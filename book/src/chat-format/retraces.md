@@ -262,7 +262,7 @@ counted and triggers a false E705.
 | `single_word_retrace_without_replacement` | `word [//]` | Baseline (no replacement) |
 | `retrace_with_replacement_does_not_cause_e705` | Full pipeline with %mor | No false E705 |
 
-Reference corpus entries: `corpus/reference/annotation/retrace.cha`
+Reference corpus entries: `resources/corpus/reference/annotation/retrace.cha`
 
 ## See Also
 

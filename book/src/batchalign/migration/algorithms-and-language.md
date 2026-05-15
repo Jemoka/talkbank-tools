@@ -664,7 +664,7 @@ plausible-looking garbage.
 The supported language set is maintained in
 `crates/talkbank-transform/src/morphosyntax/pos_hints.rs::is_stanza_supported`
 (Rust-side gate, called before dispatch in `crates/batchalign/src/morphosyntax/batch.rs`)
-and `batchalign/worker/_stanza_loading.py` (Python-side mapping). Both
+and `python/batchalign/worker/_stanza_loading.py` (Python-side mapping). Both
 must stay in sync.
 
 ### Processor capability discovery
@@ -682,7 +682,7 @@ when a language lacked an assumed processor.
 | iso3→alpha2 mapping | Hardcoded dict (56 codes) | Hardcoded dict (3 copies: Python + 2 Rust) | Derived from `pycountry` + `resources.json` |
 | Constituency availability | Always requested (crashed for 180+ languages) | Always requested (same) | Per-language check (~11 languages have it) |
 
-The capability table (`batchalign/worker/_stanza_capabilities.py`) reads
+The capability table (`python/batchalign/worker/_stanza_capabilities.py`) reads
 Stanza's `resources.json` once at worker startup and reports per-language
 processor availability.  This eliminates the manual sync burden between
 Python and Rust and prevents runtime crashes from missing processors.

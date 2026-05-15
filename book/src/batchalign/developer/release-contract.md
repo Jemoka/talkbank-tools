@@ -44,7 +44,7 @@ not covered by any compatibility promise.
 ## Cross-repo dependency
 
 batchalign3 depends on talkbank-tools crates (`talkbank-model`,
-`talkbank-parser`, `talkbank-transform`, `talkbank-clan`). These are currently
+`talkbank-parser`, `talkbank-transform`, `clan-core`). These are currently
 referenced via local path dependencies. Before 1.0, these will move to
 versioned crates.io dependencies to decouple release cycles.
 

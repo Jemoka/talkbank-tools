@@ -88,7 +88,7 @@ assembly.
 contains Unicode text for all supported languages.
 
 **Source files:**
-- `batchalign/inference/asr.py` (Python: `infer_whisper_prepared_audio()`, `_infer_whisper()`)
+- `python/batchalign/inference/asr.py` (Python: `infer_whisper_prepared_audio()`, `_infer_whisper()`)
 - `crates/batchalign/src/runner/dispatch/transcribe_pipeline.rs` (Rust: orchestration)
 - `crates/talkbank-transform/src/asr_postprocess/` (Rust: post-processing pipeline)
 
@@ -222,9 +222,9 @@ handles CHAT notation").
 (CHAT is UTF-8).
 
 **Source files:**
-- `batchalign/inference/morphosyntax.py` (Python: `batch_infer_morphosyntax()`)
-- `batchalign/inference/_tokenizer_realign.py` (Python: MWT realignment)
-- `batchalign/worker/_stanza_loading.py` (Python: pipeline configuration)
+- `python/batchalign/inference/morphosyntax.py` (Python: `batch_infer_morphosyntax()`)
+- `python/batchalign/inference/_tokenizer_realign.py` (Python: MWT realignment)
+- `python/batchalign/worker/_stanza_loading.py` (Python: pipeline configuration)
 - `crates/talkbank-transform/src/morphosyntax/payload.rs` (Rust: payload collection)
 - `crates/talkbank-transform/src/extract.rs` (Rust: word extraction)
 
@@ -255,8 +255,8 @@ per-request via `build_stanza_config_from_langs()` in `_stanza_loading.py`.
 strings and computes word-to-utterance assignments.
 
 **Source files:**
-- `batchalign/inference/utseg.py` (Python: `batch_infer_utseg()`)
-- `batchalign/worker/_stanza_loading.py` (Python: `load_utseg_builder()`)
+- `python/batchalign/inference/utseg.py` (Python: `batch_infer_utseg()`)
+- `python/batchalign/worker/_stanza_loading.py` (Python: `load_utseg_builder()`)
 - `crates/batchalign/src/utseg.rs` (Rust: assignment computation)
 
 ---
@@ -284,7 +284,7 @@ cleaned words). Python joins them and Stanza preserves the tokenization.
 start/end flags. Rust builds CHAT `%xcoref` bracket notation from these.
 
 **Source files:**
-- `batchalign/inference/coref.py` (Python: `batch_infer_coref()`)
+- `python/batchalign/inference/coref.py` (Python: `batch_infer_coref()`)
 - `crates/batchalign/src/coref.rs` (Rust: injection)
 
 ---
@@ -333,7 +333,7 @@ Rust groups words by audio time windows before sending to Python.
   map to `*` (wildcard), corrupting the character-level CTC alignment.
 
 **Source files:**
-- `batchalign/inference/fa.py` (Python: `infer_whisper_fa()`, `infer_wave2vec_fa()`)
+- `python/batchalign/inference/fa.py` (Python: `infer_whisper_fa()`, `infer_wave2vec_fa()`)
 - `crates/batchalign/src/chat_ops/fa/extraction.rs` (Rust: word extraction for FA)
 - `crates/batchalign/src/chat_ops/fa/` (Rust: grouping, injection, postprocess)
 
@@ -352,7 +352,7 @@ words pass through unchanged.
 `cleaned_text()`), then Python-side jyutping conversion.
 
 **Source files:**
-- `batchalign/inference/languages/cantonese/_cantonese_fa.py` (Python)
+- `python/batchalign/inference/languages/cantonese/_cantonese_fa.py` (Python)
 
 ---
 
@@ -377,8 +377,8 @@ Rust's `cantonese.rs` module applies:
    character corrections
 
 **Source files:**
-- `batchalign/inference/languages/cantonese/_tencent_asr.py` (Python: transport)
-- `batchalign/inference/languages/cantonese/_tencent_api.py` (Python: Tencent SDK wrapper)
+- `python/batchalign/inference/languages/cantonese/_tencent_asr.py` (Python: transport)
+- `python/batchalign/inference/languages/cantonese/_tencent_api.py` (Python: Tencent SDK wrapper)
 - `crates/talkbank-transform/src/asr_postprocess/cantonese.rs` (Rust: normalization)
 
 ---
@@ -400,7 +400,7 @@ tokenization plus the monologue/timed-word projection. Standard ASR
 post-processing (including Cantonese normalization) follows.
 
 **Source files:**
-- `batchalign/inference/languages/cantonese/_aliyun_asr.py` (Python: websocket transport)
+- `python/batchalign/inference/languages/cantonese/_aliyun_asr.py` (Python: websocket transport)
 
 ---
 
@@ -418,8 +418,8 @@ with VAD (voice activity detection) and timestamp output.
 merging, number expansion, Cantonese normalization, etc.
 
 **Source files:**
-- `batchalign/inference/languages/cantonese/_funaudio_asr.py` (Python: provider)
-- `batchalign/inference/languages/cantonese/_funaudio_common.py` (Python: FunASR model wrapper)
+- `python/batchalign/inference/languages/cantonese/_funaudio_asr.py` (Python: provider)
+- `python/batchalign/inference/languages/cantonese/_funaudio_common.py` (Python: FunASR model wrapper)
 
 ---
 
@@ -460,7 +460,7 @@ incorrect word boundaries if CHAT markers were embedded in the input string.
 The POS tagger would assign incorrect tags to tokens containing `@`, `+`, etc.
 
 **Source files:**
-- `batchalign/inference/morphosyntax.py` (Python: `_segment_cantonese()`, `_override_pos_with_pycantonese()`)
+- `python/batchalign/inference/morphosyntax.py` (Python: `_segment_cantonese()`, `_override_pos_with_pycantonese()`)
 
 ---
 
@@ -485,7 +485,7 @@ the model would attempt to translate CHAT notation as natural language. CHAT
 markers like `&-um`, `(be)cause`, `@s:eng` would produce nonsense translations.
 
 **Source files:**
-- `batchalign/inference/translate.py` (Python: `batch_infer_translate()`)
+- `python/batchalign/inference/translate.py` (Python: `batch_infer_translate()`)
 - `crates/batchalign/src/translate.rs` (Rust: payload collection and injection)
 
 ---
@@ -499,7 +499,7 @@ markers like `&-um`, `(be)cause`, `@s:eng` would produce nonsense translations.
 **Output:** Timestamped speaker segments with speaker IDs.
 
 **Source files:**
-- `batchalign/inference/speaker.py` (Python: `infer_speaker_prepared_audio()`)
+- `python/batchalign/inference/speaker.py` (Python: `infer_speaker_prepared_audio()`)
 
 ---
 

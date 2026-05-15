@@ -1,0 +1,15 @@
+"""Patch files applied to third-party crates via `crate.annotation`.
+
+When upstream lands the equivalent fix, delete the patch file and
+remove the matching `crate.annotation(patches=...)` in MODULE.bazel.
+
+Patch authoring rules:
+- Use `-p1` (unified diff with one leading path component).
+- Keep patches minimal — only the lines needed for Bazel sandbox parity.
+- The header comment in the patch must explain *why* (which sandbox /
+  Bazel behavior the upstream code conflicts with).
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*.patch"]))

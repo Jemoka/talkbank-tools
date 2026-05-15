@@ -192,8 +192,8 @@ with non-default values, and `plan.rs` verifies the runner-facing command-family
 plans consume those extracted values. Run with:
 
 ```bash
-cargo nextest run -p batchalign -E 'test(runner::dispatch::options)'
-cargo nextest run -p batchalign -E 'test(runner::dispatch::plan)'
+cargo nextest run -p batchalign-cli -E 'test(runner::dispatch::options)'
+cargo nextest run -p batchalign-cli -E 'test(runner::dispatch::plan)'
 ```
 
 ### Path 2: Job-level options
@@ -206,21 +206,21 @@ Job-level options (`before_paths`, `lang`, `num_speakers`) are tested via:
 - **Path resolution tests**: `dispatch/paths.rs` `--before` directory/file matching
 
 ```bash
-cargo nextest run -p batchalign -E 'test(diff)'
-cargo nextest run -p batchalign -E 'test(job_level_options)'
+cargo nextest run -p batchalign-cli -E 'test(diff)'
+cargo nextest run -p batchalign-cli -E 'test(job_level_options)'
 ```
 
 ### UTR testing
 
 ```bash
 # Unit tests for UTR (timing injection, cache keys, window finder)
-cargo nextest run -p batchalign -E 'test(fa::utr)'
+cargo nextest run -p batchalign-cli -E 'test(fa::utr)'
 
 # Cache key stability tests
-cargo nextest run -p batchalign -E 'test(cache_key)'
+cargo nextest run -p batchalign-cli -E 'test(cache_key)'
 
 # All FA tests (UTR + grouping + alignment + injection)
-cargo nextest run -p batchalign -E 'test(fa::)'
+cargo nextest run -p batchalign-cli -E 'test(fa::)'
 ```
 
 ---

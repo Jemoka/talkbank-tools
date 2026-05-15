@@ -93,7 +93,7 @@ batchalign3 transcribe audio/ output/ --lang eng --debug-dir /tmp/ba3-debug
 cat /tmp/ba3-debug/sample_post_asr.cha
 
 # 3. Validate it offline to find the exact parse error
-cargo run -p talkbank-cli -- validate /tmp/ba3-debug/sample_post_asr.cha
+cargo run -p chatter-cli -- validate /tmp/ba3-debug/sample_post_asr.cha
 
 # 4. Without --debug-dir, check server logs for the automatic warn! dump
 ```

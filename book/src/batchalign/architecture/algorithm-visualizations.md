@@ -22,7 +22,7 @@ visualization supports two modes:
 
 ```text
 ┌─────────────────────────────────────┐
-│ React Dashboard (frontend/)         │
+│ React Dashboard (apps/batchalign/cli-web-statuspage/)         │
 │                                     │
 │  /dashboard/visualizations/         │
 │    ├── dp-alignment   ──┐           │
@@ -185,7 +185,7 @@ JobTraces
 ### TypeScript Engine Ports
 
 Static mode uses TypeScript ports of the Rust algorithms located in
-`frontend/src/engines/`:
+`apps/batchalign/cli-web-statuspage/src/engines/`:
 
 | Engine file | Rust source | What it ports |
 |-------------|------------|--------------|
@@ -222,7 +222,7 @@ function DPAlignmentPage() {
 
 ### Shared Components
 
-Reusable visualization components in `frontend/src/components/visualizations/`:
+Reusable visualization components in `apps/batchalign/cli-web-statuspage/src/components/visualizations/`:
 
 | Component | Purpose |
 |-----------|---------|

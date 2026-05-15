@@ -11,7 +11,7 @@ refuse to let you leave a capability half-wired.
 
 ### 1. Advertise the capability
 
-Edit `crates/talkbank-lsp/src/backend/capabilities.rs` and add the
+Edit `crates/chatter-lsp/src/backend/capabilities.rs` and add the
 provider to `build_initialize_result()`:
 
 ```text
@@ -23,7 +23,7 @@ Without this, VS Code never sends requests for the feature.
 
 ### 2. Create the feature handler
 
-Add a new file in `crates/talkbank-lsp/src/backend/features/`
+Add a new file in `crates/chatter-lsp/src/backend/features/`
 (e.g. `rename.rs`). Handlers are pure functions over backend state:
 
 ```rust,ignore
@@ -61,7 +61,7 @@ Two invariants:
 ### 3. Wire it into the LanguageServer trait
 
 Edit the appropriate request-handler module under
-`crates/talkbank-lsp/src/backend/requests/`:
+`crates/chatter-lsp/src/backend/requests/`:
 
 ```rust,ignore
 async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
@@ -129,9 +129,9 @@ All CHAT semantics live in `talkbank-model`; the LSP layer is format
 conversion and routing. If a feature needs a new primitive on the
 model (e.g. a chunk-walking iterator), add it in `talkbank-model`
 and delegate — do not grow the primitive in the LSP crate. See
-[`crates/talkbank-lsp/CLAUDE.md`][lsp-claude].
+[`crates/chatter-lsp/CLAUDE.md`][lsp-claude].
 
-[lsp-claude]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-lsp/CLAUDE.md
+[lsp-claude]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/chatter-lsp/CLAUDE.md
 
 ## Adding a VS Code command
 
@@ -180,7 +180,7 @@ algebra composes across RPC + webview + per-feature boundaries.
 |---|---|---|
 | `registerEffectCommand(...)` via `src/activation/commands/{analysis,editor,media,utility}.ts` | Effect runtime with typed errors | Default choice for new commands. |
 | `vscode.commands.registerCommand(...)` via `src/activation/validation.ts` | Direct VS Code API | Validation Explorer only — the tree view's context-menu state does not fit the effect runtime. |
-| `crates/talkbank-lsp/src/backend/execute_commands.rs` + per-family handler | Server-side LSP RPC dispatch | The 12 `talkbank/*` commands invoked from TS via `workspace/executeCommand`. See [RPC Contracts](../reference/rpc-contracts.md). |
+| `crates/chatter-lsp/src/backend/execute_commands.rs` + per-family handler | Server-side LSP RPC dispatch | The 12 `talkbank/*` commands invoked from TS via `workspace/executeCommand`. See [RPC Contracts](../reference/rpc-contracts.md). |
 
 A registration sanity test asserts every
 `contributes.commands` entry has a handler in one of the three
@@ -193,7 +193,7 @@ For features that don't map to standard LSP capabilities, use
 `workspace/executeCommand`.
 
 1. Add a new variant to `ExecuteCommandName` and `ExecuteCommandRequest`
-   in `crates/talkbank-lsp/src/backend/execute_commands.rs`. Assign it
+   in `crates/chatter-lsp/src/backend/execute_commands.rs`. Assign it
    to a feature family (`Documents`, `Analysis`, `Participants`,
    `ChatOps`).
 2. Add the command-name string to `ExecuteCommandName::as_str` /

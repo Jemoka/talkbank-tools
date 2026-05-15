@@ -35,12 +35,12 @@ cargo nextest run --manifest-path crates/batchalign-pyo3/Cargo.toml
 **single canonical command router**. The standalone binary (`main.rs`) calls it.
 The installed `batchalign3` console command is a tiny Python wrapper
 (`batchalign/_cli.py`) that finds and execs the standalone binary — either
-packaged in the wheel at `batchalign/_bin/batchalign3`, or from
+packaged in the wheel at `python/batchalign/_bin/batchalign3`, or from
 `target/debug/batchalign3` in a source checkout.
 
 ```rust,ignore
 main.rs            → batchalign::cli::run_command(cli)
-batchalign/_cli.py → os.execv(batchalign/_bin/batchalign3)  [installed]
+batchalign/_cli.py → os.execv(python/batchalign/_bin/batchalign3)  [installed]
                    → os.execv(target/debug/batchalign3)      [dev checkout]
 ```
 
@@ -332,10 +332,10 @@ So the current recommendation is:
 Validated so far:
 
 ```bash
-cargo check -p batchalign -p batchalign
-cargo test -p batchalign --lib -q
-cargo test -p batchalign --test json_compat -q
-cargo test -p batchalign --lib -q
+cargo check -p batchalign-cli -p batchalign-cli
+cargo test -p batchalign-cli --lib -q
+cargo test -p batchalign-cli --test json_compat -q
+cargo test -p batchalign-cli --lib -q
 batchalign3 serve start --foreground --backend temporal --test-echo --warmup off
 batchalign3 jobs --server http://127.0.0.1:8111 <JOB_ID>
 curl -X POST http://127.0.0.1:8111/jobs/<JOB_ID>/restart
@@ -469,7 +469,7 @@ That ownership model is the durable fix for the old orphan-daemon/kill-all
 whackamole around warmup-spawned TCP workers.
 
 On the Python side, you must also add the `InferTask` to `_INFER_TASK_PROBES` in
-`batchalign/worker/_handlers.py`. See
+`python/batchalign/worker/_handlers.py`. See
 [Adding Inference Providers](../developer/adding-engines.md#4-wire-dispatch-and-capability-advertisement)
 for details.
 
@@ -509,14 +509,14 @@ For batch text workflows, prefer the named wrappers in
 
 ### 7. Worker support
 
-**`batchalign/worker/_model_loading/`** — Register the dynamic batch-infer
+**`python/batchalign/worker/_model_loading/`** — Register the dynamic batch-infer
 handler for `InferTask.FOO` during worker bootstrap if the task needs loaded
 runtime state or engine-specific wiring.
 
-**`batchalign/worker/_infer.py`** — Only update this file if the task is a
+**`python/batchalign/worker/_infer.py`** — Only update this file if the task is a
 pure static route that does not need bootstrap-installed runtime wiring.
 
-**`batchalign/inference/foo.py`** — The Python inference module (pure model
+**`python/batchalign/inference/foo.py`** — The Python inference module (pure model
 invocation, no CHAT awareness).
 
 ### 8. CHAT operations (if needed)
@@ -528,10 +528,10 @@ computation, result injection functions used by the orchestrator.
 
 ```bash
 # Generate OpenAPI schema
-cargo run -q -p batchalign -- openapi --output openapi.json
+cargo run -q -p batchalign-cli -- openapi --output openapi.json
 
 # Verify schema is up to date (CI gate)
-cargo run -q -p batchalign -- openapi --check --output openapi.json
+cargo run -q -p batchalign-cli -- openapi --check --output openapi.json
 ```
 
 ## Relationship to the PyO3 Layer
@@ -547,5 +547,5 @@ also depends on `batchalign` (for `run_command()`) and `batchalign`
 extension path does not compile the standalone binary's OTLP stack.
 
 See [Building & Development](building.md) for the recommended fast local loop
-(`make build-python`, then one `cargo build -p batchalign` if you want the
+(`bazel build //...-python`, then one `cargo build -p batchalign-cli` if you want the
 source-checkout fallback to use the repo binary).

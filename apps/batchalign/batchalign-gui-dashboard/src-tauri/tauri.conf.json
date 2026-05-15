@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Batchalign3",
+  "version": "0.1.0",
+  "identifier": "org.talkbank.batchalign3.dashboard",
+  "build": {
+    "beforeDevCommand": "cd ../../../frontend && npm run dev -- --host 127.0.0.1 --port 1420",
+    "devUrl": "http://127.0.0.1:1420/process?server=http://127.0.0.1:18000",
+    "beforeBuildCommand": "bash ../../../scripts/generate_dashboard_api_types.sh && cd ../../../frontend && npm run build",
+    "frontendDist": "../../../apps/batchalign/cli-web-statuspage/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Batchalign3",
+        "width": 1024,
+        "height": 720,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}

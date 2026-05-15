@@ -205,7 +205,7 @@ The ~3× memory reduction comes from two sources:
 | Python CHAT parser/generator modules | Rust CHAT crates + serializer/validator path in core |
 | ad-hoc alignment remap glue | contract-driven UTR/FA handlers with deterministic fallback policies |
 | monolithic Python command pipelines | task-local Python inference + Rust orchestration/injection/postprocess |
-| provider-specific modifications in forks | in-tree provider modules under `batchalign/inference/`; CHAT-aware orchestration lives in the Rust runtime, not Python |
+| provider-specific modifications in forks | in-tree provider modules under `python/batchalign/inference/`; CHAT-aware orchestration lives in the Rust runtime, not Python |
 
 Baseline anchors used for this crosswalk:
 

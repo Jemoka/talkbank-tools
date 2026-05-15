@@ -1,0 +1,57 @@
+"""talkbank-transform — parse+validate pipeline, CHAT↔JSON roundtrip.
+
+Pulls in the parser, model, and the re2c parser. No build.rs.
+
+Bazel-hostile bits:
+  - The library reads `data/*.json` (compounds, num2lang, ordinal-year
+    fixtures) via `include_str!`. Those files are wired as
+    `compile_data` so the embed succeeds inside the sandbox.
+  - `sqlx::migrate!("./migrations")` is a proc macro that canonicalizes
+    and reads `./migrations/*.sql` at compile time. The directory must
+    be present in the sandbox, so `migrations/**/*` is wired into
+    `compile_data` on both the library and unit-test targets.
+  - Tests read `resources/fixtures/*.cha` via `include_str!` from the
+    repo root; that's outside this crate. The unit-test target carries a
+    `compile_data` glob that pulls them in.
+  - `quick-xml`, `csv`, `jsonschema` are all hermetic external deps via
+    crate_universe — nothing exotic.
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "talkbank_transform",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = aliases(),
+    compile_data = glob([
+        "data/**/*",
+        "migrations/**/*",
+    ]) + [
+        # JSON Schema for ChatFile AST; src/json.rs embeds it.
+        "//schemas/chat-file:chat-file.schema.json",
+    ],
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + [
+        "//crates/core/talkbank-model:talkbank_model",
+        "//crates/core/talkbank-parser:talkbank_parser",
+        "//crates/core/talkbank-parser-re2c:talkbank_parser_re2c",
+    ],
+)
+
+rust_test(
+    name = "talkbank_transform_unit_test",
+    crate = ":talkbank_transform",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    compile_data = glob([
+        "data/**/*",
+        "migrations/**/*",
+    ]) + [
+        "//resources/fixtures:all_files",
+    ],
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

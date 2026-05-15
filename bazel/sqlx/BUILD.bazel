@@ -1,0 +1,20 @@
+"""sqlx prepare wrapper.
+
+`bazel run //bazel/sqlx:prepare` runs `cargo sqlx prepare` against the
+batchalign-cli migrations so that compile-time SQL validation works
+without a live database. Outputs land in
+`crates/batchalign/batchalign-cli/.sqlx/`. Commit that directory.
+
+The cache is checked in (rather than regenerated per-build) because
+sqlx-cli needs a live SQLite database to inspect query schemas, which
+isn't sandboxable.
+"""
+
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+sh_binary(
+    name = "prepare",
+    srcs = ["prepare.sh"],
+)

@@ -42,7 +42,7 @@ rules, and CLAN-equivalence tables, see [freq.md](freq.md).
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** Rewriter
-> at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`; no `clap` field consumes it today.
 > Drafted from CLAN manual §7.14 (`Unique Options`, GEMFREQ) for
 > PI review.
@@ -92,7 +92,7 @@ Implementation: `Gemfreq` is a separate `clap` subcommand variant in
 the `ClanCommands` enum (not a `#[command(alias = "...")]`); the
 required `--gem` constraint is enforced via a clap `ArgGroup` with
 `required(true)`. The dispatcher at
-`crates/talkbank-cli/src/commands/clan/compatibility.rs::96` routes
+`crates/chatter-cli/src/commands/clan/compatibility.rs::96` routes
 the parsed arguments to `run_analysis_and_print` with
 `AnalysisCommandName::Freq`, so behavior past the parse boundary is
 identical to a `freq --gem …` invocation. See [freq.md](freq.md) for

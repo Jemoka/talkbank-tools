@@ -51,11 +51,11 @@ flowchart TD
     parser["talkbank-parser\nCanonical parser (tree-sitter)"]
     re2c["talkbank-parser-re2c\nAlternate parser (equivalence oracle)"]
     transform["talkbank-transform\nPipelines, CHAT↔JSON, caching"]
-    clan["talkbank-clan\nCLAN analysis commands"]
-    cli["talkbank-cli (chatter)\nCLI: validate, normalize, convert"]
-    lsp["talkbank-lsp\nLanguage Server Protocol"]
+    clan["clan-core\nCLAN analysis commands"]
+    cli["chatter-cli (chatter)\nCLI: validate, normalize, convert"]
+    lsp["chatter-lsp\nLanguage Server Protocol"]
     s2c["send2clan-sys\nFFI to CLAN app"]
-    desktop["chatter-desktop\nDesktop validation app (Tauri)"]
+    desktop["chatter-gui\nDesktop validation app (Tauri)"]
     tests["talkbank-parser-tests\nEquivalence tests"]
 
     batchalign_types["batchalign-types\nWire types (V2 protocol)"]
@@ -91,11 +91,11 @@ talkbank-tools/
 ├── crates/                 All Rust crates (CHAT core + batchalign)
 ├── corpus/                 Reference corpus
 ├── schema/                 JSON Schema (auto-generated)
-├── vscode/                 VS Code extension
-├── apps/chatter-desktop/   Desktop validation app (Tauri v2, React)
-├── apps/dashboard-desktop/ Batchalign dashboard Tauri shell (experimental)
+├── apps/vscode-extension/                 VS Code extension
+├── apps/chatter/chatter-gui/   Desktop validation app (Tauri v2, React)
+├── apps/batchalign/dashboard-desktop/ Batchalign dashboard Tauri shell (experimental)
 ├── batchalign/             Python worker code (ML inference only)
-├── frontend/               React dashboard (served by batchalign server)
+├── apps/batchalign/cli-web-statuspage/               React dashboard (served by batchalign server)
 ├── book/                   This documentation
 └── fuzz/                   Fuzz testing targets (separate Cargo workspace)
 ```
@@ -105,12 +105,12 @@ talkbank-tools/
 Two separate workspaces:
 
 1. **Root workspace** (`Cargo.toml`) — all Rust crates for parsing, model,
-   transform, batchalign runtime, plus `apps/chatter-desktop/src-tauri`.
-2. **Spec workspace** (`spec/Cargo.toml`) — `spec/tools` for core
+   transform, batchalign runtime, plus `apps/chatter/chatter-gui/src-tauri`.
+2. **Spec workspace** (`crates/spec/talkbank-spec-testgen/Cargo.toml`) — `spec/tools` for core
    generation, `spec/runtime-tools` for runtime-aware spec tooling.
 
 Use the relevant manifest path when working in the spec workspace:
-`spec/tools/Cargo.toml` for generators, `spec/runtime-tools/Cargo.toml`
+`crates/spec/talkbank-spec-testgen/Cargo.toml` for generators, `crates/spec/talkbank-spec-testrun/Cargo.toml`
 for bootstrap/mining/runtime validation.
 
 ## Where to read next

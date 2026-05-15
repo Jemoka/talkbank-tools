@@ -10,13 +10,13 @@ This chapter covers how to test both the Rust language server and the TypeScript
 ### Running Tests
 
 ```bash
-cargo test -p talkbank-lsp
+cargo test -p chatter-lsp
 ```
 
 Or with the preferred parallel test runner:
 
 ```bash
-cargo nextest run -p talkbank-lsp
+cargo nextest run -p chatter-lsp
 ```
 
 ### Test Locations
@@ -131,7 +131,7 @@ This opens a new VS Code window with the extension loaded from source. Changes r
 
 ### Test Files
 
-Use files from `corpus/reference/` for manual testing. This directory contains 87 CHAT files covering 20 languages and diverse CHAT constructs.
+Use files from `resources/corpus/reference/` for manual testing. This directory contains 87 CHAT files covering 20 languages and diverse CHAT constructs.
 
 ### Debugging the Language Server
 
@@ -144,7 +144,7 @@ RUST_LOG=debug code --extensionDevelopmentPath=.
 For targeted tracing of a specific module:
 
 ```bash
-RUST_LOG=talkbank_lsp::alignment=trace code --extensionDevelopmentPath=.
+RUST_LOG=chatter_lsp::alignment=trace code --extensionDevelopmentPath=.
 ```
 
 Server output appears in the Output panel under "TalkBank Language Server".
@@ -153,7 +153,7 @@ Server output appears in the Output panel under "TalkBank Language Server".
 
 To inspect the raw JSON-RPC messages between VS Code and the server:
 
-1. Check if the extension supports the `talkbank-lsp.trace.server` setting
+1. Check if the extension supports the `chatter-lsp.trace.server` setting
 2. Set it to `"verbose"` to log all request/response payloads
 3. Alternatively, use VS Code's built-in LSP inspector (if available in your version)
 
@@ -171,7 +171,7 @@ This generates a coverage report using Vitest's built-in coverage via `@vitest/c
 For LSP changes:
 
 ```bash
-cargo nextest run -p talkbank-lsp        # LSP tests
+cargo nextest run -p chatter-lsp        # LSP tests
 cargo nextest run -p talkbank-parser-tests  # Parser equivalence (if touching parsing)
 ```
 
@@ -184,7 +184,7 @@ cd vscode && npm test && npm run lint
 For any change:
 
 ```bash
-make verify    # Full pre-merge verification gates (G0-G13)
+bazel build //... && bazel test //...    # Full pre-merge verification gates (G0-G13)
 ```
 
 ## Related Chapters

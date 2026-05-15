@@ -14,7 +14,7 @@ Last updated: 2026-04-29 07:58 EDT
 - [ ] grammar / tree-sitter
 - [ ] core Rust crates (`talkbank-*`)
 - [ ] `chatter` CLI
-- [ ] `talkbank-lsp`
+- [ ] `chatter-lsp`
 - [ ] CLAN commands / converters
 - [ ] `batchalign3` / `batchalign-*`
 - [ ] VS Code extension
@@ -40,11 +40,11 @@ If maintainer follow-up is needed, explain why:
 
 ## Validation
 
-- [ ] `make verify`
-- [ ] `make batchalign-check`
-- [ ] `make batchalign-test-rust`
-- [ ] `make batchalign-test-integration`
-- [ ] `make batchalign-ci-python`
+- [ ] `bazel build //... && bazel test //...`
+- [ ] `bazel build //crates/batchalign/...`
+- [ ] `bazel test //crates/batchalign/...`
+- [ ] `bazel test //crates/batchalign/...`
+- [ ] `just batchalign pytest && just batchalign lint`
 - [ ] other (describe below)
 
 List the commands you ran and any intentionally skipped checks:

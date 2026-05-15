@@ -42,7 +42,7 @@ current CLI.
 ## Algorithm
 
 1. For each utterance, count morphemes and words from `%mor`
-2. Detect **verb-containing utterances** using POS tags: `v`, `verb`, `cop`, `aux`, `mod`, `part` (`crates/talkbank-clan/src/commands/sugar.rs:198` — both `v` and the longer `verb` form are accepted)
+2. Detect **verb-containing utterances** using POS tags: `v`, `verb`, `cop`, `aux`, `mod`, `part` (`crates/clan-core/src/commands/sugar.rs:198` — both `v` and the longer `verb` form are accepted)
 3. For verb utterances with `%gra`, count **subordinate clauses** via grammatical relations (`COMP`, `CSUBJ`, `CMOD`, etc.)
 4. Compute per-speaker ratios at finalization:
    - WPS = total words / number of verb utterances

@@ -22,7 +22,7 @@ flowchart LR
     scope{"Single file<br/>or directory?"}
     walk["Recursive walk<br/>resolve_files()"]
     dispatch["LSP talkbank/analyze<br/>(typed request)"]
-    runner["AnalysisRunner<br/>(talkbank-clan crate)"]
+    runner["AnalysisRunner<br/>(clan-core crate)"]
     result["JSON result<br/>(typed Response)"]
     panel["AnalysisPanel<br/>webview"]
 
@@ -40,7 +40,7 @@ flowchart LR
     result --> panel
     panel -->|"Export CSV"| csv(["CSV file<br/>on disk"])
 ```
-<!-- Verified against: vscode/src/commands/analysis.ts, vscode/src/analysisPanel.ts, crates/talkbank-lsp/src/backend/analysis.rs, crates/talkbank-clan/src/framework/runner.rs -->
+<!-- Verified against: apps/vscode-extension/src/commands/analysis.ts, apps/vscode-extension/src/analysisPanel.ts, crates/chatter-lsp/src/backend/analysis.rs, crates/clan-core/src/framework/runner.rs -->
 
 The six commands that prompt for extra input are listed below under
 [Commands that prompt for additional input](#commands-that-prompt-for-additional-input).

@@ -1,0 +1,68 @@
+"""batchalign3 — Python product (PyO3 wheel via maturin).
+
+Mirrors the crate tier convention: this BUILD.bazel lives at the
+package source root (`python/batchalign/`). Targets:
+
+    bazel run //python/batchalign:develop   # maturin develop (editable install)
+    bazel run //python/batchalign:wheel     # maturin build --release
+    bazel run //python/batchalign:test      # pytest
+    bazel run //python/batchalign:lint      # mypy (+ ruff)
+
+Maturin is the wheel builder — no Bazel ruleset packages PyO3 wheels.
+See `python/BUILD.bazel` and `bazel/python/` for the orchestration story.
+
+Convenience aliases at `//batchalign:wheel`, `//batchalign:develop`, etc.
+"""
+
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_uv//uv:venv.bzl", "create_venv")
+
+package(default_visibility = ["//visibility:public"])
+
+# `runtime_constants.toml` is embedded into batchalign-cli at compile
+# time via `include_str!`. Re-export so other packages (notably
+# //crates/batchalign/batchalign-cli) can list it as compile_data.
+exports_files(["runtime_constants.toml"])
+
+# Source tree maturin and uv touch. `data` so any target consuming
+# these scripts invalidates when the Python sources change.
+_SRC = glob(["**/*"], exclude = ["BUILD.bazel"])
+_DATA = _SRC + [
+    "//python:project_metadata",
+    "//python:batchalign_core_src",
+    "//python:stubs_src",
+    "//python:batchalign_core.pyi",
+]
+
+create_venv(
+    name = "venv",
+    requirements_txt = "//python:uv.lock",
+)
+
+sh_binary(
+    name = "develop",
+    srcs = ["//bazel/python:maturin_develop.sh"],
+    args = ["$(rootpath @multitool//tools/uv)"],
+    data = _DATA + ["@multitool//tools/uv"],
+)
+
+sh_binary(
+    name = "wheel",
+    srcs = ["//bazel/python:maturin_build.sh"],
+    args = ["$(rootpath @multitool//tools/uv)"],
+    data = _DATA + ["@multitool//tools/uv"],
+)
+
+sh_binary(
+    name = "test",
+    srcs = ["//bazel/python:pytest.sh"],
+    args = ["$(rootpath @multitool//tools/uv)"],
+    data = _DATA + ["@multitool//tools/uv"],
+)
+
+sh_binary(
+    name = "lint",
+    srcs = ["//bazel/python:lint.sh"],
+    args = ["$(rootpath @multitool//tools/uv)"],
+    data = _DATA + ["@multitool//tools/uv"],
+)

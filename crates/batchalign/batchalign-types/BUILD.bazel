@@ -1,0 +1,28 @@
+"""batchalign-types — shared batchalign domain + worker protocol types.
+
+Pure library: `string_id!` / `numeric_id!` newtype macros and the
+domain/scheduling types built on top. No build.rs, no intra-workspace
+deps.
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "batchalign_types",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = aliases(),
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True),
+)
+
+rust_test(
+    name = "batchalign_types_unit_test",
+    crate = ":batchalign_types",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

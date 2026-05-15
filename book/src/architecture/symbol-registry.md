@@ -4,7 +4,7 @@
 **Last updated:** 2026-03-24 00:01 EDT
 
 ## Purpose
-`spec/symbols/symbol_registry.json` is the canonical source of token/symbol classes used by
+`resources/spec/symbols/symbol_registry.json` is the canonical source of token/symbol classes used by
 CHAT grammar tokenization policy.
 
 ## Scope
@@ -15,9 +15,9 @@ The registry currently governs:
 - event segment forbidden symbol classes.
 
 ## Governance Rules
-1. Symbol changes must be made only in `spec/symbols/symbol_registry.json`.
+1. Symbol changes must be made only in `resources/spec/symbols/symbol_registry.json`.
 2. Registry must pass validation:
-   - `node spec/symbols/validate_symbol_registry.js`
+   - `node resources/spec/symbols/validate_symbol_registry.js`
 3. Grammar symbol sets must be regenerated after any registry change:
    - `node scripts/generate-symbol-sets.js`
 4. Generated files are read-only and must not be edited manually.
@@ -45,5 +45,5 @@ critical symbol policy.
 6. Commit source + generated outputs together.
 
 ## Auditability
-Registry and generated outputs are covered by `make generated-check` and CI checks, so drift
+Registry and generated outputs are covered by `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs && git diff --exit-code` and CI checks, so drift
 between source policy and consumed grammar constants is merge-blocking.

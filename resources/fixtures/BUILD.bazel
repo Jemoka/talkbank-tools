@@ -1,0 +1,13 @@
+"""Test fixtures — FA, morphotag, ML golden inputs.
+
+Looser than `//resources/corpus` (which must pass 100%); these are
+fixtures for ML-gated and integration tests that may legitimately
+fail or be partial.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "all_files",
+    srcs = glob(["**/*"], exclude = ["BUILD.bazel"]),
+)

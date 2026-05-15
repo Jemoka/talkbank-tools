@@ -3,7 +3,7 @@
 **Status:** Current
 **Last updated:** 2026-04-16 13:37 EDT
 
-The TalkBank extension is powered by a Rust language server (`talkbank-lsp`) that communicates with VS Code over stdio. If the language server fails to start or crashes, most extension features will not work. This chapter covers how to diagnose and fix LSP connection issues.
+The TalkBank extension is powered by a Rust language server (`chatter-lsp`) that communicates with VS Code over stdio. If the language server fails to start or crashes, most extension features will not work. This chapter covers how to diagnose and fix LSP connection issues.
 
 ## Checking the Output Panel
 
@@ -21,22 +21,22 @@ This shows the LSP communication logs and any server stderr output. Look for:
 
 ## Binary Not Found
 
-**Symptom:** The Output panel shows an error about not finding the `talkbank-lsp` binary, or a notification appears with a link to the `talkbank.lsp.binaryPath` setting.
+**Symptom:** The Output panel shows an error about not finding the `chatter-lsp` binary, or a notification appears with a link to the `talkbank.lsp.binaryPath` setting.
 
 The extension searches for the language-server binary in this order:
 
 1. **`talkbank.lsp.binaryPath` setting** -- if set and the file exists, used as an explicit override
-2. **Bundled binary** -- `<extension>/server/talkbank-lsp[.exe]`, shipped inside platform-specific VSIXes
-3. **System PATH** -- runs `which talkbank-lsp` (or `where talkbank-lsp` on Windows); used by developers who install via `cargo install`
-4. **Dev-tree builds** -- `<extension>/../target/debug/talkbank-lsp` or `.../target/release/talkbank-lsp`, for contributors running from a cloned workspace
+2. **Bundled binary** -- `<extension>/server/chatter-lsp[.exe]`, shipped inside platform-specific VSIXes
+3. **System PATH** -- runs `which chatter-lsp` (or `where chatter-lsp` on Windows); used by developers who install via `cargo install`
+4. **Dev-tree builds** -- `<extension>/../target/debug/chatter-lsp` or `.../target/release/chatter-lsp`, for contributors running from a cloned workspace
 5. If none are found, an actionable error notification appears with a link to the setting
 
 **Fixes:**
 
-- **Users:** install the VSIX that matches your platform (e.g. `talkbank-chat-darwin-arm64.vsix`). Each platform-specific VSIX bundles the correct prebuilt `talkbank-lsp`. See [Installation](../getting-started/installation.md).
-- **Developers who installed via Cargo:** `cargo install --path crates/talkbank-lsp` and confirm `which talkbank-lsp` resolves
-- **Contributors running from source:** `cargo build --release -p talkbank-lsp` so the dev-tree path exists
-- **Manual override:** set `talkbank.lsp.binaryPath` in your settings to the absolute path of an existing `talkbank-lsp` binary
+- **Users:** install the VSIX that matches your platform (e.g. `talkbank-chat-darwin-arm64.vsix`). Each platform-specific VSIX bundles the correct prebuilt `chatter-lsp`. See [Installation](../getting-started/installation.md).
+- **Developers who installed via Cargo:** `cargo install --path crates/chatter-lsp` and confirm `which chatter-lsp` resolves
+- **Contributors running from source:** `cargo build --release -p chatter-lsp` so the dev-tree path exists
+- **Manual override:** set `talkbank.lsp.binaryPath` in your settings to the absolute path of an existing `chatter-lsp` binary
 
 ## Enabling Trace Logging
 
@@ -53,15 +53,15 @@ RUST_LOG=debug code .
 Or for more targeted tracing:
 
 ```bash
-RUST_LOG=talkbank_lsp=debug code .
-RUST_LOG=talkbank_lsp::alignment=trace code .
+RUST_LOG=chatter_lsp=debug code .
+RUST_LOG=chatter_lsp::alignment=trace code .
 ```
 
 The server uses the `tracing` crate for structured logging. Trace output appears in the Output panel under "TalkBank Language Server".
 
 ### LSP message inspection
 
-To see the raw JSON-RPC messages between VS Code and the server, check whether the extension supports the `talkbank-lsp.trace.server` setting. Set it to `"verbose"` to log all request/response payloads. Alternatively, use VS Code's built-in LSP inspector if available.
+To see the raw JSON-RPC messages between VS Code and the server, check whether the extension supports the `chatter-lsp.trace.server` setting. Set it to `"verbose"` to log all request/response payloads. Alternatively, use VS Code's built-in LSP inspector if available.
 
 ## Server Crash Recovery
 

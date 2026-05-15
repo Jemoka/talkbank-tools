@@ -288,7 +288,7 @@ registrations.
 
 ### BA3 Status
 
-All four engines are now built-in modules under `batchalign/inference/languages/cantonese/`.
+All four engines are now built-in modules under `python/batchalign/inference/languages/cantonese/`.
 Engine dispatch uses `AsrEngine`/`FaEngine` enums in `worker/_types.py`.
 The plugin discovery mechanism (`PluginDescriptor`, `InferenceProvider`,
 entry points) has been completely removed. See

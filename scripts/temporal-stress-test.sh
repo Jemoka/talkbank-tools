@@ -741,7 +741,7 @@ main() {
 
     # Preflight
     if [ ! -x "${BINARY}" ]; then
-        echo "ERROR: Binary not found at ${BINARY}. Run 'cargo build -p batchalign' first."
+        echo "ERROR: Binary not found at ${BINARY}. Run 'cargo build -p batchalign-cli' first."
         exit 2
     fi
     if ! command -v temporal &> /dev/null; then

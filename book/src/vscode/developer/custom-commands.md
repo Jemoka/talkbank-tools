@@ -27,15 +27,15 @@ bridges. See [ADR-001](../design/adr-001-lsp-over-embedded-parser.md).
 ## Round-trip sequence
 
 ```mermaid
-%% Verified against: vscode/src/lsp/executeCommandClient.ts,
-%% crates/talkbank-lsp/src/backend/requests/execute_command.rs,
-%% crates/talkbank-lsp/src/backend/execute_commands.rs,
-%% crates/talkbank-lsp/src/backend/analysis.rs.
+%% Verified against: apps/vscode-extension/src/lsp/executeCommandClient.ts,
+%% crates/chatter-lsp/src/backend/requests/execute_command.rs,
+%% crates/chatter-lsp/src/backend/execute_commands.rs,
+%% crates/chatter-lsp/src/backend/analysis.rs.
 sequenceDiagram
     participant C as Caller<br/>(command / panel)
     participant E as TalkbankExecuteCommandClient<br/>(src/lsp/executeCommandClient.ts)
     participant LC as LanguageClient<br/>(vscode-languageclient)
-    participant S as talkbank-lsp dispatcher<br/>(backend/requests/execute_command.rs)
+    participant S as chatter-lsp dispatcher<br/>(backend/requests/execute_command.rs)
     participant D as Request decoder<br/>(backend/execute_commands.rs)
     participant H as Handler<br/>(e.g. backend/analysis.rs)
     participant M as talkbank-model<br/>(ChatFile, alignment, CLAN runner)
@@ -76,7 +76,7 @@ sequenceDiagram
   failure modes — see
   [`executeCommandErrors.ts`][errors].
 
-[errors]: https://github.com/TalkBank/talkbank-tools/blob/main/vscode/src/lsp/executeCommandErrors.ts
+[errors]: https://github.com/TalkBank/talkbank-tools/blob/main/apps/vscode-extension/src/lsp/executeCommandErrors.ts
 
 ## Usage from TypeScript
 

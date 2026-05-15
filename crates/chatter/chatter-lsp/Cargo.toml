@@ -1,0 +1,56 @@
+[package]
+name = "chatter-lsp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Language Server Protocol implementation for CHAT format"
+readme = "README.md"
+
+[dependencies]
+dashmap = "6.1"
+regex = "1.12"
+schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
+clan-core = { path = "../../clan/clan-core", version = "0.2.0" }
+talkbank-model = { path = "../../core/talkbank-model", version = "0.2.0" }
+tree-sitter-highlight = "0.26"
+talkbank-parser = { path = "../../core/talkbank-parser", version = "0.2.0" }
+thiserror = "^2.0.18" #unified
+tokio = { version = "1.52", features = ["full"] }
+tower-lsp = "0.20"
+tracing = "0.1"
+tree-sitter = "0.26"
+tree-sitter-talkbank = { path = "../../../grammar", version = "0.2.0" }
+walkdir = "^2.5"
+
+[[bin]]
+name = "chatter-lsp"
+path = "src/bin/chatter-lsp.rs"
+
+[dev-dependencies]
+insta = { version = "1.47", features = ["json", "yaml"] }
+
+# This crate finished its panic-site audit on 2026-04-29 (see
+# `book/src/operations/panic-audit/chatter-lsp.md`). The 6 non-test panic shapes are
+# all classified as infallible-by-construction with explicit
+# `#[allow]` annotations carrying rationales; new sites are now
+# blocked from landing without a deliberate opt-in.
+#
+# Cargo does not allow combining `[lints] workspace = true` with
+# crate-level overrides, so this table inlines the workspace lints
+# (kept in sync with root `Cargo.toml`'s `[workspace.lints.clippy]`)
+# and then promotes the panic-shape lints to `deny` for this crate
+# specifically. Other crates still inherit the workspace `warn`
+# floor.
+[lints.clippy]
+unwrap_used   = "deny"
+expect_used   = "deny"
+panic         = "deny"
+unreachable   = "deny"
+todo          = "deny"
+unimplemented = "deny"

@@ -13,14 +13,14 @@ features, and run CLAN analyses on demand. Two plausible shapes:
    `tree-sitter-talkbank` plus a TypeScript port of
    `talkbank-model` / `talkbank-validation` so the extension can
    parse CHAT in-process.
-2. **Language server.** Ship a Rust binary (`talkbank-lsp`) that
+2. **Language server.** Ship a Rust binary (`chatter-lsp`) that
    hosts the entire parser + model + validation + CLAN analysis
    stack and talks to the extension over LSP stdio.
 
 ## Decision
 
 **Use a language server.** The extension is a thin
-presentation/workflow layer; `talkbank-lsp` owns every piece of
+presentation/workflow layer; `chatter-lsp` owns every piece of
 CHAT domain knowledge.
 
 Concretely:
@@ -91,6 +91,6 @@ CST node ranges.
 ## Source anchors
 
 - Extension-side LSP activation: `src/activation/lsp.ts`.
-- Server binary target: `crates/talkbank-lsp/src/bin/talkbank-lsp.rs`.
-- Server dispatch entry: `crates/talkbank-lsp/src/backend/mod.rs`.
-- Custom RPC registration: `crates/talkbank-lsp/src/backend/execute_commands.rs`.
+- Server binary target: `crates/chatter-lsp/src/bin/chatter-lsp.rs`.
+- Server dispatch entry: `crates/chatter-lsp/src/backend/mod.rs`.
+- Custom RPC registration: `crates/chatter-lsp/src/backend/execute_commands.rs`.

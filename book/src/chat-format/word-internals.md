@@ -456,7 +456,7 @@ markers from grammar through model.
 The purity invariant — each structural marker produces a separate CST
 child rather than being consumed by `word_segment` — is enforced by a
 group of tree-sitter corpus tests under
-`grammar/test/corpus/word/`. Each `*_in_word_lint.txt` file embeds a
+`grammar/test/resources/corpus/word/`. Each `*_in_word_lint.txt` file embeds a
 structural marker inside a word and asserts the CST splits the word
 appropriately:
 
@@ -474,25 +474,25 @@ in `grammar/test/corpus/` and by the parser-equivalence tests in
 `word_segment_purity.txt` consolidated 8 named tests in one file; it
 was retired in commit `fdceeac2` when the corresponding constructs
 were given their own per-construct test files (this is the new layout
-that `make test-gen` produces from the spec sources).
+that `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` produces from the spec sources).
 
 ### How to add a new purity-style test
 
 If you add a new structural marker to the grammar:
 
 1. Add its characters to the symbol registry
-   (`spec/symbols/symbol_registry.json`).
-2. Run `make symbols-gen` to regenerate the exclusion sets.
-3. Add a spec in `spec/constructs/` that embeds the marker inside a
-   word; run `make test-gen` so a per-construct test fixture is
-   created in `grammar/test/corpus/word/`. Verify the CST output
+   (`resources/spec/symbols/symbol_registry.json`).
+2. Run `node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js` to regenerate the exclusion sets.
+3. Add a spec in `resources/spec/constructs/` that embeds the marker inside a
+   word; run `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` so a per-construct test fixture is
+   created in `grammar/test/resources/corpus/word/`. Verify the CST output
    names each marker as its own child.
 4. Run the full verification sequence:
    ```bash
    cd grammar && tree-sitter generate && tree-sitter test
    cargo nextest run -p talkbank-parser
    cargo nextest run -p talkbank-parser-tests
-   make verify
+   bazel build //... && bazel test //...
    ```
 
 ## Key Source Files
@@ -501,7 +501,7 @@ If you add a new structural marker to the grammar:
 |---|---|
 | `grammar/grammar.js` | search for `standalone_word`, `word_body`, `word_segment`, `_word_marker` |
 | `grammar/src/generated_symbol_sets.js` | Character exclusion sets (generated, do not edit) |
-| `grammar/test/corpus/word/*_in_word_lint.txt`, `lengthening*.txt`, `stacked_ca_markers.txt` | Per-construct purity-invariant gate tests (replaced the consolidated `word_segment_purity.txt` retired in `fdceeac2`) |
+| `grammar/test/resources/corpus/word/*_in_word_lint.txt`, `lengthening*.txt`, `stacked_ca_markers.txt` | Per-construct purity-invariant gate tests (replaced the consolidated `word_segment_purity.txt` retired in `fdceeac2`) |
 | `grammar/docs/tokenization-rules.md` | The 6 tokenization ambiguities with full examples |
 | `grammar/docs/precedence-decisions.md` | Precedence proofs (zero, colon, purity invariant) |
 | `grammar/docs/pre-coarsening-grammar.js.reference` | Historical: the grammar before coarsening |

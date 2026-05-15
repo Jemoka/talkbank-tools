@@ -39,7 +39,7 @@ chatter clan mlu --format json corpus/
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** The
-> rewriter at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> rewriter at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`, but no `clap` field consumes that token
 > today. Drafted from CLAN manual §7.21.2 (`Unique Options`, MLU) for
 > PI review. Plan: `<workspace>/docs/superpowers/plans/2026-05-11-clan-rewriter-honor-three-flags.md`

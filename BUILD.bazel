@@ -1,0 +1,28 @@
+"""Workspace root.
+
+Tier discovery:
+
+    //crates/core/...        core parser/model/transform/utils crates
+    //crates/spec/...         CHAT spec generators (testgen + testrun)
+    //crates/chatter/...      chatter CLI + LSP libraries/binaries
+    //crates/clan/...         CLAN analysis library + send2clan FFI
+    //crates/batchalign/...   batchalign runtime + types + pyo3
+    //crates/xtask            workspace dev automation
+    //apps/chatter/...        Tauri Chatter validation GUI
+    //apps/batchalign/...     React dashboard + Tauri shell
+    //apps/vscode-extension   VS Code extension
+    //grammar                 tree-sitter-talkbank Rust binding
+    //python/batchalign       Python product (maturin-wrapped wheel)
+    //book                    mdBook documentation
+
+The former `//:<project>/<role>` semantic aliases have been retired.
+Use the fully qualified target paths directly, or the workspace-level
+`justfile` (`just --list`) for convenience names.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "Cargo.toml",
+    "Cargo.lock",
+])

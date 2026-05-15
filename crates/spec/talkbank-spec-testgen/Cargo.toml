@@ -1,0 +1,87 @@
+[package]
+name = "talkbank-spec-testgen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Static codegen: read resources/spec/ and emit tree-sitter corpus tests, Rust parser/validator tests, and error documentation"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Workspace-shared (versions live in root Cargo.toml [workspace.dependencies])
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
+comrak = "0.52.0"
+clap = { version = "4.6", features = ["derive", "env"] }
+walkdir = "^2.5"
+anyhow = "1.0"
+thiserror = "^2.0.18"
+regex = "1.12"
+chrono = "0.4"
+tree-sitter = "0.26"
+tree-sitter-talkbank = { path = "../../../grammar", version = "0.2.0" }
+
+# Crate-local (not shared with any other workspace member — pinned here so
+# the root manifest doesn't accumulate spec-only deps)
+serde_yaml_ng = "0.10"
+tera = "1.20"
+unicode-normalization = "0.1"
+oxc_allocator = "0.116.0"
+oxc_ast = "0.116.0"
+oxc_parser = "0.116.0"
+oxc_span = "0.116.0"
+
+[[bin]]
+name = "gen_tree_sitter_tests"
+path = "src/bin/gen_tree_sitter_tests.rs"
+
+[[bin]]
+name = "gen_rust_tests"
+path = "src/bin/gen_rust_tests.rs"
+
+[[bin]]
+name = "gen_error_docs"
+path = "src/bin/gen_error_docs.rs"
+
+[[bin]]
+name = "validate_spec"
+path = "src/bin/validate_spec.rs"
+
+[[bin]]
+name = "coverage"
+path = "src/bin/coverage.rs"
+
+[[bin]]
+name = "gen_validation_tests"
+path = "src/bin/gen_validation_tests.rs"
+
+[[bin]]
+name = "gen_coverage_dashboard"
+path = "src/bin/gen_coverage_dashboard.rs"
+
+[[bin]]
+name = "corpus_to_specs"
+path = "src/bin/corpus_to_specs.rs"
+
+[[bin]]
+name = "fix_spec_layers"
+path = "src/bin/fix_spec_layers.rs"
+
+[[bin]]
+name = "enhance_specs"
+path = "src/bin/enhance_specs.rs"
+
+[[bin]]
+name = "corpus_node_coverage"
+path = "src/bin/corpus_node_coverage.rs"
+
+[[bin]]
+name = "perturb_corpus"
+path = "src/bin/perturb_corpus.rs"
+
+[dev-dependencies]
+tempfile = "3.8"

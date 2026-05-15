@@ -88,7 +88,7 @@ When post-serialization validation fails:
 
 This prevents broken results from being served on future runs.
 
-## Verification Gates (`make verify`)
+## Verification Gates (`bazel build //... && bazel test //...`)
 
 The mandatory pre-merge / pre-push gate. All gates must pass before
 any code or doc change ships:
@@ -111,11 +111,11 @@ any code or doc change ships:
 | G13 | Fuzz workspace isolation |
 | G14 | Imported Batchalign Rust/PyO3 gate |
 
-The reference corpus at `corpus/reference/` is the sacred semantic
-target — every file must be valid CHAT, and `make verify` runs each
+The reference corpus at `resources/corpus/reference/` is the sacred semantic
+target — every file must be valid CHAT, and `bazel build //... && bazel test //...` runs each
 gate against it.
 
-The pre-push hook (`make install-hooks`) runs the fast subset (`fmt`,
+The pre-push hook (`ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push`) runs the fast subset (`fmt`,
 affected compile, parser guardrail, `generated-check`, `fuzz-check`)
 locally before push. CI runs the full set.
 
@@ -151,7 +151,7 @@ on the `ChatFile` AST.
   (`enable_quotation_validation` flag) — the cross-utterance walker
   exists but is not yet wired into the standard validation gate.
 - **Some error-spec / validator pairs are not yet implemented.**
-  Tracked in `spec/errors/` files marked `Status: not_implemented`;
-  these generate `#[ignore]` tests via `make test-gen` rather than
-  failing CI. Run `grep -rl "Status.*not_implemented" spec/errors/`
+  Tracked in `resources/spec/errors/` files marked `Status: not_implemented`;
+  these generate `#[ignore]` tests via `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` rather than
+  failing CI. Run `grep -rl "Status.*not_implemented" resources/spec/errors/`
   to enumerate.

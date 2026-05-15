@@ -48,10 +48,10 @@ The `batchalign3` CLI is a standalone Rust binary (`crates/batchalign`).
 It is **not** compiled into the .so extension. Instead:
 
 - **PyPI wheels**: The binary is pre-built and included as package data at
-  `batchalign/_bin/batchalign3`. The console_scripts entry point
+  `python/batchalign/_bin/batchalign3`. The console_scripts entry point
   (`batchalign/_cli.py`) finds and execs it.
 - **Dev checkout**: `_cli.py` falls back to `target/debug/batchalign3` or
-  `cargo run -p batchalign`.
+  `cargo run -p batchalign-cli`.
 
 This eliminates the old `cli-entry` feature gate that dragged 741 extra crates
 (the entire server stack) into the extension build.
@@ -69,15 +69,15 @@ handoffs into the Rust binary:
 
 ```bash
 # Development rebuild (debug, fast — ~7s incremental)
-make build-python
+bazel build //...-python
 # equivalent: uv run maturin develop -m crates/batchalign-pyo3/Cargo.toml -F pyo3/extension-module
 
-# Full package (extension + CLI binary in batchalign/_bin/)
-make build-python-full
+# Full package (extension + CLI binary in python/batchalign/_bin/)
+bazel build //...-python-full
 
 # Release wheel for deployment
-cargo build --release -p batchalign --bin batchalign3
-cp target/release/batchalign3 batchalign/_bin/batchalign3
+cargo build --release -p batchalign-cli --bin batchalign3
+cp target/release/batchalign3 python/batchalign/_bin/batchalign3
 uv run maturin build --release -m crates/batchalign-pyo3/Cargo.toml -F pyo3/extension-module --out dist/
 
 # Check compilation without building wheel

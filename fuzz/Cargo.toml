@@ -10,10 +10,10 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 [dependencies.talkbank-model]
-path = "../crates/talkbank-model"
+path = "../crates/core/talkbank-model"
 
 [dependencies.talkbank-parser]
-path = "../crates/talkbank-parser"
+path = "../crates/core/talkbank-parser"
 
 # Fuzz target: parse_chat_file
 [[bin]]

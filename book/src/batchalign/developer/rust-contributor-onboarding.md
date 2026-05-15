@@ -26,7 +26,7 @@ This page is the shortest path to productive work on the Rust side of Batchalign
 
 ```bash
 make sync
-make build
+bazel build //...
 cargo check --workspace
 cargo nextest run --workspace
 cargo nextest run --manifest-path crates/batchalign-pyo3/Cargo.toml
@@ -38,11 +38,11 @@ extra or plugin tier.
 
 Rebuild rule of thumb while iterating:
 
-- CLI/server-only changes: `cargo build -p batchalign` or `make build-rust`
-- `batchalign` or `crates/batchalign-pyo3/` changes: `make build-python`
-- the fast contributor loop: run `cargo build -p batchalign` once, then
+- CLI/server-only changes: `cargo build -p batchalign-cli` or `bazel build //...-rust`
+- `batchalign` or `crates/batchalign-pyo3/` changes: `bazel build //...-python`
+- the fast contributor loop: run `cargo build -p batchalign-cli` once, then
   `uv run batchalign3 ...` will use the repo CLI fallback in a source checkout
-  after a slim `make build-python`
+  after a slim `bazel build //...-python`
 
 ## Where To Work
 
@@ -61,11 +61,11 @@ Rebuild rule of thumb while iterating:
 ## Useful Commands
 
 ```bash
-cargo build -p batchalign
-make build-python
-cargo nextest run -p batchalign --test cli
-cargo nextest run -p batchalign --test e2e
-cargo nextest run -p batchalign --test integration
+cargo build -p batchalign-cli
+bazel build //...-python
+cargo nextest run -p batchalign-cli --test cli
+cargo nextest run -p batchalign-cli --test e2e
+cargo nextest run -p batchalign-cli --test integration
 cargo nextest run --manifest-path crates/batchalign-pyo3/Cargo.toml
-cargo run -q -p batchalign -- openapi --check --output openapi.json
+cargo run -q -p batchalign-cli -- openapi --check --output openapi.json
 ```

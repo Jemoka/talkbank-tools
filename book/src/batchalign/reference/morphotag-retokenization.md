@@ -108,12 +108,12 @@ flowchart TD
     Cha["CHAT file on disk"] --> Parse["parse_lenient()\n(talkbank-transform/src/parse.rs)"]
     Parse --> Extract["extract_words()\n(talkbank-transform/src/extract.rs)"]
     Extract --> Collect["collect_payloads()\n(talkbank-transform/src/morphosyntax/payload.rs)"]
-    Collect --> Worker["Python worker\n(batchalign/worker/_protocol.py)"]
-    Worker --> Load["load_stanza_model(lang)\n(batchalign/worker/_stanza_loading.py)"]
-    Load --> Infer["batch_infer_morphosyntax()\n(batchalign/inference/morphosyntax.py)"]
-    Infer --> Postproc["tokenize_postprocessor\n(batchalign/inference/_tokenizer_realign.py)"]
+    Collect --> Worker["Python worker\n(python/batchalign/worker/_protocol.py)"]
+    Worker --> Load["load_stanza_model(lang)\n(python/batchalign/worker/_stanza_loading.py)"]
+    Load --> Infer["batch_infer_morphosyntax()\n(python/batchalign/inference/morphosyntax.py)"]
+    Infer --> Postproc["tokenize_postprocessor\n(python/batchalign/inference/_tokenizer_realign.py)"]
     Postproc --> Stanza["Stanza Pipeline\n(tokenize + mwt + pos + lemma + depparse)"]
-    Stanza --> Raw["UdSentence JSON\n(ipc-schema/generated)"]
+    Stanza --> Raw["UdSentence JSON\n(schemas/ipc/generated)"]
     Raw --> Mode{"TokenizationMode\n(talkbank-transform/src/morphosyntax/types.rs:106)"}
 
     Mode -->|"Preserve"| MapMerge["map_ud_sentence()\n(talkbank-transform/src/morphosyntax/sentence_mapping.rs:77)"]
@@ -140,7 +140,7 @@ The difference is upstream:
 
 Stanza's output does not line up cleanly with CHAT words, because Stanza's
 tokenizer may split, merge, or drop characters in ways that a naive 1:1
-index cannot recover. `batchalign/inference/_tokenizer_realign.py` runs as
+index cannot recover. `python/batchalign/inference/_tokenizer_realign.py` runs as
 Stanza's `tokenize_postprocessor` callback and reconciles the two.
 
 We delegate the character-level alignment itself to
@@ -149,7 +149,7 @@ postprocessor). The Python wrapper supplies two extra things:
 
 1. A thread-local `TokenizerContext` holding `original_words` for the
    current batch. This is populated in `batch_infer_morphosyntax()` in
-   `batchalign/inference/morphosyntax.py` (around line 346) and cleared
+   `python/batchalign/inference/morphosyntax.py` (around line 346) and cleared
    immediately after `nlp()` returns.
 2. MWT hint preservation. Stanza's tokenizer natively emits
    `(text, True)` tuples to ask its MWT processor to expand a token
@@ -238,7 +238,7 @@ reading `~/batchalign2-master/batchalign/pipelines/morphosyntax/ud.py`.
 
 | Concern | BA2 (`ud.py`) | BA3 |
 |---|---|---|
-| Stanza mode | `tokenize_no_ssplit=True`, free tokenizer (NOT pretokenized). Config built in `_build_nlp()` at line 1004. | Mixed: `tokenize_pretokenized=True` for non-MWT languages and Japanese; free tokenizer with `tokenize_postprocessor` for English and other MWT languages. Config in `batchalign/worker/_stanza_loading.py` line 102-140. |
+| Stanza mode | `tokenize_no_ssplit=True`, free tokenizer (NOT pretokenized). Config built in `_build_nlp()` at line 1004. | Mixed: `tokenize_pretokenized=True` for non-MWT languages and Japanese; free tokenizer with `tokenize_postprocessor` for English and other MWT languages. Config in `python/batchalign/worker/_stanza_loading.py` line 102-140. |
 | Preserve vs retokenize branch | Single `morphoanalyze()` function at line 713 branches on the `retokenize` boolean parameter at line 833. | Typed `TokenizationMode` enum in `morphosyntax/mod.rs`; dispatch branch in `morphosyntax/inject.rs` at line 158. |
 | MWT contraction fix | Inline regex on emitted %mor string at line 826: `re.sub(r"~part\|s verb\|(\w+)-Ger-S", r"~aux|is verb|\1-Part-Pres-S", mor)`. | MWT handling is type-level, not textual: `UdId::Range` parent tokens are detected in `map_ud_sentence()` / `map_ud_sentence_expanded()` and mapped at the AST layer. |
 | Character-DP aligner | Internal `align()` function from `batchalign.utils.dp` operating on `PayloadTarget`/`ReferenceTarget` lists, called at line 872. | Rust `align_tokens()` exposed via `batchalign_core`, called from `_tokenizer_realign.py:188`. Hirschberg divide-and-conquer (`crates/batchalign/src/dp_align.rs`). |
@@ -311,9 +311,9 @@ What BA3 got wrong that BA2 got right (or at least, did simply):
 | `crates/talkbank-transform/src/nlp/mapping/helpers.rs` | `assemble_mors()` — clitic-join MOR construction |
 | `crates/talkbank-transform/src/nlp/mapping/context.rs` | `MappingContext`: language, MWT lexicon, L2 config |
 | `crates/talkbank-transform/src/inject.rs` | `inject_morphosyntax()` — tier insertion, shared by both modes |
-| `batchalign/inference/_tokenizer_realign.py` | `TokenizerContext`, `make_tokenizer_postprocessor`, `_realign_sentence`, `_conform` |
-| `batchalign/inference/morphosyntax.py` | `batch_infer_morphosyntax()` — dispatches Stanza per language, sets `original_words` |
-| `batchalign/worker/_stanza_loading.py` | Per-language Stanza pipeline construction (pretokenized vs postprocessor) |
+| `python/batchalign/inference/_tokenizer_realign.py` | `TokenizerContext`, `make_tokenizer_postprocessor`, `_realign_sentence`, `_conform` |
+| `python/batchalign/inference/morphosyntax.py` | `batch_infer_morphosyntax()` — dispatches Stanza per language, sets `original_words` |
+| `python/batchalign/worker/_stanza_loading.py` | Per-language Stanza pipeline construction (pretokenized vs postprocessor) |
 
 ## Known limitations
 
@@ -370,7 +370,7 @@ Python tests:
 To run the Rust side locally:
 
 ```bash
-cargo nextest run -p batchalign retokenize::tests
+cargo nextest run -p batchalign-cli retokenize::tests
 ```
 
 The ML goldens require real Stanza models and only run on net (256 GB
@@ -392,12 +392,12 @@ following source files, read during authoring:
   and `map_ud_sentence_expanded`.
 - `crates/batchalign/src/retokenize/tests.rs` — 20 `#[test]`
   entries.
-- `batchalign/inference/_tokenizer_realign.py` — full file, including
+- `python/batchalign/inference/_tokenizer_realign.py` — full file, including
   `_conform`, `_is_contraction`, `_realign_sentence`, and the MWT-hint
   overlay block (lines 201-212).
-- `batchalign/inference/morphosyntax.py` — dispatcher around
+- `python/batchalign/inference/morphosyntax.py` — dispatcher around
   `ctx.original_words` (lines 280-360).
-- `batchalign/worker/_stanza_loading.py` — per-language Stanza pipeline
+- `python/batchalign/worker/_stanza_loading.py` — per-language Stanza pipeline
   construction, in particular `tokenize_pretokenized` vs
   `tokenize_postprocessor` split (lines 75-145).
 - `crates/batchalign/tests/ml_golden/golden.rs` — golden test names at

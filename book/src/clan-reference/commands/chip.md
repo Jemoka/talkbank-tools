@@ -26,7 +26,7 @@ chatter clan chip --format json file.cha
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** The
-> rewriter at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> rewriter at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`, but no `clap` field consumes that token
 > today. Drafted from CLAN manual §7.4.5 (`Unique Options`, CHIP) for
 > PI review.
@@ -107,7 +107,7 @@ Supports text, JSON, and CSV. CLAN produces text only.
 
 No CHIP-specific golden tests are currently checked in (`rg
 'chip_golden|chip.*golden'` returns nothing in `tests/` and
-`crates/talkbank-clan/`). The previous "100% parity" claim was
+`crates/clan-core/`). The previous "100% parity" claim was
 incorrect given the stub measure values described above. Once the
 36 measures are computed, golden tests should be added against a
 real CLAN CHIP run.

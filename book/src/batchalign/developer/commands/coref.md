@@ -16,7 +16,7 @@ see [User Guide: coref](../../user-guide/commands/coref.md).
 | Command definition | `crates/batchalign/src/commands/coref.rs` | `CommandDefinition` impl |
 | Coref orchestration | `crates/batchalign/src/coref.rs` | Full-document context assembly, worker dispatch, sparse injection |
 | Injection | `crates/batchalign/src/coref.rs` | Writes sparse `%xcoref:` tiers |
-| Worker IPC | `batchalign/inference/coref.py` — `batch_infer_coref()` | Loads Stanza coref model, returns chain structures |
+| Worker IPC | `python/batchalign/inference/coref.py` — `batch_infer_coref()` | Loads Stanza coref model, returns chain structures |
 
 Local submissions (auto-daemon or loopback `--server`) use `paths_mode=true`
 as of 2026-04-14: the CLI posts source/output path lists instead of CHAT
@@ -82,8 +82,8 @@ resolved language before dispatching; non-English files pass through with no
 ## Testing
 
 ```bash
-make test
-cargo nextest run -p batchalign -E 'test(coref::)'
+bazel test //...
+cargo nextest run -p batchalign-cli -E 'test(coref::)'
 # Requires Stanza coref model
 cargo nextest run --profile ml -E 'test(coref::golden)'
 ```

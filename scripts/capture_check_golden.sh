@@ -1,8 +1,8 @@
 #!/bin/bash
 # Capture CLAN CHECK output for each check-error-corpus file.
 #
-# Produces tests/check-error-corpus/golden/ with one .txt file per .cha file.
-# Also produces tests/check-error-corpus/golden/summary.tsv with error numbers.
+# Produces tests/check-error-resources/corpus/golden/ with one .txt file per .cha file.
+# Also produces tests/check-error-resources/corpus/golden/summary.tsv with error numbers.
 #
 # Usage:
 #   bash scripts/capture_check_golden.sh [CLAN_CHECK_BINARY]

@@ -7,7 +7,7 @@
 
 Searches for clusters containing specified keywords and displays the matching lines with context. The legacy manual gives `KWAL` a dedicated section and describes it as operating on "clusters": the main tier plus the selected dependent tiers associated with that line.
 
-In `talkbank-clan`, keywords are currently matched against countable words on the main tier, with the matched utterance shown in context.
+In `clan-core`, keywords are currently matched against countable words on the main tier, with the matched utterance shown in context.
 
 ## Usage
 
@@ -35,7 +35,7 @@ chatter clan kwal -k want -k cookie file.cha
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** The
-> rewriter at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> rewriter at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`, but no `clap` field consumes that token
 > today. This table is drafted from CLAN manual §7.17.5
 > (`Unique Options`, KWAL) verbatim for PI review. Tracked in

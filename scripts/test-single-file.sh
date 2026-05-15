@@ -27,7 +27,7 @@ if [[ "$FILE" == /* ]]; then
 else
     TEST_FILE="$FILE"
     REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-    CORPUS_DIR="${CORPUS_ARG:-$REPO_ROOT/corpus/reference}"
+    CORPUS_DIR="${CORPUS_ARG:-$REPO_ROOT/resources/corpus/reference}"
 fi
 
 echo "Testing: $TEST_FILE"

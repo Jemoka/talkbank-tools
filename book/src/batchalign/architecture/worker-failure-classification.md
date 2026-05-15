@@ -142,7 +142,7 @@ Two reasons:
 
 ## The Python side: `_serve_stdio` and exception handling
 
-Source: `batchalign/worker/_protocol.py`.
+Source: `python/batchalign/worker/_protocol.py`.
 
 ### Pre-2026-05-06 behavior (the bug)
 
@@ -475,7 +475,7 @@ Checklist for contributors:
 
 2. **Register it in the classifier.** Add a lazy import + append to the
    `bootstrap_types` list in
-   `batchalign/worker/_protocol.py:_classify_dispatch_exception`.
+   `python/batchalign/worker/_protocol.py:_classify_dispatch_exception`.
 
 3. **Make sure the error message is actionable.** The user will see it
    verbatim. Include: what failed, where (URL, file path), why

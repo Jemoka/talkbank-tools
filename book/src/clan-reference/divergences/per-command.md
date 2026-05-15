@@ -24,7 +24,7 @@ This page documents every known divergence between the Rust `chatter clan` comma
 - AST-based `is_countable_word()` replaces string-prefix matching
 - The [CLAN manual](https://talkbank.org/0info/manuals/CLAN.html) explicitly
   says `FREQ` ignores `xxx`, `www`, and items beginning with `0`, `&`, `+`,
-  `-`, or `#` by default; `talkbank-clan` preserves that intent through typed
+  `-`, or `#` by default; `clan-core` preserves that intent through typed
   word classes rather than raw prefix checks.
 - `NormalizedWord` lowercases and strips compound markers for grouping
 - Deterministic sort (count descending, then alphabetical); CLAN's order varies

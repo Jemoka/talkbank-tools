@@ -29,7 +29,7 @@ command registration, and server orchestration.
 
 ### 1. Add the inference module
 
-Create a built-in module under `batchalign/inference/` that exposes a pure
+Create a built-in module under `python/batchalign/inference/` that exposes a pure
 inference helper consumed by a typed V2 worker host:
 
 ```python
@@ -52,7 +52,7 @@ and return structured results only.
 
 If this is a new live infer task, add it in the V2 IPC type definitions:
 
-- `batchalign/worker/_types_v2.py`
+- `python/batchalign/worker/_types_v2.py`
 - `crates/batchalign-types/src/worker_v2/` (re-exported by `crates/batchalign/src/types/worker_v2.rs`)
 
 If you are only adding a new engine behind an existing task such as ASR or FA,
@@ -60,7 +60,7 @@ reuse the existing task and add only the new engine selector/state.
 
 ### 3. Load model state in the worker
 
-Update `batchalign/worker/_model_loading/` so `load_worker_task()` can
+Update `python/batchalign/worker/_model_loading/` so `load_worker_task()` can
 initialize the new engine for the relevant infer task. This is where task-level
 engine overrides are resolved and worker state is populated.
 
@@ -75,10 +75,10 @@ For existing command families, you usually update one of:
 
 Update:
 
-- `batchalign/worker/_execute_v2.py` to route the task or engine
-- `batchalign/worker/_text_v2.py` if the task belongs to the shared batched
+- `python/batchalign/worker/_execute_v2.py` to route the task or engine
+- `python/batchalign/worker/_text_v2.py` if the task belongs to the shared batched
   text host
-- `batchalign/worker/_handlers.py` to advertise `infer_tasks` and
+- `python/batchalign/worker/_handlers.py` to advertise `infer_tasks` and
   `engine_versions`
 
 If the new engine is a variant of an existing task, keep the task stable and
@@ -155,7 +155,7 @@ must update when adding a new variant. Use the `whisper_hub` addition
 
 Worker-side enum (matches Rust wire name one-to-one):
 
-- `AsrEngine` in `batchalign/worker/_types.py` — the Python enum the
+- `AsrEngine` in `python/batchalign/worker/_types.py` — the Python enum the
   worker bootstrap stores in `_state.asr_engine`.
 
 Request validation surface (optional, only for engines with
@@ -165,7 +165,7 @@ per-engine language constraints like the Cantonese ASR engines):
 
 **Per-language default model_id resolution.** If your engine picks a
 model per language (e.g. different HF fine-tunes per language), add
-entries to `batchalign/models/resolve.py` rather than inventing a new
+entries to `python/batchalign/models/resolve.py` rather than inventing a new
 per-engine table. `resolve("your_engine", lang_iso3)` returns the
 model_id or `None`; raise a typed error on `None` unless the caller
 passed an explicit override, rather than falling back to a generic
@@ -175,10 +175,10 @@ default.
 `language` and `task` into their own `generation_config`. Passing
 those again in `generate_kwargs` produces gibberish. The escape hatch
 is the `skip_language_force: bool` flag on
-`batchalign/inference/types.py::WhisperASRHandle` — when `True`,
+`python/batchalign/inference/types.py::WhisperASRHandle` — when `True`,
 `gen_kwargs()` returns ONLY `{"max_new_tokens": 444}` and omits
 `task`, `language`, `generation_config`, and `repetition_penalty`.
-See `batchalign/inference/whisper_hub.py` for the wiring:
+See `python/batchalign/inference/whisper_hub.py` for the wiring:
 pass `language="auto"` to `load_whisper_asr()` AND set
 `handle.skip_language_force = True` before returning.
 
@@ -240,7 +240,7 @@ only one was the contract.
 
 ```bash
 # What reads self.lang?
-rg 'model\.lang|handle\.lang|\.lang =' batchalign/inference/
+rg 'model\.lang|handle\.lang|\.lang =' python/batchalign/inference/
 # What calls gen_kwargs?
 rg 'gen_kwargs\(' batchalign/
 ```
@@ -289,11 +289,11 @@ variant means you must:
 1. Add a match arm inside `crates/batchalign-pyo3/src/worker_asr_exec.rs::run_asr` that
    routes the new variant. The compiler will catch the missing arm if
    you let it — but only after you rebuild the PyO3 extension.
-2. Rebuild `batchalign_core`: `make batchalign-python-prepare` (which
+2. Rebuild `batchalign_core`: `just batchalign develop` (which
    produces a fresh wheel via the maturin backend declared in
    `pyproject.toml` and reinstalls it into the dev environment), or run
    any `uv run …` command to trigger an incremental rebuild against
-   `[tool.maturin] profile = "dev"`. Running `make build` alone (which
+   `[tool.maturin] profile = "dev"`. Running `bazel build //...` alone (which
    does `cargo build --workspace --release`) compiles the PyO3 crate but
    does **not** install the resulting `.so` into the Python environment
    that workers import from. Without the install step, workers silently
@@ -303,8 +303,8 @@ variant means you must:
    ~30 minutes). Neither end logs the Pydantic / serde validation
    failure that would localize this.
 3. Also update the Python hand-maintained `AsrBackendV2` enum in
-   `batchalign/worker/_types_v2.py`. The generated file at
-   `batchalign/generated/worker_v2/AsrBackendV2.py` already gets the
+   `python/batchalign/worker/_types_v2.py`. The generated file at
+   `python/batchalign/generated/worker_v2/AsrBackendV2.py` already gets the
    variant after `make generate-ipc-types`, but the hand-maintained
    file is what type-checks in worker source code and must be kept in
    sync by hand.
@@ -326,16 +326,16 @@ again on first read, the variant has a hole.
 
 `batchalign-pyo3` is a member of the root Cargo workspace (see
 `members` in the root `Cargo.toml`), so `cargo check --workspace`
-and `make build` *do* compile the PyO3 bridge and *do*
+and `bazel build //...` *do* compile the PyO3 bridge and *do*
 exhaustive-match-check `AsrBackendV2` arms there. Targeted
-commands like `cargo check -p batchalign` skip it because
+commands like `cargo check -p batchalign-cli` skip it because
 `batchalign` does not depend on `batchalign-pyo3`.
 
 The failure mode the rebuild ritual prevents is therefore not a
 missed compile error: it is an install gap. The freshly compiled
 PyO3 `.so` lives in `target/`, while the Python worker process
 imports `batchalign_core` from the wheel previously installed into
-the active `uv` environment. Without `make batchalign-python-prepare`
+the active `uv` environment. Without `just batchalign develop`
 (or an equivalent reinstall), the worker keeps loading the stale
 `.so` and the new variant produces a silent stall on the worker's
 stdin readline (no response surfaces until the 30-minute
@@ -374,18 +374,18 @@ In addition to those Rust-side changes, update these Python-side surfaces:
 
 1. **`crates/batchalign-types/src/command_spec.rs`** — Add a `CommandSpec` entry to
    `COMMAND_SPECS`. Then run `cargo xtask gen-runtime-toml` to regenerate
-   `batchalign/runtime_constants.toml` (the generated file is the shared
+   `python/batchalign/runtime_constants.toml` (the generated file is the shared
    Rust/Python source of truth; do not edit it directly).
 2. **`batchalign/runtime.py`** — Add the command to `COMMAND_PROBES` with the
    tuple of Python modules that must be importable for the command to appear in
    `detect_capabilities()`.
-3. **`batchalign/worker/_handlers.py`** — Add the `InferTask` to
+3. **`python/batchalign/worker/_handlers.py`** — Add the `InferTask` to
    `_INFER_TASK_PROBES` so the worker advertises it. This must match the
    same dependencies used in `COMMAND_PROBES`. See
    [step 4 above](#4-wire-dispatch-and-capability-advertisement) for details.
-4. **`batchalign/worker/_model_loading/`** — Register the dynamic
+4. **`python/batchalign/worker/_model_loading/`** — Register the dynamic
    runtime host for the new task if it depends on loaded model state or
-   engine-specific wiring. Reserve **`batchalign/worker/_execute_v2.py`** for
+   engine-specific wiring. Reserve **`python/batchalign/worker/_execute_v2.py`** for
    the small task router that dispatches to those prepared hosts.
 
 Remember: command semantics live in the command-owned Rust layer, not in the

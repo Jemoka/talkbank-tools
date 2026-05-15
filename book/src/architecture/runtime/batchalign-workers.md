@@ -105,7 +105,7 @@ shared GPU worker.
     `dispatch_semaphore: Arc<Semaphore>` with `K` permits, acquired
     *before* the per-request timeout starts.
   - Python:
-    `batchalign/worker/_protocol.py::_serve_stdio_concurrent` hosts
+    `python/batchalign/worker/_protocol.py::_serve_stdio_concurrent` hosts
     a `ThreadPoolExecutor(max_workers=K)`.
 
 ```mermaid

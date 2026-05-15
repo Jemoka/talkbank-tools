@@ -1,0 +1,62 @@
+name: bazel · python
+
+# Maturin builds the batchalign3 wheel, Bazel orchestrates. This
+# workflow runs maturin develop + pytest + mypy against the editable
+# install. Wheel-publishing is its own workflow (publish-pypi.yml).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python/**"
+      - "crates/batchalign/batchalign-pyo3/**"
+      - "crates/batchalign/batchalign-types/**"
+      - "crates/core/talkbank-transform/**"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - ".github/workflows/bazel-python.yml"
+  pull_request:
+    paths:
+      - "python/**"
+      - "crates/batchalign/batchalign-pyo3/**"
+      - "crates/batchalign/batchalign-types/**"
+      - "crates/core/talkbank-transform/**"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - ".github/workflows/bazel-python.yml"
+
+concurrency:
+  group: bazel-python-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  develop-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
+
+      - name: Install uv (Python project manager)
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install Python 3.12 via uv
+        working-directory: python
+        run: uv python install 3.12
+
+      - name: Maturin editable install (bazel-orchestrated)
+        run: bazel run //python/batchalign:develop
+
+      - name: pytest
+        run: bazel run //python/batchalign:test -- -q
+
+      - name: mypy
+        run: bazel run //python/batchalign:lint

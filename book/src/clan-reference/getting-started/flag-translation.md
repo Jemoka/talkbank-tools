@@ -21,9 +21,9 @@ The original CLAN uses a `+flag`/`-flag` syntax that differs from standard CLI c
 | `+z25-125` | `--range 25-125` | Utterance range |
 | `+r6` | `--include-retracings` | Count retraced material |
 | `+u` | *(default behavior)* | Merge speakers (already default) |
-| ~~`+dN`~~ | ~~`--display-mode N`~~ | Numeric display mode — **currently non-functional**: the rewriter at `crates/talkbank-clan/src/clan_args.rs:101` produces `--display-mode`, but no `clap` field consumes it. Tracked in `docs/superpowers/plans/2026-05-11-clan-rewriter-honor-three-flags.md` Phase 3 (pending PI review). |
-| ~~`+k`~~ | ~~`--case-sensitive`~~ | Case-sensitive matching — **currently non-functional**: the rewriter at `crates/talkbank-clan/src/clan_args.rs:104` produces `--case-sensitive`, but no `clap` field consumes it. Word matching is case-insensitive today. |
-| ~~`+fEXT`~~ | ~~`--output-ext EXT`~~ | Output file extension — **currently non-functional**: the rewriter at `crates/talkbank-clan/src/clan_args.rs:107` produces `--output-ext`, but no `clap` field consumes it. Tracked as Phase 2 of the rewriter-honor plan (blocked on a batch-output prerequisite). |
+| ~~`+dN`~~ | ~~`--display-mode N`~~ | Numeric display mode — **currently non-functional**: the rewriter at `crates/clan-core/src/clan_args.rs:101` produces `--display-mode`, but no `clap` field consumes it. Tracked in `docs/superpowers/plans/2026-05-11-clan-rewriter-honor-three-flags.md` Phase 3 (pending PI review). |
+| ~~`+k`~~ | ~~`--case-sensitive`~~ | Case-sensitive matching — **currently non-functional**: the rewriter at `crates/clan-core/src/clan_args.rs:104` produces `--case-sensitive`, but no `clap` field consumes it. Word matching is case-insensitive today. |
+| ~~`+fEXT`~~ | ~~`--output-ext EXT`~~ | Output file extension — **currently non-functional**: the rewriter at `crates/clan-core/src/clan_args.rs:107` produces `--output-ext`, but no `clap` field consumes it. Tracked as Phase 2 of the rewriter-honor plan (blocked on a batch-output prerequisite). |
 | `+wN` | `--context-after N` | Context lines after match |
 | `-wN` | `--context-before N` | Context lines before match |
 

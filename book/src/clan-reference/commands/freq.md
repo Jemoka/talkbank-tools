@@ -7,7 +7,7 @@
 
 Counts word tokens and types and computes type-token ratio (TTR). The legacy manual describes `FREQ` as one of CLAN's most powerful and easiest-to-use programs, producing word-frequency counts and lexical-diversity measures over selected files and speakers.
 
-In `talkbank-clan`, `FREQ` counts words on the main tier by default, or morphemes from the `%mor` tier when `--mor` is set.
+In `clan-core`, `FREQ` counts words on the main tier by default, or morphemes from the `%mor` tier when `--mor` is set.
 
 See the [CLAN manual](https://talkbank.org/0info/manuals/CLAN.html#_Toc220409093) for the original FREQ command specification.
 
@@ -23,7 +23,7 @@ chatter clan freq --include-word "the" file.cha
 
 > **`+k` / `--case-sensitive` is currently non-functional.** The
 > legacy `+k` flag rewrites to `--case-sensitive` (see
-> `crates/talkbank-clan/src/clan_args.rs:104`), but no `clap` field
+> `crates/clan-core/src/clan_args.rs:104`), but no `clap` field
 > consumes that token in the current `Freq`/`CommonAnalysisArgs`
 > structs, so passing it produces a parse error. Word matching is
 > case-insensitive today.
@@ -54,7 +54,7 @@ chatter clan freq --include-word "the" file.cha
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** The legacy
-> rewriter at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> rewriter at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`, but no `clap` field consumes that token
 > today. This section drafts the per-N table from CLAN manual
 > §7.10.15 (`Unique Options`, FREQ) verbatim, for PI review and
@@ -166,7 +166,7 @@ Our implementation uses AST-based `is_countable_word()`, which checks semantic t
 
 ### Manual features not yet mirrored directly
 
-The legacy manual documents several advanced `FREQ` workflows, including `+s@file` lexical-group lists, `%mor`/`%gra` combined search with `+d7`, and multilingual searches. Some of those behaviors are covered in `talkbank-clan` through broader filtering infrastructure, but the command chapter should not imply one-for-one flag parity unless explicitly implemented.
+The legacy manual documents several advanced `FREQ` workflows, including `+s@file` lexical-group lists, `%mor`/`%gra` combined search with `+d7`, and multilingual searches. Some of those behaviors are covered in `clan-core` through broader filtering infrastructure, but the command chapter should not imply one-for-one flag parity unless explicitly implemented.
 
 ### Output ordering
 

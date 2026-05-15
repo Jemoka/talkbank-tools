@@ -127,7 +127,7 @@ file should be created following the pattern of existing language files.
 |------|------|
 | `batchalign/src/nlp/features.rs` | HebBinyan/HebExistential extraction |
 | `batchalign/src/nlp/mapping.rs` | `heb` → `he` code mapping, integration tests |
-| `batchalign/worker/_stanza_loading.py` | Stanza pipeline configuration for Hebrew |
+| `python/batchalign/worker/_stanza_loading.py` | Stanza pipeline configuration for Hebrew |
 
 ## Test Coverage
 

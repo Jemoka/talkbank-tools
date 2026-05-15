@@ -1,0 +1,15 @@
+"""JSON Schemas for the ChatFile AST + analyze-command interfaces."""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "chat-file.schema.json",
+    "chat-file.schema.generated.json",
+    "analyze-command.schema.json",
+    "analyze-command.schema.generated.json",
+])
+
+filegroup(
+    name = "all_files",
+    srcs = glob(["**/*"], exclude = ["BUILD.bazel"]),
+)

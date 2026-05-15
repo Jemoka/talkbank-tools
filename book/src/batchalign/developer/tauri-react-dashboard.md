@@ -7,8 +7,8 @@
 
 Batchalign3 dashboard delivery uses:
 
-1. `frontend/` as the canonical React UI.
-2. `apps/dashboard-desktop/` as the Tauri desktop shell.
+1. `apps/batchalign/cli-web-statuspage/` as the canonical React UI.
+2. `apps/batchalign/dashboard-desktop/` as the Tauri desktop shell.
 
 The frontend serves two surfaces:
 
@@ -30,7 +30,7 @@ and the Tauri backend IPC boundary.
 
 ```mermaid
 flowchart TD
-    subgraph "React Frontend (frontend/src/)"
+    subgraph "React Frontend (apps/batchalign/cli-web-statuspage/src/)"
         subgraph "/dashboard — Fleet Monitoring"
             dash["DashboardPage"]
             dash --> joblist["JobList"] & workers["WorkerProfilePanel"] & mem["MemoryPanel"] & vitals["VitalsRow"]
@@ -57,7 +57,7 @@ flowchart TD
         config["read_config() / write_config()"]
     end
 
-    subgraph "React Hooks (frontend/src/desktop/)"
+    subgraph "React Hooks (apps/batchalign/cli-web-statuspage/src/desktop/)"
         lifecycle["useServerLifecycle"]
         health["useServerHealth"]
         submit["useSubmitJob"]
@@ -80,7 +80,7 @@ dev server.
 
 ```bash
 # Debug build (faster compile, slower runtime — fine for dashboard dev)
-cargo run -p batchalign -- serve start --foreground --port 8000
+cargo run -p batchalign-cli -- serve start --foreground --port 8000
 ```
 
 Or if you already have a release binary:
@@ -89,7 +89,7 @@ Or if you already have a release binary:
 ./target/release/batchalign3 serve start --foreground --port 8000
 ```
 
-The server must be on port 8000 — the Vite dev config in `frontend/vite.config.ts`
+The server must be on port 8000 — the Vite dev config in `apps/batchalign/cli-web-statuspage/vite.config.ts`
 proxies `/jobs`, `/health`, and `/ws` to `localhost:8000`.
 
 ### Terminal 2: Start the Vite dev server
@@ -111,7 +111,7 @@ Vite starts on `http://localhost:5173`. Open:
 - **`http://localhost:5173/process`** — end-user processing flow (desktop-oriented,
   but works in browser for layout testing)
 
-Changes to `frontend/src/` hot-reload instantly. Changes to Rust types require
+Changes to `apps/batchalign/cli-web-statuspage/src/` hot-reload instantly. Changes to Rust types require
 rebuilding the server and regenerating OpenAPI types
 (`bash scripts/generate_dashboard_api_types.sh`).
 
@@ -217,13 +217,13 @@ started development servers.
 
 ### Desktop-Specific Frontend Code
 
-Low-level Tauri API access remains isolated in `frontend/src/lib/tauri.ts`, but
+Low-level Tauri API access remains isolated in `apps/batchalign/cli-web-statuspage/src/lib/tauri.ts`, but
 the React tree now consumes it through a protocol/capability split:
 
-- `frontend/src/desktop/protocol.ts` inventories raw command/event identifiers
+- `apps/batchalign/cli-web-statuspage/src/desktop/protocol.ts` inventories raw command/event identifiers
   and pairs them with request/response payload types
-- `DesktopProvider` wraps the app in `frontend/src/main.tsx`
-- `frontend/src/desktop/DesktopContext.tsx` exposes focused hooks:
+- `DesktopProvider` wraps the app in `apps/batchalign/cli-web-statuspage/src/main.tsx`
+- `apps/batchalign/cli-web-statuspage/src/desktop/DesktopContext.tsx` exposes focused hooks:
   `useDesktopEnvironment()`, `useDesktopFiles()`, `useDesktopConfig()`, and
   `useDesktopServer()`
 - `lib/tauri.ts` keeps the dynamic imports and browser fallbacks for dialogs,
@@ -236,7 +236,7 @@ components/hooks.
 
 ### Process Flow Components
 
-Desktop-specific processing UI lives in `frontend/src/components/process/`:
+Desktop-specific processing UI lives in `apps/batchalign/cli-web-statuspage/src/components/process/`:
 
 | Component | Role |
 |-----------|------|
@@ -272,7 +272,7 @@ setup wizard before the main route tree loads. This matches batchalign2's
 behavior where `config_read(interactive=True)` triggers `interactive_setup()`
 on first CLI invocation.
 
-The wizard lives in `frontend/src/components/setup/`:
+The wizard lives in `apps/batchalign/cli-web-statuspage/src/components/setup/`:
 
 | Component | Role |
 |-----------|------|
@@ -288,7 +288,7 @@ error with instructions (non-interactive).
 Run the shell-focused Rust tests with:
 
 ```bash
-cargo test --manifest-path apps/dashboard-apps/chatter-desktop/src-tauri/Cargo.toml
+cargo test --manifest-path apps/dashboard-apps/chatter/chatter-gui/src-tauri/Cargo.toml
 ```
 
 These tests intentionally cover the native shell contracts only:
@@ -302,7 +302,7 @@ Keep new shell logic behind pure helpers or small state wrappers so this suite
 can stay fast without booting the full webview.
 
 Focused frontend seam checks live in
-`frontend/e2e/tests/mock-server.spec.mjs`, which fakes the Tauri runtime to
+`apps/batchalign/cli-web-statuspage/e2e/tests/mock-server.spec.mjs`, which fakes the Tauri runtime to
 exercise first-launch config flow, file discovery, and server status event
 wiring.
 
@@ -380,7 +380,7 @@ visual phases. The mapping is defined in `PHASES` at the top of the component:
 
 When adding a new `FileProgressStage` variant in Rust, add it to the
 appropriate phase set in `PipelineStageBar.tsx` and to `PROGRESS_STAGE_LABELS`
-in `frontend/src/utils.ts`.
+in `apps/batchalign/cli-web-statuspage/src/utils.ts`.
 
 ### Worker Key Parsing
 

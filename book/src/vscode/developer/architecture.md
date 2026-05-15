@@ -20,7 +20,7 @@ flowchart TD
     end
 
     subgraph "Language Server (Rust)"
-        LSP["talkbank-lsp\nmain.rs, lib.rs"]
+        LSP["chatter-lsp\nmain.rs, lib.rs"]
         Backend["Backend (state.rs)\nDashMap caches, debounce"]
         Features["Feature Handlers\nhover, completion, rename,\ncode actions, highlights..."]
         Align["Alignment Module\nCross-tier mapping"]
@@ -31,7 +31,7 @@ flowchart TD
     subgraph "Core Crates (Rust)"
         Model["talkbank-model\nData types, validation,\nalignment"]
         Parser["talkbank-parser\nTree-sitter CST to AST"]
-        Clan["talkbank-clan\n33 analysis commands"]
+        Clan["clan-core\n33 analysis commands"]
     end
 
     Ext -->|"stdio JSON-RPC"| LSP
@@ -123,7 +123,7 @@ If you are new to the codebase, read these files in order:
 Cross-tier alignment — main ↔ `%mor`, `%mor` ↔ `%gra`, main ↔ `%pho` /
 `%sin` / `%wor` — is implemented **once** in `talkbank-model`. The LSP
 crate is a consumer; it never recomputes alignment. This boundary is
-strict and is codified in `crates/talkbank-lsp/CLAUDE.md`.
+strict and is codified in `crates/chatter-lsp/CLAUDE.md`.
 
 ### The `%mor` chunk primitive
 
@@ -183,7 +183,7 @@ magic number.
 sequenceDiagram
     participant U as User
     participant TS as VS Code (TS)
-    participant LSP as talkbank-lsp
+    participant LSP as chatter-lsp
     participant M as talkbank-model
 
     U->>TS: Click "2|0|ROOT" on %gra line
@@ -277,7 +277,7 @@ flowchart LR
     user["User\nright-click > Run Analysis"]
     pick["QuickPick\n(33 commands)"]
     lsp["LSP Request\ntalkbank/analyze"]
-    runner["AnalysisRunner\n(talkbank-clan crate)"]
+    runner["AnalysisRunner\n(clan-core crate)"]
     json["JSON result"]
     panel["AnalysisPanel\nWebview"]
     table["HTML tables\n+ stat cards\n+ bar charts"]

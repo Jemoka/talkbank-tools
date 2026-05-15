@@ -47,8 +47,8 @@ If your change modifies node types (adding/removing/renaming rules), downstream 
 | `src/parser.c` | `tree-sitter generate` | `grammar.js` |
 | `src/grammar.json` | `tree-sitter generate` | `grammar.js` |
 | `src/node-types.json` | `tree-sitter generate` | `grammar.js` |
-| `src/generated_symbol_sets.js` | `make symbols-gen` (from repo root) | `spec/symbols/` |
-| `test/corpus/` | `make test-gen` (from repo root) | `spec/constructs/` and `spec/errors/` |
+| `src/generated_symbol_sets.js` | `node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js` (from repo root) | `resources/spec/symbols/` |
+| `test/corpus/` | `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` (from repo root) | `resources/spec/constructs/` and `resources/spec/errors/` |
 
 Never hand-edit any of these. If you need to change parser behavior, edit `grammar.js`. If you need to change test cases, read on.
 
@@ -60,7 +60,7 @@ The `test/corpus/` directory contains tree-sitter test files organized by catego
 
 ```
 test/corpus/
-├── errors/         # Error detection tests (generated from spec/errors/)
+├── errors/         # Error detection tests (generated from resources/spec/errors/)
 ├── header/         # Header parsing tests
 ├── main_tier/      # Main tier / utterance tests
 ├── tiers/          # Dependent tier tests (MOR, GRA, PHO, etc.)
@@ -95,12 +95,12 @@ Test name
 
 Most test files are **generated** from specifications in the repository:
 
-- **Construct specs** (`spec/constructs/`) define valid CHAT examples with expected parse trees
-- **Error specs** (`spec/errors/`) define invalid CHAT examples with expected error codes
+- **Construct specs** (`resources/spec/constructs/`) define valid CHAT examples with expected parse trees
+- **Error specs** (`resources/spec/errors/`) define invalid CHAT examples with expected error codes
 
 The generation pipeline (from the repo root):
 ```bash
-make test-gen    # Runs gen_tree_sitter_tests → outputs to grammar/test/corpus/
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs    # Runs gen_tree_sitter_tests → outputs to grammar/test/corpus/
 ```
 
 This ensures specs are the single source of truth for what the grammar should accept/reject. Generated test files should not be edited by hand — change the spec and regenerate.
@@ -159,10 +159,10 @@ Changes that only affect internal parser states (precedence, conflict resolution
 - `EVENT_SEGMENT_FORBIDDEN_BASE` — characters that terminate event segments
 - `EVENT_SEGMENT_FORBIDDEN_COMMON` — additional forbidden event characters
 
-These are generated from `spec/symbols/symbol_registry.json`. To regenerate:
+These are generated from `resources/spec/symbols/symbol_registry.json`. To regenerate:
 
 ```bash
-make symbols-gen    # from repo root
+node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js    # from repo root
 ```
 
 ## Release process
@@ -183,4 +183,4 @@ make symbols-gen    # from repo root
 
 ## CHAT anchor validation
 
-Anchor validation is run via `make chat-anchors-check` from the repo root.
+Anchor validation is run via `bash scripts/check-chat-manual-anchors.sh` from the repo root.

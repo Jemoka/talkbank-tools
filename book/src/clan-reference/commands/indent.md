@@ -5,7 +5,7 @@
 
 Aligns overlap markers in Conversation Analysis (CA) transcripts. The legacy manual describes `INDENT` simply as a program for realigning overlap marks in CA files, and notes that the files must use a fixed-width font such as CAFont.
 
-`talkbank-clan` aligns closing overlap markers (`⌊`, U+230A) by column position with their matching opening overlap markers (`⌈`, U+2308) on a preceding speaker tier.
+`clan-core` aligns closing overlap markers (`⌊`, U+230A) by column position with their matching opening overlap markers (`⌈`, U+2308) on a preceding speaker tier.
 
 ## Usage
 

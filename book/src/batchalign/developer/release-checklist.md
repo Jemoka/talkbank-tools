@@ -11,10 +11,10 @@ the release is blocked until it is resolved.
 
 ### 1. Version Consistency
 
-- [ ] `pyproject.toml` version matches target release version and stays `< 1.0.0` unless `docs/RELEASE-CONTRACT.md` + `docs/VERSIONING.md` are updated in the same patch to promote the surface
+- [ ] `pyproject.toml` version matches target release version and stays `< 1.0.0` unless `book/src/operations/release-contract.md` + `book/src/operations/versioning.md` are updated in the same patch to promote the surface
 - [ ] `batchalign/version` mirrors the target version/date/description (runtime metadata only; not the canonical policy source)
 - [ ] `crates/batchalign-*/Cargo.toml` and `crates/batchalign-pyo3/Cargo.toml` mirror the target version
-- [ ] `cargo test -p batchalign --test ci_checks -q` passes
+- [ ] `cargo test -p batchalign-cli --test ci_checks -q` passes
 - [ ] Desktop metadata versions updated if desktop is included in the release
 
 ### 2. CI Green
@@ -61,7 +61,7 @@ the release is blocked until it is resolved.
 
 - [ ] `RELEASE-CONTRACT.md` up to date
 - [ ] `PLATFORM-SUPPORT.md` up to date
-- [ ] `docs/code-signing-and-distribution.md` still matches the actual distribution channels being used
+- [ ] `book/src/operations/code-signing-and-distribution.md` still matches the actual distribution channels being used
 - [ ] CHANGELOG or release notes drafted for this version
 - [ ] API stability documentation reflects current state
 

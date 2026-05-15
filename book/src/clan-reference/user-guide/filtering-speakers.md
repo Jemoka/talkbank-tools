@@ -51,7 +51,7 @@ chatter clan freq --id-filter "*|*|CHI" file.cha
 
 CLAN equivalent: `+t@ID="*|*|*|*|*|*|*|Target_Child"`.
 
-Authoritative parser: `crates/talkbank-clan/src/framework/id_filter.rs`. The language field is a comma-separated list in the underlying `@ID`; the filter matches if any language in the `@ID` matches the pattern.
+Authoritative parser: `crates/clan-core/src/framework/id_filter.rs`. The language field is a comma-separated list in the underlying `@ID`; the filter matches if any language in the `@ID` matches the pattern.
 
 ## Interaction with other filters
 

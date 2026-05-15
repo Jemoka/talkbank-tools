@@ -45,12 +45,12 @@ server/control-plane architecture is still evolving.
 
 If you want a repo-hosted wrapper around the same `uv` install flow:
 
-- **macOS:** [Download install-batchalign3.command](https://github.com/TalkBank/talkbank-tools/raw/main/installers/macos/install-batchalign3.command)
-- **Windows:** [Download install-batchalign3.bat](https://github.com/TalkBank/talkbank-tools/raw/main/installers/windows/install-batchalign3.bat)
+- **macOS:** [Download install-batchalign3.command](https://github.com/TalkBank/talkbank-tools/raw/main/scripts/installers/macos/install-batchalign3.command)
+- **Windows:** [Download install-batchalign3.bat](https://github.com/TalkBank/talkbank-tools/raw/main/scripts/installers/windows/install-batchalign3.bat)
 
 Those scripts install `uv` if needed and then run `uv tool install
 batchalign3`. They are convenience helpers only. For release-policy details and
-Gatekeeper/SmartScreen notes, see the [installers README](https://github.com/TalkBank/talkbank-tools/blob/main/installers/README.md).
+Gatekeeper/SmartScreen notes, see the [installers README](https://github.com/TalkBank/talkbank-tools/blob/main/scripts/installers/README.md).
 
 ### macOS
 
@@ -209,21 +209,21 @@ For contributors working from a source checkout:
 ```bash
 git clone https://github.com/TalkBank/talkbank-tools.git
 cd talkbank-tools
-make batchalign-python-prepare    # build wheel + sync uv env + install
-make build                         # full workspace cargo build (release)
+just batchalign develop    # build wheel + sync uv env + install
+bazel build //...                         # full workspace cargo build (release)
 ```
 
 Batchalign source now lives inside this repository; there is no separate active
 `batchalign3` source checkout.
 
-`make batchalign-python-prepare` rebuilds the wheel via the maturin backend
+`just batchalign develop` rebuilds the wheel via the maturin backend
 declared in `pyproject.toml`, runs `uv sync --group dev --no-install-project`,
 and installs the freshly built wheel into the dev environment. The same
 target covers Cantonese providers — they are part of the base package.
 
-`make build` runs `cargo build --workspace --release` plus the spec-tools
+`bazel build //...` runs `cargo build --workspace --release` plus the spec-tools
 build. It does not rebuild the embedded dashboard. If you also need the
-React dashboard rebuilt, run `make batchalign-dashboard-build` (which
+React dashboard rebuilt, run `just batchalign dashboard` (which
 requires Node.js + npm in addition to Rust and uv).
 
 In a source checkout, `uv run batchalign3` is still the normal way to
@@ -235,7 +235,7 @@ For the fastest contributor loop:
 
 ```bash
 uv run batchalign3 --help        # incremental PyO3 rebuild via maturin/uv
-cargo build -p batchalign         # native batchalign3 binary (debug)
+cargo build -p batchalign-cli         # native batchalign3 binary (debug)
 ./target/debug/batchalign3 --help
 ```
 
@@ -245,12 +245,12 @@ when you are not invoking the CLI itself.
 Common rebuilds from a dev checkout:
 
 ```bash
-cargo build -p batchalign                              # CLI / server changes (debug)
+cargo build -p batchalign-cli                              # CLI / server changes (debug)
 cargo build --workspace --release                      # full release build (slow)
-make batchalign-python-prepare                          # rebuild + reinstall the wheel
-make build                                              # full workspace + spec tools (release)
+just batchalign develop                          # rebuild + reinstall the wheel
+bazel build //...                                              # full workspace + spec tools (release)
 ./target/debug/batchalign3 --help
-cargo run -p batchalign -- --help
+cargo run -p batchalign-cli -- --help
 cargo nextest run --workspace
 cargo nextest run --manifest-path crates/batchalign-pyo3/Cargo.toml
 uv run pytest

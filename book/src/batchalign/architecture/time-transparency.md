@@ -63,7 +63,7 @@ its final-result IPC payload:
 {"op": "progress_v2", "event": {"request_id": "...", "completed": 0, "total": 0, "stage": "downloading_stanza_catalog"}}
 ```
 
-Source: `batchalign/worker/_protocol.py:write_progress_event`.
+Source: `python/batchalign/worker/_protocol.py:write_progress_event`.
 
 `stage` is a short machine-readable identifier (e.g.,
 `downloading_stanza_catalog`, `loading_whisper_large`,
@@ -219,6 +219,6 @@ would also need a progress signal mid-load.
 
 - [User-facing model-downloads chapter](../user-guide/model-downloads.md).
 - [Developer-facing model-downloads chapter](../developer/model-downloads-and-caching.md).
-- Source: `batchalign/worker/_progress.py`, `batchalign/worker/_protocol.py`.
+- Source: `python/batchalign/worker/_progress.py`, `python/batchalign/worker/_protocol.py`.
 - Rust forwarder: `crates/batchalign/src/runner/dispatch/audio_task.rs:spawn_progress_forwarder`.
 - Sink: `crates/batchalign/src/runner/util/file_status/event_sink.rs`.

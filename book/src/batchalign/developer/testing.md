@@ -10,7 +10,7 @@ the tiers, their resource requirements, and how to invoke each.
 
 ```mermaid
 flowchart TD
-    fast["Tier 1: Fast Tests\n(make test / cargo nextest run)\nUnit + protocol + test-echo integration\nNo models, no GPU\n~5s, safe, fully parallel"]
+    fast["Tier 1: Fast Tests\n(bazel test //... / cargo nextest run)\nUnit + protocol + test-echo integration\nNo models, no GPU\n~5s, safe, fully parallel"]
     ml["Tier 2: ML Golden Tests\n(cargo nextest run --profile ml)\nReal Whisper + Stanza + pyannote\nSerialized (profile test-threads=1)\n~5min, 8-12 GB peak RAM"]
     pygolden["Tier 3: Python Golden\n(uv run pytest -m golden)\nbatchalign_core extension\n~10-30s, 1-2 GB"]
 
@@ -43,10 +43,10 @@ For command-workflow edits, the shortest useful loop is usually:
 
 ```bash
 cargo xtask affected-rust packages
-make batchalign-python-prepare
-cargo build -p batchalign
-cargo nextest run -p batchalign --test workflow_helpers
-cargo nextest run -p batchalign --test cli
+just batchalign develop
+cargo build -p batchalign-cli
+cargo nextest run -p batchalign-cli --test workflow_helpers
+cargo nextest run -p batchalign-cli --test cli
 uv run batchalign3 --help
 ```
 
@@ -114,7 +114,7 @@ These remain as additional safety nets:
 ```bash
 # Fast tests only (default — safe, parallel, no models)
 cargo nextest run --workspace
-make test
+bazel test //...
 
 # ML tests only (serialized, one at a time)
 cargo nextest run --profile ml
@@ -173,7 +173,7 @@ All ML tests live in one binary (`ml_golden`) with submodules:
 | Worker protocol | cargo | `cargo nextest run --test worker_protocol_matrix` | None (test-echo) | ~5s | Yes |
 | Server integration | cargo | `cargo nextest run --test integration` | None (test-echo) | ~5s | Yes |
 | Network fault (turmoil) | cargo | `cargo nextest run --test turmoil_net` | None | <1s | Yes |
-| Workflow helpers | cargo | `cargo nextest run -p batchalign --test workflow_helpers` | None | ~2s | Yes |
+| Workflow helpers | cargo | `cargo nextest run -p batchalign-cli --test workflow_helpers` | None | ~2s | Yes |
 | JSON compat | cargo | `cargo nextest run --test json_compat` | None | ~1s | Yes |
 | ML tests (all) | cargo | `cargo nextest run --profile ml` | Mixed | ~5min | **No** |
 | Python golden | pytest | `uv run pytest -m golden` | batchalign_core | ~10s | **No** |
@@ -214,7 +214,7 @@ incremental rebuild on demand. For a clean wheel install of the freshly
 built extension into the dev environment:
 
 ```bash
-make batchalign-python-prepare
+just batchalign develop
 ```
 
 ### Test doubles
@@ -229,9 +229,9 @@ whether the production boundary wants a typed injected dependency instead.
 uv run pytest batchalign/tests/test_worker_protocol_v2_types.py -q
 uv run pytest batchalign/tests/test_worker_protocol_v2_artifacts.py -q
 uv run pytest batchalign/tests/test_worker_fa_v2.py -q
-cargo nextest run -p batchalign --test worker_protocol_v2_compat
-cargo nextest run -p batchalign -E 'test(fa_result_v2)'
-cargo nextest run -p batchalign --test worker_v2_fa_roundtrip
+cargo nextest run -p batchalign-cli --test worker_protocol_v2_compat
+cargo nextest run -p batchalign-cli -E 'test(fa_result_v2)'
+cargo nextest run -p batchalign-cli --test worker_v2_fa_roundtrip
 ```
 
 These tests read fixture files under `tests/fixtures/worker_protocol_v2/`
@@ -262,14 +262,14 @@ cargo nextest run --manifest-path crates/batchalign-pyo3/Cargo.toml
 cargo nextest run --workspace
 
 # Workflow layer
-cargo nextest run -p batchalign --test workflow_helpers
+cargo nextest run -p batchalign-cli --test workflow_helpers
 
 # Focused suites
-cargo nextest run -p batchalign --test cli
-cargo nextest run -p batchalign --test ci_checks
-cargo nextest run -p batchalign --test e2e
-cargo nextest run -p batchalign --test integration
-cargo nextest run -p batchalign --test json_compat
+cargo nextest run -p batchalign-cli --test cli
+cargo nextest run -p batchalign-cli --test ci_checks
+cargo nextest run -p batchalign-cli --test e2e
+cargo nextest run -p batchalign-cli --test integration
+cargo nextest run -p batchalign-cli --test json_compat
 ```
 
 ### Profile verification tests
@@ -351,8 +351,8 @@ Release-facing CI checks cover:
 - Command execution path integration coverage
 
 ```bash
-cargo nextest run -p batchalign --test ci_checks
-make ci-local
+cargo nextest run -p batchalign-cli --test ci_checks
+bazel build //... && bazel test //...
 ```
 
 ## Coverage
@@ -385,7 +385,7 @@ cargo xtask lint-wide-structs     # Enforces reviewed field caps on wide structs
 cargo xtask lint-ci-hygiene       # Version sync, legacy terms, retired packages
 ```
 
-Both are included in `make ci-local`. Thin test proxies in
+Both are included in `bazel build //... && bazel test //...`. Thin test proxies in
 `crates/batchalign/tests/` invoke them so `cargo nextest run` still catches
 regressions.
 
@@ -399,7 +399,7 @@ See [Deterministic Simulation (turmoil)](testing-turmoil.md) for architecture,
 adapter details, and the full test catalog.
 
 ```bash
-cargo nextest run -p batchalign --test turmoil_net
+cargo nextest run -p batchalign-cli --test turmoil_net
 ```
 
 ## Known gaps
@@ -421,7 +421,7 @@ cargo nextest run -p batchalign --test turmoil_net
 4. **Dashboard Playwright tests are opt-in.** The React frontend E2E suite
    requires manual Chromium setup and is not part of the default CI gate.
 
-## Background test runner (`make test-bg`)
+## Background test runner (`bazel test //...-bg`)
 
 The cost function for test runs is wall-clock time spent *waiting*, not
 just time spent running. `scripts/test-bg.sh` wraps any command, runs it
@@ -430,9 +430,9 @@ completion. The developer keeps working; failures ping loudly, successes
 ping quietly (or silently with `--quiet`).
 
 ```bash
-make test-bg CMD="make test-rust"                     # rust suite in background
-make test-bg CMD="uv run pytest -m 'golden and mwt_probe' -k fra"
-make test-bg-status                                   # running + recent runs
+bazel test //...-bg CMD="bazel test //...-rust"                     # rust suite in background
+bazel test //...-bg CMD="uv run pytest -m 'golden and mwt_probe' -k fra"
+bazel test //...-bg-status                                   # running + recent runs
 ```
 
 Log layout per run (under `~/.batchalign3/bg-test/<slug>/`):
@@ -448,5 +448,5 @@ detect completion without polling the filesystem. The `.status` file is
 the authoritative done signal.
 
 Smoke tests live at `scripts/tests/test_test_bg.sh` (invocable via
-`make test-bg-smoke`) and verify the success/failure/meta/async-parent
+`bazel test //...-bg-smoke`) and verify the success/failure/meta/async-parent
 contracts.

@@ -79,7 +79,7 @@ though it's a composite Rust-owned workflow.
 ### Worker transport
 
 CLI ↔ server is HTTP. Server ↔ worker is stdio JSON-lines IPC. The
-Python worker entry point in `batchalign/worker/_main.py` owns the
+Python worker entry point in `python/batchalign/worker/_main.py` owns the
 process lifetime and read/write loop, but Rust owns the generic stdio
 op validation and dispatch envelope through the `batchalign_core` PyO3
 bridge. HTTP is not used between the Rust server and Python workers.

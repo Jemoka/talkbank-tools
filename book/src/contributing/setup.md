@@ -40,30 +40,30 @@ cargo build
 cargo test
 ```
 
-### 2. Spec workspace (`spec/Cargo.toml`)
+### 2. Spec workspace (`crates/spec/talkbank-spec-testgen/Cargo.toml`)
 
 Contains two sibling crates for spec-driven artifacts:
 
 ```bash
-cargo build --manifest-path ~/talkbank/talkbank-tools/spec/tools/Cargo.toml
-cargo build --manifest-path ~/talkbank/talkbank-tools/spec/runtime-tools/Cargo.toml
-cargo run --manifest-path ~/talkbank/talkbank-tools/spec/tools/Cargo.toml --bin gen_tree_sitter_tests -- --help
-cargo run --manifest-path ~/talkbank/talkbank-tools/spec/runtime-tools/Cargo.toml --bin validate_error_specs -- --help
+cargo build --manifest-path ~/talkbank/talkbank-tools/crates/spec/talkbank-spec-testgen/Cargo.toml
+cargo build --manifest-path ~/talkbank/talkbank-tools/crates/spec/talkbank-spec-testrun/Cargo.toml
+cargo run --manifest-path ~/talkbank/talkbank-tools/crates/spec/talkbank-spec-testgen/Cargo.toml --bin gen_tree_sitter_tests -- --help
+cargo run --manifest-path ~/talkbank/talkbank-tools/crates/spec/talkbank-spec-testrun/Cargo.toml --bin validate_error_specs -- --help
 ```
 
 ## Makefile Targets
 
 ```bash
-make build           # Build everything
-make test            # Run all tests (nextest + parser-tests + doctests)
-make verify          # Pre-merge verification gates
-make test-gen        # Regenerate spec-driven artifacts when they actually changed
-make symbols-gen     # Regenerate shared symbol sets
-make generated-check # Verify generated artifacts are committed
-make check           # Fast compile check
-make clean           # Clean build artifacts
-make book            # Build documentation
-make book-serve      # Serve documentation locally
+bazel build //...           # Build everything
+bazel test //...            # Run all tests (nextest + parser-tests + doctests)
+bazel build //... && bazel test //...          # Pre-merge verification gates
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs        # Regenerate spec-driven artifacts when they actually changed
+node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js     # Regenerate shared symbol sets
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs && git diff --exit-code # Verify generated artifacts are committed
+bazel build //...           # Fast compile check
+bazel clean           # Clean build artifacts
+just docs build            # Build documentation
+just docs serve      # Serve documentation locally
 ```
 
 ## Verification
@@ -71,18 +71,18 @@ make book-serve      # Serve documentation locally
 Before submitting changes, run the full verification suite:
 
 ```bash
-make verify
+bazel build //... && bazel test //...
 ```
 
 See [Testing](testing.md) for the current gate breakdown. The important point is
-that `make verify` remains the pre-merge gate, while `make test-gen` is a
+that `bazel build //... && bazel test //...` remains the pre-merge gate, while `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` is a
 targeted regeneration step rather than a universal parser-testing ritual.
 
 ## Editor Setup
 
 ### VS Code
 
-Install the TalkBank extension from `vscode/` for CHAT syntax highlighting and diagnostics.
+Install the TalkBank extension from `apps/vscode-extension/` for CHAT syntax highlighting and diagnostics.
 
 ### rust-analyzer
 

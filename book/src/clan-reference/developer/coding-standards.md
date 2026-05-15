@@ -78,4 +78,4 @@ and document what other evidence is being used instead.
 
 ### Separate CLI docs from GUI docs
 
-Carry over non-GUI command semantics into the `talkbank-clan` book. GUI workflows from the legacy manual should be documented in the TalkBank VS Code extension docs instead of being mixed into the CLI command reference.
+Carry over non-GUI command semantics into the `clan-core` book. GUI workflows from the legacy manual should be documented in the TalkBank VS Code extension docs instead of being mixed into the CLI command reference.

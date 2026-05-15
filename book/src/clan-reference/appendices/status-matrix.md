@@ -127,7 +127,7 @@ These commands depend on the legacy CLAN MOR data model (trie-based lexicons, HM
 These CLAN binaries have their own `clap` subcommand variant — exposed
 under the same name as the legacy CLAN binary — but are categorized
 as compatibility aliases in
-`crates/talkbank-cli/src/cli/args/clan_commands.rs` (search for
+`crates/chatter-cli/src/cli/args/clan_commands.rs` (search for
 `CompatibilityAlias`). The dedicated subcommand exists so legacy
 CLAN scripts that invoke the binary by name continue to work.
 

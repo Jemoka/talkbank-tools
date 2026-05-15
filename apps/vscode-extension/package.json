@@ -1,0 +1,722 @@
+{
+  "name": "talkbank-chat",
+  "displayName": "TalkBank CHAT",
+  "description": "Language support for CHAT transcription format: real-time validation, 30 CLAN analysis commands, syntax highlighting, cross-tier alignment, dependency graphs, media playback, waveform view, and transcription mode",
+  "version": "0.1.0",
+  "publisher": "talkbank",
+  "license": "BSD-3-Clause",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TalkBank/talkbank-tools"
+  },
+  "homepage": "https://github.com/TalkBank/talkbank-tools/tree/main/vscode",
+  "bugs": {
+    "url": "https://github.com/TalkBank/talkbank-tools/issues"
+  },
+  "engines": {
+    "vscode": "^1.110.0",
+    "node": ">=18.0.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Formatters",
+    "Visualization"
+  ],
+  "keywords": [
+    "CHAT",
+    "TalkBank",
+    "CHILDES",
+    "linguistics",
+    "corpus-linguistics",
+    "language-acquisition",
+    "conversation-analysis",
+    "morphosyntax",
+    "dependency-graph",
+    "annotation"
+  ],
+  "activationEvents": [
+    "onLanguage:chat"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "chat",
+        "extensions": [
+          ".cha"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "chat",
+        "scopeName": "source.chat",
+        "path": "./syntaxes/chat.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "chat",
+        "path": "./snippets/chat.json"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "talkbank-validation-explorer",
+          "name": "CHAT Validation",
+          "icon": "images/validation-icon.svg",
+          "contextValue": "validation-explorer"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "TalkBank CHAT",
+      "properties": {
+        "talkbank.transcription.defaultSpeaker": {
+          "type": "string",
+          "default": "CHI",
+          "description": "Default speaker code inserted on new utterance lines during transcription mode."
+        },
+        "talkbank.transcription.rewindSeconds": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0.5,
+          "maximum": 30,
+          "description": "Number of seconds to rewind when using the Rewind Media command (F8)."
+        },
+        "talkbank.walker.autoPlay": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically play the media segment when stepping through utterances with the walker (Alt+Down/Up)."
+        },
+        "talkbank.walker.loopCount": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 50,
+          "description": "Number of times to loop each segment during walker playback. 0 = loop indefinitely until next step."
+        },
+        "talkbank.media.defaultSpeed": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 25,
+          "maximum": 200,
+          "enum": [
+            25,
+            50,
+            75,
+            100,
+            125,
+            150,
+            175,
+            200
+          ],
+          "description": "Default playback speed as a percentage (100 = normal speed, 50 = half speed, 200 = double speed)."
+        },
+        "talkbank.bullets.display": {
+          "type": "string",
+          "default": "dim",
+          "enum": [
+            "dim",
+            "hidden",
+            "normal"
+          ],
+          "enumDescriptions": [
+            "Dim bullets to 35% opacity (default)",
+            "Hide bullets entirely",
+            "Show bullets at full visibility"
+          ],
+          "description": "How timing bullets (•beg_end•) are displayed in the editor."
+        },
+        "talkbank.walker.pauseSeconds": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Seconds to pause between segments during continuous playback or walker stepping. 0 = no pause."
+        },
+        "talkbank.walker.walkLength": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Number of utterances to play during continuous walker mode. 0 = play all remaining segments."
+        },
+        "talkbank.lsp.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the chatter-lsp binary. Leave empty to auto-detect from PATH or the talkbank-tools target/ directory."
+        },
+        "talkbank.inlayHints.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inlay hints for timing durations and tier relationships."
+        },
+        "talkbank.validation.severity": {
+          "type": "string",
+          "default": "all",
+          "enum": [
+            "all",
+            "errorsOnly",
+            "errorsAndWarnings"
+          ],
+          "enumDescriptions": [
+            "Show all diagnostics (errors, warnings, and information)",
+            "Show only errors",
+            "Show errors and warnings, hide informational diagnostics"
+          ],
+          "description": "Filter which validation diagnostics are displayed."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "talkbank.showDependencyGraph",
+        "title": "Show Dependency Graph",
+        "category": "TalkBank",
+        "icon": "$(type-hierarchy)",
+        "when": "resourceLangId == chat"
+      },
+      {
+        "command": "talkbank.validateFile",
+        "title": "Validate File",
+        "category": "TalkBank",
+        "icon": "$(check)"
+      },
+      {
+        "command": "talkbank.validateDirectory",
+        "title": "Validate Directory",
+        "category": "TalkBank",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "talkbank.clearCache",
+        "title": "Clear Cache",
+        "category": "TalkBank",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "talkbank.refreshValidation",
+        "title": "Refresh Validation",
+        "category": "TalkBank",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "talkbank.viewCacheStatistics",
+        "title": "View Cache Statistics",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.clearAllCache",
+        "title": "Clear All Validation Cache",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.openInClan",
+        "title": "Open in CLAN",
+        "category": "TalkBank",
+        "icon": "$(link-external)",
+        "when": "resourceLangId == chat"
+      },
+      {
+        "command": "talkbank.playBullet",
+        "title": "Play Media at Cursor",
+        "category": "TalkBank",
+        "icon": "$(play)"
+      },
+      {
+        "command": "talkbank.playContinuous",
+        "title": "Play Media Continuously",
+        "category": "TalkBank",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "talkbank.stopPlayback",
+        "title": "Stop Media Playback",
+        "category": "TalkBank",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "talkbank.rewindMedia",
+        "title": "Rewind Media (2 s)",
+        "category": "TalkBank",
+        "icon": "$(debug-step-back)"
+      },
+      {
+        "command": "talkbank.loopSegment",
+        "title": "Toggle Segment Loop",
+        "category": "TalkBank",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "talkbank.walkerNext",
+        "title": "Walker: Next Utterance",
+        "category": "TalkBank",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "talkbank.walkerPrev",
+        "title": "Walker: Previous Utterance",
+        "category": "TalkBank",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "talkbank.runAnalysis",
+        "title": "Run CLAN Analysis…",
+        "category": "TalkBank",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "talkbank.runAnalysisOnDirectory",
+        "title": "Run CLAN Analysis on Directory…",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.startTranscription",
+        "title": "Start Transcription Mode",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.stampBullet",
+        "title": "Stamp Timestamp Bullet",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.stopTranscription",
+        "title": "Stop Transcription Mode",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.filterBySpeaker",
+        "title": "Filter by Speaker…",
+        "category": "TalkBank",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "talkbank.scopedFind",
+        "title": "Find in Tier…",
+        "category": "TalkBank",
+        "icon": "$(search)"
+      },
+      {
+        "command": "talkbank.showWaveform",
+        "title": "Show Waveform View",
+        "category": "TalkBank",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "talkbank.showPicture",
+        "title": "Show Elicitation Picture",
+        "category": "TalkBank",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "talkbank.runKideval",
+        "title": "Run KidEval…",
+        "category": "TalkBank",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "talkbank.runEval",
+        "title": "Run Eval…",
+        "category": "TalkBank",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "talkbank.editParticipants",
+        "title": "Edit Participants…",
+        "category": "TalkBank",
+        "icon": "$(person)"
+      },
+      {
+        "command": "talkbank.runEvald",
+        "title": "Run Eval-D (Dementia)…",
+        "category": "TalkBank",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "talkbank.configureTranscriptionKeys",
+        "title": "Configure Transcription Keybindings…",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.composeCA",
+        "title": "Insert CA Special Character…",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.composeChat",
+        "title": "Insert CHAT Special Character…",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.cancelCompose",
+        "title": "Cancel Special Character Input",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.startCoder",
+        "title": "Start Coder Mode…",
+        "category": "TalkBank",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "talkbank.stopCoder",
+        "title": "Stop Coder Mode",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.coderNext",
+        "title": "Coder: Next Utterance",
+        "category": "TalkBank",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "talkbank.coderInsertCode",
+        "title": "Coder: Insert Code…",
+        "category": "TalkBank",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "talkbank.startReview",
+        "title": "Start Review Mode",
+        "category": "TalkBank",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "talkbank.stopReview",
+        "title": "Stop Review Mode",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.reviewNext",
+        "title": "Review: Next Flagged",
+        "category": "TalkBank",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "talkbank.reviewPrev",
+        "title": "Review: Previous Flagged",
+        "category": "TalkBank",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "talkbank.reviewGood",
+        "title": "Review: Rate Good",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.reviewEarly",
+        "title": "Review: Rate Early",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.reviewLate",
+        "title": "Review: Rate Late",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.reviewWrong",
+        "title": "Review: Rate Wrong",
+        "category": "TalkBank"
+      },
+      {
+        "command": "talkbank.reviewSkip",
+        "title": "Review: Skip",
+        "category": "TalkBank"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "talkbank.showDependencyGraph",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "when": "editorLangId == chat"
+      },
+      {
+        "command": "talkbank.playBullet",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorLangId == chat"
+      },
+      {
+        "command": "talkbank.playContinuous",
+        "key": "ctrl+shift+/",
+        "mac": "cmd+shift+/",
+        "when": "editorLangId == chat"
+      },
+      {
+        "command": "talkbank.rewindMedia",
+        "key": "f8",
+        "when": "editorLangId == chat"
+      },
+      {
+        "command": "talkbank.loopSegment",
+        "key": "shift+f5",
+        "when": "editorLangId == chat"
+      },
+      {
+        "command": "talkbank.walkerNext",
+        "key": "alt+down",
+        "when": "editorLangId == chat"
+      },
+      {
+        "command": "talkbank.walkerPrev",
+        "key": "alt+up",
+        "when": "editorLangId == chat"
+      },
+      {
+        "command": "talkbank.showWaveform",
+        "key": "ctrl+shift+w",
+        "mac": "cmd+shift+w",
+        "when": "editorLangId == chat"
+      },
+      {
+        "command": "talkbank.stampBullet",
+        "key": "f4",
+        "when": "editorLangId == chat && talkbank.transcriptionActive"
+      },
+      {
+        "command": "talkbank.composeCA",
+        "key": "ctrl+shift+1",
+        "mac": "cmd+shift+1",
+        "when": "editorTextFocus && editorLangId == chat"
+      },
+      {
+        "command": "talkbank.composeChat",
+        "key": "ctrl+shift+2",
+        "mac": "cmd+shift+2",
+        "when": "editorTextFocus && editorLangId == chat"
+      },
+      {
+        "command": "talkbank.coderNext",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorLangId == chat && talkbank.coderActive"
+      },
+      {
+        "command": "talkbank.coderInsertCode",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "editorLangId == chat && talkbank.coderActive"
+      },
+      {
+        "command": "talkbank.reviewNext",
+        "key": "alt+]",
+        "when": "editorLangId == chat && talkbank.reviewActive"
+      },
+      {
+        "command": "talkbank.reviewPrev",
+        "key": "alt+[",
+        "when": "editorLangId == chat && talkbank.reviewActive"
+      },
+      {
+        "command": "talkbank.reviewGood",
+        "key": "1",
+        "when": "editorLangId == chat && talkbank.reviewActive && !editorTextFocus"
+      },
+      {
+        "command": "talkbank.reviewEarly",
+        "key": "2",
+        "when": "editorLangId == chat && talkbank.reviewActive && !editorTextFocus"
+      },
+      {
+        "command": "talkbank.reviewLate",
+        "key": "3",
+        "when": "editorLangId == chat && talkbank.reviewActive && !editorTextFocus"
+      },
+      {
+        "command": "talkbank.reviewWrong",
+        "key": "4",
+        "when": "editorLangId == chat && talkbank.reviewActive && !editorTextFocus"
+      },
+      {
+        "command": "talkbank.reviewSkip",
+        "key": "5",
+        "when": "editorLangId == chat && talkbank.reviewActive && !editorTextFocus"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "talkbank.media",
+        "label": "TalkBank: Media"
+      },
+      {
+        "id": "talkbank.analysis",
+        "label": "TalkBank: Analysis"
+      },
+      {
+        "id": "talkbank.navigation",
+        "label": "TalkBank: Navigation"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "submenu": "talkbank.media",
+          "group": "1_talkbank@1",
+          "when": "resourceLangId == chat"
+        },
+        {
+          "submenu": "talkbank.analysis",
+          "group": "1_talkbank@2",
+          "when": "resourceLangId == chat"
+        },
+        {
+          "submenu": "talkbank.navigation",
+          "group": "1_talkbank@3",
+          "when": "resourceLangId == chat"
+        },
+        {
+          "command": "talkbank.openInClan",
+          "group": "1_talkbank@4",
+          "when": "resourceLangId == chat"
+        }
+      ],
+      "talkbank.media": [
+        {
+          "command": "talkbank.playBullet",
+          "group": "1_playback@1"
+        },
+        {
+          "command": "talkbank.playContinuous",
+          "group": "1_playback@2"
+        },
+        {
+          "command": "talkbank.showWaveform",
+          "group": "2_view@1"
+        },
+        {
+          "command": "talkbank.showPicture",
+          "group": "2_view@2"
+        }
+      ],
+      "talkbank.analysis": [
+        {
+          "command": "talkbank.runAnalysis",
+          "group": "1_analysis@1"
+        },
+        {
+          "command": "talkbank.runKideval",
+          "group": "1_analysis@2"
+        },
+        {
+          "command": "talkbank.runEval",
+          "group": "1_analysis@3"
+        },
+        {
+          "command": "talkbank.runEvald",
+          "group": "1_analysis@4"
+        }
+      ],
+      "talkbank.navigation": [
+        {
+          "command": "talkbank.showDependencyGraph",
+          "group": "1_nav@1"
+        },
+        {
+          "command": "talkbank.filterBySpeaker",
+          "group": "1_nav@2"
+        },
+        {
+          "command": "talkbank.scopedFind",
+          "group": "1_nav@3"
+        },
+        {
+          "command": "talkbank.editParticipants",
+          "group": "1_nav@3"
+        },
+        {
+          "command": "talkbank.startCoder",
+          "group": "2_annotation@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "talkbank.openInClan",
+          "group": "2_workspace",
+          "when": "resourceLangId == chat"
+        },
+        {
+          "command": "talkbank.runAnalysisOnDirectory",
+          "group": "2_workspace",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "talkbank.validateDirectory",
+          "when": "view == talkbank-validation-explorer",
+          "group": "navigation"
+        },
+        {
+          "command": "talkbank.refreshValidation",
+          "when": "view == talkbank-validation-explorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "talkbank.validateFile",
+          "when": "view == talkbank-validation-explorer && viewItem == file",
+          "group": "inline@1"
+        },
+        {
+          "command": "talkbank.validateDirectory",
+          "when": "view == talkbank-validation-explorer && viewItem == directory",
+          "group": "inline@1"
+        },
+        {
+          "command": "talkbank.clearCache",
+          "when": "view == talkbank-validation-explorer && (viewItem == file || viewItem == directory)",
+          "group": "inline@2"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && npm run bundle -- --production",
+    "copy-webview": "mkdir -p out/webview && cp src/webview/*.html src/webview/*.js out/webview/",
+    "compile": "tsc -p ./ && npm run copy-webview",
+    "bundle": "node esbuild.config.mjs",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "package": "vsce package",
+    "package:prepare": "node scripts/prepare-server.mjs",
+    "package:darwin-arm64": "vsce package --target darwin-arm64 --out talkbank-chat-darwin-arm64.vsix",
+    "package:darwin-x64": "vsce package --target darwin-x64   --out talkbank-chat-darwin-x64.vsix",
+    "package:linux-x64": "vsce package --target linux-x64    --out talkbank-chat-linux-x64.vsix",
+    "package:linux-arm64": "vsce package --target linux-arm64  --out talkbank-chat-linux-arm64.vsix",
+    "package:win32-x64": "vsce package --target win32-x64    --out talkbank-chat-win32-x64.vsix",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/vscode": "^1.110.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.0",
+    "@typescript-eslint/parser": "^8.57.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "@vitest/ui": "^4.1.0",
+    "@apps/vscode-extension/test-electron": "^2.5.2",
+    "@apps/vscode-extension/vsce": "^3.9.0",
+    "esbuild": "^0.27.7",
+    "eslint": "^10.0.3",
+    "fast-check": "^4.6.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "@hpcc-js/wasm": "^2.33.1",
+    "effect": "^3.19.19",
+    "vscode-languageclient": "^9.0.1"
+  }
+}

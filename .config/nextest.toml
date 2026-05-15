@@ -26,7 +26,7 @@
 
 # Default profile: ml_golden is skipped (requires real Rev.AI keys, network
 # access, and model checkpoints). Run the ML suite explicitly via
-# `cargo nextest run -p batchalign --profile ml`.
+# `cargo nextest run -p batchalign-cli --profile ml`.
 [profile.default]
 default-filter = 'not binary(ml_golden)'
 

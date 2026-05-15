@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Extracts material within gem boundaries. The legacy manual gives `GEM` a dedicated section; in `talkbank-clan`, it extracts utterances and their dependent tiers that fall within `@Bg`/`@Eg` gem boundaries, producing a new CHAT file containing only the gem-scoped content.
+Extracts material within gem boundaries. The legacy manual gives `GEM` a dedicated section; in `clan-core`, it extracts utterances and their dependent tiers that fall within `@Bg`/`@Eg` gem boundaries, producing a new CHAT file containing only the gem-scoped content.
 
 See the [CLAN manual](https://talkbank.org/0info/manuals/CLAN.html#_Toc220409206) for the original GEM command specification.
 
@@ -34,7 +34,7 @@ Without `--gem`, all gem segments in the file are extracted.
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** Rewriter
-> at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`; no `clap` field consumes it today.
 > Drafted from CLAN manual §7.13 (GEM, in-section `+d` note) for
 > PI review.

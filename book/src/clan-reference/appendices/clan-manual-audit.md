@@ -3,7 +3,7 @@
 **Status:** Current
 This appendix tracks how the
 [CLAN manual](https://talkbank.org/0info/manuals/CLAN.html) covers the
-commands currently implemented in `talkbank-clan`.
+commands currently implemented in `clan-core`.
 
 The purpose of this audit is to keep the book honest about command intent:
 

@@ -1,0 +1,27 @@
+"""CHAT specification — single source of truth for grammar/parser tests.
+
+Read by `//crates/spec/talkbank-spec-testgen` (static codegen) and
+`//crates/spec/talkbank-spec-testrun` (live-parser verification).
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "all_files",
+    srcs = glob(["**/*"], exclude = ["BUILD.bazel"]),
+)
+
+filegroup(
+    name = "constructs",
+    srcs = glob(["constructs/**/*"]),
+)
+
+filegroup(
+    name = "errors",
+    srcs = glob(["errors/**/*"]),
+)
+
+filegroup(
+    name = "symbols",
+    srcs = glob(["symbols/**/*"]),
+)

@@ -1,0 +1,8 @@
+"""Shell scripts driving the React dashboard build (Vite)."""
+
+# Only the dashboard package consumes this.
+package(default_visibility = [
+    "//apps/batchalign/batchalign-cli-webdashboard:__pkg__",
+])
+
+exports_files(["build.sh"])

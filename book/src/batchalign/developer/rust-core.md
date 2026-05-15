@@ -22,7 +22,7 @@ manifest-path = "crates/batchalign-pyo3/Cargo.toml"`, feature
 `pyo3/extension-module`, `profile = "dev"` for fast rebuild).
 For a packaged install you build the wheel via `make
 batchalign-build-wheel`, which compiles `batchalign3` in release
-mode, copies it into `batchalign/_bin/`, and then runs `uv build
+mode, copies it into `python/batchalign/_bin/`, and then runs `uv build
 --wheel --out-dir dist/` to produce the maturin-built wheel that
 bundles both the extension and the native binary.
 
@@ -125,12 +125,12 @@ worker processes consume, rebuild the extension and reinstall it
 into the dev environment:
 
 ```bash
-make batchalign-python-prepare
+just batchalign develop
 ```
 
 This depends on `batchalign-build-wheel`, which rebuilds the native
 `batchalign3` binary in release mode, copies it into
-`batchalign/_bin/`, and produces a maturin-built wheel via `uv
+`python/batchalign/_bin/`, and produces a maturin-built wheel via `uv
 build --wheel`. The prepare target then runs `uv sync --group dev
 --no-install-project` and `uv pip install --reinstall --no-deps
 dist/*.whl` to install the freshly built wheel into the active
@@ -144,7 +144,7 @@ If you also plan to run the standalone Rust CLI directly after a
 shared-crate change, rebuild that binary too:
 
 ```bash
-cargo build -p batchalign
+cargo build -p batchalign-cli
 ```
 
 ## Running Rust tests
@@ -192,7 +192,7 @@ current workflow for adding capability to the worker side is:
 3. Add Rust tests in the same crate.
 4. If you changed shared types in `batchalign-types`, regenerate any
    IPC type mirrors.
-5. Rebuild `batchalign_core` (`make batchalign-python-prepare`, or just `uv run …` for incremental dev rebuilds).
+5. Rebuild `batchalign_core` (`just batchalign develop`, or just `uv run …` for incremental dev rebuilds).
 6. Test against real corpus data, not just unit tests.
 
 If you find yourself wanting to call the new function from Python

@@ -28,7 +28,7 @@ need a "not available for X" line.
 | **`num2words` backend?** (build-time only) | `python -c "import num2words; print('XX' in num2words.CONVERTER_CLASSES)"` (use ISO 639-1 2-char code). Used by `scripts/codegen_num2lang.py` to populate the Rust `NUM2LANG` table; runtime uses Rust only. | Number expansion (E220 risk) |
 | **Rev.AI quality?** | Submit a sample to Rev.AI; check for hallucinations, script confusion, repetition. Document result in `book/src/reference/revai-language-quality-strategy.md` | Default ASR engine choice |
 | **Stock Whisper quality?** | Same: run a representative sample, evaluate | Fallback ASR engine choice |
-| **HuggingFace fine-tune available?** | Search HF Hub for `whisper-*-{lang}` checkpoints | `whisper_hub` engine routing in `batchalign/models/resolve.py` |
+| **HuggingFace fine-tune available?** | Search HF Hub for `whisper-*-{lang}` checkpoints | `whisper_hub` engine routing in `python/batchalign/models/resolve.py` |
 | **CHAT digit-validator allows digits?** | `rg "{lang}" talkbank-tools/crates/talkbank-model/src/validation/word/language/digits.rs` | Whether E220 fires on Whisper digit emissions |
 | **PyCantonese / language-specific tools?** | Per-language: relevant for CJK, possibly others | Special-case wiring |
 
@@ -41,7 +41,7 @@ When the matrix is filled in, work through these in order:
 If Stanza ships a real pipeline (the `packages` key is populated, not
 just `backward_charlm`/`forward_charlm` stubs):
 
-- Add or verify the language in `batchalign/worker/_stanza_capabilities.py`
+- Add or verify the language in `python/batchalign/worker/_stanza_capabilities.py`
   — this is the runtime authority, NOT a hardcoded table.
 - Confirm MWT, POS, lemma, depparse, constituency availability via the
   capability table.
@@ -112,7 +112,7 @@ a representative sample:
    no per-language config. Good baseline.
 2. **HuggingFace fine-tune via `whisper_hub`**: when stock Whisper or
    Rev.AI underperform on extended recordings. Configure model
-   resolution in `batchalign/models/resolve.py`.
+   resolution in `python/batchalign/models/resolve.py`.
 3. **Rev.AI** (`--asr-engine rev`): only if it produces clean output
    for this language. Many languages return garbage from Rev.AI; see
    `book/src/reference/revai-language-quality-strategy.md` for the

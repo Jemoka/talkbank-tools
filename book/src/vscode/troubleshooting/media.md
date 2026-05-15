@@ -26,13 +26,13 @@ The extension resolves media files by searching for a file whose base name match
 1. **Same directory** as the `.cha` file
 2. **`media/` subdirectory** relative to the `.cha` file
 
-For example, if the `.cha` file is at `/data/corpus/interview.cha` and the header says `@Media: interview, audio`, the extension looks for:
+For example, if the `.cha` file is at `/data/resources/corpus/interview.cha` and the header says `@Media: interview, audio`, the extension looks for:
 
-- `/data/corpus/interview.mp3`
-- `/data/corpus/interview.wav`
-- `/data/corpus/interview.m4a`
-- `/data/corpus/interview.mp4`
-- `/data/corpus/media/interview.mp3`
+- `/data/resources/corpus/interview.mp3`
+- `/data/resources/corpus/interview.wav`
+- `/data/resources/corpus/interview.m4a`
+- `/data/resources/corpus/interview.mp4`
+- `/data/resources/corpus/media/interview.mp3`
 - (and so on for other supported extensions)
 
 **Fixes:**

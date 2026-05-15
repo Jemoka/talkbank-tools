@@ -1,0 +1,30 @@
+"""clan-core — CLAN analysis library (freq, mlu, eval, kideval, etc.).
+
+Pure library. The `chatter` CLI consumes this via `chatter clan <cmd>`.
+No build.rs.
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "clan_core",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = aliases(),
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + [
+        "//crates/core/talkbank-model:talkbank_model",
+        "//crates/core/talkbank-transform:talkbank_transform",
+    ],
+)
+
+rust_test(
+    name = "clan_core_unit_test",
+    crate = ":clan_core",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

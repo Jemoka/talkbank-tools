@@ -5,7 +5,7 @@
 
 The error infrastructure used across all CHAT-core crates
 (`talkbank-model`, `talkbank-parser`, `talkbank-transform`,
-`talkbank-clan`, `talkbank-cli`, `talkbank-lsp`). Defined in the
+`clan-core`, `chatter-cli`, `chatter-lsp`). Defined in the
 `errors` module of `talkbank-model`.
 
 For the Batchalign-runtime side (ML / IPC / network / ASR / worker
@@ -66,7 +66,7 @@ flowchart LR
     E6 ~~~ E7
 ```
 
-The full error code reference is generated in `docs/errors/` at the
+The full error code reference is generated in `book/src/operations/errors/` at the
 repository root.
 
 ### `Severity`
@@ -170,9 +170,9 @@ testing.
 1. Add the variant to `ErrorCode` in
    `crates/talkbank-model/src/errors/codes/error_code.rs` with a
    `#[code("Exxx")]` attribute.
-2. Create a spec file in `spec/errors/Exxx-description.md` following
+2. Create a spec file in `resources/spec/errors/Exxx-description.md` following
    the existing template.
 3. Construct `ParseError::new(ErrorCode::YourVariant, ...)` at the
    detection site in the parser or validator.
-4. Run `make test-gen` to regenerate test fixtures from specs.
-5. Run `make verify` to confirm the gate passes.
+4. Run `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` to regenerate test fixtures from specs.
+5. Run `bazel build //... && bazel test //...` to confirm the gate passes.

@@ -1,0 +1,18 @@
+"""Reference CHAT corpus (must pass 100% parser equivalence).
+
+Exposed as a filegroup so Rust tests can list it under `compile_data`
+when they `include_str!` corpus files.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "all_files",
+    srcs = glob(["**/*"], exclude = ["BUILD.bazel"]),
+)
+
+# Convenience aliases for the subdirs most often referenced individually.
+filegroup(
+    name = "reference",
+    srcs = glob(["reference/**/*"]),
+)

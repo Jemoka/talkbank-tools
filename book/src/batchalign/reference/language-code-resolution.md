@@ -44,7 +44,7 @@ Stanza uses ISO 639-1 alpha-2 codes (with a few non-standard variants
 like `zh-hans`/`zh-hant`/`nb`). Batchalign uses ISO 639-3 internally,
 so the worker has to map one to the other before handing a `lang`
 argument to `stanza.Pipeline`. The conversion lives in
-`batchalign/worker/_stanza_loading.py::iso3_to_alpha2()` and resolves
+`python/batchalign/worker/_stanza_loading.py::iso3_to_alpha2()` and resolves
 in three layers:
 
 1. **Stanza-specific overrides** — `_ISO3_OVERRIDES` in
@@ -161,7 +161,7 @@ flowchart TD
 ## MWT Language Dispatch
 
 Multi-Word Token (MWT) processing is driven by an explicit allowlist in
-`batchalign/worker/_stanza_loading.py`.
+`python/batchalign/worker/_stanza_loading.py`.
 
 Current behavior:
 
@@ -301,7 +301,7 @@ maintain our own validation tables.
 - **No programmatic language list** in the model API
 - The model's `GenerationConfig` has `is_multilingual: true` but no language
   list; supported languages are implicit in the tokenizer's language tokens
-- Our mapping: `iso3_to_language_name()` in `batchalign/inference/asr.py`
+- Our mapping: `iso3_to_language_name()` in `python/batchalign/inference/asr.py`
   uses `pycountry` lookup with special cases for `yue`/`cmn`
 - **Fixed (2026-03-19):** Unknown codes now raise `ValueError` instead of
   silently falling back to English.
@@ -313,7 +313,7 @@ maintain our own validation tables.
 - **Stanza has a `stanza.resources` module** that lists available models, but
   batchalign does not query it — instead using a hardcoded 55-entry mapping
 - Could be queried at startup: `stanza.resources.common.list_available_languages()`
-- Our mapping: `iso3_to_alpha2()` in `batchalign/worker/_stanza_loading.py`
+- Our mapping: `iso3_to_alpha2()` in `python/batchalign/worker/_stanza_loading.py`
 - **Validation approach:** Check if the language exists in the explicit mapping
   table before attempting to load the pipeline
 
@@ -321,7 +321,7 @@ maintain our own validation tables.
 
 - **No API endpoint**; hardcoded to Chinese variants only
 - Our validation: `_CHINESE_CODES = {"zho", "yue", "wuu", "nan", "hak"}`
-  in `batchalign/inference/languages/cantonese/_tencent_asr.py`
+  in `python/batchalign/inference/languages/cantonese/_tencent_asr.py`
 - Already raises `ValueError` for non-Chinese — this is good, but happens
   at worker load time rather than job submission time
 

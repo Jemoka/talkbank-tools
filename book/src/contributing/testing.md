@@ -6,18 +6,18 @@
 ## Test Generation Pipeline
 
 Specs are the source of truth. All grammar corpus tests, Rust parser tests,
-and error docs are **generated** from specs. `make test-gen` wipes the output
+and error docs are **generated** from specs. `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` wipes the output
 directories and recreates them — never hand-edit generated files.
 
 ```mermaid
 flowchart LR
     subgraph sources["Source of Truth"]
-        constructs["spec/constructs/\n(112 construct specs)"]
-        errors["spec/errors/\n(187 error specs)"]
-        templates["spec/tools/templates/\n(Tera wrappers)"]
+        constructs["resources/spec/constructs/\n(112 construct specs)"]
+        errors["resources/spec/errors/\n(187 error specs)"]
+        templates["crates/spec/talkbank-spec-testgen/templates/\n(Tera wrappers)"]
     end
 
-    subgraph generators["make test-gen"]
+    subgraph generators["just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs"]
         gen_ts["gen_tree_sitter_tests"]
         gen_rust["gen_rust_tests"]
         gen_docs["gen_error_docs"]
@@ -26,7 +26,7 @@ flowchart LR
     subgraph outputs["Generated Outputs (DO NOT EDIT)"]
         ts_tests["grammar/test/corpus/\n(166 tree-sitter tests)"]
         rust_tests["tests/generated/\n(167 Rust tests)"]
-        error_docs["docs/errors/\n(182 error doc pages)"]
+        error_docs["book/src/operations/errors/\n(182 error doc pages)"]
     end
 
     constructs & errors --> gen_ts
@@ -39,8 +39,8 @@ flowchart LR
     gen_docs --> error_docs
 ```
 
-To add a grammar test or error test, add a spec file in `spec/constructs/`
-or `spec/errors/`, then run `make test-gen`. See `spec/CLAUDE.md` for the
+To add a grammar test or error test, add a spec file in `resources/spec/constructs/`
+or `resources/spec/errors/`, then run `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs`. See `resources/spec/CLAUDE.md` for the
 spec format.
 
 ## Test Strategy
@@ -50,10 +50,10 @@ Testing is organized in layers, from fastest to most comprehensive.
 ```mermaid
 flowchart TD
     unit["Unit + Integration Tests\n(cargo nextest run)\n~2300 tests, ~5s"]
-    specgen["Spec-Generated Tests\n(make test-generated)\nParser + validation layer"]
+    specgen["Spec-Generated Tests\n(bazel test //crates/core/talkbank-parser-tests/...)\nParser + validation layer"]
     grammar["Grammar Corpus\n(tree-sitter test)\n166 tree-sitter tests"]
     ref["Reference Corpus\n(97 files, 100% required)"]
-    gates["Verification Gates\n(make verify)\nG0–G14 sequential pipeline"]
+    gates["Verification Gates\n(bazel build //... && bazel test //...)\nG0–G14 sequential pipeline"]
 
     unit --> specgen --> grammar --> ref --> gates
 ```
@@ -81,7 +81,7 @@ failure isolation via nextest.
 
 ### Spec-Generated Tests
 
-Part of `talkbank-parser-tests`. These are generated from specs via `make test-gen` and currently test:
+Part of `talkbank-parser-tests`. These are generated from specs via `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` and currently test:
 - Construct specs: input parses correctly
 - Parser-layer error specs: input fails to parse with expected error code
 - Validation-layer error specs: input parses but validation reports expected error code
@@ -89,13 +89,13 @@ Part of `talkbank-parser-tests`. These are generated from specs via `make test-g
 Concrete entrypoint:
 
 ```bash
-make test-generated
+bazel test //crates/core/talkbank-parser-tests/...
 ```
 
 ### Tree-Sitter Grammar Tests
 
 ```bash
-make test-grammar
+bazel test //grammar/...
 ```
 
 Runs the tree-sitter grammar corpus tests. This is the right gate for
@@ -116,18 +116,18 @@ tree-sitter test
 
 ## Reference Corpus
 
-The reference corpus at `corpus/reference/` contains 97 `.cha` files across 20 languages that represent the diversity of real-world CHAT data. The parser must handle every file at 100%.
+The reference corpus at `resources/corpus/reference/` contains 97 `.cha` files across 20 languages that represent the diversity of real-world CHAT data. The parser must handle every file at 100%.
 
 This corpus is the ultimate arbiter of correctness for full-file parsing.
 
 ## Verification Gates
 
-`make verify` runs the pre-merge verification suite (G0–G14). All gates
+`bazel build //... && bazel test //...` runs the pre-merge verification suite (G0–G14). All gates
 run sequentially — the first failure stops the pipeline.
 
 ```mermaid
 flowchart TD
-    start(["make verify"]) --> G0
+    start(["bazel build //... && bazel test //..."]) --> G0
     G0["G0: Parser signature guardrail\n(check-errorsink-option-signatures.sh)"]
     G0 -->|pass| G1["G1: Rust workspace compile\n(cargo check --workspace)"]
     G1 -->|pass| G2["G2: Spec tools compile\n(cd spec/tools && cargo check)"]
@@ -185,15 +185,15 @@ cargo nextest run --no-capture
 
 | What you changed | Run |
 |-----------------|-----|
-| Grammar (`grammar.js`) | `cd grammar && tree-sitter generate && tree-sitter test` then `make test-generated` |
+| Grammar (`grammar.js`) | `cd grammar && tree-sitter generate && tree-sitter test` then `bazel test //crates/core/talkbank-parser-tests/...` |
 | Parser (CST-to-model) | `cargo nextest run -p talkbank-parser` |
 | Model (types, validation, alignment) | `cargo nextest run -p talkbank-model` |
-| CLAN command | `cargo nextest run -p talkbank-clan -E 'test(command_name)'` + golden test |
-| CLI (chatter args, dispatch) | `cargo nextest run -p talkbank-cli` |
-| LSP | `cargo nextest run -p talkbank-lsp` |
-| Spec files | `make test-gen && make verify` |
-| Pre-merge (any change) | `make verify` |
-| Pre-push (quick) | `make ci-local` |
+| CLAN command | `cargo nextest run -p clan-core -E 'test(command_name)'` + golden test |
+| CLI (chatter args, dispatch) | `cargo nextest run -p chatter-cli` |
+| LSP | `cargo nextest run -p chatter-lsp` |
+| Spec files | `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs && bazel build //... && bazel test //...` |
+| Pre-merge (any change) | `bazel build //... && bazel test //...` |
+| Pre-push (quick) | `bazel build //... && bazel test //...` |
 
 ## Mutation Testing
 
@@ -207,7 +207,7 @@ cargo install cargo-mutants
 cargo mutants -p talkbank-parser --timeout 120 --jobs 1
 
 # Run against CLAN commands
-cargo mutants -p talkbank-clan --timeout 120 --jobs 1
+cargo mutants -p clan-core --timeout 120 --jobs 1
 
 # Review results
 cat mutants.out/missed.txt    # Mutations no test caught
@@ -222,6 +222,6 @@ Configuration: `mutants.toml` at the repo root excludes trivial functions.
 
 - **Model tests**: add to the relevant crate's `tests/` directory or `#[cfg(test)]` module
 - **Parser tests**: if the change is about grammar shape or validation contracts,
-  add or update specs and regenerate with `make test-gen`
+  add or update specs and regenerate with `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs`
 - **Error corpus tests**: add a `.cha` file to `tests/error_corpus/` and update `expectations.json`
 - **CLAN command tests**: add golden test cases in `tests/clan_golden/` using the manifest-driven `ParityCase` / `RustSnapshotCase` pattern

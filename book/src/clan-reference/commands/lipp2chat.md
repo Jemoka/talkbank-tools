@@ -22,7 +22,7 @@ chatter clan lipp2chat input.lipp
 | `-o`, `--output` | stdout | Output CHAT file path |
 
 The corpus name in `@ID` headers is hardcoded to `"lipp_corpus"`
-(`crates/talkbank-clan/src/converters/lipp2chat.rs:80`); there is
+(`crates/clan-core/src/converters/lipp2chat.rs:80`); there is
 no CLI flag to override it.
 
 ## Input Format

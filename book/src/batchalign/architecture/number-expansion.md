@@ -524,7 +524,7 @@ The library is no longer a runtime dependency, but
    `scripts/codegen_num2lang.py`).
 3. Diff the generated files; any value change in a covered language
    is a behaviour change worth a callout in the commit.
-4. Run `cargo test -p batchalign --lib`; the
+4. Run `cargo test -p batchalign-cli --lib`; the
    `ordinal_year_eng` cross-validation tests catch divergence.
 
 **When changing the CHAT digit-allowlist** (rare, requires CHAT-spec

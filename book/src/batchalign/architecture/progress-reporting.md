@@ -224,19 +224,19 @@ forward `HealthResponse` into the reducer as a `TuiUpdate::HealthSnapshot`.
 
 ### React Dashboard
 
-The dashboard (`frontend/`) consumes progress data via both WebSocket push
+The dashboard (`apps/batchalign/cli-web-statuspage/`) consumes progress data via both WebSocket push
 (real-time `file_update` events) and REST polling (health endpoint for system
 panels). It renders several distinct progress surfaces:
 
 #### File-Level Progress (FileTable)
 
-In `frontend/src/components/FileTable.tsx`, each processing file row shows:
+In `apps/batchalign/cli-web-statuspage/src/components/FileTable.tsx`, each processing file row shows:
 
 - **Pipeline phase indicator** (`PipelineStageBar`) — 5 compact segments
   mapping the 23 `FileProgressStage` variants to visual phases:
   Read → Transcribe → Align → Analyze → Finalize. The active segment pulses
   using the existing `status-dot-pulse` CSS animation. Completed phases are
-  filled; future phases are gray. Component: `frontend/src/components/PipelineStageBar.tsx`.
+  filled; future phases are gray. Component: `apps/batchalign/cli-web-statuspage/src/components/PipelineStageBar.tsx`.
 - **Label-only stages**: italic text next to the status dot
 - **Label + counter**: inline blue mini-bar with counter (e.g., "Aligning 3/7")
 - **Indeterminate shimmer**: shown for batched commands while no files have
@@ -251,20 +251,20 @@ In `frontend/src/components/FileTable.tsx`, each processing file row shows:
 The main dashboard page (`/dashboard`) uses a two-column layout. The right
 column stacks three system-health panels:
 
-- **WorkerProfilePanel** (`frontend/src/components/WorkerProfilePanel.tsx`) —
+- **WorkerProfilePanel** (`apps/batchalign/cli-web-statuspage/src/components/WorkerProfilePanel.tsx`) —
   parses `live_worker_keys` strings from the health endpoint into profile
   summaries (GPU/Stanza/IO). Shows active/idle counts, languages, engine
   overrides, and a model-sharing callout for the GPU profile. Also shows
   warmup status.
 
-- **MemoryPanel** (`frontend/src/components/MemoryPanel.tsx`) — displays system
+- **MemoryPanel** (`apps/batchalign/cli-web-statuspage/src/components/MemoryPanel.tsx`) — displays system
   RAM usage from the health endpoint fields `system_memory_total_mb`,
   `system_memory_available_mb`, `system_memory_used_mb`. Shows a segmented
   gauge bar with the `memory_gate_threshold_mb` marked as a vertical line.
   Color-codes proximity to the gate threshold (green/amber/red) and shows
   cumulative gate rejection count.
 
-- **VitalsRow** (`frontend/src/components/VitalsRow.tsx`) — compact badges for
+- **VitalsRow** (`apps/batchalign/cli-web-statuspage/src/components/VitalsRow.tsx`) — compact badges for
   operational counters: `worker_crashes`, `forced_terminal_errors`,
   `memory_gate_aborts`, `attempts_started`, `attempts_retried`,
   `deferred_work_units`. Only nonzero counters render. Error counters are red,

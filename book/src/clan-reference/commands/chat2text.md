@@ -5,7 +5,7 @@
 
 Converts CHAT files into plain text lines suitable for downstream text analysis. The legacy manual describes `CHAT2TEXT` as converting a CHAT file to text lines for concordance programs such as AntConc, and says it is implemented as an alias of `FLO` with `+cr +t*`.
 
-`talkbank-clan` implements the same broad intent directly by extracting plain spoken text from the parsed CHAT AST.
+`clan-core` implements the same broad intent directly by extracting plain spoken text from the parsed CHAT AST.
 
 ## Usage
 

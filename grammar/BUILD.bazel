@@ -1,0 +1,59 @@
+"""tree-sitter-talkbank — Rust binding to the CHAT tree-sitter grammar.
+
+This package is multi-language (C, Go, Node, Python, Rust, Swift); only
+the Rust binding is wired into Bazel. The Cargo manifest at
+`grammar/Cargo.toml` declares `[lib] path = "bindings/rust/lib.rs"` and
+a `build.rs` at `bindings/rust/build.rs` that compiles the generated
+C parser (`src/parser.c`) via the `cc` crate.
+
+DO NOT modify `src/parser.c` — it is generated from `grammar.js`.
+TODO(bazel): add a `//grammar:tree-sitter-generate` sh_binary that
+wraps `tree-sitter generate` for regenerations.
+
+Edition: 2021 (per the manifest — older than the workspace default).
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cargo_build_script(
+    name = "tree_sitter_talkbank_build_script",
+    srcs = ["bindings/rust/build.rs"],
+    aliases = aliases(build = True),
+    data = glob([
+        "src/parser.c",
+        "src/parser.h",
+        "src/tree_sitter/*.h",
+        "src/scanner.c",
+    ]),
+    edition = "2021",
+    proc_macro_deps = all_crate_deps(build_proc_macro = True),
+    deps = all_crate_deps(build = True),
+)
+
+rust_library(
+    name = "tree_sitter_talkbank",
+    srcs = glob(["bindings/rust/**/*.rs"]),
+    aliases = aliases(),
+    compile_data = glob([
+        "src/node-types.json",
+        "queries/*.scm",
+    ]),
+    crate_name = "tree_sitter_talkbank",
+    edition = "2021",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + [
+        ":tree_sitter_talkbank_build_script",
+    ],
+)
+
+rust_test(
+    name = "tree_sitter_talkbank_unit_test",
+    crate = ":tree_sitter_talkbank",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

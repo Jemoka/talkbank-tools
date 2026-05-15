@@ -1,0 +1,70 @@
+"""talkbank-spec-testgen — static codegen for tests + docs from the CHAT spec.
+
+12 generator binaries. None of them link the live parser/model; that's
+what `talkbank-spec-testrun` is for. The split exists so this crate
+stays fast to build.
+
+Reads `//resources/spec/` (constructs, errors, symbols). Writes outputs
+elsewhere (grammar corpus, generated Rust tests, error docs). Templates
+live next to the source under `templates/`.
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "talkbank_spec_testgen",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/bin/**"],
+    ),
+    aliases = aliases(),
+    compile_data = glob(["templates/**/*"]),
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + [
+        "//grammar:tree_sitter_talkbank",
+    ],
+)
+
+# All 12 generator binaries follow the same shape — declared via a
+# loop so adding a new one is one line.
+_BINARIES = [
+    "gen_tree_sitter_tests",
+    "gen_rust_tests",
+    "gen_validation_tests",
+    "gen_error_docs",
+    "validate_spec",
+    "coverage",
+    "gen_coverage_dashboard",
+    "corpus_node_coverage",
+    "corpus_to_specs",
+    "fix_spec_layers",
+    "enhance_specs",
+    "perturb_corpus",
+]
+
+[
+    rust_binary(
+        name = bin_name,
+        srcs = ["src/bin/{}.rs".format(bin_name)],
+        aliases = aliases(),
+        edition = "2024",
+        proc_macro_deps = all_crate_deps(proc_macro = True),
+        deps = all_crate_deps(normal = True) + [
+            ":talkbank_spec_testgen",
+            "//grammar:tree_sitter_talkbank",
+        ],
+    )
+    for bin_name in _BINARIES
+]
+
+rust_test(
+    name = "talkbank_spec_testgen_unit_test",
+    crate = ":talkbank_spec_testgen",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

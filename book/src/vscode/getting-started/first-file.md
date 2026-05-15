@@ -22,7 +22,7 @@ formatting -- runs inside this server.
 
 ```mermaid
 flowchart LR
-    Editor["VS Code Editor\n(TypeScript)"] -->|"stdio LSP"| Server["talkbank-lsp\n(Rust binary)"]
+    Editor["VS Code Editor\n(TypeScript)"] -->|"stdio LSP"| Server["chatter-lsp\n(Rust binary)"]
     Server --> Parser["Tree-Sitter\nParser"]
     Server --> Model["CHAT Data\nModel"]
     Server --> Validator["Validation\nPipeline"]
@@ -40,7 +40,7 @@ scenes.
 ## Open a CHAT File
 
 Open any `.cha` file in VS Code. If you have the `talkbank-tools` repository
-cloned, good files to start with are in the `corpus/reference/` directory.
+cloned, good files to start with are in the `resources/corpus/reference/` directory.
 These files cover a range of CHAT features across 20 languages.
 
 As soon as the file opens, you should see:
@@ -54,7 +54,7 @@ As soon as the file opens, you should see:
   (`Cmd+Shift+O`) showing every utterance by speaker
 
 > **(SCREENSHOT: CHAT file with syntax highlighting)**
-> *Capture this: a `corpus/reference/` file open in the editor. The screenshot
+> *Capture this: a `resources/corpus/reference/` file open in the editor. The screenshot
 > should show colored headers, speaker codes, dependent tiers, dimmed timing
 > bullets, and the code lens utterance counts above `@Participants`.*
 

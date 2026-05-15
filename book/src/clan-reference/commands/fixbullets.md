@@ -5,7 +5,7 @@
 
 Repairs timing bullets that link CHAT to audio or video. The legacy manual describes `FIXBULLETS` more broadly: converting old-format bullets to new format, inserting `@Media`, merging multiple bullets, adding language tags, and shifting global timing offsets.
 
-`talkbank-clan` now supports the AST-safe subset of that behavior: main-tier monotonic bullet repair, global millisecond offsets on parsed bullet timings, and tier-scoped bullet repair using parsed tier kinds.
+`clan-core` now supports the AST-safe subset of that behavior: main-tier monotonic bullet repair, global millisecond offsets on parsed bullet timings, and tier-scoped bullet repair using parsed tier kinds.
 
 ## Usage
 

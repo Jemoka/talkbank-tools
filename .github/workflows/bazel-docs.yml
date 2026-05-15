@@ -1,0 +1,39 @@
+name: bazel · docs
+
+# Build the mdBook and run the linkcheck.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "book/**"
+      - ".github/workflows/bazel-docs.yml"
+  pull_request:
+    paths:
+      - "book/**"
+      - ".github/workflows/bazel-docs.yml"
+
+concurrency:
+  group: bazel-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-linkcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install mdbook + mdbook-mermaid + mdbook-linkcheck2
+        run: cargo install mdbook mdbook-mermaid mdbook-linkcheck2 --locked
+      - name: bazel build //book:html
+        run: bazel run //book:html
+      - name: bazel run //book:linkcheck
+        run: bazel run //book:linkcheck
+      - uses: actions/upload-artifact@v4
+        with:
+          name: book-html
+          path: book/build/html

@@ -12,10 +12,10 @@ Construct specs define valid CHAT patterns with expected parse trees.
 
 ### 1. Create the Spec File
 
-Create a new markdown file in the appropriate `spec/constructs/` subdirectory:
+Create a new markdown file in the appropriate `resources/spec/constructs/` subdirectory:
 
 ```text
-spec/constructs/
+resources/spec/constructs/
 ├── header/         # Header-related constructs
 ├── main_tier/      # Main tier patterns
 ├── tiers/          # Dependent tier patterns
@@ -60,10 +60,10 @@ Parse your input with tree-sitter to get the actual CST, then copy it as the Exp
 ### 4. Regenerate The Affected Generated Artifacts
 
 ```bash
-make test-gen
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs
 ```
 
-Use `make test-gen` when you intentionally changed generated grammar corpus
+Use `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` when you intentionally changed generated grammar corpus
 tests, generated Rust tests, or generated error docs.
 
 For isolated grammar additions, keep the change small:
@@ -78,10 +78,10 @@ Error specs define invalid CHAT patterns with expected error codes.
 
 ### 1. Create the Spec File
 
-Error specs live in `spec/errors/`, named by error code:
+Error specs live in `resources/spec/errors/`, named by error code:
 
 ```text
-spec/errors/E301_missing_participants.md
+resources/spec/errors/E301_missing_participants.md
 ```
 
 ### 2. Write the Spec
@@ -121,22 +121,22 @@ The @Participants header is required in every CHAT file.
 ### 3. Regenerate The Affected Artifacts
 
 ```bash
-make test-gen
-make verify
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs
+bazel build //... && bazel test //...
 ```
 
 ## Updating the Symbol Registry
 
-The symbol registry at `spec/symbols/symbol_registry.json` defines character sets used by the grammar and Rust crates.
+The symbol registry at `resources/spec/symbols/symbol_registry.json` defines character sets used by the grammar and Rust crates.
 
 ```mermaid
 flowchart TD
-    registry["Edit spec/symbols/\nsymbol_registry.json"]
+    registry["Edit resources/spec/symbols/\nsymbol_registry.json"]
     validate["validate_symbol_registry.js\n(structure check)"]
     gen_grammar["Generate grammar symbols\n(for tree-sitter)"]
-    gen_rust["generate_rust_symbol_sets.js\n→ talkbank-model/src/generated/symbol_sets.rs\n→ spec/tools/src/generated/symbol_sets.rs"]
+    gen_rust["generate_rust_symbol_sets.js\n→ talkbank-model/src/generated/symbol_sets.rs\n→ crates/spec/talkbank-spec-testgen/src/generated/symbol_sets.rs"]
     fmt["rustfmt\n(format generated code)"]
-    verify["make symbols-gen\nthen make verify"]
+    verify["node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js\nthen bazel build //... && bazel test //..."]
 
     registry --> validate --> gen_grammar & gen_rust
     gen_rust --> fmt --> verify
@@ -146,12 +146,12 @@ flowchart TD
 After editing:
 
 ```bash
-make symbols-gen    # Regenerate Rust and JS constants
-make test-gen       # If generated grammar/tests/docs depend on the symbols
+node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js    # Regenerate Rust and JS constants
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs       # If generated grammar/tests/docs depend on the symbols
 ```
 
 ## Common Mistakes
 
 - **Editing generated files** — never edit `grammar/test/corpus/` or `crates/talkbank-parser-tests/tests/generated/` by hand
-- **Running `make test-gen` reflexively** — use it when generated artifacts changed, not as a substitute for thinking about what kind of test authority the change really needs
+- **Running `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` reflexively** — use it when generated artifacts changed, not as a substitute for thinking about what kind of test authority the change really needs
 - **Wrong layer** — parser-layer specs expect parse failure; validation-layer specs expect parse success + error report

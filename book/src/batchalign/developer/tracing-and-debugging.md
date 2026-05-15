@@ -93,7 +93,7 @@ The `add_morphosyntax_batched_inner` function has three phases:
 - **Phase 2** (GIL — Python callback): `debug!` logs response item count.
 - **Phase 3** (pure Rust — inject results): `debug!` logs completion.
 
-### 2. Python inference module (`batchalign/inference/morphosyntax.py`)
+### 2. Python inference module (`python/batchalign/inference/morphosyntax.py`)
 
 The `batch_infer_morphosyntax` function logs:
 
@@ -360,7 +360,7 @@ that was produced by the transcribe stage. Feed it to the parser locally:
 
 ```bash
 # Reproduce the parse error offline
-cargo run -p talkbank-cli -- validate /tmp/debug/sample_post_asr.cha
+cargo run -p chatter-cli -- validate /tmp/debug/sample_post_asr.cha
 ```
 
 ### Example: Diagnosing an FA grouping issue
@@ -418,7 +418,7 @@ at each cache call site via `policy_for(CacheTaskName)`.
 
 ## Stanza Anomaly Detection
 
-The morphosyntax inference module (`batchalign/inference/morphosyntax.py`)
+The morphosyntax inference module (`python/batchalign/inference/morphosyntax.py`)
 detects several classes of Stanza misbehavior:
 
 | Anomaly | Detection |

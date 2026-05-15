@@ -44,18 +44,18 @@ Source verified by reading code on 2026-05-06.
 
 | # | Family | Load site | Library | Cache root |
 |---|---|---|---|---|
-| 1 | Stanza morphosyntax | `batchalign/worker/_stanza_loading.py:99` `load_stanza_models` | `stanza.Pipeline(download_method=REUSE_RESOURCES)` | Stanza `DEFAULT_MODEL_DIR` |
+| 1 | Stanza morphosyntax | `python/batchalign/worker/_stanza_loading.py:99` `load_stanza_models` | `stanza.Pipeline(download_method=REUSE_RESOURCES)` | Stanza `DEFAULT_MODEL_DIR` |
 | 2 | Stanza utseg | `_stanza_loading.py:280` `load_utseg_builder` | (same) | (same) |
 | 3 | Stanza Chinese retok | `_stanza_loading.py:235` `load_stanza_retokenize_model` | (same) | (same) |
-| 4 | Stanza coref (lazy) | `batchalign/inference/coref.py:66-68` | `stanza.Pipeline(...)` | (same) |
-| 5 | Whisper ASR | `batchalign/inference/asr.py:119` `load_whisper_asr` | `transformers.pipeline + WhisperProcessor.from_pretrained` | HF |
-| 6 | Whisper FA | `batchalign/inference/fa.py:114` `load_whisper_fa` | `WhisperForConditionalGeneration.from_pretrained` + `WhisperProcessor.from_pretrained` | HF |
-| 7 | Wave2Vec FA | `batchalign/inference/fa.py:198` `load_wave2vec_fa` | `torchaudio.pipelines.MMS_FA.get_model()` | torchaudio hub |
-| 8 | Cantonese FA | `batchalign/inference/languages/cantonese/_cantonese_fa.py` `load_cantonese_fa` | `Wav2Vec2ForCTC.from_pretrained` | HF |
-| 9 | SeamlessM4T translation | `batchalign/worker/_model_loading/translation.py:40-56` | `AutoProcessor.from_pretrained` + `SeamlessM4TModel.from_pretrained` | HF |
-| 10 | pyannote diarization | `batchalign/inference/speaker.py:350` | `Pipeline.from_pretrained("talkbank/dia-fork")` | HF |
-| 11 | NeMo speaker (fallback) | `batchalign/inference/speaker.py` (NeMo branch) | `EncDecSpeakerLabelModel.from_pretrained(...)` | NeMo cache |
-| 12 | BERT utterance | `batchalign/models/utterance/infer.py:120-128` | `AutoTokenizer.from_pretrained` + `BertForTokenClassification.from_pretrained` | HF |
+| 4 | Stanza coref (lazy) | `python/batchalign/inference/coref.py:66-68` | `stanza.Pipeline(...)` | (same) |
+| 5 | Whisper ASR | `python/batchalign/inference/asr.py:119` `load_whisper_asr` | `transformers.pipeline + WhisperProcessor.from_pretrained` | HF |
+| 6 | Whisper FA | `python/batchalign/inference/fa.py:114` `load_whisper_fa` | `WhisperForConditionalGeneration.from_pretrained` + `WhisperProcessor.from_pretrained` | HF |
+| 7 | Wave2Vec FA | `python/batchalign/inference/fa.py:198` `load_wave2vec_fa` | `torchaudio.pipelines.MMS_FA.get_model()` | torchaudio hub |
+| 8 | Cantonese FA | `python/batchalign/inference/languages/cantonese/_cantonese_fa.py` `load_cantonese_fa` | `Wav2Vec2ForCTC.from_pretrained` | HF |
+| 9 | SeamlessM4T translation | `python/batchalign/worker/_model_loading/translation.py:40-56` | `AutoProcessor.from_pretrained` + `SeamlessM4TModel.from_pretrained` | HF |
+| 10 | pyannote diarization | `python/batchalign/inference/speaker.py:350` | `Pipeline.from_pretrained("talkbank/dia-fork")` | HF |
+| 11 | NeMo speaker (fallback) | `python/batchalign/inference/speaker.py` (NeMo branch) | `EncDecSpeakerLabelModel.from_pretrained(...)` | NeMo cache |
+| 12 | BERT utterance | `python/batchalign/models/utterance/infer.py:120-128` | `AutoTokenizer.from_pretrained` + `BertForTokenClassification.from_pretrained` | HF |
 | 13 | PyCantonese | (bundled) | — | (none — wheel) |
 
 Cache roots resolve to OS-specific paths via each library's own logic. See
@@ -112,7 +112,7 @@ distinction is what the catalog bootstrap exists to enforce.
 
 Every download site emits a `progress_v2` event so the user sees what's
 happening. The shared helper lives at
-`batchalign/worker/_progress.py`:
+`python/batchalign/worker/_progress.py`:
 
 - `emit_download_event(stage, user_message, request_id=None, size_bytes_estimate=None)`
   — generic, used for non-HF downloads (Stanza catalog, Stanza language
@@ -281,6 +281,6 @@ PyCantonese tests run in the default suite because PyCantonese is bundled
 
 - [User-facing model-downloads chapter](../user-guide/model-downloads.md).
 - [Time transparency principle](../architecture/time-transparency.md).
-- The contract enforcement code: `batchalign/worker/_stanza_capabilities.py`,
-  `batchalign/worker/_progress.py`, `batchalign/worker/_protocol.py`.
+- The contract enforcement code: `python/batchalign/worker/_stanza_capabilities.py`,
+  `python/batchalign/worker/_progress.py`, `python/batchalign/worker/_protocol.py`.
 - Bootstrap regression tests: `batchalign/tests/test_stanza_capabilities.py`.

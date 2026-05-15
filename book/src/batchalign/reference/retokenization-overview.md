@@ -86,7 +86,7 @@ competence from three sources, in order of leverage:
    on Stanza's UD output (POS/lemma corrections, case features).
    Live in `crates/talkbank-transform/src/morphosyntax/lang_{en,fr,ja}.rs`.
 3. **BA3's Python tokenizer realignment postprocessor** —
-   `batchalign/inference/_tokenizer_realign.py`, a character-DP
+   `python/batchalign/inference/_tokenizer_realign.py`, a character-DP
    realigner that forces Stanza to respect BA3's pre-tokenized
    input. Mostly language-agnostic; one English-specific
    contraction hint rule.
@@ -158,7 +158,7 @@ Beyond the logic gap, default CI doesn't probe per-language
 tokenization at all. The investigation probe matrix
 (`batchalign/tests/investigations/_cases/`) covers French, Italian,
 Portuguese, Dutch, Spanish, German for clitic / MWT phenomena —
-but every case is `@pytest.mark.golden`, so `make test` and
+but every case is `@pytest.mark.golden`, so `bazel test //...` and
 default `uv run pytest` skip them.
 
 A contributor can break BA3's handling of `c'est` or `d'água`

@@ -16,7 +16,7 @@ see [User Guide: utseg](../../user-guide/commands/utseg.md).
 | Command definition | `crates/batchalign/src/commands/utseg.rs` | `CommandDefinition` impl |
 | Utseg orchestration | `crates/batchalign/src/utseg.rs` | Cross-file batching, cache, boundary application |
 | Batch dispatch | `crates/batchalign/src/runner/dispatch/infer_batched.rs` | Shared with morphotag and translate |
-| Worker IPC | `batchalign/inference/utseg.py` — `batch_infer_utseg()` | Loads Stanza constituency, returns raw parse trees |
+| Worker IPC | `python/batchalign/inference/utseg.py` — `batch_infer_utseg()` | Loads Stanza constituency, returns raw parse trees |
 | Boundary application | `crates/batchalign/src/utseg.rs` | Maps predicted boundaries back to CHAT utterance structure |
 
 Local submissions (auto-daemon or loopback `--server`) use `paths_mode=true`
@@ -63,7 +63,7 @@ The Rust `utseg.rs` library maps these back to CHAT utterance splits/merges.
 About 11 languages have Stanza constituency models. Languages without
 constituency support fall back to punctuation-based boundary detection. The
 available processors are queried at worker startup via
-`batchalign/worker/_stanza_capabilities.py` — never hardcoded.
+`python/batchalign/worker/_stanza_capabilities.py` — never hardcoded.
 
 ---
 
@@ -78,8 +78,8 @@ available processors are queried at worker startup via
 ## Testing
 
 ```bash
-make test
-cargo nextest run -p batchalign -E 'test(utseg::)'
+bazel test //...
+cargo nextest run -p batchalign-cli -E 'test(utseg::)'
 # ML golden tests — only on net
 cargo nextest run --profile ml -E 'test(utseg::golden)'
 ```

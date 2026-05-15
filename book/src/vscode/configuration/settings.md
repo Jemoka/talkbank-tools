@@ -39,7 +39,7 @@ All extension settings are accessible via **File > Preferences > Settings** (`Cm
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `talkbank.lsp.binaryPath` | string | `""` (empty) | Absolute path to the standalone `talkbank-lsp` binary. When empty (the default), the extension searches: (1) bundled binary at `<extension>/server/talkbank-lsp[.exe]` (shipped with platform-specific VSIXes), (2) system PATH via `which talkbank-lsp`, (3) dev-tree builds at `<extension>/../target/{debug,release}/talkbank-lsp`. If none are found, an actionable error notification is shown. Set this only if you need to override the search. |
+| `talkbank.lsp.binaryPath` | string | `""` (empty) | Absolute path to the standalone `chatter-lsp` binary. When empty (the default), the extension searches: (1) bundled binary at `<extension>/server/chatter-lsp[.exe]` (shipped with platform-specific VSIXes), (2) system PATH via `which chatter-lsp`, (3) dev-tree builds at `<extension>/../target/{debug,release}/chatter-lsp`. If none are found, an actionable error notification is shown. Set this only if you need to override the search. |
 
 ## Settings in JSON
 
@@ -55,7 +55,7 @@ To edit settings directly in `settings.json`, add entries like:
   "talkbank.bullets.display": "hidden",
   "talkbank.inlayHints.enabled": false,
   "talkbank.validation.severity": "errorsOnly",
-  "talkbank.lsp.binaryPath": "/usr/local/bin/talkbank-lsp"
+  "talkbank.lsp.binaryPath": "/usr/local/bin/chatter-lsp"
 }
 ```
 

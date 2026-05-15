@@ -1,0 +1,6 @@
+"""Shell scripts that drive mdBook build / serve / linkcheck."""
+
+# Only the book package consumes these.
+package(default_visibility = ["//book:__pkg__"])
+
+exports_files(["serve.sh", "build.sh", "linkcheck.sh"])

@@ -31,7 +31,7 @@ if [[ "${BATCHALIGN_REAL_SERVER_E2E:-0}" == "1" ]]; then
   BATCHALIGN_BIN_PATH="${BATCHALIGN_BIN:-$ROOT/target/release/batchalign3}"
   if [[ ! -x "$BATCHALIGN_BIN_PATH" ]]; then
     echo "batchalign3 release binary not found at $BATCHALIGN_BIN_PATH; building..."
-    cargo build --manifest-path "$ROOT/Cargo.toml" -p batchalign --release
+    cargo build --manifest-path "$ROOT/Cargo.toml" -p batchalign-cli --release
   fi
   export BATCHALIGN_BIN="$BATCHALIGN_BIN_PATH"
   export BATCHALIGN_DASHBOARD_DIR="${BATCHALIGN_DASHBOARD_DIR:-$FRONTEND_DIR/dist}"

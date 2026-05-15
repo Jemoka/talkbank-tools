@@ -155,6 +155,6 @@ Count mismatches are tolerated rather than diagnosed.
 
 - [Cross-Tier Alignment](../navigation/alignment.md) — user-facing behavior on hover and highlight.
 - [Architecture](../developer/architecture.md) — three-layer design and chunk-projection flow.
-- [`talkbank-lsp/CLAUDE.md`][lsp-claude] — AI-assistant discipline for any future LSP code that touches these indices.
+- [`chatter-lsp/CLAUDE.md`][lsp-claude] — AI-assistant discipline for any future LSP code that touches these indices.
 
-[lsp-claude]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-lsp/CLAUDE.md
+[lsp-claude]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/chatter-lsp/CLAUDE.md

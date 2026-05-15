@@ -33,7 +33,7 @@ This is a **development-only arrangement**. For public release, dependencies mus
 
 3. **CI in batchalign3 clones talkbank-tools at HEAD.** This means batchalign3 CI implicitly tests against the latest talkbank-tools. A breaking change in talkbank-tools will surface as a batchalign3 CI failure.
 
-4. **After pulling talkbank-tools changes**, rebuild batchalign3's Python extension: `make build-python`
+4. **After pulling talkbank-tools changes**, rebuild batchalign3's Python extension: `bazel build //...-python`
 
 ## Release Boundary (Target)
 

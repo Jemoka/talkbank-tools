@@ -88,7 +88,7 @@ through the worker capabilities IPC protocol.
 
 ```mermaid
 flowchart TD
-    subgraph Python["Python Worker (batchalign/worker/)"]
+    subgraph Python["Python Worker (python/batchalign/worker/)"]
         resources["Stanza resources.json\n(installed package data)"]
         builder["build_stanza_capability_table()\n(_stanza_capabilities.py)"]
         pycountry["pycountry\n(ISO-639-3 to alpha-2)"]
@@ -129,8 +129,8 @@ flowchart TD
 ```
 
 <!-- Verified against:
-  - batchalign/worker/_stanza_capabilities.py (builder, overrides, pycountry)
-  - batchalign/worker/_handlers.py (handle_capabilities, CapabilitiesResponse)
+  - python/batchalign/worker/_stanza_capabilities.py (builder, overrides, pycountry)
+  - python/batchalign/worker/_handlers.py (handle_capabilities, CapabilitiesResponse)
   - crates/batchalign-types/src/worker.rs (WorkerCapabilities.stanza_capabilities, StanzaLanguageProcessors)
   - crates/batchalign/src/worker/pool/mod.rs (OnceLock, record_capabilities)
   - crates/batchalign/src/stanza_registry.rs (StanzaRegistry)
@@ -140,7 +140,7 @@ flowchart TD
 
 ## Python Side: Building the Table
 
-`batchalign/worker/_stanza_capabilities.py` is the single source of truth.
+`python/batchalign/worker/_stanza_capabilities.py` is the single source of truth.
 
 **`build_stanza_capability_table()`** reads `stanza.resources.common.load_resources_json()`,
 which returns the full Stanza resource dictionary keyed by alpha-2 language
@@ -176,7 +176,7 @@ the handler converts the `StanzaCapabilityTable` into a
 `dict[str, StanzaLanguageProcessors]` (keyed by ISO-639-3, each value
 containing an `alpha2` string and a `processors` list). This is serialized
 as the `stanza_capabilities` field of `CapabilitiesResponse`
-(`batchalign/worker/_types.py`).
+(`python/batchalign/worker/_types.py`).
 
 On the Rust side, `WorkerCapabilities` in `crates/batchalign-types/src/worker.rs`
 mirrors this structure with `stanza_capabilities: BTreeMap<String, StanzaLanguageProcessors>`.
@@ -271,16 +271,16 @@ net regardless of how stale the Rust fallback gets.
 
 | File | Role |
 |------|------|
-| `batchalign/worker/_stanza_capabilities.py` | Reads `resources.json`, builds `StanzaCapabilityTable` |
-| `batchalign/worker/_handlers.py` | Serializes table into `CapabilitiesResponse.stanza_capabilities` |
-| `batchalign/worker/_types.py` | `CapabilitiesResponse`, `StanzaLanguageProcessors` Pydantic models |
-| `batchalign/worker/_stanza_loading.py` | Utseg config builder queries table for constituency/MWT |
+| `python/batchalign/worker/_stanza_capabilities.py` | Reads `resources.json`, builds `StanzaCapabilityTable` |
+| `python/batchalign/worker/_handlers.py` | Serializes table into `CapabilitiesResponse.stanza_capabilities` |
+| `python/batchalign/worker/_types.py` | `CapabilitiesResponse`, `StanzaLanguageProcessors` Pydantic models |
+| `python/batchalign/worker/_stanza_loading.py` | Utseg config builder queries table for constituency/MWT |
 | `crates/batchalign-types/src/worker.rs` | `WorkerCapabilities`, `StanzaLanguageProcessors` Rust types |
 | `crates/batchalign/src/stanza_registry.rs` | `StanzaRegistry` with typed query methods |
 | `crates/batchalign/src/worker/pool/mod.rs` | `OnceLock<StanzaRegistry>` storage, `record_capabilities()` |
 | `crates/batchalign/src/types/request.rs` | Single Rust fallback via `is_stanza_supported_language()`; delegates to chat-ops |
 | `crates/batchalign/src/types/request.rs` | `validate_language_with_registry()`; submission-time gate delegates to chat-ops |
 | `crates/batchalign/src/pipeline/transcribe.rs` | Plan-time gate (registry first, chat-ops fallback) |
-| `batchalign/worker/_stanza_loading.py` | `UnsupportedLanguageError` preflight before `stanza.Pipeline` |
+| `python/batchalign/worker/_stanza_loading.py` | `UnsupportedLanguageError` preflight before `stanza.Pipeline` |
 | `crates/batchalign/src/morphosyntax/batch.rs` | Queries registry for language filtering |
 | `scripts/generate_stanza_language_table.py` | Regenerates Rust fallback tables from installed Stanza |

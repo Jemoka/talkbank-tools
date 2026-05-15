@@ -1,0 +1,56 @@
+name: bazel · grammar
+
+# Tree-sitter grammar + its Rust binding. Other language bindings
+# (Node, Python, Go, Swift) ship through their own publish workflows;
+# this job only validates the Rust binding compiles and that the
+# generated parser.c hasn't drifted.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "grammar/**"
+      - "resources/spec/symbols/**"
+      - ".github/workflows/bazel-grammar.yml"
+  pull_request:
+    paths:
+      - "grammar/**"
+      - "resources/spec/symbols/**"
+      - ".github/workflows/bazel-grammar.yml"
+
+concurrency:
+  group: bazel-grammar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-binding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+      - name: bazel build (tree-sitter-talkbank rust binding)
+        run: bazel build //grammar:tree_sitter_talkbank
+      - name: bazel test (rust binding)
+        run: bazel test //grammar:tree_sitter_talkbank_unit_test
+
+  generated-artifacts-fresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: Install tree-sitter CLI
+        run: npm install -g tree-sitter-cli@0.25
+      - name: Regenerate parser.c
+        working-directory: grammar
+        run: tree-sitter generate
+      - name: Ensure no drift
+        run: |
+          if ! git diff --quiet -- grammar/src/parser.c grammar/src/grammar.json grammar/src/node-types.json; then
+            echo "::error::grammar/src/ artifacts drifted. Regenerate locally with \`tree-sitter generate\` and commit."
+            git --no-pager diff -- grammar/src/parser.c grammar/src/grammar.json grammar/src/node-types.json | head -200
+            exit 1
+          fi

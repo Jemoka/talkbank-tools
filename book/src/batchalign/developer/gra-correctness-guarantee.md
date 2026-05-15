@@ -76,7 +76,7 @@ structures:
 You can list or run that group with:
 
 ```bash
-cargo nextest run -p batchalign -E 'test(validate_generated_gra)'
+cargo nextest run -p batchalign-cli -E 'test(validate_generated_gra)'
 ```
 
 ## Scope

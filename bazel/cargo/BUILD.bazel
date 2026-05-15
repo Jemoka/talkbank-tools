@@ -1,0 +1,15 @@
+"""Cargo / crate_universe maintenance targets.
+
+`bazel run //bazel/cargo:repin` regenerates the crate_universe lockfile
+after editing any Cargo.toml. Wraps `CARGO_BAZEL_REPIN=1 bazel sync
+--only=crates`. Run after every cargo edit.
+"""
+
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+sh_binary(
+    name = "repin",
+    srcs = ["repin.sh"],
+)

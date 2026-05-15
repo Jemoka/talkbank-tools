@@ -12,9 +12,9 @@ that no new runtime DP appears outside the allowlisted call sites.
 
 | Area | Call site | DP algorithm | Notes |
 |---|---|---|---|
-| Whisper ASR timestamp extraction | `batchalign/inference/audio.py` | DTW (`_dynamic_time_warping`) | Maps decoder tokens to audio frames from cross-attention matrices |
-| Whisper FA token timing | `batchalign/inference/fa.py` | DTW | Token jump times extracted in Python, mapped in Rust |
-| Wave2Vec forced alignment | `batchalign/inference/fa.py` | CTC forced alignment (Viterbi-style DP) | `torchaudio.functional.forced_align` on emission matrix vs transcript |
+| Whisper ASR timestamp extraction | `python/batchalign/inference/audio.py` | DTW (`_dynamic_time_warping`) | Maps decoder tokens to audio frames from cross-attention matrices |
+| Whisper FA token timing | `python/batchalign/inference/fa.py` | DTW | Token jump times extracted in Python, mapped in Rust |
+| Wave2Vec forced alignment | `python/batchalign/inference/fa.py` | CTC forced alignment (Viterbi-style DP) | `torchaudio.functional.forced_align` on emission matrix vs transcript |
 | FA word-level remapping | `crates/batchalign/src/chat_ops/fa/alignment.rs::apply_indexed_timings` | **None** | Indexed callback protocol maps timings 1:1 by index |
 | FA token-level remapping | `crates/batchalign/src/chat_ops/fa/alignment.rs::align_token_timings` | **None** | Deterministic token→word stitching only; unmatched words remain untimed |
 | UTR timing recovery | `crates/batchalign/src/chat_ops/fa/utr.rs::inject_utr_timing` | Hirschberg edit-distance DP | Global alignment of all document words against all ASR tokens |

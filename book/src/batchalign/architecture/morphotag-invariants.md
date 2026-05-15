@@ -46,7 +46,7 @@ flowchart TD
     Nlabel -->|"N == 0"| NA["MorOutcome::NotApplicable<br/>no %mor produced (correct)"]
     Nlabel -->|"N > 0"| D
 
-    D["Stage 2: Dispatch<br/>tok_ctx.original_words = word_lists<br/>(batchalign/inference/morphosyntax.py:375)"] --> S
+    D["Stage 2: Dispatch<br/>tok_ctx.original_words = word_lists<br/>(python/batchalign/inference/morphosyntax.py:375)"] --> S
     S["Stanza neural tokenizer<br/>re-tokenizes text, realigning<br/>to word_lists boundaries"] --> P
 
     P["Stage 3: Project<br/>map_ud_sentence + MWT Range reassembly<br/>(crates/talkbank-transform/src/morphosyntax/sentence_mapping.rs)"] --> M
@@ -148,7 +148,7 @@ the most likely failing stage:
 - `crates/talkbank-transform/src/morphosyntax/outcome.rs` — outcome types
 - `crates/talkbank-transform/src/inject.rs` — invariant check & outcome emission
 - `crates/talkbank-transform/src/morphosyntax/payload.rs` — NotApplicable classification
-- `batchalign/inference/morphosyntax.py` — realignment stage
+- `python/batchalign/inference/morphosyntax.py` — realignment stage
 - `batchalign/tests/inference/test_morphosyntax_realignment_contract.py` — Stage 2 tests
 - `crates/batchalign/tests/mor_count_parity_reference_corpus.rs` — Stage 1 tests
 - `talkbank-tools/crates/talkbank-model/src/alignment/helpers/rules.rs` — `counts_for_tier`

@@ -5,7 +5,7 @@
 
 ## JSON for Scripting
 
-For programmatic consumption, use `--format json` and pipe to `jq`. The schemas are the typed result structs in `crates/talkbank-clan/src/commands/<cmd>.rs` (each implements `Serialize`).
+For programmatic consumption, use `--format json` and pipe to `jq`. The schemas are the typed result structs in `crates/clan-core/src/commands/<cmd>.rs` (each implements `Serialize`).
 
 ```bash
 # Total token count for the first speaker in a FREQ run
@@ -54,4 +54,4 @@ chatter clan lowcase file.cha > file.low.cha
 chatter clan dates   file.low.cha > file.final.cha
 ```
 
-Transforms do not modify the input file in place; see `crates/talkbank-clan/src/framework/transform.rs::run_transform`.
+Transforms do not modify the input file in place; see `crates/clan-core/src/framework/transform.rs::run_transform`.

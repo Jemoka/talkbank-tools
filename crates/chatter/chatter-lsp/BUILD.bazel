@@ -1,0 +1,52 @@
+"""chatter-lsp — Language Server Protocol implementation for CHAT.
+
+Thin tower-lsp/tokio adapter. Library half is for in-tree integration
+tests; binary half ships as `chatter-lsp` and is what the VS Code
+extension launches over stdio.
+
+Run:
+    bazel run //crates/chatter/chatter-lsp:chatter-lsp
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+_INTRA = [
+    "//crates/clan/clan-core:clan_core",
+    "//crates/core/talkbank-model:talkbank_model",
+    "//crates/core/talkbank-parser:talkbank_parser",
+    "//grammar:tree_sitter_talkbank",
+]
+
+rust_library(
+    name = "chatter_lsp",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/bin/**"],
+    ),
+    aliases = aliases(),
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + _INTRA,
+    compile_data=glob(["queries/*.scm"])+["//apps/vscode-extension:src/test/fixtures/executeCommandContract.json"]
+)
+
+rust_binary(
+    name = "chatter-lsp",
+    srcs = ["src/bin/chatter-lsp.rs"],
+    aliases = aliases(),
+    crate_name = "chatter_lsp_bin",
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + _INTRA + [":chatter_lsp"],
+)
+
+rust_test(
+    name = "chatter_lsp_unit_test",
+    crate = ":chatter_lsp",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

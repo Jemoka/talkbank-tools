@@ -7,7 +7,7 @@
 [schemars](https://docs.rs/schemars) for two different integration surfaces:
 
 - the `ChatFile` transcript model used by `chatter to-json`
-- the `talkbank/analyze` editor/server request contract shared by the VS Code extension and `talkbank-lsp`
+- the `talkbank/analyze` editor/server request contract shared by the VS Code extension and `chatter-lsp`
 
 Keeping those schemas generated from the Rust source of truth lets cross-language
 integrations consume stable contracts without re-deriving the shapes by hand.
@@ -16,8 +16,8 @@ integrations consume stable contracts without re-deriving the shapes by hand.
 
 | Schema | Canonical URL | Repository | Generator |
 |----------|------------|------------|------------|
-| `ChatFile` transcript model | `https://talkbank.org/schemas/v0.1/chat-file.json` | `schema/chat-file.schema.json` | `cargo test --test generate_schema` |
-| `AnalyzeCommandPayload` execute-command contract | `https://talkbank.org/schemas/v0.1/analyze-command.json` | `schema/analyze-command.schema.json` | `cargo test --test generate_analyze_command_schema` |
+| `ChatFile` transcript model | `https://talkbank.org/schemas/v0.1/chat-file.json` | `schemas/chat-file/chat-file.schema.json` | `cargo test --test generate_schema` |
+| `AnalyzeCommandPayload` execute-command contract | `https://talkbank.org/schemas/v0.1/analyze-command.json` | `schemas/chat-file/analyze-command.schema.json` | `cargo test --test generate_analyze_command_schema` |
 
 The generated schemas declare both `$schema` (JSON Schema 2020-12) and `$id`
 (the canonical URL above). External consumers that want to track the
@@ -105,7 +105,7 @@ Go, and other languages.
 
 The `talkbank/analyze` LSP command still travels through
 `workspace/executeCommand`, but its logical payload is now one typed object
-described by `talkbank_lsp::backend::contracts::AnalyzeCommandPayload`:
+described by `chatter_lsp::backend::contracts::AnalyzeCommandPayload`:
 
 ```json
 {
@@ -121,16 +121,16 @@ That schema is useful for:
 
 - external editor integrations that want the exact request contract
 - future TypeScript type generation or runtime validation
-- documenting the stable boundary between the extension and `talkbank-lsp`
+- documenting the stable boundary between the extension and `chatter-lsp`
 
 The Rust contract module also reuses library-owned types such as
 `AnalysisCommandName`, `Gender`, and `DatabaseFilter` so the transport schema
 stays aligned with the typed CLAN execution boundary.
 
 The repo also keeps one concrete shared fixture for this contract at
-`vscode/src/test/fixtures/analyzeCommandPayload.json`. The TypeScript payload
+`apps/vscode-extension/src/test/fixtures/analyzeCommandPayload.json`. The TypeScript payload
 tests import that fixture directly, and `tests/validate_analyze_command_fixture.rs`
-validates the same JSON against `schema/analyze-command.schema.json` and then
+validates the same JSON against `schemas/chat-file/analyze-command.schema.json` and then
 deserializes it through `AnalyzeCommandPayload`. That gives the contract one
 mechanically checked cross-language example in addition to the generated schema
 artifact itself.
@@ -145,7 +145,7 @@ cargo test --test generate_schema
 ```
 
 After changing the editor/server analyze contract in
-`crates/talkbank-lsp/src/backend/contracts.rs`:
+`crates/chatter-lsp/src/backend/contracts.rs`:
 
 ```bash
 cd talkbank-tools
@@ -157,12 +157,12 @@ generated artifacts stay in sync.
 
 ## Code references
 
-- `schema/chat-file.schema.json` — generated schema
-- `schema/analyze-command.schema.json` — generated `talkbank/analyze` contract schema
-- `vscode/src/test/fixtures/analyzeCommandPayload.json` — shared concrete analyze-command fixture
+- `schemas/chat-file/chat-file.schema.json` — generated schema
+- `schemas/chat-file/analyze-command.schema.json` — generated `talkbank/analyze` contract schema
+- `apps/vscode-extension/src/test/fixtures/analyzeCommandPayload.json` — shared concrete analyze-command fixture
 - `crates/talkbank-transform/src/json.rs` — schema loading and validation
 - `crates/talkbank-model/src/model/` — Rust data model
-- `crates/talkbank-lsp/src/backend/contracts.rs` — Rust-owned editor/server transport contracts
+- `crates/chatter-lsp/src/backend/contracts.rs` — Rust-owned editor/server transport contracts
 - `tests/generate_schema/` — shared schema generation helpers
 - `tests/generate_analyze_command_schema.rs` — analyze-contract schema generation test
 - `tests/validate_analyze_command_fixture.rs` — fixture/schema validation test for the editor/server contract

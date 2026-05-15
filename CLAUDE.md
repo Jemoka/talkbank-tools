@@ -39,8 +39,8 @@ These rules matter because contributors often read code before they read docs.
 11. **Time transparency.** Operations that take more than ~1 second must
    surface to all UI channels (console, TUI, desktop app, web dashboard)
    via the `progress_v2` event channel
-   (`batchalign/worker/_protocol.py:write_progress_event`,
-   `batchalign/worker/_progress.py` helpers). Silent waits are UX bugs.
+   (`python/batchalign/worker/_protocol.py:write_progress_event`,
+   `python/batchalign/worker/_progress.py` helpers). Silent waits are UX bugs.
    Applies to model downloads, model loads, external API calls, and any
    blocking wait. Full rationale and contributor checklist in
    [`book/src/batchalign/architecture/time-transparency.md`](book/src/batchalign/architecture/time-transparency.md).
@@ -55,19 +55,19 @@ Data flows: **spec** (source of truth) → **grammar** (`grammar/`) → **crates
 
 ## Running in Development
 
-The CLI binary is called `chatter` (package `talkbank-cli`).
+The CLI binary is called `chatter` (package `chatter-cli`).
 
 ```bash
 # Run chatter directly (debug build, recompiles as needed)
-cargo run -p talkbank-cli -- validate path/to/file.cha
-cargo run -p talkbank-cli -- to-json path/to/file.cha
-cargo run -p talkbank-cli -- clan freq path/to/file.cha
+cargo run -p chatter-cli -- validate path/to/file.cha
+cargo run -p chatter-cli -- to-json path/to/file.cha
+cargo run -p chatter-cli -- clan freq path/to/file.cha
 
 # Release build for large-scale work (much faster runtime)
-cargo run --release -p talkbank-cli -- validate path/to/corpus/ --force
+cargo run --release -p chatter-cli -- validate path/to/corpus/ --force
 
 # Build the release binary once, then run it directly
-cargo build --release -p talkbank-cli
+cargo build --release -p chatter-cli
 ./target/release/chatter validate path/to/file.cha
 ```
 
@@ -87,16 +87,16 @@ reference rather than reinventing the solution.
 ## Build, Test, and Lint
 
 ```bash
-# Monorepo-level (run `make help` for the full target list)
-make build          # Generate symbols + build Rust workspace
-make test           # Rust workspace tests + doctests + spec tools
-make check          # Fast compile check (both workspaces)
-make verify         # Canonical pre-merge gates
-make test-gen       # Regenerate tests from specs
-make smoke CRATE=x  # Fast: compile check + test one crate
-make check-specs    # Verify every error code has a spec file
-make ci-local       # Quick local CI approximation
-make coverage       # Code coverage report
+# Monorepo-level (run `just --list` for the full target list)
+bazel build //...          # Generate symbols + build Rust workspace
+bazel test //...           # Rust workspace tests + doctests + spec tools
+bazel build //...          # Fast compile check (both workspaces)
+bazel build //... && bazel test //...         # Canonical pre-merge gates
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs       # Regenerate tests from specs
+bazel test //crates/... CRATE=x  # Fast: compile check + test one crate
+bash scripts/check-error-specs.sh    # Verify every error code has a spec file
+bazel build //... && bazel test //...       # Quick local CI approximation
+just spec coverage       # Code coverage report
 
 # Rust workspace
 cargo fmt
@@ -127,11 +127,11 @@ cd spec/tools && cargo check --all-targets
 cd vscode && npm run compile && npm test && npm run lint
 
 # Desktop app (Tauri v2)
-cd apps/chatter-desktop && npm install && cargo tauri dev   # dev mode with hot reload
-cd apps/chatter-desktop && cargo tauri build                # distributable app bundle
+cd apps/chatter-gui && npm install && cargo tauri dev   # dev mode with hot reload
+cd apps/chatter-gui && cargo tauri build                # distributable app bundle
 
 # CLAN golden tests (requires CLAN binaries)
-cargo nextest run -p talkbank-clan -E 'test(golden)'
+cargo nextest run -p clan-core -E 'test(golden)'
 
 # Fuzz testing (from fuzz/ directory)
 cd fuzz && cargo fuzz run fuzz_parse_chat_file
@@ -158,9 +158,9 @@ corpus/         Reference corpus (must pass 100%)
   reference/      Sacred reference set
 tests/          Integration tests and fixtures
 schema/         JSON Schema for ChatFile AST
-vscode/         VS Code extension (TypeScript)
-apps/chatter-desktop/   Desktop validation app (Tauri v2, React + TypeScript)
-apps/dashboard-desktop/ Tauri shell for the Batchalign React dashboard (experimental)
+apps/vscode-extension/         VS Code extension (TypeScript)
+apps/chatter/chatter-gui/   Desktop validation app (Tauri v2, React + TypeScript)
+apps/batchalign/dashboard-desktop/ Tauri shell for the Batchalign React dashboard (experimental)
 fuzz/           Fuzz testing targets (separate Cargo workspace)
 ```
 
@@ -172,11 +172,11 @@ flowchart TD
     derive["talkbank-derive\nProc macros"]
     parser["talkbank-parser\nCanonical parser (tree-sitter)"]
     transform["talkbank-transform\nPipelines, CHAT↔JSON, caching"]
-    clan["talkbank-clan\nCLAN analysis commands"]
-    cli["talkbank-cli (chatter)\nCLI: validate, normalize, convert"]
-    lsp["talkbank-lsp\nLanguage Server Protocol"]
+    clan["clan-core\nCLAN analysis commands"]
+    cli["chatter-cli (chatter)\nCLI: validate, normalize, convert"]
+    lsp["chatter-lsp\nLanguage Server Protocol"]
     s2c["send2clan-sys\nFFI to CLAN app"]
-    desktop["chatter-desktop\nDesktop validation app (Tauri)"]
+    desktop["chatter-gui\nDesktop validation app (Tauri)"]
     re2c["talkbank-parser-re2c\nAlternate parser (equivalence oracle)"]
     tests["talkbank-parser-tests\nEquivalence tests"]
 
@@ -192,7 +192,7 @@ flowchart TD
 ```
 
 The same repository now also contains the Batchalign runtime/application layer
-under `crates/batchalign-*`, `batchalign/`, `frontend/`, `crates/batchalign-pyo3/`, and related
+under `crates/batchalign-*`, `batchalign/`, `apps/batchalign/cli-web-statuspage/`, `crates/batchalign-pyo3/`, and related
 surfaces.
 
 ### Crate Summaries
@@ -203,29 +203,29 @@ surfaces.
 | `talkbank-derive` | `semantic_eq.rs`, `span_shift.rs`, `error_code_enum.rs` | SemanticEq, SpanShift, ValidationTagged, error_code_enum proc macros |
 | `talkbank-parser` | `api/`, `parser/` | CST-to-model conversion via tree-sitter |
 | `talkbank-transform` | pipelines, serialization, caching | Parse+validate pipeline, CHAT↔JSON roundtrip |
-| `talkbank-clan` | `framework/`, `commands/`, `transforms/`, `converters/` | CLAN analysis (FREQ, MLU, etc.), transforms (FLO, etc.), format converters |
-| `talkbank-cli` | `cli/`, `commands/`, `ui/` | `chatter` binary: validate, normalize, to-json, clan dispatch |
-| `talkbank-lsp` | `backend/`, `alignment/`, `graph/` | LSP server with tree-sitter incremental parsing |
+| `clan-core` | `framework/`, `commands/`, `transforms/`, `converters/` | CLAN analysis (FREQ, MLU, etc.), transforms (FLO, etc.), format converters |
+| `chatter-cli` | `cli/`, `commands/`, `ui/` | `chatter` binary: validate, normalize, to-json, clan dispatch |
+| `chatter-lsp` | `backend/`, `alignment/`, `graph/` | LSP server with tree-sitter incremental parsing |
 | `send2clan-sys` | `ffi.rs`, `api/` | C FFI to CLAN app (macOS Apple Events, Windows WM_APP) |
 | `talkbank-parser-re2c` | `re2c/`, `lexer.rs`, `parser.rs` | Alternate parser using re2c lexer (equivalence oracle for tree-sitter parser) |
 | `talkbank-parser-tests` | golden word lists, `generated/` | Parser equivalence, roundtrip, property tests |
-| `chatter-desktop` | `commands.rs`, `events.rs` | Native desktop validation app (Tauri v2, React) |
+| `chatter-gui` | `commands.rs`, `events.rs` | Native desktop validation app (Tauri v2, React) |
 | `xtask` | `main.rs` | Cargo xtask build helpers (symbol generation, etc.) |
 
 ### Two Cargo Workspaces (plus desktop)
 
-1. **Root workspace** (`Cargo.toml`) — all Rust crates under `crates/` + `apps/chatter-desktop/src-tauri`
-2. **Spec workspace** (`spec/Cargo.toml`) — `spec/tools` for core generation and `spec/runtime-tools` for runtime-aware spec tooling
+1. **Root workspace** (`Cargo.toml`) — all Rust crates under `crates/` + `apps/chatter/chatter-gui/src-tauri`
+2. **Spec workspace** (`crates/spec/talkbank-spec-testgen/Cargo.toml`) — `spec/tools` for core generation and `spec/runtime-tools` for runtime-aware spec tooling
 
 Use the relevant manifest path for spec tooling:
-- `spec/tools/Cargo.toml` for generation
-- `spec/runtime-tools/Cargo.toml` for bootstrap/mining/runtime validation
+- `crates/spec/talkbank-spec-testgen/Cargo.toml` for generation
+- `crates/spec/talkbank-spec-testrun/Cargo.toml` for bootstrap/mining/runtime validation
 
 ### Shared Symbol Registry
 
-Symbols (language codes, error markers, etc.) are defined once in `spec/symbols/symbol_registry.json` and generated into grammar JS and Rust code:
+Symbols (language codes, error markers, etc.) are defined once in `resources/spec/symbols/symbol_registry.json` and generated into grammar JS and Rust code:
 ```bash
-make symbols-gen    # Validates registry, generates grammar + Rust symbol sets
+node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js    # Validates registry, generates grammar + Rust symbol sets
 ```
 
 ## Grammar Change Workflow (Required)
@@ -246,11 +246,11 @@ When any grammar source changes (especially `grammar/grammar.js`), run this full
      --skip whitespaces \
      2>/dev/null > ~/talkbank/talkbank-tools/crates/talkbank-parser-tests/src/generated_traversal.rs
    ```
-4. `make test-gen` — regenerate corpus tests and error tests from specs
+4. `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` — regenerate corpus tests and error tests from specs
 5. `cargo nextest run -p talkbank-parser && cargo nextest run -p talkbank-parser-tests`
 6. `cargo nextest run --test bare_timestamp_regression`
 7. Re-run at least one real-file CLI validation command covering the changed syntax path.
-8. `make generated-check`
+8. `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs && git diff --exit-code`
 
 Rules:
 - Do not trust parser/validator debugging output until step 1 is complete.
@@ -264,10 +264,10 @@ For header fields with a closed set of valid values, the grammar uses the **stri
 
 ## Spec Change Workflow
 
-After modifying specs in `spec/constructs/` or `spec/errors/`:
+After modifying specs in `resources/spec/constructs/` or `resources/spec/errors/`:
 ```bash
-make test-gen       # Regenerates into: grammar/test/corpus/, crates/talkbank-parser-tests/tests/generated/, docs/errors/
-make verify         # Run all verification gates
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs       # Regenerates into: grammar/test/corpus/, crates/talkbank-parser-tests/tests/generated/, book/src/operations/errors/
+bazel build //... && bazel test //...         # Run all verification gates
 ```
 
 ## Critical Policies
@@ -322,14 +322,14 @@ documents the fix for successors.
 
 **The workflow:**
 1. Find the bug (error in corpus data, failing parse, wrong CST)
-2. **RED:** Add a spec in `spec/constructs/` or `spec/errors/` that
+2. **RED:** Add a spec in `resources/spec/constructs/` or `resources/spec/errors/` that
    captures the exact input pattern. Add a reference corpus file in
-   `corpus/reference/` using real data from the affected corpus.
-3. Run `make test-gen` to generate the test. Verify it fails (or would
+   `resources/corpus/reference/` using real data from the affected corpus.
+3. Run `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` to generate the test. Verify it fails (or would
    fail without the fix).
 4. **GREEN:** Fix the grammar/parser. Run `tree-sitter generate`,
    `tree-sitter test`, then the specific Rust parser test.
-5. **REFACTOR:** Clean up. Run `make verify` only as a final gate
+5. **REFACTOR:** Clean up. Run `bazel build //... && bazel test //...` only as a final gate
    before commit — never during iterative development (it takes minutes).
 
 **Specs are permanent regression gates.** A bug that has a spec can never
@@ -342,9 +342,9 @@ Every `match` on `UtteranceContent` or `BracketedItem` must explicitly list all 
 When CHAT rules refer to "consecutive", "sequential", or "adjacent" items on the main tier, this ALWAYS means **document order via recursive traversal** — NOT adjacent indices in the flat `Vec<UtteranceContent>`. Items inside groups (`<...>`, `"..."`, etc.) are part of the sequence. Always use `walk_words` or equivalent in-order walker, never raw index adjacency.
 
 ### Reference Corpus (100% Required)
-`corpus/reference/` is the sacred reference corpus. Every file MUST be valid CHAT. All files must pass:
+`resources/corpus/reference/` is the sacred reference corpus. Every file MUST be valid CHAT. All files must pass:
 ```bash
-make verify
+bazel build //... && bazel test //...
 cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
 ```
 
@@ -354,9 +354,9 @@ For any change touching parser, data model, validation, alignment, serialization
 2. `cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus`
 3. Both must pass before any commit.
 
-### Pre-Push Gate: `make verify` is MANDATORY
+### Pre-Push Gate: `bazel build //... && bazel test //...` is MANDATORY
 
-**`make verify` MUST pass before pushing any commit.** This is the single
+**`bazel build //... && bazel test //...` MUST pass before pushing any commit.** This is the single
 gate that catches all regressions. It runs the verification gates
 covering: compile checks, spec tools, parser equivalence, golden
 roundtrips, fragment semantics, wor alignment, node coverage,
@@ -364,29 +364,29 @@ generated-artifact freshness, and fuzz workspace isolation.
 
 **Install the pre-push hook on every fresh clone:**
 ```bash
-make install-hooks   # symlinks scripts/pre-push.sh → .git/hooks/pre-push
+ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push   # symlinks scripts/pre-push.sh → .git/hooks/pre-push
 ```
-`make verify` begins with a `hooks-check` that warns if the hook isn't
+`bazel build //... && bazel test //...` begins with a `hooks-check` that warns if the hook isn't
 installed. The hook itself runs the fast subset (fmt, affected compile,
 parser guardrail, `generated-check`, `fuzz-check`) — enough to catch
 every content-level CI failure without running the full test suite.
 
-**The rule:** never push without running `make verify`.
+**The rule:** never push without running `bazel build //... && bazel test //...`.
 
 **The rule:**
 ```bash
-make verify          # MUST pass before git push
+bazel build //... && bazel test //...          # MUST pass before git push
 ```
 
 The pre-push hook also runs `generated-check` and `fuzz-check` so
 generated-artifact drift is caught locally rather than only in CI.
 
-If `make verify` fails and the fix is not immediately clear, do NOT push.
+If `bazel build //... && bazel test //...` fails and the fix is not immediately clear, do NOT push.
 Investigate first. See also: Grammar Change Workflow section.
 
 **Ordering: `generated-check` is a post-commit check, not a pre-commit
 check.** The target runs `git diff --exit-code` against `HEAD` on the
-generated-artifact paths. If you regenerate (e.g. via `make test-gen`)
+generated-artifact paths. If you regenerate (e.g. via `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs`)
 and then run `generated-check` *before* committing, it fails — because
 the regenerated files in your working tree differ from the yet-unchanged
 HEAD. That's not a real failure; the check is working correctly. The
@@ -407,15 +407,15 @@ soon as you commit.
 
 Some error specs are marked `Status: not_implemented` — the
 parser/validator does not yet produce the expected error code for the
-given input. These are tracked in `spec/errors/` files with
+given input. These are tracked in `resources/spec/errors/` files with
 `- **Status**: not_implemented`.
 
 To list them:
 ```bash
-grep -rl "Status.*not_implemented" spec/errors/
+grep -rl "Status.*not_implemented" resources/spec/errors/
 ```
 
-These generate `#[ignore]` tests via `make test-gen`. Each represents
+These generate `#[ignore]` tests via `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs`. Each represents
 a validation check that needs implementing. They are NOT test
 failures — they are honest markers of unfinished work.
 
@@ -437,10 +437,10 @@ failures — they are honest markers of unfinished work.
 - Group content dispatch: all nested content types must be explicitly dispatched.
 
 ### Test File Policy
-Never create ad hoc `.cha` test files. Use existing files from `corpus/reference/` or ask the user to provide test files.
+Never create ad hoc `.cha` test files. Use existing files from `resources/corpus/reference/` or ask the user to provide test files.
 
 ### Error Code Testing Policy
-All error code tests flow through `spec/errors/`. Every error code MUST have a spec in `spec/errors/E###_*.md`. Tests are GENERATED via `make test-gen` — never hand-written. After adding new error codes to `error_code.rs`, run `make check-specs` to verify all codes have spec files.
+All error code tests flow through `resources/spec/errors/`. Every error code MUST have a spec in `resources/spec/errors/E###_*.md`. Tests are GENERATED via `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` — never hand-written. After adding new error codes to `error_code.rs`, run `bash scripts/check-error-specs.sh` to verify all codes have spec files.
 
 ### %mor Syntax: UD Only
 
@@ -702,10 +702,10 @@ Domain-aware gating is built in: `Some(Mor)` skips retrace groups, `Some(Pho|Sin
 
 ### Adding a New CLAN Command
 
-1. Create `crates/talkbank-clan/src/commands/<name>.rs` with `Config`, `State`, `Result`, `Command`
+1. Create `crates/clan-core/src/commands/<name>.rs` with `Config`, `State`, `Result`, `Command`
 2. Register in `src/commands/mod.rs`
-3. Add CLI subcommand in `crates/talkbank-cli/src/cli/args.rs` (`ClanCommands` enum)
-4. Wire dispatch in `crates/talkbank-cli/src/commands/clan.rs` (`run_clan()`)
+3. Add CLI subcommand in `crates/chatter-cli/src/cli/args.rs` (`ClanCommands` enum)
+4. Wire dispatch in `crates/chatter-cli/src/commands/clan.rs` (`run_clan()`)
 5. Add golden test in `tests/clan_golden.rs`
 
 ### CLAN Flag Mapping
@@ -751,9 +751,9 @@ corpus — every divergence between re2c and TreeSitter is a missing test.
 3. For each divergence category:
    a. Find a representative file from the wild corpus
    b. Identify the CHAT construct causing the divergence
-   c. **Add a construct spec** in `spec/constructs/`
-   d. **Add or update a reference corpus file** in `corpus/reference/`
-   e. Run `make test-gen` to regenerate tests
+   c. **Add a construct spec** in `resources/spec/constructs/`
+   d. **Add or update a reference corpus file** in `resources/corpus/reference/`
+   e. Run `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` to regenerate tests
    f. Fix the re2c parser to match (or file a bug on TreeSitter if it's wrong)
 
 4. Re-run the corpus comparison to verify reduction.
@@ -766,7 +766,7 @@ Do NOT pipe corpus test output through grep — run directly and tail the output
 ### CLI Integration
 
 ```bash
-chatter validate --parser re2c corpus/reference/   # Validate with re2c parser
+chatter validate --parser re2c resources/corpus/reference/   # Validate with re2c parser
 chatter validate --parser re2c --roundtrip corpus/  # + roundtrip test
 ```
 
@@ -790,12 +790,12 @@ See `crates/talkbank-parser-re2c/docs/parity-report.md` for detailed metrics.
 | File | Scope |
 |------|-------|
 | `grammar/CLAUDE.md` | Tree-sitter grammar design, 4-step verification, strict+catch-all pattern |
-| `spec/CLAUDE.md` | Specification structure, templates, `make test-gen` workflow |
+| `resources/spec/CLAUDE.md` | Specification structure, templates, `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` workflow |
 | `spec/tools/CLAUDE.md` | Spec generator binaries, spec/runtime-tools sibling crate |
-| `crates/talkbank-lsp/CLAUDE.md` | LSP crate: **alignment lives in `talkbank-model`, do not reimplement**; three `%mor`/`%gra` index spaces; RPC and feature handler rules |
+| `crates/chatter-lsp/CLAUDE.md` | LSP crate: **alignment lives in `talkbank-model`, do not reimplement**; three `%mor`/`%gra` index spaces; RPC and feature handler rules |
 | `crates/talkbank-parser-re2c/CLAUDE.md` | Re2c parser crate (alternate parser / spec oracle) |
-| `vscode/CLAUDE.md` | VS Code extension: presentation-only layer, no domain logic on the TS side |
-| `apps/chatter-desktop/CLAUDE.md` | Desktop app (Tauri v2, React) — **mandates TUI parity** |
+| `apps/vscode-extension/CLAUDE.md` | VS Code extension: presentation-only layer, no domain logic on the TS side |
+| `apps/chatter/chatter-gui/CLAUDE.md` | Desktop app (Tauri v2, React) — **mandates TUI parity** |
 
 ## The unified mdBook (in this repo)
 
@@ -806,7 +806,7 @@ and contributing guides all live there.
 
 | Path | Title | Sections |
 |------|-------|----------|
-| `book/` | TalkBank Toolchain | `chatter/`, `batchalign/`, `vscode/`, `clan-reference/`, `chat-format/`, `architecture/`, `contributing/` |
+| `book/` | TalkBank Toolchain | `chatter/`, `batchalign/`, `apps/vscode-extension/`, `clan-reference/`, `chat-format/`, `architecture/`, `contributing/` |
 
 **Policy.** The book is the canonical user / developer documentation
 for the whole toolchain. Keep only one top-level `README.md` per repo

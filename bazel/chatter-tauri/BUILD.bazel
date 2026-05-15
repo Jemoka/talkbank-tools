@@ -1,0 +1,8 @@
+"""Shell script driving the Chatter desktop app bundler (`cargo tauri build`)."""
+
+# Only the chatter-gui src-tauri package consumes this.
+package(default_visibility = [
+    "//apps/chatter/chatter-gui/src-tauri:__pkg__",
+])
+
+exports_files(["bundle.sh"])

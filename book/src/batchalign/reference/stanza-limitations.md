@@ -233,7 +233,7 @@ and therefore no `~`-joined `%mor` output for English contractions.
 
 ### Why this matters in BA3
 
-If `batchalign/inference/_tokenizer_realign.py::_realign_sentence`
+If `python/batchalign/inference/_tokenizer_realign.py::_realign_sentence`
 flattens tokens to plain strings before passing them to the Rust
 char-DP aligner, the aligner's 1:1 mapping (the common case where no
 compound-merging is needed) loses the hint tuple, and Stanza's MWT
@@ -376,9 +376,9 @@ interaction with the MWT processor on this specific surface form.
 Detect control tokens at the Python/Rust ingress boundary and strip
 them in place, logging each rewrite with a ``tracing.warning``. The
 stripper is in
-``batchalign/inference/_control_token_filter.py::strip_control_tokens_in_sentence``;
+``python/batchalign/inference/_control_token_filter.py::strip_control_tokens_in_sentence``;
 the call site is
-``batchalign/inference/morphosyntax.py::batch_infer_morphosyntax``
+``python/batchalign/inference/morphosyntax.py::batch_infer_morphosyntax``
 right after ``doc.to_dict()`` yields the Stanza sentence.
 
 Control-token vocabulary covered: ``<SOS>``, ``<EOS>``, ``<UNK>``,
@@ -440,7 +440,7 @@ BA3 workaround stays in place.
   the BA3 loader, not Stanza.
 * **Nature:** A loader-side bug, not a Stanza bug. BA3 maintained a
   hardcoded ``MWT_LANGS`` include set in
-  ``batchalign/worker/_stanza_loading.py`` that drifted from Stanza's
+  ``python/batchalign/worker/_stanza_loading.py`` that drifted from Stanza's
   installed catalog. For any language on the include set that Stanza
   did not actually ship MWT for, the worker requested an unavailable
   processor and crashed at bootstrap with
@@ -507,7 +507,7 @@ at every Stanza pipeline construction:
 has_mwt = should_request_mwt(alpha2, get_cached_capability_table())
 ```
 
-The capability table (``batchalign/worker/_stanza_capabilities.py``)
+The capability table (``python/batchalign/worker/_stanza_capabilities.py``)
 is built once at worker startup from
 ``stanza.resources.common.load_resources_json()`` and reports per
 language whether each processor is available. CLAUDE.md mandates

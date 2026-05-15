@@ -3,7 +3,7 @@
 **Status:** Current
 **Last updated:** 2026-05-12 08:35 EDT
 
-The framework (`crates/talkbank-clan/src/framework/`) provides shared infrastructure for all commands.
+The framework (`crates/clan-core/src/framework/`) provides shared infrastructure for all commands.
 
 ## Runner
 
@@ -40,7 +40,7 @@ flowchart TD
 
 ### `AnalysisCommand`
 
-Per `crates/talkbank-clan/src/framework/command.rs:52`:
+Per `crates/clan-core/src/framework/command.rs:52`:
 
 ```rust,ignore
 trait AnalysisCommand {
@@ -95,7 +95,7 @@ Transform commands receive a mutable `ChatFile` and modify it in place.
 
 ### `CommandOutput`
 
-Per `crates/talkbank-clan/src/framework/output.rs:48`:
+Per `crates/clan-core/src/framework/output.rs:48`:
 
 ```rust,ignore
 trait CommandOutput: Serialize + std::fmt::Debug {

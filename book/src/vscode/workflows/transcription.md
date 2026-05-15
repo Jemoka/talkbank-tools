@@ -38,7 +38,7 @@ flowchart LR
     type -.->|"missed something"| rewind -.-> play
     play -.->|"re-listen needed"| loop -.-> play
 ```
-<!-- Verified against: vscode/src/commands/transcription.ts, vscode/src/mediaPanel.ts, crates/talkbank-lsp/src/backend/execute_commands.rs (FormatBulletLine variant) -->
+<!-- Verified against: apps/vscode-extension/src/commands/transcription.ts, apps/vscode-extension/src/mediaPanel.ts, crates/chatter-lsp/src/backend/execute_commands.rs (FormatBulletLine variant) -->
 
 Dashed edges show the two sideways playback controls (`F8`, `Shift+F5`)
 that don't advance the editor cursor. The `F4` path is the only one

@@ -10,7 +10,7 @@ declarations (the "runs always" set).
 Scans for:
   * Python test files: ``test_*.py`` in batchalign/tests/
   * Rust integration tests: ``*.rs`` in crates/*/tests/
-  * E2E tests: ``.mjs`` and ``.ts`` files in frontend/e2e/tests/
+  * E2E tests: ``.mjs`` and ``.ts`` files in apps/batchalign/cli-web-statuspage/e2e/tests/
 
 Usage::
 

@@ -1,0 +1,39 @@
+# Bazel's own outputs
+bazel-bin
+bazel-out
+bazel-talkbank-tools
+bazel-testlogs
+
+# Cargo
+target
+
+# Node
+node_modules
+**/node_modules
+apps/vscode-extension/out
+apps/vscode-extension/dist
+apps/batchalign/batchalign-cli-webdashboard/dist
+apps/batchalign/batchalign-cli-webdashboard/playwright-report
+apps/batchalign/batchalign-cli-webdashboard/test-results
+apps/batchalign/batchalign-cli-webdashboard/node_modules
+
+# Python
+.venv
+python/.venv
+python/build
+python/dist
+**/__pycache__
+**/*.egg-info
+
+# mdBook output
+book/book
+book/build
+
+# Tree-sitter grammar generated artifacts (treated as source for non-Bazel)
+grammar/build
+grammar/prebuilds
+grammar/.tree-sitter
+
+# Tauri build outputs
+apps/**/src-tauri/target
+apps/**/src-tauri/gen

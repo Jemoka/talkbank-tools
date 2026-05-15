@@ -4,8 +4,8 @@
 **Last updated:** 2026-04-16 22:12 EDT
 
 This chapter documents all Language Server Protocol capabilities
-advertised by `talkbank-lsp`. The capability set is declared in
-`crates/talkbank-lsp/src/backend/capabilities.rs` via
+advertised by `chatter-lsp`. The capability set is declared in
+`crates/chatter-lsp/src/backend/capabilities.rs` via
 `build_initialize_result()`. Per-feature handlers live under
 `backend/features/` (request-agnostic feature code) and
 `backend/requests/` (request-dispatcher shims that pull out the
@@ -65,7 +65,7 @@ sequence-diagram: [Custom Commands](custom-commands.md).
 
 ## Error contract
 
-Feature handlers inside `talkbank-lsp` return
+Feature handlers inside `chatter-lsp` return
 `Result<_, LspBackendError>` rather than stringly `Result<_, String>`.
 `LspBackendError` (`backend/error.rs`) is a `thiserror` enum with
 variants for tier/alignment state (`MissingTier { tier: TierName }`,

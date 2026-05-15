@@ -10,4 +10,4 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-cargo run -q -p batchalign -- ipc-schema --check --output ipc-schema/
+cargo run -q -p batchalign-cli -- ipc-schema --check --output schemas/ipc/

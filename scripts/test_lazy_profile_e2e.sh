@@ -31,11 +31,11 @@ fi
 
 if [[ ! -x "$BINARY" ]]; then
     echo "ERROR: binary not found: $BINARY"
-    echo "Build first: cargo build -p batchalign"
+    echo "Build first: cargo build -p batchalign-cli"
     exit 1
 fi
 
-FIXTURE="$REPO_DIR/test-fixtures/eng_three_utterances.cha"
+FIXTURE="$REPO_DIR/resources/fixtures/eng_three_utterances.cha"
 if [[ ! -f "$FIXTURE" ]]; then
     echo "ERROR: fixture not found: $FIXTURE"
     exit 1

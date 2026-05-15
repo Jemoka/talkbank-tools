@@ -9,7 +9,7 @@ This page defines the canonical local verification gates that must pass before o
 Run:
 
 ```bash
-make verify
+bazel build //... && bazel test //...
 ```
 
 This runs 15 gates (G0–G14). See [Testing > Verification Gates](testing.md#verification-gates) for the full table. Key gates include:
@@ -32,7 +32,7 @@ This runs 15 gates (G0–G14). See [Testing > Verification Gates](testing.md#ver
 
 ## Additional Engineering Checks
 
-Run these in addition to `make verify` when touching parser/model code:
+Run these in addition to `bazel build //... && bazel test //...` when touching parser/model code:
 
 1. `cargo fmt` from repo root (use `cargo fmt`, not direct `rustfmt`).
 2. `cargo test -p talkbank-parser --test test_parse_health_recovery`.
@@ -49,7 +49,7 @@ These protect against regressions in:
 - If the failure is unrelated and pre-existing, document it in the PR and open a blocker issue.
 
 ## Recommended Fast Loop During Development
-Use narrower loops while iterating, then run `make verify` before final review:
+Use narrower loops while iterating, then run `bazel build //... && bazel test //...` before final review:
 
 ```bash
 cargo test -p talkbank-parser --lib
@@ -62,7 +62,7 @@ tree-sitter test
 cargo test -p talkbank-parser
 ```
 
-Only reach for `make test-gen` when the change truly affects generated
+Only reach for `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` when the change truly affects generated
 artifacts.
 
 For dependency-aware local sweeps, the canonical entrypoint is now the Rust
@@ -73,5 +73,5 @@ cargo run -q -p xtask -- affected-rust check
 cargo run -q -p xtask -- affected-rust test
 ```
 
-`make check-affected` and `make test-affected` both delegate to the same xtask
+`bazel build //...` and `bazel test //...` both delegate to the same xtask
 implementation.

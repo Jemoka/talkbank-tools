@@ -26,7 +26,7 @@ chatter clan dist --format json file.cha
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** Rewriter
-> at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`; no `clap` field consumes it today.
 > Drafted from CLAN manual §7.9.1 (`Unique Options`, DIST) for
 > PI review.

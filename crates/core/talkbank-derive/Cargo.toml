@@ -1,0 +1,28 @@
+[package]
+name = "talkbank-derive"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Derive macros for talkbank-model"
+readme = "README.md"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
+
+[dev-dependencies]
+trybuild = "1.0"
+talkbank-model = { path = "../talkbank-model", version = "0.2.0" }
+serde = { version = "1.0", features = ["derive", "rc"] }
+schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
+
+[lints]
+workspace = true

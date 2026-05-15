@@ -25,15 +25,15 @@ High-level pipelines: parse+validate, CHAT-to-JSON, JSON-to-CHAT, normalization.
 
 ## Application Crates
 
-### talkbank-clan
+### clan-core
 
 CLAN analysis commands (FREQ, MLU, etc.), transforms (FLO, etc.), and format converters. Each command implements the `CommandOutput` trait with typed results. The crate also owns higher-level library integration seams such as `UtteranceRange`, `DiscoveredChatFiles`, `service::AnalysisCommandName`, `service::AnalysisService` / `service::AnalysisRequest`, and the `service::AnalysisOptions` / `service::AnalysisRequestBuilder` layer so other crates can execute CLAN analyses without reimplementing directory walking, range parsing, raw command-name parsing, JSON output policy, or command-default selection.
 
-### talkbank-cli
+### chatter-cli
 
 The `chatter` CLI binary: validate, normalize, to-json, CLAN command dispatch, and corpus management.
 
-### talkbank-lsp
+### chatter-lsp
 
 Language Server Protocol server with tree-sitter incremental parsing, real-time diagnostics, and semantic highlighting.
 
@@ -41,7 +41,7 @@ Language Server Protocol server with tree-sitter incremental parsing, real-time 
 
 FFI bindings for sending files to the CLAN application (macOS Apple Events, Windows WM_APP).
 
-### chatter-desktop
+### chatter-gui
 
 Desktop validation app (Tauri v2, React). Mandates TUI parity with the CLI.
 

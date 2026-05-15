@@ -99,7 +99,7 @@ intervals by the drain task in `infer_batched.rs`. Visible in:
 
 **Per-language tagger.** The drain loop in `infer_batched.rs`
 groups progress events by `event.stage`. The Python worker's
-`batchalign/worker/_protocol.py::write_progress_event` hard-codes
+`python/batchalign/worker/_protocol.py::write_progress_event` hard-codes
 `stage="stanza_processing"` regardless of language, so — before the fix —
 three real language groups (eng / spa / zho ...) collapsed into a single
 BTreeMap entry keyed `"stanza_processing"`. The resulting summaries were
@@ -120,7 +120,7 @@ The following sequence shows where the relabel happens:
 
 ```mermaid
 sequenceDiagram
-    participant Py as "Python worker\n(batchalign/worker/_protocol.py)"
+    participant Py as "Python worker\n(python/batchalign/worker/_protocol.py)"
     participant Tag as "Per-language tagger\n(morphosyntax/worker.rs::infer_batch)"
     participant Drain as "Drain loop\n(runner/dispatch/infer_batched.rs)"
     participant Store as "BatchInferProgress\n(runner/util/batch_progress.rs)"
@@ -135,7 +135,7 @@ sequenceDiagram
     Store-->>Drain: incomplete_groups() sees real stalls
 ```
 
-Diagram verified against: `batchalign/worker/_protocol.py`,
+Diagram verified against: `python/batchalign/worker/_protocol.py`,
 `crates/batchalign/src/morphosyntax/worker.rs`,
 `crates/batchalign/src/runner/dispatch/infer_batched.rs`,
 `crates/batchalign/src/runner/util/batch_progress.rs`.

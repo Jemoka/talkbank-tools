@@ -66,3 +66,4 @@ lcov*.info
 # Vendored Swift Package Manager checkouts (should never be committed)
 **/.build/
 **/.tmp-review-venv/
+/bazel-*

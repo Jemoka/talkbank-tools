@@ -21,7 +21,7 @@ the surrounding code shifted.
 
 The regression-fixture system fixes that. Each reported bug becomes a
 small command-shaped fixture directory under
-`test-fixtures/<command>/regressions/<bug-name>/`. A Rust integration
+`resources/fixtures/<command>/regressions/<bug-name>/`. A Rust integration
 test runs each fixture through the same in-process direct host the
 production CLI uses and asserts a structural invariant on the output.
 The bug then **cannot** silently regress: any future change that
@@ -35,7 +35,7 @@ private repository
 [`TalkBank/<private-fixtures>`](https://github.com/TalkBank/<private-fixtures>)
 that maintainers clone locally and expose to the runner via the
 `BATCHALIGN3_PRIVATE_FIXTURES_DIR` environment variable. The in-tree
-`test-fixtures/<command>/regressions/` directories are gitignored
+`resources/fixtures/<command>/regressions/` directories are gitignored
 below the per-command README level specifically so private material
 cannot land in this public repo by accident. Contributors without
 access to the private fixture repository will see the regression
@@ -44,7 +44,7 @@ tests skip gracefully rather than fail.
 ## Directory layout
 
 ```text
-batchalign3/test-fixtures/
+batchalign3/resources/fixtures/
 ├── README.md                     # convention overview + JSON schema
 ├── align/
 │   ├── README.md
@@ -147,7 +147,7 @@ assertions operate on the parsed `ChatFile` directly and do not.
    look right but silently mis-time alignment.
 
 2. **Stage the command input into a new directory** under
-   `test-fixtures/<command>/regressions/<command>-regression-NNN/`
+   `resources/fixtures/<command>/regressions/<command>-regression-NNN/`
    in your local checkout. Use `input.cha` for CHAT-first fixtures and
    `input.<ext>` for the required audio file. If the command consumes CHAT,
    rewrite the `@Media` line so the staged audio resolves locally.
@@ -193,7 +193,7 @@ assertions operate on the parsed `ChatFile` directly and do not.
 7. **Run the test, confirm RED:**
 
    ```bash
-   cargo nextest run -p batchalign --profile ml \
+   cargo nextest run -p batchalign-cli --profile ml \
          -E 'test(transcribe::regressions::transcribe_regression_001)'
    ```
 
@@ -208,19 +208,19 @@ assertions operate on the parsed `ChatFile` directly and do not.
 The regression-fixture tests live in the `ml_golden` test binary so they
 share its warmed worker pool with the other ML golden tests. They are
 gated behind the `ml` nextest profile and will not run on a normal
-`cargo test` or `make test` invocation.
+`cargo test` or `bazel test //...` invocation.
 
 ```bash
 # Run every align regression fixture
-cargo nextest run -p batchalign --profile ml \
+cargo nextest run -p batchalign-cli --profile ml \
     -E 'test(align::regressions::)' --no-fail-fast
 
 # Run every transcribe regression fixture
-cargo nextest run -p batchalign --profile ml \
+cargo nextest run -p batchalign-cli --profile ml \
     -E 'test(transcribe::regressions::)' --no-fail-fast
 
 # Run a single fixture
-cargo nextest run -p batchalign --profile ml \
+cargo nextest run -p batchalign-cli --profile ml \
     -E 'test(transcribe::regressions::transcribe_regression_001)'
 ```
 
@@ -237,7 +237,7 @@ The command-local `tests/ml_golden/<command>/regressions.rs` modules call
       — the recommended path. Point this env var at your local clone
       of
       [`TalkBank/<private-fixtures>`](https://github.com/TalkBank/<private-fixtures>).
-   b. `<batchalign3-repo>/test-fixtures/<command>/regressions/<bug>/`
+   b. `<batchalign3-repo>/resources/fixtures/<command>/regressions/<bug>/`
       — the in-tree fallback, used only for fixtures whose content is
       verifiably safe to ship in the public repo. This path is
       gitignored below the per-command README level so private

@@ -1,0 +1,43 @@
+"""Python product root.
+
+Mirrors the crates/ tier structure: per-package BUILD.bazels live under
+`//python/<package>/`. Right now there's only one: `//python/batchalign/`.
+
+This BUILD.bazel exposes the project-wide metadata (`pyproject.toml`,
+`uv.lock`, `.python-version`, mypy/pytest/ty configs) as a filegroup
+so the per-package BUILD.bazels can consume them as data deps.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "project_metadata",
+    srcs = [
+        "pyproject.toml",
+        "uv.lock",
+        ".python-version",
+        "mypy.ini",
+        "pytest.ini",
+        "ty.toml",
+    ],
+)
+
+# Sibling Python sources that live alongside `python/batchalign/` but are
+# needed by maturin/pytest invocations rooted there. Globbed here (in the
+# parent package) so child packages can depend on them as labels — Bazel
+# globs cannot escape their declaring package via `..`.
+filegroup(
+    name = "batchalign_core_src",
+    srcs = glob(["batchalign_core/**/*"], allow_empty = True),
+)
+
+filegroup(
+    name = "stubs_src",
+    srcs = glob(["stubs/**/*"], allow_empty = True),
+)
+
+exports_files([
+    "uv.lock",
+    "pyproject.toml",
+    "batchalign_core.pyi",
+])

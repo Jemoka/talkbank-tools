@@ -80,7 +80,7 @@ correct, and a warning there would be noise.
 
 The rendering pipeline is entirely offline -- no internet connection required.
 
-1. **Server side** (`talkbank-lsp`, in `graph/`): The LSP server receives the request via the `talkbank/showDependencyGraph` custom command. It extracts word labels from the `%mor` tier (`graph/labels.rs`), styles each `%gra` relation with a color (`graph/edges.rs`), and assembles a Graphviz DOT digraph (`graph/builder.rs`) with invisible ordering edges to preserve left-to-right word order.
+1. **Server side** (`chatter-lsp`, in `graph/`): The LSP server receives the request via the `talkbank/showDependencyGraph` custom command. It extracts word labels from the `%mor` tier (`graph/labels.rs`), styles each `%gra` relation with a color (`graph/edges.rs`), and assembles a Graphviz DOT digraph (`graph/builder.rs`) with invisible ordering edges to preserve left-to-right word order.
 
 2. **Client side** (`graphPanel.ts`): The extension receives the DOT string and passes it to the bundled `@hpcc-js/wasm` Graphviz renderer, which runs Graphviz entirely in WebAssembly. The rendered SVG is injected into a webview panel. The toolbar provides zoom, fit, and export controls over the SVG DOM.
 

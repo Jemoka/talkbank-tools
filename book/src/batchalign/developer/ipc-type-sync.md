@@ -21,8 +21,8 @@ from Rust schemas or **conformance-tested** against them.
 
 ```mermaid
 flowchart LR
-    rust["Rust structs\n(schemars::JsonSchema)"] --> schema["JSON Schema\n(ipc-schema/)"]
-    schema --> generated["Generated Pydantic\n(batchalign/generated/)"]
+    rust["Rust structs\n(schemars::JsonSchema)"] --> schema["JSON Schema\n(schemas/ipc/)"]
+    schema --> generated["Generated Pydantic\n(python/batchalign/generated/)"]
     schema --> test["Conformance tests\n(test_ipc_type_conformance.py)"]
     test --> handwritten["Hand-written Pydantic\n(_types_v2.py, inference/*.py)"]
 ```
@@ -31,7 +31,7 @@ flowchart LR
 
 ```bash
 # Step 1: Generate JSON Schema from Rust types
-cargo run -p batchalign -- ipc-schema --output ipc-schema/
+cargo run -p batchalign-cli -- ipc-schema --output schemas/ipc/
 
 # Step 2: Generate Python Pydantic models + check conformance
 bash scripts/generate_ipc_types.sh
@@ -45,9 +45,9 @@ bash scripts/check_ipc_type_drift.sh
 | Layer | Source of truth | Files |
 |-------|----------------|-------|
 | Rust types | Canonical definitions | `crates/batchalign-types/src/worker_v2/`, re-exported by `crates/batchalign/src/types/worker_v2.rs`, plus `crates/batchalign/src/morphosyntax/mod.rs` |
-| JSON Schema | Generated from Rust | `ipc-schema/worker_v2/*.json`, `ipc-schema/batch_items/*.json` |
-| Generated Python | Generated from schema | `batchalign/generated/worker_v2/`, `batchalign/generated/batch_items/` |
-| Hand-written Python | Conformance-tested | `batchalign/worker/_types_v2.py`, `batchalign/inference/*.py` |
+| JSON Schema | Generated from Rust | `schemas/ipc/worker_v2/*.json`, `schemas/ipc/batch_items/*.json` |
+| Generated Python | Generated from schema | `python/batchalign/generated/worker_v2/`, `python/batchalign/generated/batch_items/` |
+| Hand-written Python | Conformance-tested | `python/batchalign/worker/_types_v2.py`, `python/batchalign/inference/*.py` |
 | Conformance tests | Validates hand-written against schema | `batchalign/tests/test_ipc_type_conformance.py` |
 
 The `worker_v2` layer name is still intentional. V1 remains in-tree as the
@@ -155,7 +155,7 @@ schemas. The conformance tests catch Python-side drift.
 ## Future: Full Generation
 
 The end goal is to replace all hand-written Python IPC types with imports
-from `batchalign/generated/`. The remaining steps:
+from `python/batchalign/generated/`. The remaining steps:
 
 1. Add thin subclass overlays for types with validators
 2. Replace imports in `_types_v2.py` with re-exports from generated

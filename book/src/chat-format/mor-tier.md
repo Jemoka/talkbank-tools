@@ -311,9 +311,9 @@ Key design decisions:
 
 The tree-sitter parser produces `MorTier` from CHAT text. It is GLR-based and error-recovering, producing a CST that the Rust `talkbank-parser` crate walks to construct `MorTier`. Used by the CLI, LSP, and batchalign. High-frequency values (`PosCategory`, `MorStem`) are interned via `Arc<str>` during construction.
 
-The `corpus/reference/` set is the correctness gate for `%mor` parsing —
+The `resources/corpus/reference/` set is the correctness gate for `%mor` parsing —
 every file must parse and round-trip cleanly. The file count grows as
-new constructs are added; run `find corpus/reference -name '*.cha' | wc -l`
+new constructs are added; run `find resources/corpus/reference -name '*.cha' | wc -l`
 to get the live total.
 
 ## Validation

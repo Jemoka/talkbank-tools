@@ -6,8 +6,8 @@
 The extension is published as five platform-specific VSIX files via the
 `VS Code Extension Release (Preview)` workflow
 (`.github/workflows/vscode-release.yml`). Each VSIX bundles a prebuilt
-`talkbank-lsp` for its target platform at
-`extension/server/talkbank-lsp[.exe]`, so end users never need a Rust
+`chatter-lsp` for its target platform at
+`extension/server/chatter-lsp[.exe]`, so end users never need a Rust
 toolchain or a PATH binary — the extension finds the bundled server
 automatically (see [LSP Binary Discovery](../troubleshooting/lsp.md)). This
 workflow creates preview GitHub Releases only; Marketplace publishing is
@@ -23,7 +23,7 @@ explicitly out of scope for the first public release.
 
 ## Cutting a release
 
-1. Bump `vscode/package.json` version.
+1. Bump `apps/vscode-extension/package.json` version.
 2. Commit and push to `main`.
 3. Trigger the workflow:
    ```bash
@@ -44,14 +44,14 @@ For a manual build targeting your current host:
 
 ```bash
 cd <talkbank-tools-root>
-cargo build --release -p talkbank-lsp
+cargo build --release -p chatter-lsp
 cd vscode
-node scripts/prepare-server.mjs --source ../target/release/talkbank-lsp
+node scripts/prepare-server.mjs --source ../target/release/chatter-lsp
 npm run package:darwin-arm64   # or darwin-x64, linux-x64, linux-arm64, win32-x64
 ```
 
-`prepare-server.mjs` stages the binary into `vscode/server/` with the
-correct name (`talkbank-lsp` on Unix, `talkbank-lsp.exe` on Windows) so
+`prepare-server.mjs` stages the binary into `apps/vscode-extension/server/` with the
+correct name (`chatter-lsp` on Unix, `chatter-lsp.exe` on Windows) so
 `vsce package` bundles it at `<extension>/server/` inside the VSIX.
 
 ## Users installing a VSIX
@@ -68,8 +68,8 @@ No Rust toolchain, no PATH setup, no extra dependencies.
 
 ## Version number discipline
 
-`vscode/package.json` is the single source of truth for the extension
-version. Do not hand-edit the `extension/server/talkbank-lsp` binary
+`apps/vscode-extension/package.json` is the single source of truth for the extension
+version. Do not hand-edit the `extension/server/chatter-lsp` binary
 name or the tag format — the CI workflow derives both from `version`.
 For a release candidate, append a pre-release identifier (`0.X.Y-rc.1`) per
 semver. The workflow still publishes to the `vscode-vX.Y.Z` GitHub prerelease

@@ -28,7 +28,7 @@ chatter clan praat2chat input.TextGrid
 | `-o`, `--output` | stdout | Output CHAT file path |
 
 The corpus name in `@ID` headers is hardcoded to `"praat_corpus"`
-(`crates/talkbank-clan/src/converters/praat2chat.rs:200`); there is
+(`crates/clan-core/src/converters/praat2chat.rs:200`); there is
 no CLI flag to override it. Same pattern as the other converters
 in this directory.
 

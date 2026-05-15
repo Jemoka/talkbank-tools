@@ -249,7 +249,7 @@ This would complement the 74-file reference corpus with broader coverage.
 
 **Caveats:**
 - Requires corpus data in CI (currently only in the `talkbank-dev` workspace).
-  Could use a small curated subset checked into `corpus/smoke/`.
+  Could use a small curated subset checked into `resources/corpus/smoke/`.
 - Must handle expected parse errors (CHAT files with intentional quirks) without
   false positives.
 

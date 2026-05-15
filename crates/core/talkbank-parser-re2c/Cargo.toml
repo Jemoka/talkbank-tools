@@ -1,0 +1,55 @@
+[package]
+name = "talkbank-parser-re2c"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "CHAT parser using re2c lexer and handwritten recursive-descent parser"
+
+[dependencies]
+# Workspace crates
+talkbank-model = { path = "../talkbank-model", version = "0.2.0" }
+
+# Error handling and diagnostics
+thiserror = "^2.0.18"
+miette = { version = "7.6.0", features = ["derive"] }
+
+# Parsing and Lexing
+chumsky = "=1.0.0-alpha.8"
+phf = { version = "0.13", features = ["macros"] }
+strum = { version = "0.28", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
+
+# Domain types
+indexmap = { version = "2.14", features = ["serde"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
+smallvec = { version = "1.15", features = ["serde", "union", "const_generics"] }
+smol_str = { version = "0.3", features = ["serde"] }
+
+[dev-dependencies]
+divan = "0.1"
+insta = { version = "1.47", features = ["json", "yaml"] }
+proptest = "1.11.0"
+serde_json = "1.0"
+talkbank-parser = { path = "../talkbank-parser", version = "0.2.0" }
+walkdir = "^2.5"
+
+[[bench]]
+name = "parse_comparison"
+harness = false
+
+[build-dependencies]
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+
+# Panic-site audit completed 2026-04-29 (see
+# `book/src/operations/panic-audit/talkbank-parser-re2c.md`).
+[lints.clippy]
+unwrap_used   = "deny"
+expect_used   = "deny"
+panic         = "deny"
+unreachable   = "deny"
+todo          = "deny"
+unimplemented = "deny"

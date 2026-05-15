@@ -58,15 +58,15 @@ Top-level modules under `crates/batchalign/src/`:
 ## Typical commands
 
 ```bash
-cargo build -p batchalign
+cargo build -p batchalign-cli
 cargo check --workspace
 cargo nextest run --workspace
-cargo nextest run -p batchalign --test cli
-cargo nextest run -p batchalign --test integration
+cargo nextest run -p batchalign-cli --test cli
+cargo nextest run -p batchalign-cli --test integration
 cargo xtask affected-rust packages
 
 # Python extension build
-make build-python
+bazel build //...-python
 cargo nextest run --manifest-path crates/batchalign-pyo3/Cargo.toml
 ```
 

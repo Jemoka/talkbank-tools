@@ -63,9 +63,9 @@ CHAT_HTML_URL:
 Usage:
   scripts/check-chat-manual-anchors.sh /abs/path/to/CHAT.html
 or:
-  CHAT_HTML_PATH=/abs/path/to/CHAT.html make chat-anchors-check
+  CHAT_HTML_PATH=/abs/path/to/CHAT.html bash scripts/check-chat-manual-anchors.sh
 or:
-  CHAT_HTML_URL=https://talkbank.org/0info/manuals/CHAT.html make chat-anchors-check
+  CHAT_HTML_URL=https://talkbank.org/0info/manuals/CHAT.html bash scripts/check-chat-manual-anchors.sh
 EOF
     exit 2
   fi

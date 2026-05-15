@@ -125,7 +125,7 @@ stateDiagram-v2
         No webview, no separate buffer.
     end note
 ```
-<!-- Verified against: vscode/src/commands/coder.ts, vscode/src/coderState.ts, crates/talkbank-lsp/src/backend/chat_ops/get_utterances.rs -->
+<!-- Verified against: apps/vscode-extension/src/commands/coder.ts, apps/vscode-extension/src/coderState.ts, crates/chatter-lsp/src/backend/chat_ops/get_utterances.rs -->
 
 Key properties the diagram documents:
 

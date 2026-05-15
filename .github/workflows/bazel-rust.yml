@@ -1,0 +1,73 @@
+name: bazel · rust
+
+# Build + test every Rust crate via Bazel. Scoped to changes that
+# actually affect Rust output (Cargo.toml, .rs, BUILD.bazel files
+# under the Rust tiers, plus shared infra).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "grammar/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - ".bazelrc"
+      - ".bazelversion"
+      - ".github/workflows/bazel-rust.yml"
+  pull_request:
+    paths:
+      - "crates/**"
+      - "grammar/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - ".bazelrc"
+      - ".bazelversion"
+      - ".github/workflows/bazel-rust.yml"
+
+concurrency:
+  group: bazel-rust-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
+
+      - name: Install re2c (talkbank-parser-re2c build.rs prerequisite)
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then sudo apt-get update && sudo apt-get install -y re2c
+          elif [ "$RUNNER_OS" = "macOS" ]; then brew install re2c; fi
+
+      - name: bazel build (Rust tiers)
+        run: |
+          bazel build --config=ci \
+            //crates/core/... \
+            //crates/chatter/... \
+            //crates/clan/... \
+            //crates/batchalign/... \
+            //crates/xtask:xtask \
+            //grammar:tree_sitter_talkbank
+
+      - name: bazel test (Rust unit tests)
+        run: |
+          bazel test --config=ci \
+            //crates/core/... \
+            //crates/chatter/... \
+            //crates/clan/... \
+            //crates/batchalign/...

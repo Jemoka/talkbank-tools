@@ -218,4 +218,4 @@ what broke.
 | `batchalign/src/utseg.rs` | Batch utseg path with pre-validation + CHAT dump |
 | `batchalign/src/pipeline/transcribe.rs` | Transcribe pipeline stages (ASR → utseg → morphosyntax) |
 | `batchalign/src/runner/debug_dumper.rs` | `DebugDumper` — zero-cost artifact writer |
-| `batchalign/inference/asr.py` | Whisper timestamp clamping |
+| `python/batchalign/inference/asr.py` | Whisper timestamp clamping |

@@ -20,7 +20,7 @@ documentation, see [User Guide: morphotag](../../user-guide/commands/morphotag.m
 | Injection | `crates/talkbank-transform/src/morphosyntax/injection.rs` | `inject_results()` — writes `%mor`/`%gra` from typed UD annotations |
 | Retokenization | `crates/batchalign/src/retokenize/` | Character-level DP for Stanza word splits/merges |
 | Payload collection & injection | `crates/talkbank-transform/src/morphosyntax/` — `collect_payloads()`, `clear_morphosyntax()`, `inject_results()`, `remove_empty_morphosyntax_placeholders()` | Cross-crate: domain logic lives in talkbank-transform model layer |
-| Worker IPC | `batchalign/inference/morphosyntax.py` — `batch_infer_morphosyntax()` | Loads Stanza, returns raw `to_dict()` UD annotations |
+| Worker IPC | `python/batchalign/inference/morphosyntax.py` — `batch_infer_morphosyntax()` | Loads Stanza, returns raw `to_dict()` UD annotations |
 
 Local submissions (auto-daemon or loopback `--server`) use `paths_mode=true`:
 the CLI posts source/output path lists instead of CHAT bytes. See
@@ -107,8 +107,8 @@ variant escapes the filter's vocabulary.
 
 Code + tests:
 
-- `batchalign/inference/_control_token_filter.py` — pure stripper + regex
-- `batchalign/inference/morphosyntax.py` — call site inside
+- `python/batchalign/inference/_control_token_filter.py` — pure stripper + regex
+- `python/batchalign/inference/morphosyntax.py` — call site inside
   `batch_infer_morphosyntax` after `doc.to_dict()`
 - `batchalign/tests/inference/test_control_token_filter.py` —
   34 pure-function tests (regex vocabulary, strip contract, MWT safety)
@@ -400,13 +400,13 @@ called from `crates/batchalign/src/morphosyntax/batch.rs:532–536`.
 
 ```bash
 # Unit tests (no ML models)
-make test
+bazel test //...
 
 # Morphotag golden tests (real Stanza models — only on net or machines with models)
 cargo nextest run --profile ml -E 'test(morphosyntax::)'
 
 # Retokenization unit tests
-cargo nextest run -p batchalign -E 'test(retokenize::)'
+cargo nextest run -p batchalign-cli -E 'test(retokenize::)'
 ```
 
 ---

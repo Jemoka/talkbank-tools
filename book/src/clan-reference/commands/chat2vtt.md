@@ -14,7 +14,7 @@ Internally, `chat2vtt` is a thin CLI surface over the same converter
 crate as [`chat2srt`](chat2srt.md): both subcommands take a CHAT file
 with timing bullets and emit numbered subtitle blocks, just in
 different file formats. The shared infrastructure lives at
-`crates/talkbank-clan/src/converters/chat2srt.rs` (`chat_to_vtt()` for
+`crates/clan-core/src/converters/chat2srt.rs` (`chat_to_vtt()` for
 this subcommand, `chat_to_srt()` for SRT).
 
 ## Usage

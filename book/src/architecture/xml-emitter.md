@@ -34,7 +34,7 @@ It is the Rust-side replacement for Java's CHAT → XML projection.
   `<pg>/<pw>/<ph>/<cmph>/<ss>` XML. Files carrying these tiers
   still parse, validate, and round-trip through CHAT unchanged —
   only the XML projection is declined.
-- **Parity oracle.** The goldens in `corpus/reference-xml/`
+- **Parity oracle.** The goldens in `resources/corpus/reference-xml/`
   (produced by Java Chatter against the reference CHAT corpus)
   are the parity target. All paired goldens pass structurally —
   full parity across every reference `.cha` file Java Chatter can
@@ -257,7 +257,7 @@ carries no timing evidence (no main-tier bullets, no positional
 `crates/talkbank-model/src/model/file/chat_file/validate.rs`
 `check_media_linkage_has_timing`), not an emitter rule — it runs
 during `ChatFile::validate` and blocks downstream emission on
-validation-gated entry points. See `spec/errors/E544_media_linkage_without_timing.md`.
+validation-gated entry points. See `resources/spec/errors/E544_media_linkage_without_timing.md`.
 
 The emitter itself doesn't care about bullet presence; the former
 Java-Chatter emitter imposed this check as a parser-level semantic
@@ -373,7 +373,7 @@ Two complementary test surfaces:
 
 2. **Golden-XML parity harness** at
    `crates/talkbank-parser-tests/tests/xml_golden.rs`. Runs one
-   parametrised test per file in `corpus/reference-xml/**/*.xml`,
+   parametrised test per file in `resources/corpus/reference-xml/**/*.xml`,
    parses both emitted and golden XML via `quick-xml`, and diffs
    event streams with whitespace and attribute-order normalisation.
    Comparator lives in
@@ -397,7 +397,7 @@ delete after the divergence is resolved.
   Rust-vs-Java parser-level differences that the emitter bridges.
 - `docs/talkbank-xml-consumers-2026-04.md` — downstream XML
   consumers and the Phon-pivot context.
-- `spec/errors/E544_media_linkage_without_timing.md` — the
+- `resources/spec/errors/E544_media_linkage_without_timing.md` — the
   `@Media` bullet-existence validator that runs before emission.
 
 ## Staged features

@@ -17,8 +17,8 @@ documentation, see [User Guide: translate](../../user-guide/commands/translate.m
 | Translate orchestration | `crates/batchalign/src/translate.rs` | Cross-file batching, cache, `%xtra` injection |
 | Batch dispatch | `crates/batchalign/src/runner/dispatch/infer_batched.rs` | Shared with morphotag and utseg |
 | Injection | `crates/batchalign/src/translate.rs` | Writes `%xtra:` tiers from translation strings |
-| Engine bootstrap | `batchalign/worker/_model_loading/translation.py::load_translation_engine()` | Resolves `_state.translate_backend` at worker startup: `GOOGLE` first, `SEAMLESS` (`facebook/hf-seamless-m4t-medium`) fallback if `googletrans` import fails |
-| Worker IPC | `batchalign/inference/translate.py` — `batch_infer_translate()` | Iterates batch items, calls the resolved `translate_fn(text, src_lang)`, returns `raw_translation` per item. Sleeps 1.5s per item when backend is `GOOGLE` (rate limit). Pre-processing (Chinese space removal) happens in Rust before the call; post-processing in Rust after |
+| Engine bootstrap | `python/batchalign/worker/_model_loading/translation.py::load_translation_engine()` | Resolves `_state.translate_backend` at worker startup: `GOOGLE` first, `SEAMLESS` (`facebook/hf-seamless-m4t-medium`) fallback if `googletrans` import fails |
+| Worker IPC | `python/batchalign/inference/translate.py` — `batch_infer_translate()` | Iterates batch items, calls the resolved `translate_fn(text, src_lang)`, returns `raw_translation` per item. Sleeps 1.5s per item when backend is `GOOGLE` (rate limit). Pre-processing (Chinese space removal) happens in Rust before the call; post-processing in Rust after |
 
 Local submissions (auto-daemon or loopback `--server`) use `paths_mode=true`
 as of 2026-04-14: the CLI posts source/output path lists instead of CHAT
@@ -86,8 +86,8 @@ the wild was not written by Batchalign.
 ## Testing
 
 ```bash
-make test
-cargo nextest run -p batchalign -E 'test(translate::)'
+bazel test //...
+cargo nextest run -p batchalign-cli -E 'test(translate::)'
 ```
 
 ---

@@ -83,7 +83,7 @@ loop handles utterances that were untimed on input but received
 timing from FA — they need `postprocess_utterance_timings` and
 `add_wor_tier` too.
 
-The Python worker (`batchalign/inference/fa.py`) computes audio
+The Python worker (`python/batchalign/inference/fa.py`) computes audio
 duration from the loaded `ASRAudioFile`:
 
 ```python

@@ -29,7 +29,7 @@
 To add a new inference engine, use the built-in engine pattern documented in
 [Adding Inference Providers](adding-engines.md). The pattern is:
 
-1. Create a `(load_*, infer_*)` function pair in `batchalign/inference/`
+1. Create a `(load_*, infer_*)` function pair in `python/batchalign/inference/`
 2. Add an enum variant to `AsrEngine`, `FaEngine`, or the relevant engine enum
 3. Wire the loader into `worker/_model_loading/`
 4. Register the runtime handler during bootstrap in `worker/_model_loading/`
@@ -45,7 +45,7 @@ providers for Rust-owned command flows; command composition does not happen
 through late-bound plugin discovery.
 
 For a real-world example of this pattern, see the Cantonese ASR engines in
-`batchalign/inference/languages/cantonese/` and the
+`python/batchalign/inference/languages/cantonese/` and the
 [Cantonese and CJK — Architecture](../../architecture/language-and-multilingual/cantonese-and-cjk.md).
 
 ## Migration Guide for Existing Plugins
@@ -53,7 +53,7 @@ For a real-world example of this pattern, see the Cantonese ASR engines in
 If you have an existing `batchalign.plugins` plugin, migrate it to a built-in
 engine:
 
-1. Move your `load_*` and `infer_*` functions into `batchalign/inference/`
+1. Move your `load_*` and `infer_*` functions into `python/batchalign/inference/`
 2. Add an enum variant for your engine in `worker/_types.py`
 3. Remove `pyproject.toml` entry points and `PluginDescriptor`
 4. Add your dependencies to batchalign's base package if the engine is a

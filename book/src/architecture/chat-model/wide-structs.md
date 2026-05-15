@@ -64,7 +64,7 @@ know the whole subsystem to use a subset of fields.
 
 ## Refactor Examples
 
-### `ValidateDirectoryOptions` (talkbank-cli) — was a flat bag
+### `ValidateDirectoryOptions` (chatter-cli) — was a flat bag
 
 Used to be a flat bag of format, cache, traversal, roundtrip, parser, audit,
 and TUI flags. Now grouped by concern:
@@ -140,11 +140,11 @@ Real state owners that still want grouping by concern (selection vs. progress
 vs. render flags vs. status):
 
 - `src/test_dashboard/app.rs` `AppState`
-- `crates/talkbank-cli/src/ui/validation_tui/state.rs` `TuiState`
+- `crates/chatter-cli/src/ui/validation_tui/state.rs` `TuiState`
 
-### `Backend` (talkbank-lsp)
+### `Backend` (chatter-lsp)
 
-`crates/talkbank-lsp/src/backend/state.rs` is a service-root aggregate.
+`crates/chatter-lsp/src/backend/state.rs` is a service-root aggregate.
 Defensible, but still wants grouping such as document caches, parse caches,
 validation state, language services.
 
@@ -157,7 +157,7 @@ lines.
 
 ## Audit Guardrail
 
-The Rust audit test at `crates/talkbank-cli/tests/wide_struct_audit.rs`
+The Rust audit test at `crates/chatter-cli/tests/wide_struct_audit.rs`
 classifies the current wide structs and fails when a new one appears without
 an explicit review entry. The corresponding xtask
 (`cargo xtask lint-wide-structs`) enforces field caps on reviewed structs.

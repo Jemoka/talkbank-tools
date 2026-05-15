@@ -143,7 +143,7 @@ Batchalign audio-task cache (FA / UTR ASR / media conversion) is in
 
 ### VOCD (Vocabulary Diversity)
 
-**Location:** `talkbank-clan/src/commands/vocd.rs`
+**Location:** `clan-core/src/commands/vocd.rs`
 
 Bootstrap sampling + least-squares curve fitting:
 1. For each of 3 trials: for each sample size N in \[35..50]: draw 100 random
@@ -154,7 +154,7 @@ Bootstrap sampling + least-squares curve fitting:
 
 ### DSS (Developmental Sentence Scoring)
 
-**Location:** `talkbank-clan/src/commands/dss.rs`
+**Location:** `clan-core/src/commands/dss.rs`
 
 Rule-based pattern matching on %mor POS tags. 10-category scoring
 (copula, conjunction, personal pronouns, etc.), 1–3 points per category per
@@ -162,7 +162,7 @@ utterance, averaged across up to 50 utterances per speaker.
 
 ### IPSyn (Index of Productive Syntax)
 
-**Location:** `talkbank-clan/src/commands/ipsyn.rs`
+**Location:** `clan-core/src/commands/ipsyn.rs`
 
 Syntactic structure coverage scoring: 56 rules across 4 categories (N, V, Q, S).
 Each rule earns max 2 points (discovery + variety). Total range: 0–112.

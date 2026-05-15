@@ -139,7 +139,7 @@ probe that anchored the test expectations.
 
 ### MWT Hint Preservation Regression — FIXED
 
-A follow-up Python regression in `batchalign/inference/_tokenizer_realign.py`
+A follow-up Python regression in `python/batchalign/inference/_tokenizer_realign.py`
 silently stripped Stanza's `(text, True)` MWT hint tuples before the Rust
 char-DP aligner saw them. Stanza's tokenizer natively emits those tuples for
 English contractions, and its MWT processor relies on them to expand Range

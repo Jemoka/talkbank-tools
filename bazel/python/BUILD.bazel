@@ -1,0 +1,16 @@
+"""Shell scripts that drive Python work from Bazel.
+
+These shell out to `uv` (provided by the rules_uv toolchain) and to
+`maturin` (the PyO3 wheel builder). They are NOT user-invokable; the
+user-facing targets live at `//python:*`.
+"""
+
+# Only the //python package needs these scripts.
+package(default_visibility = ["//python:__pkg__"])
+
+exports_files([
+    "maturin_develop.sh",
+    "maturin_build.sh",
+    "pytest.sh",
+    "lint.sh",
+])

@@ -21,7 +21,7 @@ chatter clan elan2chat input.eaf
 | `-o`, `--output` | stdout | Output CHAT file path |
 
 The corpus name in `@ID` headers is hardcoded to `"elan_corpus"`
-(`crates/talkbank-clan/src/converters/elan2chat.rs:230`); there is
+(`crates/clan-core/src/converters/elan2chat.rs:230`); there is
 no CLI flag to override it.
 
 ## Conversion Details

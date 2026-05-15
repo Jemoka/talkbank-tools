@@ -16,7 +16,7 @@ Preferred reporting channels:
 Please include:
 
 - the affected surface (`chatter`, public TalkBank crates, `batchalign3`,
-  `talkbank-lsp`, VS Code extension, or another repo path)
+  `chatter-lsp`, VS Code extension, or another repo path)
 - the commit SHA, branch, or released version you tested
 - reproduction steps or a proof of concept
 - impact assessment
@@ -34,8 +34,8 @@ please report the issue against one of these:
 - the latest tagged release for the affected public surface
 
 The current public release lines are documented in
-[`docs/RELEASE-CONTRACT.md`](docs/RELEASE-CONTRACT.md) and
-[`docs/VERSIONING.md`](docs/VERSIONING.md). Older releases may still be
+[`book/src/operations/release-contract.md`](book/src/operations/release-contract.md) and
+[`book/src/operations/versioning.md`](book/src/operations/versioning.md). Older releases may still be
 investigated, but maintainers may ask you to reproduce the issue on a current
 build before triage.
 

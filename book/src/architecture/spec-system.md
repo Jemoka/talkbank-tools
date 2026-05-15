@@ -16,7 +16,7 @@ page or test explicitly says otherwise.
 
 ## Spec Types
 
-### Construct Specs (`spec/constructs/`)
+### Construct Specs (`resources/spec/constructs/`)
 
 Each construct spec defines a valid CHAT pattern with its expected parse tree:
 
@@ -52,7 +52,7 @@ That is an explicit **grammar/test templating** mechanism. It is useful, but it
 does **not** by itself define honest isolated-fragment semantics for the direct
 parser.
 
-### Error Specs (`spec/errors/`)
+### Error Specs (`resources/spec/errors/`)
 
 Each error spec defines an invalid CHAT pattern with expected error codes:
 
@@ -83,15 +83,15 @@ Key metadata fields:
 - **Layer: validation** — error caught after successful parse
 - **Status: not_implemented** — generates `#[ignore]` tests
 
-### Symbol Registry (`spec/symbols/`)
+### Symbol Registry (`resources/spec/symbols/`)
 
-`symbol_registry.json` defines character sets used by both the grammar and Rust crates. Running `make symbols-gen` generates:
+`symbol_registry.json` defines character sets used by both the grammar and Rust crates. Running `node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js` generates:
 - JavaScript constants for `grammar.js`
 - Rust constants for model validation
 
 ## Test Generation
 
-Running `make test-gen` currently executes three generators:
+Running `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` currently executes three generators:
 
 ### 1. Tree-sitter Corpus Tests
 
@@ -116,14 +116,14 @@ coverage, but they are not the sole authority for parser semantics.
 
 ### 3. Error Documentation
 
-`gen_error_docs` generates markdown pages for each error code at `docs/errors/`.
+`gen_error_docs` generates markdown pages for each error code at `book/src/operations/errors/`.
 
 ## Workflow After Spec Changes
 
 ```bash
 cd talkbank-tools
-make test-gen     # Regenerate the affected spec-driven artifacts
-make verify       # Run pre-merge verification gates
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs     # Regenerate the affected spec-driven artifacts
+bazel build //... && bazel test //...       # Run pre-merge verification gates
 ```
 
 Never hand-edit generated artifacts — always regenerate from specs.

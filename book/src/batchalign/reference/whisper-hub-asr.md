@@ -26,7 +26,7 @@ only path to coherent transcription.
 
 ```bash
 # Uses the per-language default model_id resolved from
-# batchalign/models/resolve.py. For Malayalam that's
+# python/batchalign/models/resolve.py. For Malayalam that's
 # thennal/whisper-medium-ml.
 batchalign3 transcribe input/ output/ --lang mal --asr-engine whisper_hub
 ```
@@ -43,7 +43,7 @@ batchalign3 transcribe input/ output/ \
 ## Per-language defaults
 
 The per-language default model_id table lives in
-`batchalign/models/resolve.py`. It is intentionally small and seeded
+`python/batchalign/models/resolve.py`. It is intentionally small and seeded
 reactively from empirical evaluation — a language only gets a default
 after we've confirmed the chosen fine-tune produces coherent output.
 

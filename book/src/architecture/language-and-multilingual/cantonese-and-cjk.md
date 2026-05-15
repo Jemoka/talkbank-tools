@@ -45,7 +45,7 @@ flowchart LR
 ```
 
 Engines are `(load, infer)` function pairs in
-`batchalign/inference/languages/cantonese/`. Each engine fails at startup
+`python/batchalign/inference/languages/cantonese/`. Each engine fails at startup
 with a clear error if its model/credentials are unavailable — never at
 runtime during inference. Compile-time exhaustiveness checking on the
 enum guarantees no engine can be silently missed.
@@ -289,7 +289,7 @@ crates/batchalign-types/src/worker_v2/requests.rs  — MorphosyntaxRequestV2.ret
 ### Python
 
 ```text
-batchalign/inference/languages/cantonese/
+python/batchalign/inference/languages/cantonese/
 ├── __init__.py         — Engine registration
 ├── _common.py          — normalize_cantonese_text() (delegates to Rust),
 │                         read_asr_config(), provider_lang_code()
@@ -301,8 +301,8 @@ batchalign/inference/languages/cantonese/
 ├── _cantonese_fa.py    — Cantonese forced alignment (jyutping + Wave2Vec)
 └── _asr_types.py       — Internal TypedDicts
 
-batchalign/inference/morphosyntax.py — _segment_cantonese(), Mandarin retokenize selection
-batchalign/worker/_stanza_loading.py — load_stanza_retokenize_model() (lazy Chinese)
+python/batchalign/inference/morphosyntax.py — _segment_cantonese(), Mandarin retokenize selection
+python/batchalign/worker/_stanza_loading.py — load_stanza_retokenize_model() (lazy Chinese)
 ```
 
 ### Tests — no `unittest.mock`

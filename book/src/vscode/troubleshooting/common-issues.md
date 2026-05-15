@@ -29,7 +29,7 @@ This chapter covers the most frequently encountered problems and their solutions
 
 2. **Check that the extension is installed and enabled.** Open the Extensions sidebar (`Cmd+Shift+X`) and search for "TalkBank CHAT". The extension should show as installed and enabled.
 
-3. **Check the development host.** If running via `code --extensionDevelopmentPath=.`, ensure you are running the command from the `vscode/` directory and that `npm run compile` has been run.
+3. **Check the development host.** If running via `code --extensionDevelopmentPath=.`, ensure you are running the command from the `apps/vscode-extension/` directory and that `npm run compile` has been run.
 
 ## Formatting Does Nothing
 
@@ -48,7 +48,7 @@ If you expected changes (e.g., fixing indentation):
 
 **Fixes:**
 
-1. **Check that `node_modules` is present.** The Graphviz WASM renderer (`@hpcc-js/wasm`) is bundled with the extension. If `node_modules/@hpcc-js/wasm/` is missing, run `npm install` in the `vscode/` directory.
+1. **Check that `node_modules` is present.** The Graphviz WASM renderer (`@hpcc-js/wasm`) is bundled with the extension. If `node_modules/@hpcc-js/wasm/` is missing, run `npm install` in the `apps/vscode-extension/` directory.
 
 2. **Ensure the utterance has a `%gra` tier.** The dependency graph requires a `%gra` (grammatical relations) tier on the current utterance. Position your cursor on an utterance that has `%gra` data and try again.
 

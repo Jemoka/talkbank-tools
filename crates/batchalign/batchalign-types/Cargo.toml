@@ -1,0 +1,22 @@
+[package]
+name = "batchalign-types"
+version = "0.2.0"
+description = "Shared batchalign domain and worker protocol types"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
+sysinfo = "0.39"
+thiserror = "^2.0.18"
+utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid"] }
+
+[dev-dependencies]
+serde_json = "1.0"
+
+[lints]
+workspace = true

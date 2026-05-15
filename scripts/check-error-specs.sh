@@ -4,7 +4,7 @@
 # Error codes are defined with #[code("E###")] attributes in:
 #   crates/talkbank-model/src/errors/codes/error_code.rs
 #
-# Spec files live in spec/errors/ as E###_*.md
+# Spec files live in resources/spec/errors/ as E###_*.md
 
 set -euo pipefail
 
@@ -25,7 +25,7 @@ MISSING=0
 for code in $CODES; do
     # Check for spec file matching E###*.md or W###*.md (with or without _ suffix)
     if ! ls "$SPEC_DIR/${code}"*.md >/dev/null 2>&1; then
-        echo "MISSING: $code — no spec file in spec/errors/"
+        echo "MISSING: $code — no spec file in resources/spec/errors/"
         MISSING=$((MISSING + 1))
     fi
 done
@@ -38,7 +38,7 @@ echo "Error codes: $TOTAL total, $FOUND have specs, $MISSING missing"
 
 if [ "$MISSING" -gt 0 ]; then
     echo ""
-    echo "Create missing specs with: spec/errors/<CODE>_<description>.md"
-    echo "Then run: make test-gen"
+    echo "Create missing specs with: resources/spec/errors/<CODE>_<description>.md"
+    echo "Then run: just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs"
     exit 1
 fi

@@ -7,7 +7,7 @@
 
 Analyzes sequences of interactional codes on a single specified coding tier. In the legacy manual, `CHAINS` is described as tracking hand-entered codes on one coding tier, with `%cod`, `%spa`, and `%sit` given as examples, and with dependent-tier periods used to mark correspondence to `[^c]` clause units on the main tier.
 
-In `talkbank-clan`, a "chain" is a run of consecutive utterances by the same speaker that all contain a given code item on the selected coding tier. When the code disappears or the speaker changes, the chain is flushed and its length is recorded.
+In `clan-core`, a "chain" is a run of consecutive utterances by the same speaker that all contain a given code item on the selected coding tier. When the code disappears or the speaker changes, the chain is flushed and its length is recorded.
 
 Reports chain count, average/min/max length, and standard deviation per code and speaker.
 
@@ -32,7 +32,7 @@ chatter clan chains --tier cod file.cha
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** Rewriter
-> at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`; no `clap` field consumes it today.
 > Drafted from CLAN manual §7.1.2 (`Unique Options`, CHAINS) for
 > PI review.

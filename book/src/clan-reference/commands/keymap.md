@@ -5,7 +5,7 @@
 
 Builds contingency tables for coded interactional data. The legacy manual describes `KEYMAP` as choosing initiating or beginning codes on a specific coding tier, then examining all codes on that same tier in the next utterance.
 
-In `talkbank-clan`, given a set of keyword codes, `KEYMAP` tracks each keyword occurrence on a specified coding tier and records what code items appear in the immediately following utterance, broken down by speaker.
+In `clan-core`, given a set of keyword codes, `KEYMAP` tracks each keyword occurrence on a specified coding tier and records what code items appear in the immediately following utterance, broken down by speaker.
 
 See the [CLAN manual](https://talkbank.org/0info/manuals/CLAN.html#_Toc220409207) for the original KEYMAP command specification.
 

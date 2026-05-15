@@ -24,7 +24,7 @@ The standard install already includes these engines:
 uv tool install batchalign3
 ```
 
-For a source checkout, the standard build (`cargo build -p batchalign`
+For a source checkout, the standard build (`cargo build -p batchalign-cli`
 plus `uv run maturin develop` for the PyO3 bridge) already includes
 these engines. There are no Cantonese-specific extras to install.
 

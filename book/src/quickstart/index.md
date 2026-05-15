@@ -11,4 +11,4 @@ want to do today.
 2. **Validate / normalize / convert existing CHAT.** Fastest path is
    [chatter Quick Start](../chatter/user-guide/quick-start.md).
 3. **Edit CHAT in an editor with live validation.** Fastest path is
-   the [VS Code extension](../vscode/getting-started/installation.md).
+   the [VS Code extension](../apps/vscode-extension/getting-started/installation.md).

@@ -225,5 +225,5 @@ fallback.
 - Language code mapping: [`language-code-resolution.md`](language-code-resolution.md)
 - Whisper (the current recommended alternative): [`whisper-asr.md`](whisper-asr.md)
 - Stanza capability model (the analogy for Option C): see
-  `batchalign/worker/_stanza_capabilities.py` and
+  `python/batchalign/worker/_stanza_capabilities.py` and
   [`stanza-limitations.md`](stanza-limitations.md).

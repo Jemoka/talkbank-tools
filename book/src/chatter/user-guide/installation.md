@@ -37,7 +37,7 @@ Build and install:
 
 ```bash
 cd ~/talkbank/talkbank-tools
-cargo install --path crates/talkbank-cli
+cargo install --path crates/chatter-cli
 ```
 
 This installs the `chatter` binary to `~/.cargo/bin/` (macOS/Linux) or `%USERPROFILE%\.cargo\bin\` (Windows).
@@ -72,8 +72,8 @@ Everything lives in a single repository:
     ├── grammar/            # Tree-sitter grammar
     ├── crates/             # All Rust crates (talkbank-* and batchalign-*)
     ├── spec/               # CHAT specification
-    ├── vscode/             # VS Code extension
-    ├── apps/               # Tauri desktop apps (chatter-desktop, dashboard-desktop) — both experimental
+    ├── apps/vscode-extension/             # VS Code extension
+    ├── apps/               # Tauri desktop apps (chatter-gui, dashboard-desktop) — both experimental
     └── book/               # TalkBank Toolchain mdBook
 ```
 

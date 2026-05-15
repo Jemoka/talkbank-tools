@@ -245,15 +245,15 @@ macro_rules! require_python {
 }
 ```
 
-### Layer 9: Test isolation (default `make test-rust` skips integration tests)
+### Layer 9: Test isolation (default `bazel test //...-rust` skips integration tests)
 
 The Makefile `test-rust` target only runs `--lib` tests (pure Rust, no Python).
 Integration tests that spawn workers are opt-in:
 
 ```bash
-make test-rust       # SAFE: 1,273 library tests, no Python
-make test-workers    # Worker tests with --test-threads=1
-make test-ml         # ML model tests — net only (256 GB)
+bazel test //...-rust       # SAFE: 1,273 library tests, no Python
+bazel test //...-workers    # Worker tests with --test-threads=1
+bazel test //...-ml         # ML model tests — net only (256 GB)
 ```
 
 ## Environment Variables
@@ -279,44 +279,44 @@ make test-ml         # ML model tests — net only (256 GB)
 
 ```bash
 # Always safe — pure Rust, no Python, no ML
-make test-rust
+bazel test //...-rust
 
 # Worker tests (test-echo mode, no ML models) — safe with memory guard
 # These spawn real Python workers but in test-echo mode (no model loading)
-make test-workers
+bazel test //...-workers
 
 # NEVER run ML golden tests on a 64 GB machine
-# make test-ml  ← DO NOT RUN
+# bazel test //...-ml  ← DO NOT RUN
 ```
 
 ### On net (256 GB, M3 Ultra)
 
 ```bash
 # All tests including ML golden
-make test-rust && make test-workers && make test-ml
+bazel test //...-rust && bazel test //...-workers && bazel test //...-ml
 ```
 
 ### Running a specific integration test
 
 ```bash
 # Single test binary, single thread, memory guard active
-cargo test -p batchalign --test worker_integration -- --test-threads=1
+cargo test -p batchalign-cli --test worker_integration -- --test-threads=1
 
 # Run only ignored tests (if any)
-cargo test -p batchalign --test worker_integration -- --ignored --test-threads=1
+cargo test -p batchalign-cli --test worker_integration -- --ignored --test-threads=1
 ```
 
 ## What NOT to Do
 
 ```bash
 # NEVER: runs ALL test binaries in parallel, each spawning workers
-cargo test -p batchalign --tests
+cargo test -p batchalign-cli --tests
 
 # NEVER: same problem, workspace-wide
 cargo test --workspace
 
 # NEVER: nextest runs binaries in parallel by default
-cargo nextest run -p batchalign
+cargo nextest run -p batchalign-cli
 ```
 
 ## Implementation Files

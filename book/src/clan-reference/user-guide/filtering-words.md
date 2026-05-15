@@ -32,7 +32,7 @@ CLAN equivalent: `-s"um" -s"uh"`
 
 By default, word matching is case-insensitive (`the` matches `The`, `THE`, `the`).
 
-The CLAN `+k` flag (and its `--case-sensitive` rewrite) is **currently non-functional**: the rewriter at `crates/talkbank-clan/src/clan_args.rs:104` produces `--case-sensitive`, but no `clap` field consumes it. Word matching today is always case-insensitive. Tracked alongside `+dN` and `+fEXT` in `docs/superpowers/plans/2026-05-11-clan-rewriter-honor-three-flags.md`. See also [`flag-translation.md`](../getting-started/flag-translation.md).
+The CLAN `+k` flag (and its `--case-sensitive` rewrite) is **currently non-functional**: the rewriter at `crates/clan-core/src/clan_args.rs:104` produces `--case-sensitive`, but no `clap` field consumes it. Word matching today is always case-insensitive. Tracked alongside `+dN` and `+fEXT` in `docs/superpowers/plans/2026-05-11-clan-rewriter-honor-three-flags.md`. See also [`flag-translation.md`](../getting-started/flag-translation.md).
 
 ## What counts as a "word"
 

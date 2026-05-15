@@ -22,7 +22,7 @@ chatter clan srt2chat input.srt
 
 The speaker code (`"SPK"`) and corpus name (`"srt_corpus"`) in
 `@ID` headers are both hardcoded at
-`crates/talkbank-clan/src/converters/srt2chat.rs:152`; there are
+`crates/clan-core/src/converters/srt2chat.rs:152`; there are
 no CLI flags to override them. Same pattern as the other
 converters in this directory.
 

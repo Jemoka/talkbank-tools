@@ -21,7 +21,7 @@ chatter clan rtf2chat input.rtf
 | `-o`, `--output` | stdout | Output CHAT file path |
 
 The corpus name in `@ID` headers is hardcoded to `"rtf_corpus"`
-(`crates/talkbank-clan/src/converters/rtf2chat.rs:212`); there is
+(`crates/clan-core/src/converters/rtf2chat.rs:212`); there is
 no CLI flag to override it. Same pattern as the other converters
 in this directory.
 

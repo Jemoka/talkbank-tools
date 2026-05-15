@@ -196,7 +196,7 @@ All settings are under the `talkbank.*` namespace. Open VS Code Settings
 | `talkbank.walker.walkLength` | `0` | 0 -- 100 | Utterances to play during continuous walker mode (0 = play all remaining segments) |
 | `talkbank.media.defaultSpeed` | `100` | 25, 50, 75, 100, 125, 150, 175, 200 | Default playback speed as a percentage (100 = normal, 50 = half, 200 = double) |
 | `talkbank.bullets.display` | `"dim"` | `"dim"`, `"hidden"`, `"normal"` | How timing bullets are displayed: dim (35% opacity), hidden (invisible), or normal (full visibility) |
-| `talkbank.lsp.binaryPath` | (auto-detect) | Absolute file path | Override path to the `talkbank-lsp` binary. Leave empty to auto-detect from PATH or `target/` directory |
+| `talkbank.lsp.binaryPath` | (auto-detect) | Absolute file path | Override path to the `chatter-lsp` binary. Leave empty to auto-detect from PATH or `target/` directory |
 | `talkbank.inlayHints.enabled` | `true` | `true` / `false` | Show inline annotations for alignment mismatches (e.g., `[alignment: 3 main <-> 2 mor]`) |
 | `talkbank.validation.severity` | `"all"` | `"all"`, `"errorsOnly"`, `"errorsAndWarnings"` | Filter which diagnostics are displayed: all, errors only, or errors and warnings |
 

@@ -1,0 +1,2 @@
+"""Repo-internal Bazel tooling (not user-invokable directly)."""
+package(default_visibility = ["//visibility:public"])

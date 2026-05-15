@@ -44,7 +44,7 @@ chatter clan combo -S "want+cookie" --speaker CHI file.cha
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** Rewriter
-> at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`; no `clap` field consumes it today.
 > Drafted from CLAN manual §7.7.10 (`Unique Options`, COMBO) for
 > PI review.

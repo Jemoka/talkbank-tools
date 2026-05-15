@@ -1,5 +1,5 @@
 /**
- * Generated file from spec/symbols/symbol_registry.json
+ * Generated file from resources/spec/symbols/symbol_registry.json
  *
  * DO NOT EDIT MANUALLY.
  * To regenerate:

@@ -102,8 +102,8 @@ assembly.
 
 ```bash
 # Unit tests (no ML models)
-make test
-cargo nextest run -p batchalign -E 'test(compare::)'
+bazel test //...
+cargo nextest run -p batchalign-cli -E 'test(compare::)'
 
 # Golden tests (real Stanza for morphotag step — only on net)
 cargo nextest run --profile ml -E 'test(compare::golden)'

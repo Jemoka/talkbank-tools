@@ -44,7 +44,7 @@ a media reference; no `%mor`, no `%utseg`, no per-word timing.
 `thennal/whisper-medium-ml` produces clean output on the test sample
 the Whisper-Hub integration was validated against. Other Malayalam
 fine-tunes exist on HuggingFace; the resolver in
-`batchalign/models/resolve.py` accepts an explicit override if a
+`python/batchalign/models/resolve.py` accepts an explicit override if a
 different checkpoint is preferred.
 
 ## Why no morphotag / utseg

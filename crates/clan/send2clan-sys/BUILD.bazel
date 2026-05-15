@@ -1,0 +1,46 @@
+"""send2clan-sys — FFI to the legacy CLAN.app for "open in CLAN".
+
+Cargo lib name is `send2clan` (per `[lib] name = "send2clan"`), package
+is `send2clan-sys`. macOS sends Apple Events, Windows uses WM_APP IPC.
+Linux is a no-op.
+
+The `build.rs` invokes the `cc` crate to compile a small C wrapper.
+`cargo_build_script` handles that; the cc tool must be discoverable
+through Bazel's cc toolchain (provided by `rules_rust` defaults).
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cargo_build_script(
+    name = "send2clan_sys_build_script",
+    srcs = ["build.rs"],
+    aliases = aliases(build = True),
+    data = glob(["src/**/*.c", "src/**/*.h", "src/**/*.m", "csrc/**"]),
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(build_proc_macro = True),
+    deps = all_crate_deps(build = True),
+)
+
+rust_library(
+    name = "send2clan_sys",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = aliases(),
+    crate_name = "send2clan",
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + [
+        ":send2clan_sys_build_script",
+    ],
+)
+
+rust_test(
+    name = "send2clan_sys_unit_test",
+    crate = ":send2clan_sys",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

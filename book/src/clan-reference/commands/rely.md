@@ -7,7 +7,7 @@
 
 Compares two parallel CHAT files for coder agreement. The legacy manual gives `RELY` five functions: coder agreement, Cohen's kappa, student-vs-master evaluation, rough transcript overlap on the main line, and selective dependent-tier merging.
 
-The current `talkbank-clan` implementation focuses on the coding-tier comparison use case: it compares coded data on a specified dependent tier (default `%cod`) across two files to compute per-code agreement statistics, overall agreement percentage, and Cohen's kappa coefficient.
+The current `clan-core` implementation focuses on the coding-tier comparison use case: it compares coded data on a specified dependent tier (default `%cod`) across two files to compute per-code agreement statistics, overall agreement percentage, and Cohen's kappa coefficient.
 
 See the [CLAN manual](https://talkbank.org/0info/manuals/CLAN.html#_Toc220409232) for the original RELY command specification.
 
@@ -35,7 +35,7 @@ chatter clan rely file1.cha file2.cha --tier spa
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** Rewriter
-> at `crates/talkbank-clan/src/clan_args.rs:101` translates
+> at `crates/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`; no `clap` field consumes it today.
 > Drafted from CLAN manual §7.24.1 (`Unique Options`, RELY) for
 > PI review. **RELY's `+d` is a multi-dispatch flag** with three

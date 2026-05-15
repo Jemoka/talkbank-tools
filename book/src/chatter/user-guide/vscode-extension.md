@@ -5,17 +5,17 @@
 
 **Support tier:** Public preview. VSIX bundles are published on GitHub Releases, not yet available from the VS Code Marketplace.
 
-A full-featured CHAT editor for VS Code built on the Rust-powered `talkbank-lsp` language server. Edit, validate, analyze, transcribe, and play back audio — all inside your editor. Leverages the same CHAT engine as the `chatter` CLI with live real-time feedback.
+A full-featured CHAT editor for VS Code built on the Rust-powered `chatter-lsp` language server. Edit, validate, analyze, transcribe, and play back audio — all inside your editor. Leverages the same CHAT engine as the `chatter` CLI with live real-time feedback.
 
 **Platform support:** Windows, macOS, and Linux
 
 ## Installation
 
-The extension is located in [`vscode/`](https://github.com/TalkBank/talkbank-tools/tree/main/vscode). Two install paths, depending on what you want to do.
+The extension is located in [`apps/vscode-extension/`](https://github.com/TalkBank/talkbank-tools/tree/main/vscode). Two install paths, depending on what you want to do.
 
-**End users — install a released VSIX.** Pre-built, platform-specific VSIX bundles (each ships with the matching `talkbank-lsp` binary) are published on [GitHub Releases](https://github.com/TalkBank/talkbank-tools/releases). Download the `.vsix` for your platform, then in VS Code: Extensions sidebar → **"…"** menu → **Install from VSIX…** and pick the downloaded file.
+**End users — install a released VSIX.** Pre-built, platform-specific VSIX bundles (each ships with the matching `chatter-lsp` binary) are published on [GitHub Releases](https://github.com/TalkBank/talkbank-tools/releases). Download the `.vsix` for your platform, then in VS Code: Extensions sidebar → **"…"** menu → **Install from VSIX…** and pick the downloaded file.
 
-**Developers — run from source.** Open the `vscode/` folder in VS Code, install dependencies, compile, and launch the Extension Development Host:
+**Developers — run from source.** Open the `apps/vscode-extension/` folder in VS Code, install dependencies, compile, and launch the Extension Development Host:
 
 ```bash
 cd vscode
@@ -24,7 +24,7 @@ npm run compile
 # Then press F5 in VS Code to launch the dev host
 ```
 
-The dev host runs the locally-compiled extension and talks to a `talkbank-lsp` binary discovered via the resolver described in the [Configuration](#configuration) and [Architecture](#architecture) sections below.
+The dev host runs the locally-compiled extension and talks to a `chatter-lsp` binary discovered via the resolver described in the [Configuration](#configuration) and [Architecture](#architecture) sections below.
 
 ---
 
@@ -249,7 +249,7 @@ Utterance counts per speaker appear above the `@Participants` header (e.g., `CHI
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `talkbank.lsp.binaryPath` | `""` | Path to the `talkbank-lsp` binary (empty = auto-detect: bundled extension binary, then PATH, then extension target dir) |
+| `talkbank.lsp.binaryPath` | `""` | Path to the `chatter-lsp` binary (empty = auto-detect: bundled extension binary, then PATH, then extension target dir) |
 | `talkbank.inlayHints.enabled` | `true` | Show alignment and timing inlay hints |
 | `talkbank.validation.severity` | `"all"` | Filter: `"all"`, `"errorsOnly"`, `"errorsAndWarnings"` |
 | `talkbank.bullets.display` | `"dim"` | Bullet visibility: `"dim"`, `"hidden"`, `"normal"` |
@@ -265,11 +265,11 @@ Utterance counts per speaker appear above the `@Participants` header (e.g., `CHI
 
 ## Architecture
 
-The extension launches the dedicated `talkbank-lsp` binary over
-stdio using the Language Server Protocol. (`talkbank-lsp` is a
-separate Rust crate at `crates/talkbank-lsp/`; the VS Code
+The extension launches the dedicated `chatter-lsp` binary over
+stdio using the Language Server Protocol. (`chatter-lsp` is a
+separate Rust crate at `crates/chatter-lsp/`; the VS Code
 extension's executable resolver at
-`vscode/src/executableService.ts` looks for it in the bundled
+`apps/vscode-extension/src/executableService.ts` looks for it in the bundled
 extension binary, then on PATH, then under the extension's target
 directory.) The LSP server provides:
 
@@ -292,4 +292,4 @@ npm test             # Run tests
 npm run lint         # ESLint check
 ```
 
-To debug: open the `vscode/` folder in VS Code and press **F5** to launch the Extension Development Host.
+To debug: open the `apps/vscode-extension/` folder in VS Code and press **F5** to launch the Extension Development Host.

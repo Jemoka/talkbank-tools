@@ -214,7 +214,7 @@ chatter analyze freq sample.cha --format json > sample.frq.json
 #### IPSYN — Index of Productive Syntax
 
 - Parses %mor tier structure for syntactic pattern matching.
-- The built-in scoring covers a **representative subset** of the ~56 grammatical categories in the full English IPSyn rule set (see `crates/talkbank-clan/src/commands/ipsyn.rs`). Full coverage requires supplying an external rule file.
+- The built-in scoring covers a **representative subset** of the ~56 grammatical categories in the full English IPSyn rule set (see `crates/clan-core/src/commands/ipsyn.rs`). Full coverage requires supplying an external rule file.
 - Golden test parity: verified for the built-in subset
 
 #### VOCD — Vocabulary Diversity (D Statistic)

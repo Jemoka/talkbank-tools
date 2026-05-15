@@ -22,7 +22,7 @@ This command has no configurable options.
 The Rust port now inspects the parsed CHAT AST directly.
 
 - If no quote-extraction postcode (`[+ "]`) is present, the command is a semantic no-op and emits normalized CHAT.
-- If `[+ "]` is present, the command fails with an explicit error. `talkbank-clan` does not silently fall back to post-serialization string manipulation for this transform.
+- If `[+ "]` is present, the command fails with an explicit error. `clan-core` does not silently fall back to post-serialization string manipulation for this transform.
 
 ## Differences from CLAN
 

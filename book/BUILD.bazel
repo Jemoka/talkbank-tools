@@ -1,0 +1,41 @@
+"""mdBook documentation site.
+
+mdbook is fetched hermetically via `@multitool//tools/mdbook` on Linux
+x86_64 and macOS x86_64 — those are the only platforms upstream
+publishes prebuilt binaries for. arm64 hosts (macOS M-series, Linux
+aarch64) need `cargo install mdbook` because rust-lang doesn't ship
+arm64 binaries from the v0.4.x line.
+
+Targets:
+
+    bazel run //book:serve      # auto-reload preview at localhost:3000
+    bazel run //book:html       # static HTML at book/build/html/
+    bazel run //book:linkcheck  # build + linkcheck2 preprocessor
+"""
+
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+_BOOK_SRCS = glob(["book.toml", "src/**/*", "theme/**/*"], allow_empty = True)
+
+sh_binary(
+    name = "serve",
+    srcs = ["//bazel/book:serve.sh"],
+    args = ["$(rootpath @multitool//tools/mdbook)"],
+    data = _BOOK_SRCS + ["@multitool//tools/mdbook"],
+)
+
+sh_binary(
+    name = "html",
+    srcs = ["//bazel/book:build.sh"],
+    args = ["$(rootpath @multitool//tools/mdbook)"],
+    data = _BOOK_SRCS + ["@multitool//tools/mdbook"],
+)
+
+sh_binary(
+    name = "linkcheck",
+    srcs = ["//bazel/book:linkcheck.sh"],
+    args = ["$(rootpath @multitool//tools/mdbook)"],
+    data = _BOOK_SRCS + ["@multitool//tools/mdbook"],
+)

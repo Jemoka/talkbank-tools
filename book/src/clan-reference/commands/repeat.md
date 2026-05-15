@@ -22,7 +22,7 @@ chatter clan repeat --speaker CHI file.cha
 ## Revision Markers Detected
 
 Per `is_revision_kind()` at
-`crates/talkbank-clan/src/transforms/repeat.rs:81-87`, three of the
+`crates/clan-core/src/transforms/repeat.rs:81-87`, three of the
 four `RetraceKind` variants trigger `[+ rep]`:
 
 - `[//]` — full retrace (`RetraceKind::Full`)

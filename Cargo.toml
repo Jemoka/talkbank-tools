@@ -1,70 +1,36 @@
 [workspace]
 resolver = "2"
 members = [
-    "xtask",
-    "crates/batchalign-types",
-    "crates/batchalign",
-    "crates/talkbank-model",
-    "crates/talkbank-parser-tests",
-    "crates/talkbank-derive",
-    "crates/talkbank-parser",
-    "crates/talkbank-transform",
-    "crates/talkbank-clan",
-    "crates/talkbank-cli",
-    "crates/talkbank-lsp",
-    "crates/send2clan-sys",
-    "crates/talkbank-parser-re2c",
-    "apps/chatter-desktop/src-tauri",
-    "apps/dashboard-desktop/src-tauri",
-    "crates/batchalign-pyo3",
+    # Core (parser / model / transform / shared utilities)
+    "crates/core/talkbank-model",
+    "crates/core/talkbank-derive",
+    "crates/core/talkbank-parser",
+    "crates/core/talkbank-transform",
+    "crates/core/talkbank-parser-re2c",
+    "crates/core/talkbank-parser-tests",
+    "crates/utils",
+    # CHAT spec generators (static codegen + live-parser verification)
+    "crates/spec/talkbank-spec-testgen",
+    "crates/spec/talkbank-spec-testrun",
+    # Chatter (CLI + LSP, both produce `chatter`-branded binaries)
+    "crates/chatter/chatter-cli",
+    "crates/chatter/chatter-lsp",
+    # CLAN (analysis library + FFI to the legacy CLAN app)
+    "crates/clan/clan-core",
+    "crates/clan/send2clan-sys",
+    # Batchalign (runtime / shared types / Python FFI bridge)
+    "crates/batchalign/batchalign-cli",
+    "crates/batchalign/batchalign-types",
+    "crates/batchalign/batchalign-pyo3",
+    # Workspace dev tooling
+    "crates/xtask",
+    # Tauri desktop shells (tiered by product)
+    "apps/chatter/chatter-gui/src-tauri",
+    "apps/batchalign/batchalign-gui-dashboard/src-tauri",
 ]
 exclude = [
-    "spec/tools",  # Independent workspace
-    "fuzz",        # cargo-fuzz uses its own nightly toolchain with sanitizer flags
+    "fuzz",  # cargo-fuzz uses its own nightly toolchain with sanitizer flags
 ]
-
-[package]
-name = "talkbank-tools"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
-publish = false
-
-[lints]
-workspace = true
-
-[dependencies]
-clap = { workspace = true }
-crossterm = { workspace = true }
-dirs = { workspace = true }
-indicatif = { workspace = true }
-ratatui = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-
-# TalkBank crates
-talkbank-model = { workspace = true }
-talkbank-parser = { workspace = true }
-talkbank-transform = { workspace = true }
-tempfile = { workspace = true }
-thiserror = { workspace = true }
-tree-sitter = { workspace = true }
-tree-sitter-talkbank = { workspace = true }
-
-
-[dev-dependencies]
-crossbeam-channel = { workspace = true }
-jsonschema = { workspace = true }
-num_cpus = { workspace = true }
-rayon = { workspace = true }
-schemars = { workspace = true }
-sqlx = { workspace = true }
-talkbank-lsp = { workspace = true }
-talkbank-parser-tests = { workspace = true }
-unicode-width = { workspace = true }
-walkdir = { workspace = true }
 
 [workspace.package]
 version = "0.2.0"
@@ -83,9 +49,9 @@ rust-version = "1.89.0"
 # (LSP, server, async workers). The CLAUDE.md standard is "no panics in
 # long-lived logic, recoverable conditions go through Result with thiserror
 # domain types." These warn-level lints make every new panic site visible
-# without one-shot breaking the existing tree (see docs/panic-audit/baseline.md
-# for the frozen baseline; per-crate `[lints]` promote to `deny` as each
-# crate finishes its audit).
+# without one-shot breaking the existing tree (see
+# `book/src/operations/panic-audit/baseline.md` for the frozen baseline;
+# per-crate `[lints]` promote to `deny` as each crate finishes its audit).
 #
 # Test code keeps panic discipline relaxed — assertion macros panic by
 # design, and `unwrap()` on a fixture that's known to parse is the standard
@@ -98,181 +64,29 @@ panic         = "warn"
 todo          = "warn"
 unimplemented = "warn"
 
-[workspace.dependencies]
-aho-corasick = "1.1"
-anyhow = "1.0"
-async-trait = "0.1"
-assert_cmd = "2.2"
-atty = "0.2"
-axum = { version = "0.8", features = ["ws"] }
-blake3 = "1.8"
-cc = "1.2"
-chrono = "0.4"
-
-# CLI and tools
-clap = { version = "4.6", features = ["derive", "env"] }
-comrak = "0.52.0"
-
-# Concurrency
-crossbeam-channel = "0.5"
-crossterm = "0.29"
-ctrlc = "3.5"
-dashmap = "6.1"
-csv = "1"
-futures = "0.3"
-futures-util = "0.3"
-
-# Utilities
-dirs = "6.0"
-divan = "0.1"
-fs2 = "0.4"
-include_dir = "0.7"
-indexmap = { version = "2.14", features = ["serde"] }
-indicatif = "0.18"
-
-# Testing
-insta = { version = "1.47", features = ["json", "yaml"] }
-jsonschema = { version = "0.46", default-features = false, features = ["resolve-file"] }
-miette = { version = "7.6.0", features = ["derive"] }
-notify = "8.2"
-num_cpus = "1.17"
-parking_lot = "0.12"
-predicates = "3.1"
-
-# Proc-macro dependencies
-proc-macro2 = "1.0"
-proptest = "1.11.0"
-pyo3 = "0.28"
-quick-xml = "0.39"
-quote = "1.0"
-rand = "0.10"
-ratatui = { version = "0.30", features = ["serde"] }
-rayon = "1.12"
-regex = "1.12"
-reqwest = { version = "0.13", features = ["multipart", "json", "blocking"] }
-rstest = "0.26.1"
-schemars = { version = "1.2", features = ["indexmap2", "smol_str03"] }
-send2clan-sys = { path = "crates/send2clan-sys", version = "0.2.0" }
-serde_yaml = "0.9"
-
-# Core dependencies (shared across crates)
-# Batchalign build crates track the `batchalign3` product release line in their
-# own manifests rather than inheriting `workspace.package.version`, because the
-# TalkBank core Rust line (`0.2.x`) and the Batchalign preview product line
-# (`0.1.x`) are intentionally separate release trains.
-batchalign = { path = "crates/batchalign" }
-batchalign-types = { path = "crates/batchalign-types" }
-libc = "0.2"
-moka = { version = "0.12", features = ["future"] }
-serde = { version = "1.0", features = ["derive", "rc"] }
-serde_json = "1.0"
-shellexpand = "3.1"
-similar = "3.1"
-smallvec = { version = "1.15", features = ["serde", "union", "const_generics"] }
-smol_str = { version = "0.3", features = ["serde"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate"] }
-strsim = "0.11.1"
-syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
-talkbank-clan = { path = "crates/talkbank-clan", version = "0.2.0" }
-talkbank-cli = { path = "crates/talkbank-cli", version = "0.2.0" }
-
-# TalkBank crates — path for local dev, version for crates.io publishing
-talkbank-derive = { path = "crates/talkbank-derive", version = "0.2.0" }
-talkbank-lsp = { path = "crates/talkbank-lsp", version = "0.2.0" }
-talkbank-model = { path = "crates/talkbank-model", version = "0.2.0" }
-talkbank-parser = { path = "crates/talkbank-parser", version = "0.2.0" }
-talkbank-parser-tests = { path = "crates/talkbank-parser-tests", version = "0.2.0" }
-talkbank-parser-re2c = { path = "crates/talkbank-parser-re2c", version = "0.2.0" }
-talkbank-transform = { path = "crates/talkbank-transform", version = "0.2.0" }
-
-phf = { version = "0.13", features = ["macros"] }
-phf_codegen = "0.13"
-tempfile = "3.27"
-text-size = "1.1"
-thiserror = "^2.0.18"
-tokio-stream = { version = "0.1", features = ["sync"] }
-tokio = { version = "1.52", features = ["full"] }
-tokio-util = "0.7"
-toml = "^1.1.2"
-tracing-appender = "0.2"
-tracing-opentelemetry = "0.32"
-tower-http = { version = "0.6", features = ["cors", "fs", "limit", "trace", "compression-gzip", "compression-br", "catch-panic", "timeout"] }
-tower-lsp = "0.20"
-opentelemetry = { version = "0.31", features = ["trace"] }
-opentelemetry_sdk = { version = "0.31", features = ["trace", "rt-tokio"] }
-opentelemetry-otlp = { version = "0.31", default-features = false, features = ["trace", "http-proto", "reqwest-client"] }
-temporalio-client = "0.4"
-temporalio-common = "0.4"
-temporalio-macros = "0.4"
-temporalio-sdk = "0.4"
-temporalio-sdk-core = "0.4"
-utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid"] }
-uuid = { version = "1", features = ["v4", "serde"] }
-whatlang = "0.18"
-zhconv = "0.4.1"
-rustc-hash = "2.1"
-sysinfo = "0.39"
-zip = { version = "8", default-features = false, features = ["deflate"] }
-
-# Logging and tracing
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-
-# Tree-sitter parsing
-tree-sitter = "0.26"
-tree-sitter-highlight = "0.26"
-tree-sitter-talkbank = { path = "grammar", version = "0.2.0" }
-ferrous-opencc = "0.4.0"
-
-trybuild = "1.0"
-unicode-width = "0.2"
-walkdir = "^2.5"
-# rusqlite was previously a workspace dep for xtask audit-docs; now
-# replaced by sqlx (with a small tokio runtime in xtask) so the
-# workspace links a single libsqlite3-sys version, and sqlx tracks
-# the latest patched version automatically.
+# NOTE: No `[workspace.dependencies]` section. By design — every crate
+# declares its own dependencies inline (version + features) and uses
+# explicit relative path deps for intra-workspace links. See
+# `CONTRIBUTING.md` for the rationale.
 
 [profile.dev]
 split-debuginfo = "unpacked"
-debug = "line-tables-only"          # Less debug info -> faster linking
-
-# NOTE: previously this was `[profile.dev.package."*"] opt-level = 1`,
-# which optimized every third-party dependency in dev / `cargo check`
-# builds. After the 2026-04-28 batchalign3 fold roughly tripled the
-# third-party dep set (axum, async-trait, tokio's full feature surface,
-# pyo3, sqlx via temporal-sdk, …), `opt-level = 1` for `*` made
-# `cargo check` 5+ minutes cold. The setting is now scoped to
-# `[profile.test.package."*"]` only, so test runtime stays fast while
-# `cargo check` and non-test `cargo build` cycles get back the speed
-# they had pre-fold.
+debug = "line-tables-only"          # Less debug info → faster linking
 
 [profile.dev.build-override]
 opt-level = 3                       # Optimize proc macros and build scripts
 
 [profile.release]
-# Deliberately lean. BA3's wall-clock is dominated by Python ML inference
-# (Stanza, Whisper) and external HTTP (Rev.AI), not by Rust code paths.
-# `lto = true` (fat LTO) and `codegen-units = 1` were previously set to
-# squeeze the last few percent out of Rust execution; the build-time cost
-# of that whole-program optimization (5-15 min link, single-threaded
-# codegen on the largest crates) was disproportionate to a runtime gain
-# that is empirically lost in the noise of a single Stanza inference call.
-# strip was also enabled for binary-size reasons that don't matter on the
-# fleet machines.
-#
-# If profiling ever identifies a specific Rust hot path where LTO
-# meaningfully moves the needle, re-add the settings then — with evidence.
-# Until then, default release uses opt-level 3 (the cargo default for
-# release) with codegen parallelism intact and symbols kept.
+# Deliberately lean. Batchalign3's wall-clock is dominated by Python ML
+# inference (Stanza, Whisper) and external HTTP (Rev.AI), not by Rust
+# code paths. LTO + codegen-units = 1 was previously set but the
+# build-time cost (5–15 min link, single-threaded codegen on the
+# largest crates) was disproportionate to a runtime gain that is
+# empirically lost in the noise of a single Stanza inference call.
+# strip was enabled for binary-size reasons that don't matter on the
+# fleet machines. Default release uses opt-level 3 with codegen
+# parallelism intact and symbols kept.
 
 [profile.test]
 split-debuginfo = "unpacked"
 debug = "line-tables-only"
-
-# Note: previously `[profile.test.package."*"] opt-level = 1` was in
-# effect to speed up test *runtime*. Removed because it doubled test
-# *build* time across hundreds of third-party deps in the post-fold
-# workspace. For specific tests where runtime is the bottleneck, run
-# with `cargo nextest run --release -p <crate>`. The default test
-# profile now uses opt-level 0 for everything — fast to build, slower
-# to execute, which is the right trade in iterative dev.

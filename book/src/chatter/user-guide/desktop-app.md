@@ -7,7 +7,7 @@
 
 ## When to use Chatter Desktop
 
-Chatter Desktop (`apps/chatter-desktop/`) is intended **only for**:
+Chatter Desktop (`apps/chatter/chatter-gui/`) is intended **only for**:
 - Contributors and maintainers evaluating the native GUI implementation
 - Local development and testing of the desktop surface
 - Experimental internal workflows
@@ -18,12 +18,12 @@ Chatter Desktop (`apps/chatter-desktop/`) is intended **only for**:
 
 This is also **not** the Batchalign desktop app. The two experimental desktop surfaces in this repository are:
 
-- **Chatter Desktop** (`apps/chatter-desktop/`) — CHAT validation GUI only (experimental)
-- **Batchalign Desktop** (`apps/dashboard-desktop/`) — Batchalign processing UI (experimental)
+- **Chatter Desktop** (`apps/chatter/chatter-gui/`) — CHAT validation GUI only (experimental)
+- **Batchalign Desktop** (`apps/batchalign/dashboard-desktop/`) — Batchalign processing UI (experimental)
 
 ## Current status
 
-- **Release contract:** Experimental (see repo-root `docs/RELEASE-CONTRACT.md`)
+- **Release contract:** Experimental (see repo-root `book/src/operations/release-contract.md`)
 - **Distribution:** No supported DMG/MSI/AppImage release channel
 - **CI:** Not included in main PR CI gates
 - **Recommendation:** Contributors and maintainers only; **do not use for production work**
@@ -33,7 +33,7 @@ This is also **not** the Batchalign desktop app. The two experimental desktop su
 ### From source
 
 ```bash
-cd apps/chatter-desktop
+cd apps/chatter-gui
 npm install
 cargo tauri dev       # launches the app with hot reload
 cargo tauri build     # produces a distributable app bundle
@@ -54,7 +54,7 @@ Three ways to start validating:
 3. **Drag and drop** — drag one `.cha` file or one folder onto the app window
 
 When idle, if you've previously validated a target, the drop zone shows
-**"Last: corpus/reference/ — Re-validate?"** as a clickable shortcut.
+**"Last: resources/corpus/reference/ — Re-validate?"** as a clickable shortcut.
 
 ### Reading results
 
@@ -191,21 +191,21 @@ directory (Windows).
 To build with the bundled CLI:
 
 ```bash
-cargo build --release -p talkbank-cli
-mkdir -p apps/chatter-desktop/src-tauri/resources
-cp target/release/chatter apps/chatter-desktop/src-tauri/resources/
+cargo build --release -p chatter-cli
+mkdir -p apps/chatter/chatter-gui/src-tauri/resources
+cp target/release/chatter apps/chatter/chatter-gui/src-tauri/resources/
 cargo tauri build
 ```
 
 ## Architecture
 
-The desktop app lives in `apps/chatter-desktop/` as a sibling to `vscode/`:
+The desktop app lives in `apps/chatter/chatter-gui/` as a sibling to `apps/vscode-extension/`:
 
 ```text
-apps/chatter-desktop/
+apps/chatter/chatter-gui/
   src-tauri/          Rust backend (Tauri v2)
     src/
-      main.rs         Bin entry — calls chatter_desktop_lib::run()
+      main.rs         Bin entry — calls chatter_gui_lib::run()
       lib.rs          Tauri app setup (Builder + module wiring)
       protocol.rs     Shared command/event names + request types
       commands.rs     validate, cancel, open_in_clan, export, reveal, install_cli
@@ -256,7 +256,7 @@ different workflow:
 
 | Tool | Audience | Use when |
 |------|----------|----------|
-| **Chatter Desktop (experimental)** | Evaluators, contributors | You are specifically trying the experimental `apps/chatter-desktop/` validation GUI from source. |
+| **Chatter Desktop (experimental)** | Evaluators, contributors | You are specifically trying the experimental `apps/chatter/chatter-gui/` validation GUI from source. |
 | **VS Code extension** | Editors, annotators | You're *editing* CHAT files and want live diagnostics, quick fixes, CLAN analysis, and media playback. |
 | **`chatter validate` (TUI)** | Power users | You're comfortable in a terminal and want keyboard-driven navigation. |
 | **`chatter validate` (CLI)** | CI, scripts | You need machine-readable output (`--format json`) or batch audits (`--audit`). |

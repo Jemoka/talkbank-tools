@@ -1,0 +1,181 @@
+"""Bazel module declaration for the talkbank-tools monorepo.
+
+This module composes the rule sets that span the polyglot tree:
+
+    Rust workspace            → rules_rust + crate_universe (Cargo deps)
+    Python (batchalign)       → rules_uv (toolchain) + maturin (wheel build)
+    TypeScript (apps)         → rules_js + rules_ts (npm-translate-lock)
+    Tree-sitter grammar       → wrapped via sh_binary (multi-language bindings
+                                stay in their native build chains)
+    Tauri desktop apps        → wrapped via sh_binary around `cargo tauri build`
+    mdBook                    → wrapped via sh_binary around `mdbook build`
+
+Cargo remains the source of truth for Rust dep resolution; Maturin remains
+the source of truth for the PyO3 wheel. Bazel orchestrates, it does not
+replace these tools. See CONTRIBUTING.md for the rationale.
+"""
+
+module(
+    name = "talkbank_tools",
+    version = "0.2.0",
+    compatibility_level = 1,
+)
+
+# =============================================================================
+# Rust
+# =============================================================================
+bazel_dep(name = "rules_rust", version = "0.70.0")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = ["1.95.0"],
+)
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+
+# Hermetic protoc for crates that compile .proto at build time.
+# The canonical `com_google_protobuf` repo name matches what prost-build
+# and tonic-build look for via env, and is the convention rules_rust
+# crate_universe uses when wiring protoc into generated BUILD files.
+bazel_dep(name = "protobuf", version = "29.0", repo_name = "com_google_protobuf")
+
+# Cargo workspace → Bazel external repo via crate_universe.
+crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
+
+# Per-crate Bazel patches and build-script env wiring for third-party
+# crates whose upstream build scripts assume Cargo's single-sandbox
+# semantics. Apply minimally; see `bazel/patches/BUILD.bazel`.
+crate.annotation(
+    crate = "ferrous-opencc",
+    patches = ["//bazel/patches:ferrous-opencc-0.4.0.patch"],
+    patch_args = ["-p1"],
+)
+
+# Feed hermetic protoc into every crate whose build script invokes it.
+# Without these annotations, crate_universe-generated BUILD files have
+# no protoc input and prost-build panics with "Could not find protoc".
+#
+# We reference the bzlmod **canonical** repo name (`@@protobuf~`) rather
+# than the apparent name (`@com_google_protobuf`) because crate_universe-
+# generated repos do not inherit the root module's apparent-name mapping
+# (bzlmod isolates repo visibility per module). The canonical name is
+# stable within a Bazel + protobuf-module-version pair; if it changes
+# (e.g. Bazel switches the `~` suffix), update here.
+_PROTOC_DATA = [
+    "@@protobuf~//:protoc",
+    "@@protobuf~//:well_known_type_protos",
+]
+_PROTOC_ENV = {
+    "PROTOC": "$(execpath @@protobuf~//:protoc)",
+    # PROTOC_INCLUDE must point at a directory whose layout has
+    # `google/protobuf/*.proto`. The well_known_type_protos filegroup
+    # materializes those files at `external/protobuf~/src/google/protobuf/`,
+    # so we point PROTOC_INCLUDE at `external/protobuf~/src`. The
+    # cargo_build_script_runner resolves this execroot-relative path
+    # to an absolute path before invoking the build script.
+    "PROTOC_INCLUDE": "$${pwd}/external/protobuf~/src"
+    # "external/protobuf~/src",
+}
+
+[
+    crate.annotation(
+        crate = c,
+        build_script_data = _PROTOC_DATA,
+        build_script_env = _PROTOC_ENV,
+    )
+    for c in [
+        "prost-build",
+        "prost-wkt-types",
+        "temporalio-common",
+        "tonic-build",
+    ]
+]
+
+crate.from_cargo(
+    name = "crates",
+    cargo_lockfile = "//:Cargo.lock",
+    # Only the root manifest is listed. crate_universe walks the
+    # [workspace] members table to discover every member crate.
+    manifests = ["//:Cargo.toml"],
+)
+use_repo(crate, "crates")
+
+# =============================================================================
+# Python — toolchain via rules_uv, wheel build via maturin
+# =============================================================================
+# rules_uv provides a hermetic `uv` toolchain. Dependency resolution
+# uses uv.lock (the source of truth) rather than rules_python's pip
+# parsing — uv is faster and matches the project's tooling.
+#
+# Maturin builds the PyO3 wheel; we shell out to it from `//python/batchalign:wheel`
+# rather than re-modelling cdylib + wheel packaging in Bazel.
+bazel_dep(name = "rules_python", version = "0.39.0")
+bazel_dep(name = "rules_uv", version = "0.59.0")
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    python_version = "3.12",
+    is_default = True,
+)
+
+uv = use_extension("@rules_uv//uv:extensions.bzl", "uv")
+uv.toolchain(uv_version = "0.5.18")
+
+# =============================================================================
+# JavaScript / TypeScript
+# =============================================================================
+# aspect-build's rules are the de facto standard. They wrap node_modules
+# resolution via pnpm or npm lockfiles.
+bazel_dep(name = "aspect_rules_js", version = "2.1.3")
+bazel_dep(name = "aspect_rules_ts", version = "3.4.0")
+bazel_dep(name = "rules_nodejs", version = "6.7.4")
+
+node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node")
+# Vite v8 requires Node.js 20.19+. The pin must be a version that the
+# active rules_nodejs ships prebuilts for on every supported platform
+# (darwin arm64/amd64, linux arm64/amd64, windows amd64). rules_nodejs
+# 6.7.x extends the table well past 20.19 — bumping the table version
+# without also bumping rules_nodejs surfaces as "No nodejs is available
+# for darwin_arm64" at fetch time.
+node.toolchain(node_version = "22.12.0")
+
+npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm", dev_dependency = True)
+npm.npm_translate_lock(
+    name = "npm_vscode",
+    pnpm_lock = "//apps/vscode-extension:pnpm-lock.yaml",  # converted from package-lock.json
+    verify_node_modules_ignored = "//:.bazelignore",
+)
+use_repo(npm, "npm_vscode")
+
+npm.npm_translate_lock(
+    name = "npm_dashboard",
+    pnpm_lock = "//apps/batchalign/batchalign-cli-webdashboard:pnpm-lock.yaml",
+    verify_node_modules_ignored = "//:.bazelignore",
+)
+use_repo(npm, "npm_dashboard")
+
+# =============================================================================
+# Shell / OCI / archive utilities
+# =============================================================================
+bazel_dep(name = "rules_shell", version = "0.3.0")
+bazel_dep(name = "rules_pkg", version = "1.0.1")
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+# `copy_to_directory` is used wherever a Rust target needs an
+# in-sandbox manifest-dir layout that mirrors the source tree
+# (sqlx::migrate! and friends parse a string literal and require
+# `CARGO_MANIFEST_DIR/<literal>` to canonicalize at proc-macro time).
+bazel_dep(name = "aspect_bazel_lib", version = "2.9.3")
+
+# =============================================================================
+# Hermetic external binaries via rules_multitool
+# =============================================================================
+# Tools that don't have a first-class Bazel ruleset (uv, mdbook, sqlx-cli,
+# re2c, vsce, tree-sitter-cli) are fetched as platform-specific
+# prebuilt binaries from their upstream GitHub releases and exposed as
+# `@multitool//tools/<name>`. SHA256s live in `multitool.lock.json`.
+bazel_dep(name = "rules_multitool", version = "1.0.0")
+
+multitool = use_extension("@rules_multitool//multitool:extension.bzl", "multitool")
+multitool.hub(lockfile = "//:multitool.lock.json")
+use_repo(multitool, "multitool")

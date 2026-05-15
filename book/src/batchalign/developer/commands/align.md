@@ -19,7 +19,7 @@ see [User Guide: align](../../user-guide/commands/align.md).
 | UTR dispatch | `crates/batchalign/src/runner/dispatch/utr.rs` | `resolve_strategy()`, language-aware strategy gate |
 | UTR library | `crates/batchalign/src/fa/utr.rs` | `run_utr_pass()`, `inject_utr_timing()`, partial-window logic |
 | FA library | `crates/batchalign/src/fa/` | Grouping, extraction, DP alignment, injection, postprocessing |
-| Worker IPC | `batchalign/inference/fa.py` — `batch_infer_fa()` | Loads Whisper/Wave2Vec, returns token timestamps |
+| Worker IPC | `python/batchalign/inference/fa.py` — `batch_infer_fa()` | Loads Whisper/Wave2Vec, returns token timestamps |
 
 ---
 
@@ -258,13 +258,13 @@ Implementation: `crates/batchalign/src/fa/mod.rs:539–554`.
 
 ```bash
 # Fast unit tests (no ML models)
-make test
+bazel test //...
 
 # FA-specific tests with real models (only on net, 256 GB RAM)
 cargo nextest run --profile ml -E 'test(fa::)'
 
 # Incremental processing tests
-cargo nextest run -p batchalign --test incremental
+cargo nextest run -p batchalign-cli --test incremental
 ```
 
 Key test locations:

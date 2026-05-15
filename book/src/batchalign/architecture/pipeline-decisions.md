@@ -436,7 +436,7 @@ Invariant enforcement:
 
 - `crates/batchalign/src/inject.rs` —
   `inject_morphosyntax` (returns `Result<(), MisalignmentDiagnostic>`)
-- `batchalign/inference/morphosyntax.py` —
+- `python/batchalign/inference/morphosyntax.py` —
   realignment-skipped WARN at the Python boundary
 - `talkbank-tools/crates/talkbank-model/src/alignment/helpers/count.rs`
   — `MorAlignableWordCount` / `MorItemCount` newtypes and

@@ -6,14 +6,14 @@
 ## Context
 
 Per [ADR-001](adr-001-lsp-over-embedded-parser.md), the extension
-needs a `talkbank-lsp` binary to function. Two distribution shapes:
+needs a `chatter-lsp` binary to function. Two distribution shapes:
 
 1. **Zero-install.** Ship one generic VSIX; at activation time,
    either find the binary on `PATH` or run `cargo install
-   talkbank-lsp`. No binary ships in the VSIX.
+   chatter-lsp`. No binary ships in the VSIX.
 2. **Bundled.** Build per-platform VSIXes (five targets: macOS ARM,
     macOS Intel, Linux x86, Linux ARM, Windows x86), each carrying
-   its own prebuilt `talkbank-lsp`. Distribute those VSIXes from
+   its own prebuilt `chatter-lsp`. Distribute those VSIXes from
    GitHub Releases for the first public release.
 
 ## Decision
@@ -28,9 +28,9 @@ and finally to the `talkbank.lsp.binaryPath` setting.
 The activation fallback order:
 
 1. `talkbank.lsp.binaryPath` setting (user-provided absolute path).
-2. Bundled binary at `<extensionPath>/server/talkbank-lsp`
+2. Bundled binary at `<extensionPath>/server/chatter-lsp`
    (`.exe` on Windows).
-3. `talkbank-lsp` on `PATH` (for users who `cargo install`ed).
+3. `chatter-lsp` on `PATH` (for users who `cargo install`ed).
 
 If all three fail, activation surfaces a
 "TalkBank LSP binary not found" message with an "Open Settings"
@@ -98,6 +98,6 @@ would require the user to have a Rust toolchain already.
   (`LSP_BINARY_PATH_SETTING = 'talkbank.lsp.binaryPath'`).
 - Release workflow: `.github/workflows/vscode-release.yml`.
 - Per-platform build script: `scripts/build-vsix-<target>.sh`.
-- Package bundling: `vscode/package.json` `vsce:prepublish` scripts.
-- Setting declaration: `vscode/package.json`
+- Package bundling: `apps/vscode-extension/package.json` `vsce:prepublish` scripts.
+- Setting declaration: `apps/vscode-extension/package.json`
   `contributes.configuration` → `talkbank.lsp.binaryPath`.

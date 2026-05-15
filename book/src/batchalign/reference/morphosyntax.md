@@ -79,7 +79,7 @@ Rust: `crates/batchalign/src/morphosyntax/batch.rs` — `run_morphosyntax_batch_
   │
   ├── Batch infer (all utterances pool → one Stanza call per language)
   │     ├── Group by language, dispatch concurrently
-  │     ├── Python worker (batchalign/inference/morphosyntax.py)
+  │     ├── Python worker (python/batchalign/inference/morphosyntax.py)
   │     │     • Replace special forms with "xbxxx"
   │     │     • nlp(combined_text) → Stanza UD analysis
   │     │     • Return raw UD results as JSON
@@ -153,7 +153,7 @@ features into structured data for analysis.  The consumers and what they actuall
 | **Coreference** (`coref`) | Token boundaries in %mor tier | No — counts tokens only |
 | **WER evaluation** (`benchmark`) | Token count from %mor for word-level accuracy | No — counts only |
 | **Pre-serialization validation** (`validation.py`) | Chunk count alignment (%mor chunks vs %gra relations) | No — calls `count_chunks()` in Rust |
-| **CLAN commands** (talkbank-clan crate in talkbank-tools) | Full %mor structure (POS, lemma, suffixes for FREQ/MLU/MLT) | Yes — but via talkbank-model's Mor type |
+| **CLAN commands** (clan-core crate in talkbank-tools) | Full %mor structure (POS, lemma, suffixes for FREQ/MLU/MLT) | Yes — but via talkbank-model's Mor type |
 | **Forced alignment** | No %mor access | N/A |
 | **ASR / diarization** | No %mor access | N/A |
 

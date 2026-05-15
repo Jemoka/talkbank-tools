@@ -74,7 +74,7 @@ happens on file change (debounced), not on every request. After
 mutation, the new `ChatFile` is wrapped in `Arc::new()` and
 inserted atomically.
 
-`crates/talkbank-lsp/src/backend/state.rs`,
+`crates/chatter-lsp/src/backend/state.rs`,
 `requests.rs`, `validation_orchestrator.rs`.
 
 ## Reusable `TreeSitterParser`

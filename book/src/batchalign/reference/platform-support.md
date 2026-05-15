@@ -31,8 +31,8 @@ public book.
 | macOS / Windows | C (Experimental) | In-repo Tauri shell only; not a supported public release surface |
 | Linux | C (Experimental) | No supported public desktop distribution |
 
-This section is about **Batchalign Desktop** in `apps/dashboard-desktop/`, not
-the separate **Chatter Desktop** validation app in `apps/chatter-desktop/`.
+This section is about **Batchalign Desktop** in `apps/batchalign/dashboard-desktop/`, not
+the separate **Chatter Desktop** validation app in `apps/chatter/chatter-gui/`.
 
 ## Tier Definitions
 

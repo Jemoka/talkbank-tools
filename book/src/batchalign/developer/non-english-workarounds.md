@@ -111,7 +111,7 @@ For each workaround, the recommended verification test is:
 
 | | |
 |---|---|
-| **File** | `batchalign/worker/_stanza_loading.py` |
+| **File** | `python/batchalign/worker/_stanza_loading.py` |
 | **What** | English uses Stanza's "gum" MWT package instead of default. |
 | **Why** | The GUM corpus MWT model provides better English contraction handling. |
 | **Origin** | batchalign2 Stanza configuration |
@@ -183,7 +183,7 @@ For each workaround, the recommended verification test is:
 
 | | |
 |---|---|
-| **File** | `batchalign/worker/_stanza_loading.py` |
+| **File** | `python/batchalign/worker/_stanza_loading.py` |
 | **What** | Japanese uses Stanza's "combined" processor package for all processors instead of default. |
 | **Why** | Japanese doesn't use MWT. Combined models provide better accuracy. |
 | **Origin** | `batchalign2/ud.py:1048-1052` |
@@ -277,7 +277,7 @@ For each workaround, the recommended verification test is:
 
 | | |
 |---|---|
-| **File** | `batchalign/inference/languages/cantonese/_cantonese_fa.py` |
+| **File** | `python/batchalign/inference/languages/cantonese/_cantonese_fa.py` |
 | **What** | Converts hanzi to jyutping (tone-stripped, apostrophe-joined) before Wave2Vec FA. |
 | **Why** | Wave2Vec MMS was trained on romanized text, so hanzi must be romanized for alignment. |
 | **Origin** | Cantonese-specific (new in batchalign3) |
@@ -292,7 +292,7 @@ For each workaround, the recommended verification test is:
 
 | | |
 |---|---|
-| **File** | `batchalign/worker/_stanza_loading.py` |
+| **File** | `python/batchalign/worker/_stanza_loading.py` |
 | **Size** | 39 languages currently enable MWT |
 | **What** | Determines which languages use Stanza's MWT processor. CJK, some Slavic languages excluded. |
 | **Why** | MWT is not applicable to all languages. CJK languages don't have multi-word tokens. |
@@ -304,7 +304,7 @@ For each workaround, the recommended verification test is:
 
 | | |
 |---|---|
-| **File** | `batchalign/worker/_stanza_loading.py` |
+| **File** | `python/batchalign/worker/_stanza_loading.py` |
 | **Size** | 55 explicit mappings |
 | **What** | Converts 3-letter codes (batchalign internal) to 2-letter codes (Stanza). Special: yue→zh, cmn→zh. |
 | **Why** | Stanza uses 2-letter codes. |

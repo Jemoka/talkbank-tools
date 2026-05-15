@@ -102,7 +102,7 @@ or scheduling.
 ## Language support
 
 Per-language model selection is driven by `_RESOLVER["utterance"]` in
-`batchalign/models/resolve.py`:
+`python/batchalign/models/resolve.py`:
 
 | `--lang` | Model loaded | Source |
 |----------|--------------|--------|

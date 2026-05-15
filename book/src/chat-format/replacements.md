@@ -108,7 +108,7 @@ The alignment-counting code that enforces this is in
 [`alignment/units.rs`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs)
 — look for the `UtteranceContent::ReplacedWord` arm. The full table
 of per-domain rules is in
-[`spec/docs/ALIGNMENT_RULES.md`](https://github.com/TalkBank/talkbank-tools/blob/main/spec/docs/ALIGNMENT_RULES.md).
+[`resources/spec/docs/ALIGNMENT_RULES.md`](https://github.com/TalkBank/talkbank-tools/blob/main/resources/spec/docs/ALIGNMENT_RULES.md).
 
 ## Rust AST
 
@@ -246,7 +246,7 @@ them here so future contributors don't reinvent them.
 | `ReplacedWord` struct | `crates/talkbank-model/src/model/annotation/replacement.rs` (search `pub struct ReplacedWord`) |
 | Per-domain alignment | `crates/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs` (search `UtteranceContent::ReplacedWord`) |
 | Replacement validation | `crates/talkbank-model/src/model/annotation/replacement.rs` (search `impl ... Validate for ReplacementWords`) |
-| Reference corpus example | `corpus/reference/annotation/errors-and-replacements.cha` |
+| Reference corpus example | `resources/corpus/reference/annotation/errors-and-replacements.cha` |
 | CHAT manual | <https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope> |
 
 ## See Also

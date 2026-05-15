@@ -174,7 +174,7 @@ directly owns low-level CHAT mutation rules.
 
 ### 2. Inference providers (Python, internal)
 
-`batchalign/inference/` modules — pure Python task adapters around
+`python/batchalign/inference/` modules — pure Python task adapters around
 third-party ML libraries (Stanza, Whisper, pyannote, FunASR, Tencent,
 Aliyun, etc.). They receive typed task payloads from the Rust dispatch
 layer and return typed task results. They do not parse `.cha` files
@@ -233,10 +233,10 @@ For the API stability stance see
 
 | Surface | Why |
 |---|---|
-| `batchalign/worker/` | Thin worker host for Python-native ML runtimes |
-| `batchalign/inference/` | Direct model or SDK invocation (Stanza, Whisper, pyannote, …) |
-| `batchalign/inference/languages/cantonese/` | Python-only Cantonese SDK and model boundaries |
-| `batchalign/models/` | Training code depending on Python ML libraries |
+| `python/batchalign/worker/` | Thin worker host for Python-native ML runtimes |
+| `python/batchalign/inference/` | Direct model or SDK invocation (Stanza, Whisper, pyannote, …) |
+| `python/batchalign/inference/languages/cantonese/` | Python-only Cantonese SDK and model boundaries |
+| `python/batchalign/models/` | Training code depending on Python ML libraries |
 
 ### What was removed
 
@@ -311,7 +311,7 @@ Python model invocation.
 
 ## Python Worker Modules
 
-`batchalign/worker/`:
+`python/batchalign/worker/`:
 
 | Module | Purpose |
 |---|---|
@@ -330,7 +330,7 @@ Python model invocation.
 | `_infer.py` | Thin request-time batch inference router |
 | `_types.py` | Pydantic models mirroring Rust wire format |
 
-`batchalign/inference/`:
+`python/batchalign/inference/`:
 
 | Module | Input → Output |
 |---|---|
@@ -356,7 +356,7 @@ profile starts up, the Rust server queries it and:
 
 1. **Infer tasks** — which inference backends are available
    (`_capabilities()` import probes in
-   `batchalign/worker/_handlers.py`).
+   `python/batchalign/worker/_handlers.py`).
 2. **Engine versions** — non-empty engine identifier per advertised
    infer task, used for cache / version gating.
 

@@ -16,10 +16,10 @@ the server.
 
 `batchalign3` is the supported public **Batchalign** surface today. It is a
 **public preview** product line with wheels for Windows, macOS, and Linux. The
-separate **Batchalign Desktop** shell in `apps/dashboard-desktop/` is still
+separate **Batchalign Desktop** shell in `apps/batchalign/dashboard-desktop/` is still
 experimental and should not be described as the supported first-time-user entry
 point. For current platform details, see [Platform Support](reference/platform-support.md)
-and the repo-root `docs/RELEASE-CONTRACT.md`.
+and the repo-root `book/src/operations/release-contract.md`.
 
 The canonical public install path for this preview line is
 `uv tool install batchalign3`. Repo-hosted `.command` / `.bat` helper scripts

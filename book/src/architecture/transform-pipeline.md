@@ -32,7 +32,7 @@ use talkbank_transform::chat_to_json;
 let json = chat_to_json(source, &parser)?;
 ```
 
-The JSON follows the schema at `schema/chat-file.schema.json`.
+The JSON follows the schema at `schemas/chat-file/chat-file.schema.json`.
 
 ### JSON → CHAT
 

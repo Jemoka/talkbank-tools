@@ -1,0 +1,53 @@
+"""batchalign-pyo3 — PyO3 worker runtime bridge.
+
+This is the trickiest crate in the workspace because it produces both:
+  - `crate-type = ["rlib"]` — consumed by other Rust workspace members
+  - `crate-type = ["cdylib"]` — packaged by maturin into the Python wheel
+                                  and imported by Python as `batchalign_core`
+
+Strategy: Bazel owns the `rlib` half (`:batchalign_core`). The `cdylib`
+half is built by **maturin** via `//python/batchalign:wheel`, NOT by Bazel,
+because:
+
+  1. maturin handles platform-specific wheel packaging (macOS universal2,
+     manylinux, abi3 tagging) that rules_rust can't model cleanly.
+  2. PyO3 0.28's extension-module feature needs maturin's environment setup.
+  3. The user's release pipeline ships via `maturin build --release` →
+     `twine upload` → PyPI. Bazel should not duplicate that chain.
+
+So: the cdylib is intentionally absent from Bazel. Use Bazel for the
+rlib + workspace-member tests; use `bazel run //python/batchalign:develop`
+to invoke `maturin develop` for local Python dev iteration.
+
+External Cargo deps flow through `all_crate_deps()`. Intra-workspace deps
+(batchalign-types, talkbank-transform) are listed explicitly.
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "batchalign_core",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = aliases(),
+    crate_name = "batchalign_core",
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + [
+        "//crates/batchalign/batchalign-types:batchalign_types",
+        "//crates/core/talkbank-transform:talkbank_transform",
+    ],
+)
+
+rust_test(
+    name = "batchalign_core_unit_test",
+    crate = ":batchalign_core",
+    aliases = aliases(
+        normal_dev = True,
+        proc_macro_dev = True,
+    ),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

@@ -12,19 +12,19 @@ top-level command dispatches to a handler in the corresponding crate.
 flowchart TD
     chatter(["chatter"])
 
-    chatter --> validate["validate\n(talkbank-cli)"]
-    chatter --> normalize["normalize\n(talkbank-cli)"]
+    chatter --> validate["validate\n(chatter-cli)"]
+    chatter --> normalize["normalize\n(chatter-cli)"]
     chatter --> tojson["to-json\n(talkbank-transform)"]
     chatter --> fromjson["from-json\n(talkbank-transform)"]
-    chatter --> validateutseg["validate-utseg\n(talkbank-cli)"]
-    chatter --> showalign["show-alignment\n(talkbank-cli)"]
-    chatter --> watch["watch\n(talkbank-cli)"]
-    chatter --> lint["lint\n(talkbank-cli)"]
-    chatter --> clean["clean\n(talkbank-cli)"]
-    chatter --> newfile["new-file\n(talkbank-cli)"]
+    chatter --> validateutseg["validate-utseg\n(chatter-cli)"]
+    chatter --> showalign["show-alignment\n(chatter-cli)"]
+    chatter --> watch["watch\n(chatter-cli)"]
+    chatter --> lint["lint\n(chatter-cli)"]
+    chatter --> clean["clean\n(chatter-cli)"]
+    chatter --> newfile["new-file\n(chatter-cli)"]
     chatter --> cache["cache\n(stats, clear)"]
     chatter --> schema["schema\n(JSON Schema output)"]
-    chatter --> clan["clan\n(talkbank-clan)"]
+    chatter --> clan["clan\n(clan-core)"]
     chatter --> debug["debug\n(overlap-audit, linker-audit,\nfind, sanitize, fix-s)"]
 
     clan --> freq["freq"]

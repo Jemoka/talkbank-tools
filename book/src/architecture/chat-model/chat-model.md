@@ -357,7 +357,7 @@ For the alignment algorithms themselves, see
   per the [JSON Schema](../../chatter/integrating/json-schema.md).
 - **JSON Schema** — derived via `JsonSchema`. Run
   `cargo test --test generate_schema` to regenerate
-  `schema/chat-file.schema.json`.
+  `schemas/chat-file/chat-file.schema.json`.
 
 ## Memory and Interning
 

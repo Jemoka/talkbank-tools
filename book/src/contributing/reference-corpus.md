@@ -5,7 +5,7 @@
 
 ## Motivation
 
-The reference corpus (`corpus/reference/`) is the 100%-pass quality gate for all
+The reference corpus (`resources/corpus/reference/`) is the 100%-pass quality gate for all
 parser/grammar changes. The parser must handle every file at 100%.
 Before this overhaul, the corpus had three problems:
 
@@ -25,13 +25,13 @@ construct gap-fillers on top.
 
 ### Phase 0: Coverage Tooling
 
-Built `corpus_node_coverage` (`spec/tools/src/bin/corpus_node_coverage.rs`) to
+Built `corpus_node_coverage` (`crates/spec/talkbank-spec-testgen/src/bin/corpus_node_coverage.rs`) to
 measure which of the 334 concrete grammar node types the corpus exercises.
 Running against the old 345-file corpus confirmed exactly 18 gaps.
 
 ### Phase 1: Language Selection & File Extraction
 
-Built `extract_corpus_candidates` (`spec/runtime-tools/src/bin/extract_corpus_candidates.rs`)
+Built `extract_corpus_candidates` (`crates/spec/talkbank-spec-testrun/src/bin/extract_corpus_candidates.rs`)
 to automatically select representative files from the corpus data directory for 20 target
 languages:
 
@@ -52,7 +52,7 @@ per language (25 files total across 20 language subdirectories).
 
 ### Phase 2: Construct Gap-Filling
 
-Created 4 handcrafted files in `corpus/reference/constructs/` to exercise the 18
+Created 4 handcrafted files in `resources/corpus/reference/constructs/` to exercise the 18
 missing node types that don't appear in real-world data:
 
 | File | Node types exercised |
@@ -74,7 +74,7 @@ tiers:
 
 ```bash
 cd /path/to/batchalign3
-uv run batchalign3 morphotag /path/to/talkbank-tools/corpus/reference/{lang}/ --in-place
+uv run batchalign3 morphotag /path/to/talkbank-tools/resources/corpus/reference/{lang}/ --in-place
 ```
 
 All 20 languages are covered by Stanza's UD models. Validation confirmed all
@@ -100,7 +100,7 @@ E317, E318, E340, E374, E377, E378, E380, E385, E386.
 codes than intended (E319–E322, E376). Added `Status: not_implemented` and
 explanatory notes.
 
-**4.5: Built perturbation tool** (`spec/tools/src/bin/perturb_corpus.rs`) with 11
+**4.5: Built perturbation tool** (`crates/spec/talkbank-spec-testgen/src/bin/perturb_corpus.rs`) with 11
 mutation strategies that take a valid `.cha` file and produce controlled mutations
 targeting specific error codes:
 
@@ -144,7 +144,7 @@ All verification gates pass:
 - Parser equivalence: 377/377 (374 files + 3 extra)
 - Node coverage: 334/334 (100%)
 - Error coverage: 181/181 (100%), 169 with CHAT examples, 12 documented stubs
-- `make verify` passes all gates (G0–G10)
+- `bazel build //... && bazel test //...` passes all gates (G0–G10)
 
 ### Phase 6: Cleanup & Documentation
 
@@ -155,7 +155,7 @@ All verification gates pass:
 ## Final State
 
 ```text
-corpus/reference/           374 files total
+resources/corpus/reference/           374 files total
   *.cha                     345 files (original English corpus)
   constructs/                 4 files (rare grammar constructs)
   {20 language dirs}/        25 files (multilingual, from corpus data)
@@ -175,9 +175,9 @@ corpus/reference/           374 files total
 
 | Tool | Path | Purpose |
 |------|------|---------|
-| `corpus_node_coverage` | `spec/tools/src/bin/` | Grammar node type coverage |
-| `extract_corpus_candidates` | `spec/runtime-tools/src/bin/` | Automated file selection from corpus data |
-| `perturb_corpus` | `spec/tools/src/bin/` | Error file generation by mutation |
+| `corpus_node_coverage` | `crates/spec/talkbank-spec-testgen/src/bin/` | Grammar node type coverage |
+| `extract_corpus_candidates` | `crates/spec/talkbank-spec-testrun/src/bin/` | Automated file selection from corpus data |
+| `perturb_corpus` | `crates/spec/talkbank-spec-testgen/src/bin/` | Error file generation by mutation |
 
 ## What Worked
 

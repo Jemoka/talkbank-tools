@@ -83,10 +83,10 @@ construction.
 
 | Path | Role |
 |---|---|
-| `frontend/` | React dashboard sources (served by `batchalign` server) |
-| `apps/dashboard-desktop/` | Tauri shell (rust-tauri + React UI build) |
+| `apps/batchalign/cli-web-statuspage/` | React dashboard sources (served by `batchalign` server) |
+| `apps/batchalign/dashboard-desktop/` | Tauri shell (rust-tauri + React UI build) |
 | `crates/batchalign/src/server/openapi.rs` | OpenAPI schema generation |
 
 For the chatter desktop app (a separate Tauri product, not the
 batchalign dashboard), see
-[`apps/chatter-desktop/`](https://github.com/TalkBank/talkbank-tools/tree/main/apps/chatter-desktop).
+[`apps/chatter/chatter-gui/`](https://github.com/TalkBank/talkbank-tools/tree/main/apps/chatter-gui).

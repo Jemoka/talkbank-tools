@@ -11,7 +11,7 @@ git clone https://github.com/TalkBank/talkbank-tools.git
 
 # Build
 cd talkbank-tools
-cargo install --path crates/talkbank-cli
+cargo install --path crates/chatter-cli
 ```
 
 ## Verify installation

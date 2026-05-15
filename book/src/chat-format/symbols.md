@@ -5,7 +5,7 @@
 
 > **WARNING:** The "CA (Conversation Analysis) Delimiters" section below
 > erases a parser-level distinction. The symbol registry
-> (`spec/symbols/symbol_registry.json`) splits these characters into
+> (`resources/spec/symbols/symbol_registry.json`) splits these characters into
 > three grammatical categories with different parser treatment:
 > `ca_delimiter_symbols`, `ca_element_symbols`, and
 > `word_segment_forbidden_*`. `↑` and `↓` *attach to a word*
@@ -20,7 +20,7 @@ CHAT uses a rich set of symbols for transcription conventions. This page documen
 
 ## Symbol Registry
 
-The authoritative symbol definitions live in `spec/symbols/symbol_registry.json`. This JSON file is the single source of truth — it generates:
+The authoritative symbol definitions live in `resources/spec/symbols/symbol_registry.json`. This JSON file is the single source of truth — it generates:
 
 - Character sets for the tree-sitter grammar (`grammar.js`)
 - Rust constants for the model and validation crates
@@ -29,7 +29,7 @@ The authoritative symbol definitions live in `spec/symbols/symbol_registry.json`
 After any change to the symbol registry, run:
 
 ```bash
-make symbols-gen
+node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js
 ```
 
 ## Symbol Categories

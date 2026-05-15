@@ -33,7 +33,7 @@ jobs:
       - name: Validate highlight and editor queries
         run: |
           for query_file in queries/*.scm; do
-            npx tree-sitter query "$query_file" test/corpus/main_tier/simple_utterance.txt >/dev/null
+            npx tree-sitter query "$query_file" test/resources/corpus/main_tier/simple_utterance.txt >/dev/null
           done
 
   wasm-build:

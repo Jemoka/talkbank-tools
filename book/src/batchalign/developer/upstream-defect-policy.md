@@ -129,7 +129,7 @@ reproduce.
 
 Operate on the typed intermediate representation, not on serialized
 CHAT text. For Stanza leaks that's the Python `doc.to_dict()`
-boundary in `batchalign/inference/*.py`. For Stanza UD misanalyses
+boundary in `python/batchalign/inference/*.py`. For Stanza UD misanalyses
 that's the `UdSentence` layer in `batchalign/src/nlp/invariants/`.
 For MPS GPU deadlocks that's the device selection layer. Never
 rewrite serialized output — that's the batchalign2 anti-pattern we
@@ -144,7 +144,7 @@ affected language or input so ops monitoring is useful.
 Three levels are the standard:
 
 - **Pure unit tests** — exercise the detector/rewriter on fabricated
-  inputs without the real library. Fast, run on every `make test`.
+  inputs without the real library. Fast, run on every `bazel test //...`.
 - **Integration test** — runs the full handler with the real
   upstream library loaded. Marked `@pytest.mark.golden` (Python) or
   gated behind the `ml_golden` nextest profile (Rust). Asserts the
@@ -241,5 +241,5 @@ Things this policy explicitly rejects:
 - `crates/batchalign/src/nlp/invariants/mod.rs` — the
   Rust-side typed UD rewrite module that anchors this pattern for
   morphosyntax.
-- `batchalign/inference/_control_token_filter.py` — the Python-side
+- `python/batchalign/inference/_control_token_filter.py` — the Python-side
   Stanza-output workaround (Defect 4 in the Stanza registry).

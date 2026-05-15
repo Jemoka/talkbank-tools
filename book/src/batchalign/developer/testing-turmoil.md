@@ -177,14 +177,14 @@ instantly. A test that simulates 30 seconds of network behavior runs in
 
 ```bash
 # Run all turmoil tests
-cargo nextest run -p batchalign --test turmoil_net
+cargo nextest run -p batchalign-cli --test turmoil_net
 
 # List available turmoil tests
-cargo nextest list -p batchalign --test turmoil_net
+cargo nextest list -p batchalign-cli --test turmoil_net
 ```
 
 turmoil tests are part of **Tier 1 (fast tests)** — no ML models, no Python,
-no GPU. They run in the default `cargo nextest run` and `make test`.
+no GPU. They run in the default `cargo nextest run` and `bazel test //...`.
 
 ## Current test scenarios
 

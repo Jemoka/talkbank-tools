@@ -235,7 +235,7 @@ These tiers contain free-form text with optional embedded timing markers (`•ST
 | `%int` | Intonational contours and prosodic patterns |
 
 `%cod` remains bullet-content in the shared TalkBank AST, but current
-`talkbank-clan` coding commands derive a semantic `%cod` item stream on top of
+`clan-core` coding commands derive a semantic `%cod` item stream on top of
 that parsed content so selectors such as `<w4>` scope the following code
 instead of being counted as codes themselves.
 

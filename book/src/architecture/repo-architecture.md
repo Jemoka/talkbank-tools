@@ -16,17 +16,17 @@ crates/                   all Rust crates (root Cargo workspace)
   talkbank-parser-re2c/   alternate parser (specification oracle, opt-in batch parser)
   talkbank-parser-tests/  parser equivalence and roundtrip tests
   talkbank-transform/     pipelines, CHAT↔JSON, caching, parallel validation
-  talkbank-clan/          CLAN analysis commands and format converters
-  talkbank-cli/           the `chatter` CLI binary
-  talkbank-lsp/           LSP server
+  clan-core/          CLAN analysis commands and format converters
+  chatter-cli/           the `chatter` CLI binary
+  chatter-lsp/           LSP server
   send2clan-sys/          C FFI to the legacy CLAN app
   batchalign/             Batchalign runtime: CLI, axum server, dispatch, FA, morphosyntax, Rev.AI client
   batchalign-types/       Batchalign shared domain + worker IPC types
   batchalign-pyo3/        PyO3 bridge — builds the `batchalign_core` Python extension
 batchalign/               Batchalign Python worker code (ML inference hosting only)
-apps/                     desktop apps (Tauri v2 + React): chatter-desktop, dashboard-desktop
-frontend/                 React dashboard for the Batchalign server
-vscode/                   VS Code extension (TypeScript)
+apps/                     desktop apps (Tauri v2 + React): chatter-gui, dashboard-desktop
+apps/batchalign/cli-web-statuspage/                 React dashboard for the Batchalign server
+apps/vscode-extension/                   VS Code extension (TypeScript)
 corpus/                   reference corpus (must pass 100%)
 schema/                   JSON Schema for ChatFile AST
 tests/                    workspace-level integration tests and fixtures

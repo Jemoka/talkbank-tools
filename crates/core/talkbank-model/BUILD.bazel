@@ -1,0 +1,63 @@
+"""talkbank-model — core data model, validation, alignment, and content walker.
+
+Has a `build.rs` that uses `phf_codegen` to emit static perfect-hash tables
+into `OUT_DIR`. Bazel models this via `cargo_build_script`; the script's
+output is automatically wired into the library's compilation env.
+
+Optional features:
+  - `async`     → adds tokio dependency for async helpers
+  - `channels`  → adds crossbeam-channel for channel-based traversal
+
+Bazel's default build matches Cargo's `default = []`. Feature handling
+across crate_universe is a TODO; for now we build without optional features
+and the proc-macro/library/dev deps all flow through `all_crate_deps()`.
+
+Downstream proc-macro: talkbank-derive (intra-workspace, listed explicitly).
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cargo_build_script(
+    name = "talkbank_model_build_script",
+    srcs = ["build.rs"],
+    aliases = aliases(build = True),
+    build_script_env = {
+        "CARGO_PKG_NAME": "talkbank-model",
+        "CARGO_PKG_VERSION": "0.2.0",
+    },
+    data = glob(["data/**/*"]),
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(build_proc_macro = True),
+    deps = all_crate_deps(build = True),
+)
+
+rust_library(
+    name = "talkbank_model",
+    srcs = glob(
+        ["src/**/*.rs"]
+    ),
+    aliases = aliases(),
+    crate_name = "talkbank_model",
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True) + [
+        "//crates/core/talkbank-derive:talkbank_derive",
+    ],
+    deps = all_crate_deps(normal = True) + [
+        ":talkbank_model_build_script",
+    ],
+)
+
+rust_test(
+    name = "talkbank_model_unit_test",
+    crate = ":talkbank_model",
+    aliases = aliases(
+        normal_dev = True,
+        proc_macro_dev = True,
+    ),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

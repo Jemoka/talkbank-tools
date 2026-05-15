@@ -22,8 +22,8 @@ If your command needs to batch multiple files through one ML call, follow
 ## Quick start
 
 ```bash
-make check    # after each file edit (~6s)
-make test     # verify nothing broke (~6s)
+bazel build //...    # after each file edit (~6s)
+bazel test //...     # verify nothing broke (~6s)
 ```
 
 ## Architecture overview
@@ -250,8 +250,8 @@ And in `crates/batchalign/src/args/options.rs`, add the `build_typed_options` ar
 ## Step 8: Verify
 
 ```bash
-make check          # compiles?
-make test           # 1,273 tests still pass?
+bazel build //...          # compiles?
+bazel test //...           # 1,273 tests still pass?
 ./target/debug/batchalign3 your-command --help   # CLI works?
 ```
 
@@ -261,7 +261,7 @@ If your command needs a new ML model:
 
 1. Add an `InferTask` variant in `crates/batchalign/src/worker/mod.rs`
 2. Add a `WorkerProfile` mapping in `crates/batchalign/src/worker/registry.rs`
-3. Implement the Python worker handler in `batchalign/worker/`
+3. Implement the Python worker handler in `python/batchalign/worker/`
 
 If reusing an existing model (e.g., Stanza for morphosyntax), you only need
 to wire the Rust side — the worker already knows how to handle the infer task.

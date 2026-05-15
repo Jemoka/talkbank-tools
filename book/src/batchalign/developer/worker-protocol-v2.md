@@ -15,11 +15,11 @@ for the unified reference to all protocol-related files, Python implementations,
 shared schema definitions.
 
 The `v2` suffix is still intentional. The older JSON-lines `worker` /
-`batchalign/worker/_types.py` surface remains in-tree as a frozen compatibility
+`python/batchalign/worker/_types.py` surface remains in-tree as a frozen compatibility
 contract, so the Rust module (`crates/batchalign-types/src/worker_v2/`), schema
-directory (`ipc-schema/worker_v2/`), generated Python package
-(`batchalign/generated/worker_v2/`), and hand-written models
-(`batchalign/worker/_types_v2.py`) stay versioned together until V1 is removed
+directory (`schemas/ipc/worker_v2/`), generated Python package
+(`python/batchalign/generated/worker_v2/`), and hand-written models
+(`python/batchalign/worker/_types_v2.py`) stay versioned together until V1 is removed
 as a whole.
 
 The Python cutover is complete. Audio tasks and text-only NLP tasks
@@ -127,7 +127,7 @@ stopping the abuse of JSON payloads for local-model inputs.
 The staged schema and drift-test guardrails now exist:
 
 - Rust schema: `crates/batchalign-types/src/worker_v2/` (re-exported by `crates/batchalign/src/types/worker_v2.rs`)
-- Python schema: `batchalign/worker/_types_v2.py`
+- Python schema: `python/batchalign/worker/_types_v2.py`
 - shared fixtures: `tests/fixtures/worker_protocol_v2/`
 - Rust drift test:
   `crates/batchalign/tests/worker_protocol_v2_compat.rs`
@@ -458,7 +458,7 @@ SpeakerInput =
 
 Current implementation status:
 
-- `batchalign/worker/_speaker_v2.py` now executes live speaker requests through
+- `python/batchalign/worker/_speaker_v2.py` now executes live speaker requests through
   `execute_v2(task="speaker")` using Rust-prepared audio attachments only
 - `crates/batchalign/src/worker/speaker_request_v2.rs` now builds typed
   speaker requests on the Rust side from prepared audio artifacts
@@ -592,16 +592,16 @@ Current implementation status:
 - that builder writes the transcript arrays into a prepared text artifact
 - that builder extracts the model-ready PCM window into a prepared audio
   artifact
-- `batchalign/worker/_artifact_inputs_v2.py` now provides the thin Python
+- `python/batchalign/worker/_artifact_inputs_v2.py` now provides the thin Python
   wrapper over Rust-owned prepared text JSON and prepared PCM audio readers
 - `crates/batchalign-pyo3/src/worker_fa_exec.rs` now owns the live V2 FA executor control plane,
-  while `batchalign/worker/_fa_v2.py` stays as a thin Python host wrapper
+  while `python/batchalign/worker/_fa_v2.py` stays as a thin Python host wrapper
 - `crates/batchalign/src/worker/fa_result_v2.rs` now maps those typed V2
   FA results straight back into the established Rust FA alignment domain
 - `crates/batchalign/tests/worker_v2_fa_roundtrip.rs` now proves the
   staged Rust request builder, Rust-owned FA executor control plane, and
   staged Rust result adapter already form one coherent cross-language seam
-- `batchalign/worker/_execute_v2.py` now exposes a live `execute_v2` stdio
+- `python/batchalign/worker/_execute_v2.py` now exposes a live `execute_v2` stdio
   handler that routes forced-alignment requests into the typed V2 executor
 - `crates/batchalign/src/worker/handle.rs` and
   `crates/batchalign/src/worker/pool/mod.rs` now carry that `execute_v2`
@@ -626,11 +626,11 @@ Current implementation status:
   V2 requests with either Rust-owned prepared full-file audio artifacts or
   typed provider-media inputs
 - `crates/batchalign-pyo3/src/worker_asr_exec.rs` now owns the live V2 ASR executor control
-  plane, while `batchalign/worker/_asr_v2.py` stays as a thin Python host
+  plane, while `python/batchalign/worker/_asr_v2.py` stays as a thin Python host
   wrapper for local Whisper, Tencent, Aliyun, and FunASR
 - `crates/batchalign/src/worker/asr_result_v2.rs` now maps typed V2 ASR
   responses back into the established Rust `AsrResponse` domain
-- `batchalign/worker/_execute_v2.py` now routes all live Python-hosted ASR
+- `python/batchalign/worker/_execute_v2.py` now routes all live Python-hosted ASR
   through the `execute_v2` stdio boundary
 - `crates/batchalign/src/transcribe.rs` now uses that live V2 path for all
   Python-hosted ASR; only Rev.AI bypasses Python and stays Rust-owned
@@ -787,7 +787,7 @@ Verified source files:
 `crates/batchalign/src/worker/pool/shared_gpu/tcp.rs`,
 `crates/batchalign/src/worker/tcp_handle.rs` (carries
 `gpu_thread_pool_size` on `TcpWorkerInfo`),
-`batchalign/worker/_protocol.py` (`_serve_stdio_concurrent`).
+`python/batchalign/worker/_protocol.py` (`_serve_stdio_concurrent`).
 
 ### Request/response correlation
 

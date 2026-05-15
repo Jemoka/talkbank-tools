@@ -45,7 +45,7 @@ with a typed `GoldFileMissing` error.
 ## Testing
 
 ```bash
-make test
+bazel test //...
 # Full ML golden test (ASR + compare — only on net)
 cargo nextest run --profile ml -E 'test(benchmark::golden)'
 ```

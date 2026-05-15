@@ -518,7 +518,7 @@ Errors are collected during resolution and reported via the validation system.
 
 ### Python (stateless inference only)
 
-- **Inference function**: `batchalign/inference/morphosyntax.py:batch_infer_morphosyntax()` — calls Stanza `nlp()` per language, returns raw UD output
+- **Inference function**: `python/batchalign/inference/morphosyntax.py:batch_infer_morphosyntax()` — calls Stanza `nlp()` per language, returns raw UD output
 - **Per-utterance language routing**: Python worker receives `lang` field, groups batch items by language, routes to appropriate Stanza model
 
 ---

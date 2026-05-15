@@ -1,0 +1,23 @@
+Use OUT_DIR-relative include_bytes! so the generated `embedded_map.rs`
+survives sandbox migration between the build script and the consumer
+compile. Upstream bakes the absolute build-script OUT_DIR into the
+generated source, which works under Cargo (same dir for both actions)
+but breaks under Bazel (each action runs in a fresh sandbox; absolute
+paths from action A don't resolve in action B).
+
+Filed at <https://crates.io/crates/ferrous-opencc> — drop this patch
+once upstream lands the fix.
+
+--- a/build.rs
++++ b/build.rs
+@@ -57,9 +57,7 @@ fn run() -> Result<()> {
+
+                     let ocb_bytes = compile_dictionary(&path)?;
+                     fs::write(&ocb_path, &ocb_bytes)?;
+-                    let ocb_path_str = ocb_path.to_str().unwrap().replace('\\', "/");
+-
+-                    let value_code = format!("include_bytes!(r\"{ocb_path_str}\")");
++                    let value_code = format!("include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{ocb_file_name}\"))");
+
+                     dicts_to_add.push((ocd2_key_name, value_code));
+                 }

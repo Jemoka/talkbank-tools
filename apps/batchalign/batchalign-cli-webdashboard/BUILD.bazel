@@ -1,0 +1,78 @@
+"""batchalign-cli-webdashboard — React + Vite SPA for the batchalign3 server.
+
+Two consumers:
+  1. `//crates/batchalign/batchalign-cli` embeds the built `dist/` tree
+     into the `batchalign3` binary at compile time via `include_dir!`.
+  2. `//apps/batchalign/batchalign-gui-dashboard` wraps it in Tauri.
+
+The build is fully hermetic:
+
+  - `pnpm-lock.yaml` (imported once from `package-lock.json` via
+    `npx pnpm import`) feeds `aspect_rules_js`'s `npm_translate_lock`
+    in `MODULE.bazel`. That extension materializes a sandboxed
+    `node_modules` and exposes a typed `vite_bin` toolchain.
+  - `npm_link_all_packages(name = "node_modules")` links the
+    dashboard's declared dependency set into the sandbox under
+    `./node_modules/...` so Vite plugins (React, Tailwind, etc.)
+    resolve via normal Node module lookup.
+  - `vite_bin.vite` runs `vite build` from the dashboard directory
+    and declares `dist/` as a TreeArtifact output. Downstream
+    Rust targets list `:dist` under `compile_data` and read the
+    sandbox path via `$(execpath ...)` in `rustc_env`.
+
+There is no shell wrapper, no `$BUILD_WORKSPACE_DIRECTORY` escape
+hatch, and `npm install` never runs at build time.
+
+Dev server (HMR) is intentionally not wrapped here — run
+`npm run dev` directly when iterating on the SPA.
+"""
+
+load("@aspect_rules_js//js:defs.bzl", "js_library")
+load("@npm_dashboard//:defs.bzl", "npm_link_all_packages")
+load(
+    "@npm_dashboard//apps/batchalign/batchalign-cli-webdashboard:vite/package_json.bzl",
+    vite_bin = "bin",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+# Materialize the dashboard's npm dependency closure under
+# `./node_modules/...` in the sandbox. The label `:node_modules`
+# (and its `:node_modules/<pkg>` children) become regular Bazel
+# inputs that downstream rules feed into `srcs`.
+npm_link_all_packages(name = "node_modules")
+
+# Static source set consumed by Vite. Kept as a `js_library` so any
+# downstream rule (e.g. Tauri shell) can depend on the sources
+# without re-globbing.
+js_library(
+    name = "sources",
+    srcs = glob(
+        [
+            "src/**/*",
+            "public/**/*",
+        ],
+        allow_empty = True,
+    ) + [
+        "index.html",
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts",
+    ],
+)
+
+# Hermetic `vite build`. Emits a single `dist/` TreeArtifact whose
+# path inside the sandbox is
+# `bazel-out/<cfg>/bin/apps/batchalign/batchalign-cli-webdashboard/dist`.
+# Consumers must read that path via `$(execpath :dist)` rather than
+# guessing a source-tree-relative location.
+vite_bin.vite(
+    name = "dist",
+    srcs = [
+        ":sources",
+        ":node_modules",
+    ],
+    args = ["build"],
+    chdir = package_name(),
+    out_dirs = ["dist"],
+)

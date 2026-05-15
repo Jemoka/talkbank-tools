@@ -125,11 +125,11 @@ And this is valid too:
 
 ## Generated Error Documentation
 
-Detailed documentation for every error code is auto-generated from the spec at `docs/errors/`. Each page includes:
+Detailed documentation for every error code is auto-generated from the spec at `book/src/operations/errors/`. Each page includes:
 - Error description
 - Example input that triggers the error
 - Suggested fix
 - Which validation layer catches it (parser vs. validation)
 
-Run `make test-gen` to regenerate error documentation after **error spec**
+Run `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` to regenerate error documentation after **error spec**
 changes.

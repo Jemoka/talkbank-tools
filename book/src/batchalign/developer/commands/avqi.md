@@ -15,7 +15,7 @@ see [User Guide: avqi](../../user-guide/commands/avqi.md).
 | CLI args | `crates/batchalign/src/cli/args/commands.rs` — `AvqiArgs` | Positional input/output dirs, lang |
 | Command definition | `crates/batchalign/src/commands/avqi.rs` | `CommandDefinition` impl, paired file discovery |
 | Audio prep | Shared media prep | Converts `.cs.*` and `.sv.*` to typed PCM artifacts |
-| Worker IPC | `batchalign/inference/avqi.py` — `calculate_avqi()` | parselmouth + torchaudio analysis |
+| Worker IPC | `python/batchalign/inference/avqi.py` — `calculate_avqi()` | parselmouth + torchaudio analysis |
 | Output writer | `crates/batchalign/src/commands/avqi.rs` | Writes `.avqi.txt` from typed metrics struct |
 
 ---

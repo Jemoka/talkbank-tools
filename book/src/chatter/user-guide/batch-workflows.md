@@ -85,8 +85,8 @@ Do not delete the cache file manually while `chatter` is running.
 ## Reference Corpus Validation
 
 The `talkbank-tools` repository includes a reference corpus at
-`corpus/reference/` (currently ~100 `.cha` files; verify by
-`find corpus/reference -name '*.cha' | wc -l`). The parser must
+`resources/corpus/reference/` (currently ~100 `.cha` files; verify by
+`find resources/corpus/reference -name '*.cha' | wc -l`). The parser must
 handle every file in this corpus at 100%:
 
 ```bash

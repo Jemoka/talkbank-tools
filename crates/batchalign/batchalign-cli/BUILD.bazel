@@ -1,0 +1,129 @@
+"""batchalign-cli — batchalign3 runtime, server, worker pool, CLI.
+
+The Cargo package name is `batchalign-cli`; the library is renamed to
+`batchalign` via `[lib] name = "batchalign"` so downstream callers keep
+writing `use batchalign::...`. Bazel mirrors that with `crate_name`.
+The binary artifact is `batchalign3` — load-bearing for deploy scripts;
+do NOT rename.
+
+Bazel rules below treat the crate as if all default features are on
+(`server`, `binary-entry`, `embed-dashboard`). Cargo feature gating
+through crate_universe is a follow-up.
+
+Three things that need explicit Bazel deps:
+
+  1. **sqlx::query!** does compile-time SQL validation. It reads from
+     `$CARGO_MANIFEST_DIR/.sqlx/` when `SQLX_OFFLINE=true`. We carry
+     that env var through `rustc_env` below and expose the cache via
+     `compile_data`. **Generation:** developers run
+     `bazel run //bazel/sqlx:prepare` which wraps
+     `cargo sqlx prepare`; the cache is checked in.
+
+  2. **include_dir! embedded React dashboard.** The macro reads the
+     env var `$DASHBOARD_DIST_DIR` (see `src/routes/dashboard.rs`),
+     which we set in `rustc_env` below to the `$(execpath ...)` of
+     the dashboard's `:dist` TreeArtifact. The TreeArtifact itself is
+     produced hermetically by `vite_bin.vite` against the rules_js
+     `npm_link_all_packages` node_modules tree — no shell wrapper,
+     no source-tree side effects. Listing `:dist` under
+     `compile_data` is what makes it appear in the sandbox.
+
+  3. **The build.rs computes a BUILD_HASH from `git describe` + epoch.**
+     That doesn't work in a hermetic sandbox and isn't worth replicating
+     — we skip the build script entirely in Bazel and set `BUILD_HASH`
+     to a static value via `rustc_env`. Cargo builds still use build.rs.
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+_INTRA = [
+    "//crates/batchalign/batchalign-types:batchalign_types",
+    "//crates/clan/clan-core:clan_core",
+    "//crates/core/talkbank-model:talkbank_model",
+    "//crates/core/talkbank-parser:talkbank_parser",
+    "//crates/core/talkbank-transform:talkbank_transform",
+]
+
+# Files needed at COMPILE time (include_str!, include_dir!, sqlx::query!).
+#
+# `runtime_constants.toml` is reached via a relative path from
+# `src/types/runtime.rs`: `../../../../../python/batchalign/runtime_constants.toml`.
+# include_str! is resolved at proc-macro time against the source file's
+# location in the sandbox, so the toml must be materialized at the
+# workspace-relative path the include_str! literal expects. The
+# exports_files entry in //python/batchalign keeps that label valid.
+#
+# `//apps/batchalign/batchalign-cli-webdashboard:dist` is the Vite
+# TreeArtifact produced hermetically by `vite_bin.vite`. The macro
+# `include_dir!("$DASHBOARD_DIST_DIR")` reads the env var defined in
+# `_RUSTC_ENV` below, which `$(execpath ...)`-resolves to the
+# sandbox path of that TreeArtifact.
+_COMPILE_DATA = glob(
+    [
+        "migrations/**/*",
+        "cache_migrations/**/*",
+        ".sqlx/**/*",
+    ],
+    allow_empty = True,
+) + [
+    "//apps/batchalign/batchalign-cli-webdashboard:dist",
+    "//python/batchalign:runtime_constants.toml",
+]
+
+_RUSTC_ENV = {
+    "SQLX_OFFLINE": "true",
+    "BUILD_HASH": "bazel",  # cargo uses build.rs; Bazel uses this constant.
+    # `include_dir!("$DASHBOARD_DIST_DIR")` in `src/routes/dashboard.rs`.
+    # Cargo sets the equivalent value via `build.rs`.
+    "DASHBOARD_DIST_DIR": "$(execpath //apps/batchalign/batchalign-cli-webdashboard:dist)",
+}
+
+rust_library(
+    name = "batchalign",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/bin/**"],
+    ),
+    aliases = aliases(),
+    compile_data = _COMPILE_DATA,
+    crate_features = [
+        "server",
+        "binary-entry",
+        "embed-dashboard",
+    ],
+    crate_name = "batchalign",
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    rustc_env = _RUSTC_ENV,
+    deps = all_crate_deps(normal = True) + _INTRA,
+)
+
+rust_binary(
+    name = "batchalign3",
+    srcs = ["src/bin/batchalign3.rs"],
+    aliases = aliases(),
+    compile_data = _COMPILE_DATA,
+    crate_features = [
+        "server",
+        "binary-entry",
+        "embed-dashboard",
+    ],
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    rustc_env = _RUSTC_ENV,
+    deps = all_crate_deps(normal = True) + _INTRA + [":batchalign"],
+)
+
+rust_test(
+    name = "batchalign_unit_test",
+    crate = ":batchalign",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)
+
+# TODO(bazel): wire the integration tests under `tests/` as individual
+# rust_test targets once the golden batchalign path is verified.

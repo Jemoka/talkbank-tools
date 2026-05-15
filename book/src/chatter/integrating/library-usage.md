@@ -205,8 +205,8 @@ assert!(json.contains("\"speaker\""));
 # }
 ```
 
-The schema for `ChatFile` lives at `schema/chat-file.schema.json` and is
-regenerated from the Rust types via `make symbols-gen`. For arbitrary
+The schema for `ChatFile` lives at `schemas/chat-file/chat-file.schema.json` and is
+regenerated from the Rust types via `node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js`. For arbitrary
 serde values (not just `ChatFile`), `to_json_unvalidated` /
 `to_json_pretty_unvalidated` work the same way without the schema step.
 
@@ -245,7 +245,7 @@ implement `ErrorSink` directly for everything else.
 | Data model types, error types, `WriteChat`, `ErrorSink` | `talkbank-model` |
 | Tree-sitter CHAT parsing (low-level) | `talkbank-parser` |
 | Full pipeline (parse + validate + JSON, schema validation) | `talkbank-transform` |
-| CLAN analysis commands (FREQ, MLU, KIDEVAL, …) | `talkbank-clan` |
+| CLAN analysis commands (FREQ, MLU, KIDEVAL, …) | `clan-core` |
 
 `talkbank-model` is the foundation — every other crate depends on it. If
 all you need are the AST types and validation, model alone is enough.
@@ -268,21 +268,21 @@ For batch workflows, keep parser instances reusable and keep alignment
 logic separate from parse semantics.
 
 For CLAN analysis integration, prefer the library-owned execution
-boundary in `talkbank-clan` instead of constructing command types
+boundary in `clan-core` instead of constructing command types
 ad hoc in outer crates. In practice that means:
 
-- use `talkbank_clan::framework::UtteranceRange` and
-  `talkbank_clan::framework::DiscoveredChatFiles` for analysis input
+- use `clan_core::framework::UtteranceRange` and
+  `clan_core::framework::DiscoveredChatFiles` for analysis input
   selection
 - parse raw outer-layer command names into
-  `talkbank_clan::service::AnalysisCommandName` at the boundary
-- use `talkbank_clan::service::AnalysisOptions` and
-  `talkbank_clan::service::AnalysisRequestBuilder` when you need to
+  `clan_core::service::AnalysisCommandName` at the boundary
+- use `clan_core::service::AnalysisOptions` and
+  `clan_core::service::AnalysisRequestBuilder` when you need to
   translate raw outer-layer option bags into validated CLAN requests
   with library-owned defaults
-- use `talkbank_clan::service::AnalysisRequest` to describe which CLAN
+- use `clan_core::service::AnalysisRequest` to describe which CLAN
   analysis to run
-- use `talkbank_clan::service::AnalysisService` when you need rendered
+- use `clan_core::service::AnalysisService` when you need rendered
   or JSON analysis output from Rust code
 
 That keeps CLI and editor integrations focused on adapting their own

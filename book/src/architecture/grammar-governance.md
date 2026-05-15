@@ -23,7 +23,7 @@ This is currently powerful but fragile.
 Implement a generated symbol registry as the single source of token constraints.
 
 ### Proposed Registry Artifacts
-- `spec/symbols/symbol_registry.yaml` (human-authored intent):
+- `resources/spec/symbols/symbol_registry.yaml` (human-authored intent):
   - symbol string
   - category (delimiter, continuation, overlap, punctuation, etc.)
   - contexts where reserved/allowed
@@ -31,7 +31,7 @@ Implement a generated symbol registry as the single source of token constraints.
 - Generated outputs:
   - `grammar/src/generated_symbol_sets.js`
   - `crates/talkbank-model/src/generated/symbol_sets.rs`
-  - `spec/tools/src/generated/symbol_sets.rs`
+  - `crates/spec/talkbank-spec-testgen/src/generated/symbol_sets.rs`
   - docs: [Symbol Registry](symbol-registry.md)
 
 ## Grammar Refactor Requirements

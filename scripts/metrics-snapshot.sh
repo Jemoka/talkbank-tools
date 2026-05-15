@@ -20,7 +20,7 @@ spec_errors_validation=$(grep -rl "\*\*Layer\*\*: validation" "$REPO_ROOT/spec/e
 spec_constructs_total=$(find "$REPO_ROOT/spec/constructs" -name '*.md' | wc -l | tr -d ' ')
 
 # ── Reference corpus ──────────────────────────────────────────────────────────
-corpus_reference_files=$(find "$REPO_ROOT/corpus/reference" -name '*.cha' | wc -l | tr -d ' ')
+corpus_reference_files=$(find "$REPO_ROOT/resources/corpus/reference" -name '*.cha' | wc -l | tr -d ' ')
 
 # ── Documentation surface ─────────────────────────────────────────────────────
 markdown_total=$(find "$REPO_ROOT" -name '*.md' \

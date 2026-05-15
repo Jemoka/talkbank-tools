@@ -19,7 +19,7 @@ flowchart TD
         cli["chatter CLI"]
         workers["std::thread workers\n(crossbeam channels)"]
         cache["CachePool\n(embedded tokio rt)"]
-        lsp["talkbank-lsp\n(tokio multi-thread)"]
+        lsp["chatter-lsp\n(tokio multi-thread)"]
         cli --> workers
         workers --> cache
     end
@@ -44,12 +44,12 @@ flowchart TD
 | Component | Runtime | Why |
 |---|---|---|
 | `batchalign` server | Multi-thread (default) | Concurrent HTTP + WebSocket + job tasks |
-| `talkbank-lsp` | Multi-thread | Concurrent LSP requests from editor |
+| `chatter-lsp` | Multi-thread | Concurrent LSP requests from editor |
 | Validation `CachePool` | `current_thread` (embedded) | Bridge for sync workers; minimal overhead |
 
 ## Validation Parallelism (CHAT core)
 
-`talkbank-cli/src/commands/validate_parallel/{runtime.rs,audit.rs}`.
+`chatter-cli/src/commands/validate_parallel/{runtime.rs,audit.rs}`.
 
 ```mermaid
 flowchart LR
@@ -264,7 +264,7 @@ channel; second press: `std::process::exit(130)` (immediate).
 
 ## Desktop App (Tauri)
 
-`apps/chatter-desktop/src-tauri/src/commands.rs` uses
+`apps/chatter/chatter-gui/src-tauri/src/commands.rs` uses
 `ArcSwapOption` (from `arc-swap`) for lock-free storage of the
 cancel sender:
 

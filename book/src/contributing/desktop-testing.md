@@ -4,7 +4,7 @@
 **Last updated:** 2026-03-17
 
 This document covers the testing strategy for the Chatter desktop app
-(`apps/chatter-desktop/`). Testing is split into three tiers by speed and scope.
+(`apps/chatter/chatter-gui/`). Testing is split into three tiers by speed and scope.
 
 ## Testing Tiers
 
@@ -39,18 +39,18 @@ verify the JSON shape, field names, event ordering, and stats consistency.
 
 ```bash
 # TypeScript capability/seam tests
-cd apps/chatter-desktop && npm run test:unit
+cd apps/chatter-gui && npm run test:unit
 
 # Rust contract/integration tests
-cargo nextest run -p chatter-desktop --test validation_bridge
+cargo nextest run -p chatter-gui --test validation_bridge
 ```
 
 ### What they cover
 
 | Test | What it verifies |
 |------|-----------------|
-| `apps/chatter-desktop/tests/unit/validationRunner.test.cjs` | Validation capability uses centralized command names, subscribes before invoke, and disposes listeners exactly once |
-| `apps/chatter-desktop/tests/unit/validationState.test.cjs` | Validation reducer computes relative file names and merges diagnostics/status immutably |
+| `apps/chatter/chatter-gui/tests/unit/validationRunner.test.cjs` | Validation capability uses centralized command names, subscribes before invoke, and disposes listeners exactly once |
+| `apps/chatter/chatter-gui/tests/unit/validationState.test.cjs` | Validation reducer computes relative file names and merges diagnostics/status immutably |
 | `reference_corpus_no_hard_errors` | 74 reference files produce zero `Severity::Error` (warnings allowed) |
 | `event_lifecycle_has_correct_sequence` | Discovering → Started → FileComplete×N → Finished ordering |
 | `frontend_events_serialize_to_expected_json_shape` | Every event has `type` field; camelCase field names match TypeScript types; diagnostics include `renderedText` |
@@ -61,7 +61,7 @@ cargo nextest run -p chatter-desktop --test validation_bridge
 
 ### Adding new tests
 
-Test file: `apps/chatter-desktop/src-tauri/tests/validation_bridge.rs`
+Test file: `apps/chatter/chatter-gui/src-tauri/tests/validation_bridge.rs`
 
 The tests use `collect_events()` which runs the real validation pipeline and
 collects all `FrontendEvent` values. To test a specific scenario:
@@ -94,14 +94,14 @@ characters and `style=` attributes from ANSI color conversion.
 
 ### TypeScript seam tests
 
-The TypeScript unit tests compile a focused subset of `apps/chatter-desktop/src/` to a
+The TypeScript unit tests compile a focused subset of `apps/chatter/chatter-gui/src/` to a
 temporary CommonJS directory, then run Node's built-in test runner against the
 compiled output. This keeps the test toolchain small while still exercising the
 runtime seam as real JavaScript.
 
-- Runner script: `apps/chatter-desktop/scripts/run-unit-tests.mjs`
-- Compile config: `apps/chatter-desktop/tsconfig.unit.json`
-- Test files: `apps/chatter-desktop/tests/unit/*.test.cjs`
+- Runner script: `apps/chatter/chatter-gui/scripts/run-unit-tests.mjs`
+- Compile config: `apps/chatter/chatter-gui/tsconfig.unit.json`
+- Test files: `apps/chatter/chatter-gui/tests/unit/*.test.cjs`
 
 ### TypeScript ↔ Rust contract
 
@@ -169,7 +169,7 @@ tests focus on UI rendering and user-visible layout.
 
 ### Adding E2E tests
 
-Test file: `apps/chatter-desktop/tests/e2e/*.spec.ts`
+Test file: `apps/chatter/chatter-gui/tests/e2e/*.spec.ts`
 
 WebdriverIO provides `$()` and `$$()` for CSS selectors, plus Tauri-aware
 capabilities:
@@ -218,7 +218,7 @@ becomes a problem.
 
 ## Test Data
 
-All tests use the reference corpus at `corpus/reference/` (74 files). This
+All tests use the reference corpus at `resources/corpus/reference/` (74 files). This
 corpus is checked into the repo and must always pass validation. Two files
 currently produce warnings (E534, E603) but zero hard errors.
 
@@ -232,7 +232,7 @@ Add to the existing CI workflow:
 ```yaml
 # Rust integration tests (fast, always run)
 - name: Desktop integration tests
-  run: cargo nextest run -p chatter-desktop --test validation_bridge
+  run: cargo nextest run -p chatter-gui --test validation_bridge
 
 # E2E tests (slow, release branches only)
 - name: Build desktop app
@@ -243,5 +243,5 @@ Add to the existing CI workflow:
   run: |
     tauri-driver &
     sleep 2
-    cd apps/chatter-desktop && npm run test:e2e
+    cd apps/chatter-gui && npm run test:e2e
 ```

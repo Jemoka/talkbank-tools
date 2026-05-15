@@ -18,7 +18,7 @@ chatter clan roles --rename "Child=CHI" --rename "Mother=MOT" file.cha
 
 | Option | Description |
 |--------|-------------|
-| `-r`, `--rename "OLD=NEW"` | Rename speaker OLD to NEW (required, can be repeated). Splits on the first `=`; see `crates/talkbank-cli/src/commands/clan/transforms.rs:172` for the parser. |
+| `-r`, `--rename "OLD=NEW"` | Rename speaker OLD to NEW (required, can be repeated). Splits on the first `=`; see `crates/chatter-cli/src/commands/clan/transforms.rs:172` for the parser. |
 | `-o`, `--output` | Output CHAT file path (default: stdout). |
 
 ## Behavior

@@ -16,7 +16,7 @@ flowchart TD
     rust_test["cargo test -p talkbank-parser\n(CST-to-model conversion)"]
     equiv["parser equivalence\n(74 reference corpus files)"]
     spec_check{"Grammar change\naffects spec examples?"}
-    test_gen["make test-gen\n→ grammar/test/corpus/\n→ parser-tests/tests/generated/\n→ docs/errors/"]
+    test_gen["just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs\n→ grammar/test/corpus/\n→ parser-tests/tests/generated/\n→ book/src/operations/errors/"]
     commit(["Commit"])
 
     edit --> generate --> grammar_test --> rust_test --> equiv --> spec_check
@@ -72,7 +72,7 @@ Every file in the reference corpus must parse correctly. Each `.cha` file is its
 If the grammar change affects any spec examples:
 
 ```bash
-make test-gen
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs
 ```
 
 This regenerates tree-sitter corpus tests and other generated outputs that
@@ -86,7 +86,7 @@ If new node types were added to the grammar, the generated `node_types.rs` in `t
 
 ## Critical Policy
 
-The reference corpus at `corpus/reference/` (74 files) must pass parser equivalence at 100%. If a grammar change breaks even one file, revert immediately. The reference corpus is the ultimate arbiter of correctness.
+The reference corpus at `resources/corpus/reference/` (74 files) must pass parser equivalence at 100%. If a grammar change breaks even one file, revert immediately. The reference corpus is the ultimate arbiter of correctness.
 
 ## Common Patterns
 

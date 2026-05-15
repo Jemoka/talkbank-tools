@@ -4,7 +4,7 @@
 **Last updated:** 2026-05-11 20:14 EDT
 
 This chapter walks you through installing VS Code and the TalkBank CHAT
-extension. The language server (`talkbank-lsp`) ships inside each
+extension. The language server (`chatter-lsp`) ships inside each
 platform-specific VSIX, so there is no separate binary to install. By the end,
 you will have a working environment where opening any `.cha` file gives you
 syntax highlighting, real-time validation, and all the features described in
@@ -19,11 +19,11 @@ You need:
 1. **Visual Studio Code Insiders** version 1.110 or later
 2. **A platform-specific `.vsix` package** — each release publishes five
    VSIXes (darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64)
-   with a prebuilt `talkbank-lsp` bundled inside
+   with a prebuilt `chatter-lsp` bundled inside
 
 The extension is a `.vsix` package installed into VS Code. Each
-platform-specific VSIX bundles the matching `talkbank-lsp` binary at
-`<extension>/server/talkbank-lsp[.exe]`, so end users do not need a Rust
+platform-specific VSIX bundles the matching `chatter-lsp` binary at
+`<extension>/server/chatter-lsp[.exe]`, so end users do not need a Rust
 toolchain or any PATH setup.
 
 ---
@@ -78,17 +78,17 @@ sudo snap install code-insiders --classic
    Or from inside VS Code: open the Command Palette (`Cmd+Shift+P`), type
    **"Extensions: Install from VSIX..."**, and select the `.vsix` file.
 
-Each platform VSIX bundles a matching `talkbank-lsp` binary. No Rust
+Each platform VSIX bundles a matching `chatter-lsp` binary. No Rust
 toolchain or PATH setup is required.
 
 ### Option B: Development mode (building from source)
 
-Contributors running from a cloned workspace can build `talkbank-lsp` and
+Contributors running from a cloned workspace can build `chatter-lsp` and
 launch the extension directly:
 
 ```bash
 # From the talkbank-tools/ repository root:
-cargo build --release -p talkbank-lsp
+cargo build --release -p chatter-lsp
 
 cd vscode
 npm install
@@ -99,8 +99,8 @@ code-insiders --extensionDevelopmentPath=.
 ```
 
 In this mode the extension picks up the dev-tree build at
-`../target/release/talkbank-lsp` (or `target/debug/` after `cargo build -p
-talkbank-lsp`). Producing a full set of platform VSIXes is covered in
+`../target/release/chatter-lsp` (or `target/debug/` after `cargo build -p
+chatter-lsp`). Producing a full set of platform VSIXes is covered in
 the [Releasing chapter](../developer/releasing.md).
 
 ---
@@ -109,7 +109,7 @@ the [Releasing chapter](../developer/releasing.md).
 
 1. Open VS Code Insiders
 2. Open any `.cha` file (if you have the repository, try one from
-   `corpus/reference/`)
+   `resources/corpus/reference/`)
 3. You should see:
    - **Syntax highlighting** -- headers, speaker codes, dependent tiers, and
      annotations are colored by category
@@ -118,7 +118,7 @@ the [Releasing chapter](../developer/releasing.md).
    - **"CHAT Validation" tree view** in the Explorer sidebar
 
 > **(SCREENSHOT: VS Code Insiders with a CHAT file open)**
-> *Capture this: a `.cha` file from `corpus/reference/` open in the editor,
+> *Capture this: a `.cha` file from `resources/corpus/reference/` open in the editor,
 > showing syntax highlighting, the Problems panel with diagnostics, and the
 > CHAT Validation tree view in the Explorer sidebar.*
 
@@ -133,16 +133,16 @@ If you see plain, uncolored text, the extension did not activate. Check:
 
 ## How the LSP Binary Is Found
 
-When the extension starts, it searches for the `talkbank-lsp` binary in this order:
+When the extension starts, it searches for the `chatter-lsp` binary in this order:
 
 1. **`talkbank.lsp.binaryPath` setting** -- if set and the file exists, that
    path is used directly (explicit override)
-2. **Bundled binary** -- `<extension>/server/talkbank-lsp[.exe]`, shipped with
+2. **Bundled binary** -- `<extension>/server/chatter-lsp[.exe]`, shipped with
    each platform-specific VSIX
-3. **System PATH** -- `which talkbank-lsp`, for developers who install via
+3. **System PATH** -- `which chatter-lsp`, for developers who install via
    `cargo install`
-4. **Dev-tree builds** -- `<extension>/../target/debug/talkbank-lsp` or
-   `.../target/release/talkbank-lsp`, for contributors running from a cloned
+4. **Dev-tree builds** -- `<extension>/../target/debug/chatter-lsp` or
+   `.../target/release/chatter-lsp`, for contributors running from a cloned
    workspace
 5. If none of these find a binary, an error notification appears with a link
    to the `talkbank.lsp.binaryPath` setting

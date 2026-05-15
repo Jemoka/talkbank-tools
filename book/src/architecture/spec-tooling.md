@@ -20,7 +20,7 @@ is now audit-only unless a doc says it remains operational.
 
 - `spec/tools` still carries bootstrap-era Rust parser/model
   dependencies that create circular or awkward workflow coupling.
-- Contributor workflows still over-assume that `make test-gen` is
+- Contributor workflows still over-assume that `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` is
   the right reaction to every parser-related change.
 
 ## Current Generation Pipeline
@@ -102,7 +102,7 @@ Treat these as legacy audit paths:
   - invalid tags,
   - malformed examples,
   - unknown error codes.
-- Document when `make test-gen` is actually needed and when a small direct test
+- Document when `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` is actually needed and when a small direct test
   is the right answer instead.
 
 ## Versioning and Metadata

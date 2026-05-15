@@ -7,7 +7,7 @@
 
 Reorders dependent tiers into a consistent order. The legacy manual describes `TIERORDER` as putting dependent tiers into a consistent alphabetical order, with `/lib/fixes/tierorder.cut` able to control the order.
 
-`talkbank-clan` sorts dependent tiers on each utterance according to its built-in canonical ordering.
+`clan-core` sorts dependent tiers on each utterance according to its built-in canonical ordering.
 
 ## Usage
 
@@ -23,7 +23,7 @@ This command has no configurable options.
 
 Dependent tiers are sorted into the following canonical order
 (per the `tier_order()` priority function at
-`crates/talkbank-clan/src/transforms/tierorder.rs:57-100`):
+`crates/clan-core/src/transforms/tierorder.rs:57-100`):
 
 1. **Linguistic analysis tiers** (priorities 0-5):
    `%mor` → `%gra` → `%pho` → `%mod` → `%wor` → `%sin`

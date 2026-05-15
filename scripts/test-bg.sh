@@ -3,7 +3,7 @@
 #
 # Wraps any command, runs it detached, writes structured logs, and
 # posts a desktop notification on completion. Composes with any
-# existing make target: `bash scripts/test-bg.sh make test-rust`.
+# existing make target: `bash scripts/test-bg.sh bazel test //...-rust`.
 #
 # Why this exists: the cost function for test runs is wall-clock
 # time spent *waiting*, not just time spent running. This script
@@ -34,7 +34,7 @@ Options:
   --help        This message.
 
 Examples:
-  bash scripts/test-bg.sh make test-rust
+  bash scripts/test-bg.sh bazel test //...-rust
   bash scripts/test-bg.sh --slug golden-fra -- uv run pytest -m 'golden and mwt_probe' -k fra
 EOF
 }

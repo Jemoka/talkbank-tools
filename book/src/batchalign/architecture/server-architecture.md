@@ -9,7 +9,7 @@ This page describes the implemented `batchalign3` runtime:
   lifecycle, and local output writing.
 - `batchalign` provides the HTTP server, job store, worker pool, OpenAPI,
   and server-side CHAT orchestration.
-- Python workers in `batchalign/worker/` load ML dependencies and execute
+- Python workers in `python/batchalign/worker/` load ML dependencies and execute
   inference over stdio JSON-lines IPC.
 
 The Rust control plane never loads ML models directly.
@@ -41,8 +41,8 @@ future cleanup work:
 
 | Bucket | Current surfaces | Direction |
 |---|---|---|
-| Stays Python (for now) | `batchalign/worker/`, `batchalign/inference/`, `batchalign/models/` | host for ML model calls until Rust gains the equivalent coverage |
-| Thin worker-side glue | `batchalign/providers/` (re-exports worker IPC types), schema mirrors at the worker boundary | keep minimal; Rust owns all document semantics |
+| Stays Python (for now) | `python/batchalign/worker/`, `python/batchalign/inference/`, `python/batchalign/models/` | host for ML model calls until Rust gains the equivalent coverage |
+| Thin worker-side glue | `python/batchalign/providers/` (re-exports worker IPC types), schema mirrors at the worker boundary | keep minimal; Rust owns all document semantics |
 | Already moved to Rust | config/runtime policy, payload preparation, post-processing, CHAT mutation, validation, orchestration, WER scoring | done; no backsliding |
 | Already removed | `batchalign.compat`, `batchalign.pipeline_api`, `batchalign.inference.benchmark`, `ParsedChat` | gone — no Python public API exists |
 
@@ -244,8 +244,8 @@ flowchart LR
 | CLI | `crates/batchalign` | clap CLI, dispatch router, daemon lifecycle, output writing |
 | Server | `crates/batchalign` | axum routes, job store, worker pool, OpenAPI, server-side orchestration |
 | CHAT ops | `crates/batchalign` | CHAT extraction, injection, validation, FA/morphosyntax helpers |
-| Python worker | `batchalign/worker/` | worker entry point, model loading, capabilities, infer/execute dispatch |
-| Python inference | `batchalign/inference/` | engine-specific inference backends |
+| Python worker | `python/batchalign/worker/` | worker entry point, model loading, capabilities, infer/execute dispatch |
+| Python inference | `python/batchalign/inference/` | engine-specific inference backends |
 
 Older names such as the nested Rust workspace and `batchalign-server` are
 historical. `batchalign-types` is an active crate that holds shared domain
@@ -601,6 +601,6 @@ drift (self-healing)".
 | `crates/batchalign/src/cache/` | Tiered utterance cache (moka hot + SQLite cold), BLAKE3 keys |
 | `crates/batchalign/src/worker/pool/` | worker spawn, checkout, health loop, idle timeout |
 | `crates/batchalign/src/db/` | SQLite persistence (WAL), schema, recovery, TTL pruning |
-| `batchalign/worker/_main.py` | Python worker entry point |
-| `batchalign/worker/_model_loading/` | Python worker model-loading package |
-| `batchalign/worker/_stanza_loading.py` | Stanza configuration and ISO-code mapping |
+| `python/batchalign/worker/_main.py` | Python worker entry point |
+| `python/batchalign/worker/_model_loading/` | Python worker model-loading package |
+| `python/batchalign/worker/_stanza_loading.py` | Stanza configuration and ISO-code mapping |

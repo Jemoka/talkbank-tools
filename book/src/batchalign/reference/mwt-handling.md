@@ -245,7 +245,7 @@ expansion for every contraction. `_realign_sentence` overlays Stanza's
 original tuples onto aligner output where lengths
 match and no merging happened, so the hint survives realignment and
 Stanza's MWT processor continues to honor it. Applies to every language
-listed in `MWT_LANGS` (`batchalign/worker/_stanza_loading.py`). See
+listed in `MWT_LANGS` (`python/batchalign/worker/_stanza_loading.py`). See
 [Stanza Limitations — Defect 2](stanza-limitations.md) for the full
 trace and re-evaluation criteria.
 
@@ -283,7 +283,7 @@ The `TokenizerContext` is shared between the Stanza inference host (which sets
 the same `nlp_lock`:
 
 ```python
-# batchalign/inference/morphosyntax.py
+# python/batchalign/inference/morphosyntax.py
 with nlp_lock:
     if tok_ctx is not None:
         tok_ctx.original_words = word_lists  # Set before nlp()

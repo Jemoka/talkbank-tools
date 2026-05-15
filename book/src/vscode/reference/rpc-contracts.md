@@ -4,20 +4,20 @@
 **Last updated:** 2026-04-16 21:52 EDT
 
 The extension drives twelve custom `workspace/executeCommand` endpoints
-exposed by [`talkbank-lsp`][lsp]. This page is the per-endpoint reference:
+exposed by [`chatter-lsp`][lsp]. This page is the per-endpoint reference:
 command identifier, request shape, response shape, TS caller, Rust
 handler. Everything here is verified against the current source on
 both sides — if an endpoint's behavior drifts, update this page in
 the same commit.
 
-[lsp]: https://github.com/TalkBank/talkbank-tools/tree/main/crates/talkbank-lsp
+[lsp]: https://github.com/TalkBank/talkbank-tools/tree/main/crates/chatter-lsp
 
 ## One typical call at runtime
 
 ```mermaid
-%% Verified against: vscode/src/lsp/executeCommandClient.ts,
-%% crates/talkbank-lsp/src/backend/requests/execute_command.rs,
-%% crates/talkbank-lsp/src/backend/execute_commands.rs.
+%% Verified against: apps/vscode-extension/src/lsp/executeCommandClient.ts,
+%% crates/chatter-lsp/src/backend/requests/execute_command.rs,
+%% crates/chatter-lsp/src/backend/execute_commands.rs.
 sequenceDiagram
     participant TS as TS feature (e.g. analysis.ts)
     participant Client as TalkbankExecuteCommandClient
@@ -47,7 +47,7 @@ position.
 | | |
 |---|---|
 | Rust request | `DocumentPositionRequest { uri: Url, position: Position }` in `backend/execute_commands.rs` |
-| Rust handler | `graph::build_dependency_graph_response(utterance, parse_state)` in `crates/talkbank-lsp/src/graph/mod.rs` |
+| Rust handler | `graph::build_dependency_graph_response(utterance, parse_state)` in `crates/chatter-lsp/src/graph/mod.rs` |
 | Rust response | `DependencyGraphResponse::Dot { source } \| Unavailable { reason }` |
 | TS caller | `executeCommandClient.getDependencyGraph` (or similar — see `graphPanel.ts`) |
 | TS response type | `DependencyGraphResponse` (Effect Schema discriminated union) in `lsp/executeCommandPayloads.ts` |
@@ -87,7 +87,7 @@ Run one CLAN analysis command (freq, mlu, kideval, …) and return JSON.
 
 | | |
 |---|---|
-| Rust request | `AnalyzeRequest` = `AnalyzeCommandPayload` (shared with `talkbank-clan`) |
+| Rust request | `AnalyzeRequest` = `AnalyzeCommandPayload` (shared with `clan-core`) |
 | Rust handler | `handle_analyze(&request)` in `backend/analysis.rs` |
 | Rust response | `serde_json::Value` — the analysis command's native JSON output |
 | TS caller | `TalkbankExecuteCommandClient.analyze(request)` |
@@ -219,7 +219,7 @@ The TS side wraps every call in three typed error classes:
 - `ExecuteCommandResponseError` — wrong payload shape
 - `ExecuteCommandServerError` — server returned a string-valued error
 
-See `vscode/src/lsp/executeCommandErrors.ts` for the tagged error
+See `apps/vscode-extension/src/lsp/executeCommandErrors.ts` for the tagged error
 family and [Webview Message Contracts](webview-contracts.md) for the
 panel-side decoding patterns.
 

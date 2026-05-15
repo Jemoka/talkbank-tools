@@ -5,7 +5,7 @@
 
 Converts CHAT files to subtitle format for captioned video. The legacy manual describes `CHAT2SRT` as converting a CHAT file to SRT for video captioning and then walks through a GUI workflow using external subtitle software.
 
-This book focuses on the CLI semantics only: `talkbank-clan` converts timed CHAT utterances to SRT or WebVTT subtitle entries.
+This book focuses on the CLI semantics only: `clan-core` converts timed CHAT utterances to SRT or WebVTT subtitle entries.
 
 ## Usage
 

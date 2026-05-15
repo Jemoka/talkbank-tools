@@ -155,7 +155,7 @@ models for ~11 languages (en, de, es, it, pt, da, id, ja, tr, vi, zh-hans).
 For other languages (e.g. Dutch, Polish, Russian), the utseg config builder
 omits the constituency processor and falls back to sentence-boundary
 segmentation. This is handled automatically by the Stanza capability table
-(`batchalign/worker/_stanza_capabilities.py`), which reads Stanza's
+(`python/batchalign/worker/_stanza_capabilities.py`), which reads Stanza's
 `resources.json` to discover per-language processor availability.
 
 This is a different mechanism from the pre-CHAT utterance models above — it
@@ -183,7 +183,7 @@ To add utterance segmentation for a new language:
 2. Fine-tune a BERT token classification model (6 classes: normal, capitalize,
    period, question, exclamation, comma)
 3. Upload to HuggingFace Hub
-4. Add the model-loading hook in `batchalign/worker/_model_loading/utterance.py`
+4. Add the model-loading hook in `python/batchalign/worker/_model_loading/utterance.py`
 5. Add any language-specific preprocessing (e.g., character-level tokenization
    for CJK, particle-based chunking)
 
@@ -192,6 +192,6 @@ To add utterance segmentation for a new language:
 | File | Purpose |
 |------|---------|
 | `batchalign/src/asr_postprocess/mod.rs` | Typed ASR normalization + punctuation retokenization |
-| `batchalign/models/utterance/infer.py` | BA2-style utterance model runtime |
-| `batchalign/worker/_model_loading/utterance.py` | Utterance model bootstrap |
-| `batchalign/inference/utseg.py` | Worker-side utseg dispatch (typed assignments or Stanza trees) |
+| `python/batchalign/models/utterance/infer.py` | BA2-style utterance model runtime |
+| `python/batchalign/worker/_model_loading/utterance.py` | Utterance model bootstrap |
+| `python/batchalign/inference/utseg.py` | Worker-side utseg dispatch (typed assignments or Stanza trees) |

@@ -4,14 +4,14 @@
 **Last updated:** 2026-04-29 10:24 EDT
 
 Batchalign Desktop is the native Batchalign GUI shell in
-`apps/dashboard-desktop/`. It is **experimental** and is **not** currently a
+`apps/batchalign/dashboard-desktop/`. It is **experimental** and is **not** currently a
 supported public release surface.
 
 This is also **not** the Chatter desktop app. The two desktop surfaces in this
 repository are:
 
-- **Batchalign Desktop** (`apps/dashboard-desktop/`) — Batchalign processing UI
-- **Chatter Desktop** (`apps/chatter-desktop/`) — CHAT validation-only GUI
+- **Batchalign Desktop** (`apps/batchalign/dashboard-desktop/`) — Batchalign processing UI
+- **Chatter Desktop** (`apps/chatter/chatter-gui/`) — CHAT validation-only GUI
 
 For supported end-user workflows today, install and run **`batchalign3`** via
 the canonical CLI path in [Installation](installation.md). Treat this chapter as
@@ -20,9 +20,9 @@ for first-time users.
 
 ## Current status
 
-- **Release contract:** Experimental (see repo-root `docs/RELEASE-CONTRACT.md`)
+- **Release contract:** Experimental (see repo-root `book/src/operations/release-contract.md`)
 - **Distribution:** no supported public desktop bundle line today
-- **Desktop shell location:** `apps/dashboard-desktop/`
+- **Desktop shell location:** `apps/batchalign/dashboard-desktop/`
 - **Supported product surface today:** `batchalign3` CLI, local server, and
   dashboard UI
 
@@ -34,7 +34,7 @@ for first-time users.
    The desktop app needs `batchalign3` on your PATH.
 
 2. **Launch the shell from source** — run `npm run dev` from
-   `apps/dashboard-desktop/`.
+   `apps/batchalign/dashboard-desktop/`.
 
 3. **First-time setup** — on first launch, a setup wizard asks you to choose
    your default speech-to-text engine:

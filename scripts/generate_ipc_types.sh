@@ -21,17 +21,17 @@ COMMON_OPTS=(
 )
 
 echo "Step 1: Generating JSON Schema from Rust types..."
-cargo run -q -p batchalign -- ipc-schema --output ipc-schema/
+cargo run -q -p batchalign-cli -- ipc-schema --output schemas/ipc/
 
 echo "Step 2: Generating Python Pydantic models from JSON Schema..."
-mkdir -p batchalign/generated/worker_v2 batchalign/generated/batch_items
+mkdir -p batchalign-cli/generated/worker_v2 python/batchalign/generated/batch_items
 
 # Worker V2 types (directory → directory, one .py per schema).
 # The worker_v2 directory name is intentional while the frozen V1 worker
 # contract still exists elsewhere in the tree.
 $CODEGEN \
-    --input ipc-schema/worker_v2/ \
-    --output batchalign/generated/worker_v2/ \
+    --input schemas/ipc/worker_v2/ \
+    --output python/batchalign/generated/worker_v2/ \
     "${COMMON_OPTS[@]}" 2>&1 || {
     echo "WARNING: datamodel-codegen failed for worker_v2."
     echo "Install with: uvx --from datamodel-code-generator datamodel-codegen"
@@ -39,14 +39,14 @@ $CODEGEN \
 
 # Batch item types
 $CODEGEN \
-    --input ipc-schema/batch_items/ \
-    --output batchalign/generated/batch_items/ \
+    --input schemas/ipc/batch_items/ \
+    --output python/batchalign/generated/batch_items/ \
     "${COMMON_OPTS[@]}" 2>&1 || {
     echo "WARNING: datamodel-codegen failed for batch_items."
 }
 
 echo "Done. Generated:"
-echo "  ipc-schema/          — JSON Schema (67 types)"
-echo "  batchalign/generated/ — Python Pydantic models"
+echo "  schemas/ipc/          — JSON Schema (67 types)"
+echo "  python/batchalign/generated/ — Python Pydantic models"
 echo ""
-echo "Next: migrate hand-written Python models to import from batchalign/generated/"
+echo "Next: migrate hand-written Python models to import from python/batchalign/generated/"

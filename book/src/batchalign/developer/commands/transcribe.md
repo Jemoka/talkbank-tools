@@ -21,8 +21,8 @@ documentation, see [User Guide: transcribe](../../user-guide/commands/transcribe
 | Pre-CHAT utterance segmentation | `crates/batchalign/src/pipeline/transcribe.rs:421–457` — `process_asr_with_prechat_segmentation()` | Runs for eng/cmn/zho/yue: BERT utseg applied to prepared chunks BEFORE build_chat |
 | CHAT assembly | `crates/talkbank-transform/src/build_chat/mod.rs:41` — `build_chat()` | Assembles `ChatFile` AST from `TranscriptDescription` (typed bridge) |
 | Speaker reassignment | `crates/batchalign/src/chat_ops/speaker.rs:32` — `reassign_speakers()` | Rewrites speaker codes + headers from diarization segments (runs post-build_chat) |
-| ASR worker IPC | `batchalign/inference/asr.py` | Whisper/Rev.AI ASR, returns raw tokens |
-| Speaker worker IPC | `batchalign/inference/speaker.py` — `batch_infer_speaker()` | Pyannote/NeMo diarization, returns speaker segments |
+| ASR worker IPC | `python/batchalign/inference/asr.py` | Whisper/Rev.AI ASR, returns raw tokens |
+| Speaker worker IPC | `python/batchalign/inference/speaker.py` — `batch_infer_speaker()` | Pyannote/NeMo diarization, returns speaker segments |
 
 ---
 
@@ -162,7 +162,7 @@ For `lang == eng || lang == fra`, Rev.AI is called with
 `skip_postprocessing=true`. This suppresses Rev.AI's built-in punctuation
 so that BA3's BERT utseg model handles sentence boundary detection. For all
 other languages, Rev.AI post-processing is applied. Gate implemented in
-`batchalign/inference/asr.py` — `_revai_request()`.
+`python/batchalign/inference/asr.py` — `_revai_request()`.
 
 ---
 
@@ -179,7 +179,7 @@ dedicated speaker stage runs.
 
 ```bash
 # Fast unit tests (no ML models)
-make test
+bazel test //...
 
 # Transcribe golden tests (real ASR models — only on net)
 cargo nextest run --profile ml -E 'test(transcribe::)'
