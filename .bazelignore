@@ -1,4 +1,8 @@
-# Bazel's own outputs
+# .bazelignore: directory paths Bazel should not traverse during target
+# discovery. NOTE: Bazel's path parser on Windows (Java NIO) rejects
+# `*` globs in .bazelignore — every entry below must be a literal path.
+
+# Bazel's own outputs (Unix-only symlinks; harmless on Windows)
 bazel-bin
 bazel-out
 bazel-talkbank-tools
@@ -7,33 +11,29 @@ bazel-testlogs
 # Cargo
 target
 
-# Node
+# Node — every node_modules path enumerated explicitly (no `**`).
 node_modules
-**/node_modules
+apps/vscode-extension/node_modules
 apps/vscode-extension/out
 apps/vscode-extension/dist
-apps/batchalign/batchalign-cli-webdashboard/dist
-apps/batchalign/batchalign-cli-webdashboard/playwright-report
-apps/batchalign/batchalign-cli-webdashboard/test-results
-apps/batchalign/batchalign-cli-webdashboard/node_modules
+apps/chatter/chatter-gui/node_modules
 
 # Python
 .venv
 python/.venv
 python/build
 python/dist
-**/__pycache__
-**/*.egg-info
+python/target
 
 # mdBook output
 book/book
 book/build
 
-# Tree-sitter grammar generated artifacts (treated as source for non-Bazel)
+# Tree-sitter grammar generated artifacts
 grammar/build
 grammar/prebuilds
 grammar/.tree-sitter
 
 # Tauri build outputs
-apps/**/src-tauri/target
-apps/**/src-tauri/gen
+apps/chatter/chatter-gui/src-tauri/target
+apps/chatter/chatter-gui/src-tauri/gen
