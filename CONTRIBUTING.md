@@ -81,67 +81,62 @@ the only path that needs uv + maturin pinned by the hermeticity guard.
 
 | Command | What it does |
 |---|---|
-| `just batchalign build`            | release build of all batchalign Bazel targets |
-| `just batchalign build debug`      | debug build (fast incremental, dbg symbols) |
-| `bazel build //crates/batchalign/batchalign-engine:_core_so` | just the cdylib (`bazel-bin/.../_core.so`) |
-| `bazel build //python/batchalign:batchalign` | py_binary CLI launcher |
-| `bazel build //python/batchalign:wheel`      | release wheel via maturin |
+| `just batchalign build`        | release build (Rust + cdylib + py_binary + wheel) |
+| `just batchalign build debug`  | debug build (fast incremental, dbg symbols) |
 
 ### Run
 
 | Command | What it does |
 |---|---|
-| `just batchalign cli -- --help`      | run the `batchalign3` CLI (Bazel-native; no maturin needed) |
-| `just batchalign cli -- transcribe foo.wav` | full CLI invocation |
-| `bazel run //python/batchalign -- <args>` | same, direct Bazel invocation |
+| `just batchalign cli -- --help`              | run the `batchalign3` CLI (Bazel-native; no maturin in path) |
+| `just batchalign cli -- transcribe foo.wav`  | full CLI invocation |
 
 ### Test
 
 | Command | What it does |
 |---|---|
-| `just batchalign test`             | release-build test of Rust + Python |
-| `just batchalign test debug`       | debug-build test (faster iteration on failures) |
-| `just batchalign pytest`           | only the pytest suite via py_test |
-| `just batchalign pytest -- -k whisper` | pytest with extra args |
+| `just batchalign test`                  | release-build test (Rust unit tests + py_test pytest) |
+| `just batchalign test debug`            | debug-build test (faster iteration on failures) |
+| `just batchalign pytest`                | only the py_test pytest suite |
+| `just batchalign pytest -- -k whisper`  | pytest with extra args |
+| `just batchalign lint`                  | mypy (+ ruff if present) |
 
 ### Debug
 
-For Rust-side debugging:
-
 ```bash
-just batchalign build debug                                 # dbg build
-bazel test --config=dev //crates/batchalign/batchalign-engine:cache_smoke
-# or directly with cargo nextest:
+just batchalign build debug                          # dbg build of everything
+just batchalign cli -- <subcommand> --verbose        # rebuilds + runs dbg .so
+just batchalign pytest -- -k <name> --pdb            # pytest under pdb
+# Cargo escape hatch for Rust-side debugging at higher fidelity:
 cargo nextest run -p batchalign-engine --features extension-module
-```
-
-For Python-side debugging:
-
-```bash
-just batchalign build debug                                  # build dbg .so
-bazel run //python/batchalign -- <subcommand> --verbose
-# attach a debugger via VS Code's "Python: Attach" + pdb in code,
-# or stick a `breakpoint()` in the source and run via `bazel run`.
 ```
 
 ### Edit-and-rebuild reactivity
 
 Any `.rs` edit in the engine's transitive closure (batchalign-engine,
 batchalign-core, talkbank-model, talkbank-parser, talkbank-transform)
-invalidates `_core.so` automatically. Re-running `bazel run
-//python/batchalign` rebuilds the .so and the py_binary launcher in one
-shot — no `maturin develop` step.
+invalidates `_core.so` automatically. Re-running `just batchalign cli`
+rebuilds the .so and the py_binary launcher in one shot — no
+`maturin develop` step.
 
 When you edit `python/pyproject.toml` (adding a dep, bumping the
 version), regenerate the Bazel-side lockfile:
 
 ```bash
 just batchalign relock
-# = bazel run //python:requirements
 ```
 
-CI gates drift via `bazel test //python:requirements_test`, so a PR
-that touches `pyproject.toml` without re-running this fails.
+**Why isn't this automatic?** `pip.parse` (rules_python) reads
+`requirements.lock.txt` at Bazel's *module-resolution phase*, which
+happens before any action graph exists. A build action that *produces*
+the lockfile runs during the *execution phase*, much later. Bazel
+can't do both in one invocation — execution is strictly downstream of
+loading. Truly automatic regeneration requires a module extension that
+resolves `uv.lock`/`pyproject.toml` at module-resolution time (which is
+what `aspect_rules_py`'s `uv` extension does — blocked on a Bazel
+version bump). Until then: `just batchalign relock` after pyproject
+edits, and `just test` gates drift via the `:requirements_test` target
+so CI fails on a missed regen.
 
 ### Release a wheel
 
@@ -212,51 +207,46 @@ The CLI + LSP + desktop GUI share the same Rust foundation
 
 | Command | What it does |
 |---|---|
-| `just chatter build`           | release build of CLI + LSP + Tauri-deps |
+| `just chatter build`           | release build of CLI + LSP + Tauri-linked crates |
 | `just chatter build debug`     | debug build |
-| `bazel build //crates/chatter/chatter-cli:chatter` | only the CLI |
-| `bazel build //crates/chatter/chatter-lsp:chatter-lsp` | only the LSP |
 
 The Tauri GUI itself is built by `cargo tauri build` (not Bazel —
 Tauri's bundling chain includes codesign/notarytool/signtool which
-aren't modelled in Bazel rules). Bazel does build the intra-workspace
-Rust crates the GUI links against.
+aren't modelled in Bazel rules). `just chatter gui` wraps it; Bazel
+still builds the intra-workspace Rust crates the GUI links against.
 
 ### Run
 
 | Command | What it does |
 |---|---|
-| `just chatter cli -- validate file.cha`     | validation |
-| `just chatter cli -- to-json file.cha`      | parse + emit JSON |
-| `just chatter cli -- clan freq file.cha`    | CLAN frequency analysis |
-| `just chatter lsp`                          | LSP server (stdin/stdout) |
-| `just chatter gui`                          | bundle the desktop app (release) |
-| `just chatter gui debug`                    | bundle in debug mode |
-| `cd apps/chatter/chatter-gui && cargo tauri dev` | dev mode with hot reload |
+| `just chatter cli -- validate file.cha`    | validation |
+| `just chatter cli -- to-json file.cha`     | parse + emit JSON |
+| `just chatter cli -- clan freq file.cha`   | CLAN frequency analysis |
+| `just chatter lsp`                         | LSP server (stdin/stdout) |
+| `just chatter gui`                         | bundle the desktop app (release) |
+| `just chatter gui debug`                   | bundle in debug mode |
+| `cd apps/chatter/chatter-gui && cargo tauri dev` | dev mode with hot reload (Tauri escape hatch) |
 
 ### Test
 
 | Command | What it does |
 |---|---|
-| `just chatter test`         | release-build test |
+| `just chatter test`         | release-build test (CLI + LSP unit tests) |
 | `just chatter test debug`   | debug-build test |
-| `bazel test //crates/chatter/...` | direct invocation |
-| `cargo nextest run -p chatter-cli` | Cargo-side; useful for filtering |
+| `cargo nextest run -p chatter-cli` | Cargo escape hatch for filtering individual tests |
 
 ### Debug
 
-For the CLI + LSP:
-
 ```bash
 just chatter build debug
-bazel run --config=dev //crates/chatter/chatter-cli:chatter -- validate file.cha
+just chatter cli -- validate file.cha            # rebuilds + runs dbg
 # or under a debugger:
 lldb -- bazel-bin/crates/chatter/chatter-cli/chatter validate file.cha
 ```
 
-For the LSP, configure your editor's LSP client to spawn
-`bazel-bin/crates/chatter/chatter-lsp/chatter-lsp` (after a debug
-build). The LSP logs to stderr; capture via your client's log redirect.
+For the LSP, point your editor's client at
+`bazel-bin/crates/chatter/chatter-lsp/chatter-lsp` after `just chatter
+build debug`. LSP logs to stderr; capture via your client's log redirect.
 
 For the Tauri GUI, dev mode with hot reload is the fast loop:
 
@@ -270,10 +260,10 @@ stderr (visible in the terminal that spawned `cargo tauri dev`).
 
 ### Release
 
-The CLI + LSP ship as platform binaries on GitHub Releases. The
-desktop GUI ships as signed/notarized `.app`/`.msi`/`.AppImage`
-bundles via the (TODO) `publish-chatter.yml` and `publish-desktop.yml`
-workflows. Until those land, manual release is:
+CLI + LSP ship as platform binaries on GitHub Releases; GUI ships as
+signed/notarized `.app`/`.msi`/`.AppImage` bundles via the (TODO)
+`publish-chatter.yml` + `publish-desktop.yml` workflows. Manual release
+until those land:
 
 ```bash
 just chatter build                                                    # release builds
@@ -281,7 +271,7 @@ cp bazel-bin/crates/chatter/chatter-cli/chatter chatter-$(uname -s)-$(uname -m)
 cp bazel-bin/crates/chatter/chatter-lsp/chatter-lsp chatter-lsp-$(uname -s)-$(uname -m)
 # upload to a GitHub Release draft
 
-cd apps/chatter/chatter-gui && cargo tauri build                      # GUI bundle
+just chatter gui                                                      # GUI bundle
 # bundle output at apps/chatter/chatter-gui/src-tauri/target/release/bundle/
 # sign + notarize per book/src/operations/code-signing-and-distribution.md
 ```
@@ -462,9 +452,8 @@ Commit the resulting `crates/batchalign/.../.sqlx/` directory.
 ### "I edited grammar.js"
 
 ```bash
-bazel run //grammar:tree_sitter_generate                  # regenerates src/parser.c
-bazel build //grammar:tree_sitter_talkbank
-bazel test  //crates/core/talkbank-parser:talkbank_parser_unit_test
+just spec gen-tree-sitter-tests                           # regenerates corpus tests + parser.c
+just test                                                 # workspace-wide test (includes parser)
 ```
 
 ### "I edited a spec under resources/spec/"
@@ -485,8 +474,8 @@ just batchalign pytest                                    # full test suite
 just batchalign lint                                      # mypy + ruff
 ```
 
-No `maturin develop` step — `bazel run` rebuilds the `.so` natively
-via the rust_shared_library → genrule → py_library chain.
+No `maturin develop` step — `just batchalign cli` rebuilds the `.so`
+natively via the rust_shared_library → genrule → py_library chain.
 
 ### "I edited pyproject.toml"
 

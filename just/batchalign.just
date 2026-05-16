@@ -1,6 +1,20 @@
-# Batchalign — Rust engine, Python wheel (via maturin), CLI.
+# Batchalign — pyo3 Rust engine + Python wheel + `batchalign3` CLI.
 #
-# Build profile: `release` (default) or `debug`. Maps to:
+# Uniform recipe shape across products (batchalign + chatter):
+#   build [profile]   build every Bazel target for the product
+#   test  [profile]   run every Bazel test target for the product
+#   cli  *args        primary user-facing CLI for the product
+#   versions          source-of-truth versions for this product
+# Batchalign-specific:
+#   relock            regenerate python/requirements.lock.txt from pyproject.toml
+#   pytest *args      run py_test (pytest under Bazel)
+#   lint              mypy (+ ruff if present)
+#   wheel             host-platform wheel
+#   wheel-<platform>  per-platform wheel (5 platforms)
+#   multiwheel        all platforms (host triples succeed locally; CI fans out)
+#   publish           twine upload python/target/wheels/*.whl
+#
+# Profile is `release` (default) or `debug`. Maps to:
 #   - Bazel: --config=release | --config=dev
 #   - maturin: --release | (dev)
 #
@@ -10,18 +24,16 @@
 #
 # Wheel artifact paths:
 #   per-platform: python/target/wheels/batchalign-<version>-cp312-cp312-<plat>.whl
-#   universal:    python/target/wheels/batchalign-<version>-py3-none-any.whl  (n/a — pyo3 wheel)
 #
 # Source of truth: python/pyproject.toml owns the wheel version, deps,
-# all optional-deps groups, classifiers, scripts. Bazel does not
-# duplicate that metadata.
+# all optional-deps groups, classifiers, scripts.
 
 set shell := ["bash", "-c"]
 set positional-arguments := true
 
 # Default: list available recipes.
 default:
-    @just --justfile {{ justfile() }} --list
+    @just --list --justfile {{ justfile() }}
 
 # Build every Batchalign Bazel target (Rust + sh_binary wrappers).
 build profile="release":
@@ -110,11 +122,12 @@ publish:
 
 # Print the source-of-truth versions for human inspection.
 versions:
-    @echo "Python wheel  (python/pyproject.toml [project].version):"
-    @awk -F'"' '/^version *= *"/ {print "  " $2; exit}' python/pyproject.toml
-    @echo "Rust workspace (Cargo.toml [workspace.package].version):"
-    @awk -F'"' '/^\[workspace.package\]/,/^\[/ {if (/^version *= *"/) {print "  " $2; exit}}' Cargo.toml
-    @echo "batchalign-engine (Cargo.toml override):"
-    @awk -F'"' '/^version *= *"/ {print "  " $2; exit}' crates/batchalign/batchalign-engine/Cargo.toml
-    @echo "Pinned tools (python/pyproject.toml [tool.batchalign.pinned_tools]):"
-    @awk '/^\[tool.batchalign.pinned_tools\]/,/^\[/ {if (/=/) print "  " $0}' python/pyproject.toml | grep -v '^\['
+    @root="{{ justfile_directory() }}"; \
+    echo "Python wheel  (python/pyproject.toml [project].version):"; \
+    awk -F'"' '/^version *= *"/ {print "  " $2; exit}' "$root/python/pyproject.toml"; \
+    echo "Rust workspace (Cargo.toml [workspace.package].version):"; \
+    awk -F'"' '/^\[workspace\.package\]/{f=1;next} f&&/^\[/{exit} f&&/^version *= *"/{print "  " $2;exit}' "$root/Cargo.toml"; \
+    echo "batchalign-engine (crates/batchalign/batchalign-engine/Cargo.toml [package].version):"; \
+    awk -F'"' '/^version *= *"/ {print "  " $2; exit}' "$root/crates/batchalign/batchalign-engine/Cargo.toml"; \
+    echo "Pinned tools (python/pyproject.toml [tool.batchalign.pinned_tools]):"; \
+    awk '/^\[tool\.batchalign\.pinned_tools\]/{f=1;next} f&&/^\[/{exit} f&&/=/{print "  " $0}' "$root/python/pyproject.toml"

@@ -1,10 +1,24 @@
-# Chatter — CLI, LSP, desktop GUI (Tauri).
+# Chatter — CHAT validation CLI, LSP, and Tauri desktop GUI.
 #
-# Build profile is `release` by default; pass `debug` for the dbg compile mode.
-# The desktop bundle target shells out to `cargo tauri build`, with profile
-# threaded through via TAURI_PROFILE / BAZEL_COMPILATION_MODE.
+# Uniform recipe shape across products (batchalign + chatter):
+#   build [profile]   build every Bazel target for the product
+#   test  [profile]   run every Bazel test target for the product
+#   cli  *args        primary user-facing CLI for the product
+#   versions          source-of-truth versions for this product
+# Chatter-specific:
+#   lsp  *args        run the Language Server
+#   gui  [profile]    bundle the desktop app (Tauri)
+#
+# Profile is `release` (default) or `debug`. Maps to:
+#   - Bazel: --config=release | --config=dev
+#   - Tauri bundle: (default) | --debug
+
 set shell := ["bash", "-c"]
 set positional-arguments := true
+
+# Default: list available recipes.
+default:
+    @just --list --justfile {{ justfile() }}
 
 # Build every Chatter Bazel target.
 build profile="release":
@@ -28,3 +42,13 @@ lsp *args:
 gui profile="release" *args="":
     TAURI_PROFILE={{ if profile == "release" { "release" } else { "debug" } }} \
         bazel run //apps/chatter/chatter-gui/src-tauri:bundle -- "$@"
+
+# Print the source-of-truth versions for chatter.
+versions:
+    @root="{{ justfile_directory() }}"; \
+    echo "Chatter CLI + LSP (Cargo.toml [workspace.package].version):"; \
+    awk -F'"' '/^\[workspace\.package\]/{f=1;next} f&&/^\[/{exit} f&&/^version *= *"/{print "  " $2;exit}' "$root/Cargo.toml"; \
+    echo "Chatter desktop bundle (apps/chatter/chatter-gui/src-tauri/tauri.conf.json):"; \
+    awk -F'"' '/"version":/ {print "  " $4; exit}' "$root/apps/chatter/chatter-gui/src-tauri/tauri.conf.json"; \
+    echo "Pinned tools (workspace):"; \
+    awk -F'"' '/^rust\.toolchain/,/\)/' "$root/MODULE.bazel" | awk -F'"' '/versions/ {print "  rust = " $2; exit}'
