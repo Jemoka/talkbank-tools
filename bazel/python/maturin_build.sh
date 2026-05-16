@@ -20,6 +20,7 @@ UV="$1"; shift
 # shellcheck source=hermeticity_guard.sh
 source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/hermeticity_guard.sh"
 hermeticity_guard "$UV"
+UV="$HERMETIC_UV"
 
 cd "$BUILD_WORKSPACE_DIRECTORY/python"
 
@@ -34,7 +35,12 @@ if [[ -n "${MATURIN_TARGET:-}" ]]; then
     target_flag=(--target "$MATURIN_TARGET")
 fi
 
-"$UV" run maturin build "${profile_flag[@]}" "${target_flag[@]}" \
+# `"${arr[@]+"${arr[@]}"}"` is the bash-set-u-safe way to splat a
+# possibly-empty array — naked `"${arr[@]}"` trips `unbound variable`
+# in bash 4.4+ when the array has zero elements.
+"$UV" run maturin build \
+    "${profile_flag[@]+"${profile_flag[@]}"}" \
+    "${target_flag[@]+"${target_flag[@]}"}" \
     --manifest-path ../crates/batchalign/batchalign-engine/Cargo.toml \
     --out target/wheels \
     "$@"

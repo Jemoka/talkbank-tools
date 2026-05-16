@@ -10,6 +10,7 @@ UV="$1"; shift
 # shellcheck source=hermeticity_guard.sh
 source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/hermeticity_guard.sh"
 hermeticity_guard "$UV"
+UV="$HERMETIC_UV"
 
 cd "$BUILD_WORKSPACE_DIRECTORY/python"
 "$UV" run mypy

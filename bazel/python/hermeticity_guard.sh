@@ -26,55 +26,43 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Environment scrubbing.
+# Environment scrubbing — narrow.
 #
-# The maturin shell-out invokes the host cargo, which in turn invokes the
-# host C compiler. Both honor a long list of env vars that, if leaked
-# from the developer's shell, silently change the build:
+# The maturin shell-out invokes the host cargo, which invokes the host C
+# compiler. Some shell env vars genuinely break reproducibility if
+# leaked from a developer's session:
 #
-#   CC / CXX / AR / RANLIB          — compiler binaries
-#   CFLAGS / CXXFLAGS / CPPFLAGS    — compile flags
-#   LDFLAGS                         — link flags
-#   DYLD_LIBRARY_PATH (macOS)
-#   LD_LIBRARY_PATH (Linux)         — dynamic-loader search
-#   LIBRARY_PATH / CPATH            — static linker / preprocessor search
-#   PKG_CONFIG_PATH                 — pkg-config search
-#   RUSTFLAGS / RUSTC / RUSTC_WRAPPER — rustc behavior
-#   CARGO_TARGET_DIR                — output redirection
-#   OPENSSL_DIR / PROTOC            — system-lib pointers
+#   DYLD_LIBRARY_PATH / LD_LIBRARY_PATH — drag in unrelated dylibs at
+#       runtime; the wheel works locally but fails in CI or in user
+#       venvs that don't have those dirs.
+#   RUSTFLAGS / RUSTC / RUSTC_WRAPPER — alter the rustc invocation
+#       silently (e.g. an old `-C link-arg=...` from another project).
+#   CARGO_TARGET_DIR — redirects the build output and confuses maturin's
+#       wheel-find logic.
+#   OPENSSL_DIR / PROTOC — system-lib pointers that, when present, take
+#       precedence over what crate_universe set up.
 #
-# A developer who has these set for some unrelated project ("oh I need
-# DYLD_LIBRARY_PATH for that Conda env") will produce wheels that work
-# locally and fail in CI. Scrub them on entry, then pin CC/CXX to a
-# known-stable system compiler so the cdylib's C-side links the same way
-# on every machine.
+# What we deliberately DO NOT scrub:
+#   - CC / CXX / AR / RANLIB / CFLAGS / LDFLAGS / CPATH / LIBRARY_PATH /
+#     SDKROOT / DEVELOPER_DIR / MACOSX_DEPLOYMENT_TARGET — these belong
+#     to the host toolchain's normal configuration; clobbering them
+#     breaks the macOS SDK's `<sys/proc.h>` (`u_quad_t`, `MAXCOMLEN`)
+#     and other system headers that the user's shell already set up
+#     correctly via xcode-select / homebrew / conda.
+#   - PKG_CONFIG_PATH — sometimes needed for OpenSSL/zlib lookup on
+#     macOS+homebrew layouts.
+#
+# Override per-invocation with HERMETICITY_GUARD_SKIP_SCRUB=1 if you're
+# debugging a build that needs a specific shell var to leak through.
 # ---------------------------------------------------------------------------
 hermeticity_scrub_env() {
-    unset CC CXX AR RANLIB \
-          CFLAGS CXXFLAGS CPPFLAGS LDFLAGS \
-          DYLD_LIBRARY_PATH LD_LIBRARY_PATH LIBRARY_PATH CPATH \
-          PKG_CONFIG_PATH \
+    if [[ "${HERMETICITY_GUARD_SKIP_SCRUB:-0}" = "1" ]]; then
+        return 0
+    fi
+    unset DYLD_LIBRARY_PATH LD_LIBRARY_PATH \
           RUSTFLAGS RUSTC RUSTC_WRAPPER \
           CARGO_TARGET_DIR \
-          OPENSSL_DIR PROTOC \
-          MACOSX_DEPLOYMENT_TARGET
-
-    case "$(uname -s)" in
-        Darwin)
-            export CC=clang
-            export CXX=clang++
-            # Match `.bazelrc build:macos --macos_minimum_os=12.0`.
-            export MACOSX_DEPLOYMENT_TARGET=12.0
-            ;;
-        Linux)
-            export CC=gcc
-            export CXX=g++
-            ;;
-        *)
-            # Windows CI cells configure their own toolchain via the
-            # GH Actions matrix; nothing to do locally.
-            ;;
-    esac
+          OPENSSL_DIR PROTOC
 }
 
 _guard_pin() {
@@ -94,7 +82,24 @@ _guard_skip() {
 }
 
 hermeticity_guard() {
-    local uv="$1"
+    # The caller passes the multitool uv binary as $1; Bazel substitutes
+    # a runfiles-relative path (e.g. `../rules_multitool~~...~uv/uv`),
+    # which stops resolving the moment we `cd` away from runfiles.
+    # Resolve to an absolute path here so the rest of this script — and
+    # the caller's eventual `cd "$BUILD_WORKSPACE_DIRECTORY/python"` +
+    # `"$UV" run ...` — keeps working.
+    local uv_in="$1"
+    local uv
+    if [[ "$uv_in" = /* ]]; then
+        uv="$uv_in"
+    else
+        uv="$(cd "$(dirname "$uv_in")" && pwd)/$(basename "$uv_in")"
+    fi
+    # Re-export so the caller (after `shift`) can use the absolute path.
+    # The caller stores $1 in `UV` before calling us; we update that
+    # binding by writing back to a well-known name they can read.
+    HERMETIC_UV="$uv"
+
     local pyproject="${BUILD_WORKSPACE_DIRECTORY}/python/pyproject.toml"
     if [[ ! -f "$pyproject" ]]; then
         echo "hermeticity_guard: cannot find $pyproject" >&2
@@ -106,6 +111,21 @@ hermeticity_guard() {
     # against a corrupted environment either.
     hermeticity_scrub_env
 
+    # Ensure the uv-managed venv has the dev tools installed (maturin,
+    # pytest, mypy, twine, ...). `uv run` doesn't auto-install from
+    # `[build-system].requires` or `[project.optional-dependencies].dev`,
+    # so without this step every wrapper's first command fails with
+    # `Failed to spawn: maturin` (or similar). The sync is a no-op when
+    # the venv is already populated and pyproject.toml hasn't moved.
+    if ! _guard_skip sync; then
+        ( cd "$BUILD_WORKSPACE_DIRECTORY/python" \
+            && "$uv" sync --extra dev --quiet ) || {
+            echo "hermeticity_guard: failed to sync the uv venv ($BUILD_WORKSPACE_DIRECTORY/python)" >&2
+            echo "  fix: run 'cd python && uv sync --extra dev' manually to surface uv's full error message" >&2
+            return 1
+        }
+    fi
+
     local pin_uv pin_maturin pin_python pin_rust
     pin_uv=$(_guard_pin uv "$pyproject")
     pin_maturin=$(_guard_pin maturin "$pyproject")
@@ -114,12 +134,17 @@ hermeticity_guard() {
 
     local fail=0
 
+    # `||true` on every probe so a non-zero exit (pipefail + head closing
+    # stdin, uv-run install failure, etc.) doesn't kill the script before
+    # the explicit comparison runs. The comparison handles empty by
+    # emitting a mismatch message with `<missing>`.
+
     # uv: version banner is `uv 0.5.18 (abc123 2024-12-30)`.
     if ! _guard_skip uv; then
         local live_uv
-        live_uv="$("$uv" --version 2>/dev/null | awk '{print $2}')"
+        live_uv="$("$uv" --version 2>/dev/null | awk '{print $2}' || true)"
         if [[ "$live_uv" != "$pin_uv" ]]; then
-            echo "hermeticity_guard: uv version mismatch (pinned=$pin_uv, live=$live_uv)" >&2
+            echo "hermeticity_guard: uv version mismatch (pinned=$pin_uv, live=${live_uv:-<missing>})" >&2
             echo "  fix: update MODULE.bazel uv.toolchain(uv_version=...) to match, then bazel sync" >&2
             fail=1
         fi
@@ -129,9 +154,9 @@ hermeticity_guard() {
     # (uv installs maturin from [build-system].requires == 1.7.4).
     if ! _guard_skip maturin; then
         local live_maturin
-        live_maturin="$(cd "$BUILD_WORKSPACE_DIRECTORY/python" \
-            && "$uv" run --quiet maturin --version 2>/dev/null \
-            | awk '{print $2}')"
+        live_maturin="$( (cd "$BUILD_WORKSPACE_DIRECTORY/python" \
+            && "$uv" run --quiet maturin --version 2>/dev/null) \
+            | awk '{print $2}' || true)"
         if [[ "$live_maturin" != "$pin_maturin" ]]; then
             echo "hermeticity_guard: maturin version mismatch (pinned=$pin_maturin, live=${live_maturin:-<missing>})" >&2
             echo "  fix: update pyproject.toml [build-system].requires AND [tool.batchalign.pinned_tools].maturin" >&2
@@ -142,8 +167,8 @@ hermeticity_guard() {
     # python: major.minor only (patch level is CI-controlled).
     if ! _guard_skip python; then
         local live_python
-        live_python="$(cd "$BUILD_WORKSPACE_DIRECTORY/python" \
-            && "$uv" run --quiet python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)"
+        live_python="$( (cd "$BUILD_WORKSPACE_DIRECTORY/python" \
+            && "$uv" run --quiet python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null) || true)"
         if [[ "$live_python" != "$pin_python" ]]; then
             echo "hermeticity_guard: python version mismatch (pinned=$pin_python, live=${live_python:-<missing>})" >&2
             echo "  fix: update MODULE.bazel python.toolchain(python_version=...) AND .bazelrc python_version setting" >&2
@@ -154,7 +179,7 @@ hermeticity_guard() {
     # rustc: required for the cargo invocation maturin makes.
     if ! _guard_skip rustc; then
         local live_rust
-        live_rust="$(rustc --version 2>/dev/null | awk '{print $2}')"
+        live_rust="$(rustc --version 2>/dev/null | awk '{print $2}' || true)"
         if [[ "$live_rust" != "$pin_rust" ]]; then
             echo "hermeticity_guard: rustc version mismatch (pinned=$pin_rust, live=${live_rust:-<missing>})" >&2
             echo "  fix: update MODULE.bazel rust.toolchain(versions=[...]) AND rust-toolchain.toml" >&2
