@@ -38,10 +38,16 @@ fi
 # `"${arr[@]+"${arr[@]}"}"` is the bash-set-u-safe way to splat a
 # possibly-empty array — naked `"${arr[@]}"` trips `unbound variable`
 # in bash 4.4+ when the array has zero elements.
+# Do NOT pass `--manifest-path` on the command line: maturin treats that
+# as "lone Cargo project" mode and derives the wheel name from Cargo.toml
+# `[package].name` (which is `batchalign-engine`), bypassing the
+# `[project].name = "batchalign"` declared in pyproject.toml. The
+# `[tool.maturin].manifest-path` field in pyproject.toml supplies the
+# Cargo.toml path while keeping pyproject as the metadata source of
+# truth, which produces `batchalign-<version>-<tag>.whl`.
 "$UV" run maturin build \
     "${profile_flag[@]+"${profile_flag[@]}"}" \
     "${target_flag[@]+"${target_flag[@]}"}" \
-    --manifest-path ../crates/batchalign/batchalign-engine/Cargo.toml \
     --out target/wheels \
     "$@"
 ls -lh target/wheels/ || true
