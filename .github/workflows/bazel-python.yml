@@ -1,26 +1,38 @@
 name: bazel · python
 
-# Maturin builds the batchalign3 wheel, Bazel orchestrates. This
-# workflow runs maturin develop + pytest + mypy against the editable
-# install. Wheel-publishing is its own workflow (publish-pypi.yml).
+# Bazel-native dev / test path for the batchalign Python package.
+# The cdylib is built by `rust_shared_library` + macOS dynamic_lookup
+# link flags + a static pyo3-config.txt (see crates/batchalign/
+# batchalign-engine/BUILD.bazel and bazel/python/pyo3-config.txt).
+# `py_library` / `py_binary` / `py_test` consume the natively-built .so
+# directly — no maturin in this loop.
+#
+# The release wheel still uses maturin (sole pyproject.toml reader for
+# the multi-platform tagging matrix); that's the publish-pypi workflow.
 
 on:
   push:
     branches: [main]
     paths:
       - "python/**"
-      - "crates/batchalign/batchalign-pyo3/**"
-      - "crates/batchalign/batchalign-types/**"
+      - "crates/batchalign/batchalign-core/**"
+      - "crates/batchalign/batchalign-engine/**"
+      - "crates/core/talkbank-model/**"
+      - "crates/core/talkbank-parser/**"
       - "crates/core/talkbank-transform/**"
+      - "bazel/python/**"
       - "MODULE.bazel"
       - "MODULE.bazel.lock"
       - ".github/workflows/bazel-python.yml"
   pull_request:
     paths:
       - "python/**"
-      - "crates/batchalign/batchalign-pyo3/**"
-      - "crates/batchalign/batchalign-types/**"
+      - "crates/batchalign/batchalign-core/**"
+      - "crates/batchalign/batchalign-engine/**"
+      - "crates/core/talkbank-model/**"
+      - "crates/core/talkbank-parser/**"
       - "crates/core/talkbank-transform/**"
+      - "bazel/python/**"
       - "MODULE.bazel"
       - "MODULE.bazel.lock"
       - ".github/workflows/bazel-python.yml"
@@ -30,7 +42,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  develop-and-test:
+  build-and-test:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -45,18 +57,27 @@ jobs:
           disk-cache: ${{ github.workflow }}
           repository-cache: true
 
-      - name: Install uv (Python project manager)
-        uses: astral-sh/setup-uv@v3
+      # Lockfile drift gate — fails if pyproject.toml was edited without
+      # running `bazel run //python:requirements`. Run first so the build
+      # below can't hide a stale lockfile.
+      - name: requirements.lock.txt drift check
+        run: bazel test --config=ci //python:requirements_test
 
-      - name: Install Python 3.12 via uv
-        working-directory: python
-        run: uv python install 3.12
+      # Bazel-native cdylib via rust_shared_library + pyo3-config.txt.
+      # Verifies the abi3 + dynamic_lookup wiring builds an importable .so.
+      - name: bazel build engine cdylib + py_library
+        run: |
+          bazel build --config=ci \
+            //crates/batchalign/batchalign-engine:_core_so \
+            //python/batchalign:batchalign_lib \
+            //python/batchalign:batchalign \
+            //python/batchalign:wheel
 
-      - name: Maturin editable install (bazel-orchestrated)
-        run: bazel run //python/batchalign:develop
+      # py_test runs pytest against the Bazel-built .so.
+      - name: bazel test pytest
+        run: bazel test --config=ci //python/batchalign:pytest
 
-      - name: pytest
-        run: bazel run //python/batchalign:test -- -q
-
-      - name: mypy
-        run: bazel run //python/batchalign:lint
+      # Smoke: invoke the CLI through py_binary to catch packaging regressions
+      # that pytest alone wouldn't surface (PYTHONPATH, runfiles layout, etc.).
+      - name: CLI smoke (py_binary --help)
+        run: bazel run //python/batchalign -- --help

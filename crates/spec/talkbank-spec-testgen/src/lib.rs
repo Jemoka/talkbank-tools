@@ -94,7 +94,7 @@
 //! Load all construct specs and inspect their examples:
 //!
 //! ```no_run
-//! use generators::ConstructSpec;
+//! use talkbank_spec_testgen::ConstructSpec;
 //!
 //! let specs = ConstructSpec::load_all("../../spec/constructs")
 //!     .expect("failed to load construct specs");
@@ -115,7 +115,7 @@
 //! Load all error specs and list their codes:
 //!
 //! ```no_run
-//! use generators::ErrorSpec;
+//! use talkbank_spec_testgen::ErrorSpec;
 //!
 //! let specs = ErrorSpec::load_all("../../spec/errors")
 //!     .expect("failed to load error specs");

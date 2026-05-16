@@ -4,8 +4,8 @@
 //! directly to talkbank-tools.
 
 use clap::Parser;
-use generators::output::rust_test;
-use generators::spec::{ConstructSpec, ErrorSpec};
+use talkbank_spec_testgen::output::rust_test;
+use talkbank_spec_testgen::spec::{ConstructSpec, ErrorSpec};
 use std::path::PathBuf;
 
 /// CLI arguments: input spec directories, output directory for generated `.rs` files, and test error type path.

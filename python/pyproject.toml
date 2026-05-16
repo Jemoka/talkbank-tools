@@ -1,17 +1,20 @@
 [build-system]
-requires = ["maturin>=1.7,<2.0"]
+# Exact pin (==) rather than a range so the build is reproducible. Bump in
+# lockstep with `[tool.batchalign.pinned_tools].maturin` below; the
+# hermeticity guard asserts the runtime version matches.
+requires = ["maturin==1.7.4"]
 build-backend = "maturin"
 
 [project]
-name = "batchalign3"
-version = "0.1.0"
-description = "Transcription, alignment, and language-sample analysis for TalkBank CHAT transcripts"
-readme = "python/batchalign/README.md"
+name = "batchalign"
+version = "0.3.0"
+description = "TalkBank CHAT processing pipeline"
+readme = "batchalign/README.md"
 license = "BSD-3-Clause"
-requires-python = ">=3.12"
+requires-python = "==3.12.*"
 authors = [
     { name = "Brian MacWhinney", email = "macw@cmu.edu" },
-    { name = "Houjun Liu", email = "houjun@cmu.edu" },
+    { name = "Houjun Liu", email = "houjun@stanford.edu" },
     { name = "Franklin Chen", email = "franklinchen@franklinchen.com" },
 ]
 keywords = ["nlp", "linguistics", "chat", "talkbank", "transcription", "forced-alignment", "morphosyntax"]
@@ -21,103 +24,96 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing :: Linguistic",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Programming Language :: Rust",
 ]
 dependencies = [
-    # Core ML
-    "torch>=2.4.0",
-    "torchaudio>=2.4.0",
-    "transformers>=4.38.2",
-    "tokenizers>=0.14.1",
-    "numpy>=1.26",
-    "stanza[transformers]>=1.12.0",
-    "pycountry>=22.3",
-    "soundfile>=0.12.0",
-    # ASR
-    "openai-whisper",
-    "numba>=0.61.0",
-    "llvmlite>=0.44.0",
-    # Speaker diarization
-    "pyannote.audio>=3.1",
-    "onnxruntime>=1.16",
-    # Audio analysis
-    "opensmile>=2.5.0",
-    "praat-parselmouth>=0.4.6",
-    # Translation
-    "googletrans",
-    # Runtime
-    "pydantic>=2.4",
-    "platformdirs>=4.3.0",
-    "filelock>=3.0.0",
-    "omegaconf>=2.3",
-    "typing-extensions",
-    "certifi",
-    # Utilities
-    "nltk>=3.8",
-    "praatio>=6.0.0",
-    # Cloud ASR providers
-    "tencentcloud-sdk-python-common",
-    "tencentcloud-sdk-python-asr",
-    "cos-python-sdk-v5",
-    "aliyun-python-sdk-core>=2.13.3",
-    "alibabacloud-nls-python-sdk>=1.0.0",
-    "funasr",
-    # Bounded pin so PyCantonese major-version bumps (which can change
-    # transitive Rust dependencies) are deliberate decisions, not
-    # accidental upgrades.
-    "pycantonese>=4.2,<5",
+    "typer>=0.12",
+    "tqdm>=4",
+    "numpy>=1.24",
+    "polars>=0.20",
+    "soundfile>=0.12",
 ]
 
+# Optional dependency groups. A user pulling in heavy ML stacks opts in
+# explicitly via `batchalign[whisper]`, `batchalign[stanza]`, etc.
+# `batchalign[all]` is the kitchen sink for users who don't care.
 [project.optional-dependencies]
-# ── Development/build ─────────────────────────────────────────────────
-train = [
-    "accelerate>=0.27",
-    "click>=8.1",
-    "rich>=13.6",
-    "rich-click>=1.7.0",
+whisper      = ["transformers>=4.38", "torch>=2.0", "torchaudio>=2.0"]
+vllm         = ["openai>=1.0", "librosa>=0.10"]
+stanza       = ["stanza>=1.12"]
+pyannote     = ["pyannote.audio>=3.0", "onnxruntime>=1.16"]
+revai        = ["rev-ai"]
+cantonese    = ["pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "aliyun-python-sdk-core>=2.13", "funasr"]
+opensmile    = ["opensmile>=2.5"]
+avqi         = ["praat-parselmouth>=0.4.6"]
+translate    = ["googletrans"]
+all = [
+    "transformers>=4.38", "torch>=2.0", "torchaudio>=2.0",
+    "openai>=1.0", "librosa>=0.10",
+    "stanza>=1.12",
+    "pyannote.audio>=3.0", "onnxruntime>=1.16",
+    "rev-ai",
+    "pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "aliyun-python-sdk-core>=2.13", "funasr",
+    "opensmile>=2.5",
+    "praat-parselmouth>=0.4.6",
+    "googletrans",
 ]
-docs = ["mkdocs-material", "mkdocs-click"]
+dev = [
+    "maturin==1.7.4",  # mirror [build-system].requires + pinned_tools
+    "pytest>=7",
+    "pytest-xdist",
+    "mypy",
+    "twine>=5",        # used by `just batchalign publish`
+]
 
 [project.scripts]
-batchalign3 = "batchalign._cli:main"
+batchalign3 = "batchalign.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/TalkBank/talkbank-tools/tree/main/batchalign"
+Homepage = "https://github.com/TalkBank/talkbank-tools"
 Repository = "https://github.com/TalkBank/talkbank-tools"
-Documentation = "https://github.com/TalkBank/talkbank-tools/tree/main/batchalign-book"
 Issues = "https://github.com/TalkBank/talkbank-tools/issues"
 
+# Maturin builds the engine crate's cdylib and drops the resulting .so
+# at `python/batchalign/_core/_core.<abi>.so`. Python imports the symbols
+# via `from batchalign._core import ...`.
 [tool.maturin]
-manifest-path = "crates/batchalign-pyo3/Cargo.toml"
+manifest-path = "../crates/batchalign/batchalign-engine/Cargo.toml"
 python-source = "."
-python-packages = ["batchalign"]
-features = ["pyo3/extension-module"]
-# Use the debug profile for editable installs so `uv run <anything>` rebuilds
-# the extension in seconds rather than minutes. Release wheels for distribution
-# are built explicitly via `maturin build --release` in the deploy script,
-# which overrides this setting.
-profile = "dev"
-include = [
-    { path = "python/batchalign/runtime_constants.toml", format = "sdist" },
-    { path = "python/batchalign/runtime_constants.toml", format = "wheel" },
-    { path = "python/batchalign/_bin/batchalign3", format = "wheel" },
-    { path = "python/batchalign/_bin/batchalign3.exe", format = "wheel" },
-]
+module-name   = "batchalign._core"
+features      = ["pyo3/extension-module"]
+profile       = "dev"
+
+# ---------------------------------------------------------------------------
+# Hermeticity pins.
+#
+# Since the Python wheel build path escapes Bazel (maturin shells out to the
+# host cargo and to the host CPython), we guard the escape ourselves: the
+# `bazel/python/hermeticity_guard.sh` script asserts that the live versions
+# of these tools match the pins below before any maturin/uv/pytest invocation.
+#
+# Bumping a pin:
+#   1. Update the value here.
+#   2. For uv:     also update `MODULE.bazel` -> `uv.toolchain(uv_version = ...)`.
+#   3. For python: also update `MODULE.bazel` -> `python.toolchain(python_version = ...)`
+#                  and `.bazelrc` -> `--@rules_python//python/config_settings:python_version=...`.
+#   4. For maturin: also update `[build-system].requires` above (PEP 517 build
+#                   pin) and the dev-deps section if listed.
+# ---------------------------------------------------------------------------
+[tool.batchalign.pinned_tools]
+python = "3.12"      # major.minor; patch float is intentional (cibuildwheel
+                     # picks the CI runner's patch level for each matrix cell)
+uv = "0.5.18"        # mirror MODULE.bazel uv.toolchain
+maturin = "1.7.4"    # used for `maturin develop` and `maturin build` —
+                     # bump in lockstep with [build-system].requires
+rust = "1.95.0"      # mirror MODULE.bazel rust.toolchain(versions = [...])
 
 [dependency-groups]
 dev = [
-    "batchalign3",
-    "maturin>=1.7,<2.0",
-    "mypy",
-    "pytest",
-    "pytest-asyncio",
-    "pytest-cov>=5.0",
-    "pytest-xdist",
-    "ty",
-    "types-requests>=2.32.4.20260107",
+    "pytest>=9.0.3",
 ]

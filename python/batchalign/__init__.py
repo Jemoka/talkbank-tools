@@ -1,29 +1,114 @@
-"""Batchalign: ASR, forced alignment, and morphosyntax pipeline for CHAT transcripts.
+"""Batchalign: TalkBank CHAT processing pipeline.
 
-Batchalign3 processes conversation audio files and transcripts in CHAT format
-(Codes for the Human Analysis of Transcripts), the standard format of the
-TalkBank project. The package provides inference functions for automatic speech
-recognition (ASR), forced alignment, morphosyntactic analysis, speaker
-diarization, utterance segmentation, translation, coreference resolution,
-and audio feature extraction.
+The public surface re-exports two layers:
 
-The CHAT parsing and serialization layer is implemented in Rust
-(``batchalign_core``) for correctness and performance. All CHAT
-manipulation goes through principled AST operations -- never ad-hoc
-string or regex hacking.
+1. Types and orchestration primitives from the compiled Rust extension
+   (`batchalign._core`). If the .so is not built yet (e.g. fresh clone
+   without `maturin develop` run), importing this module emits a
+   helpful `ImportError` rather than a cryptic missing-symbol failure.
+
+2. Python-side backends, recipes, and CLI helpers.
+
+See `spec2.md` §16 for the canonical surface map.
 """
 
-# batchalign supports CUDA and CPU inference backends. PyTorch's MPS fallback
-# path is intentionally not enabled because the runtime does not select MPS.
+from __future__ import annotations
 
-import logging
+# ---------------------------------------------------------------------------
+# Core re-exports from the PyO3 extension. We import explicitly so a missing
+# .so produces a single readable diagnostic, not a wall of NameErrors later.
+# ---------------------------------------------------------------------------
+try:
+    from batchalign._core import (  # type: ignore[attr-defined]
+        Task,
+        Pipeline,
+        BAValue,
+        MediaInput,
+        ChatInput,
+        PairedInput,
+        CacheSpec,
+        CachePolicy,
+        BatchPolicy,
+        ProgressEvent,
+        ProgressKind,
+        nuke_cache,
+        default_cache_path,
+    )
+    _CORE_AVAILABLE = True
+except ImportError as _exc:  # pragma: no cover - exercised only without .so
+    _CORE_IMPORT_ERROR = _exc
+    _CORE_AVAILABLE = False
 
-# Library best practice: NullHandler so library users don't get
-# "No handlers could be found" warnings.  The CLI adds its own handlers.
-logging.getLogger("batchalign").addHandler(logging.NullHandler())
+    # We deliberately don't shadow names with stubs — calling code should
+    # fail loudly. But we expose a helper for callers that want to probe.
+    def _core_unavailable(*_args, **_kwargs):
+        raise ImportError(
+            "batchalign._core (the compiled Rust extension) is not built. "
+            "Run `cd python && maturin develop` to build it, then re-import. "
+            f"Original error: {_CORE_IMPORT_ERROR!r}"
+        )
 
-# Suppress noisy third-party loggers without touching the root logger
-for _name in ("nemo_logger", "nemo", "pytorch_lightning"):
-    logging.getLogger(_name).setLevel(logging.WARNING)
+# ---------------------------------------------------------------------------
+# Backends re-export. These are pure Python and do not require _core to load,
+# although individual backend constructors will lazy-import their ML deps.
+# ---------------------------------------------------------------------------
+from batchalign.backends import (  # noqa: E402
+    Backend,
+    ASR,
+    FA,
+    Speaker,
+    UtSeg,
+    Morphosyntax,
+    Translate,
+    Coref,
+    OpenSmile,
+    AVQI,
+    WhisperBackend,
+    StanzaBackend,
+    PyannoteBackend,
+    GoogleTranslateBackend,
+    RevAI,
+    VllmAsrBackend,
+    VllmTranslateBackend,
+)
+from batchalign import recipes  # noqa: E402
+from batchalign import inputs  # noqa: E402
 
-from .errors import *
+__all__ = [
+    # _core types
+    "Task",
+    "Pipeline",
+    "BAValue",
+    "MediaInput",
+    "ChatInput",
+    "PairedInput",
+    "CacheSpec",
+    "CachePolicy",
+    "BatchPolicy",
+    "ProgressEvent",
+    "ProgressKind",
+    "nuke_cache",
+    "default_cache_path",
+    # backend ABCs
+    "Backend",
+    "ASR",
+    "FA",
+    "Speaker",
+    "UtSeg",
+    "Morphosyntax",
+    "Translate",
+    "Coref",
+    "OpenSmile",
+    "AVQI",
+    # concrete backends
+    "WhisperBackend",
+    "StanzaBackend",
+    "PyannoteBackend",
+    "GoogleTranslateBackend",
+    "RevAI",
+    "VllmAsrBackend",
+    "VllmTranslateBackend",
+    # submodules
+    "recipes",
+    "inputs",
+]

@@ -1,8 +1,11 @@
-# `build/` — repo-internal Bazel tooling
+# `bazel/` — repo-internal Bazel tooling
 
 Wrappers, scripts, and small Bazel rules that drive the polyglot build
 chain. Nothing in here is a product; everything in here is a **tool that
 Bazel orchestrates**.
+
+Layout follows the dependency graph of the build itself: deps preparation
+first, then language toolchains, then frontends, then documentation.
 
 The pattern across this tree is the same: when a third-party tool already
 knows how to do the job correctly (maturin builds wheels, vite builds the
@@ -13,15 +16,21 @@ lets Bazel act as the workspace-wide entry point (`bazel run //python/batchalign
 while leaving each ecosystem's canonical tooling in charge of what it
 does best.
 
-| Path | Purpose | Consumer |
-|---|---|---|
-| `cargo/` | `bazel run //bazel/cargo:repin` — regenerate `crate_universe` lock after any `Cargo.toml` edit | public |
-| `sqlx/` | `bazel run //bazel/sqlx:prepare` — regenerate `.sqlx/` query cache for `batchalign-cli`'s `sqlx::query!` macros | public |
-| `python/` | maturin orchestration: `develop`, `maturin_build`, `pytest`, `lint` | `//python` only |
-| `dashboard/` | `vite build` wrapper for the React dashboard SPA | `//apps/batchalign/batchalign-cli-webdashboard` only |
-| `vscode/` | `npm` + `vsce` wrappers for the VS Code extension | `//apps/vscode-extension` only |
-| `book/` | mdBook wrappers (`serve`, `build`, `linkcheck`) | `//book` only |
-| `chatter-tauri/` | `cargo tauri build` wrapper for the Chatter desktop app | `//apps/chatter/chatter-gui/src-tauri` only |
+Ordered by where each entry sits in the build graph:
+
+| Stage | Path | Purpose | Consumer |
+|---|---|---|---|
+| 1. Dep prep | `cargo/` | `bazel run //bazel/cargo:repin` — regenerate `crate_universe` lock after any `Cargo.toml` edit | public |
+| 1. Dep prep | `sqlx/` | `bazel run //bazel/sqlx:prepare` — regenerate `.sqlx/` query cache for `batchalign-cli`'s `sqlx::query!` macros | public |
+| 1. Dep prep | `patches/` | crate_universe patch files (see `MODULE.bazel`) | crate_universe only |
+| 2. Toolchains | `python/` | `uv` + `maturin` orchestration: `cli`, `develop`, `maturin_build`, `pytest`, `lint`. Profile via `MATURIN_PROFILE` or `BAZEL_COMPILATION_MODE`. | `//python` only |
+| 3. App bundlers | `chatter-tauri/` | `cargo tauri build` wrapper for Chatter desktop. Profile via `TAURI_PROFILE` or `BAZEL_COMPILATION_MODE`. | `//apps/chatter/chatter-gui/src-tauri` only |
+| 3. App bundlers | `vscode/` | `npm` + `vsce` wrappers for the VS Code extension | `//apps/vscode-extension` only |
+| 4. Docs | `book/` | mdBook wrappers (`serve`, `build`, `linkcheck`) | `//book` only |
+
+Removed: `dashboard/` — wrapped the deleted batchalign-cli-webdashboard
+Vite SPA. The replacement Tauri shell at `apps/batchalign/dashboard-desktop`
+builds outside Bazel via `cargo tauri build`.
 
 ## When to add a new subdir
 

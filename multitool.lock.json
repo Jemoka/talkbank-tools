@@ -1,5 +1,41 @@
 {
   "$schema": "https://raw.githubusercontent.com/theoremlp/rules_multitool/main/lockfile.schema.json",
+  "mdbook": {
+    "binaries": [
+      {
+        "kind": "archive",
+        "url": "https://github.com/rust-lang/mdBook/releases/download/v0.5.2/mdbook-v0.5.2-x86_64-unknown-linux-gnu.tar.gz",
+        "sha256": "084e4342ba564db270108763e404a7d1f309d932651a22484e93c0dc1a071f6d",
+        "file": "mdbook",
+        "os": "linux",
+        "cpu": "x86_64"
+      },
+      {
+        "kind": "archive",
+        "url": "https://github.com/rust-lang/mdBook/releases/download/v0.5.2/mdbook-v0.5.2-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "fb229bfdc68dd6c93692e64c502a67a8d3d2fc35c37c61fc72768843e6476add",
+        "file": "mdbook",
+        "os": "linux",
+        "cpu": "arm64"
+      },
+      {
+        "kind": "archive",
+        "url": "https://github.com/rust-lang/mdBook/releases/download/v0.5.2/mdbook-v0.5.2-x86_64-apple-darwin.tar.gz",
+        "sha256": "17cc64478ec279a73881420e850bd8f9d460552e56b50159ff465bc97eb90d6c",
+        "file": "mdbook",
+        "os": "macos",
+        "cpu": "x86_64"
+      },
+      {
+        "kind": "archive",
+        "url": "https://github.com/rust-lang/mdBook/releases/download/v0.5.2/mdbook-v0.5.2-aarch64-apple-darwin.tar.gz",
+        "sha256": "da2f55653e96e3f6e1c53e2e13e91cc0cfbce8ab971c2e0de792c0f1f8d24222",
+        "file": "mdbook",
+        "os": "macos",
+        "cpu": "arm64"
+      }
+    ]
+  },
   "uv": {
     "binaries": [
       {

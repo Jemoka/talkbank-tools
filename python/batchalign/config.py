@@ -1,89 +1,154 @@
-"""Read batchalign user config from ``~/.batchalign.ini``.
+"""Configuration loader for batchalign.
 
-This module is intentionally non-interactive. Setup is performed by the Rust
-CLI command ``batchalign3 setup``; Python runtime code only reads config.
+We read ``~/.batchalign.ini`` in **BA2-compatible** form so users
+migrating from BA2 keep their credentials without manual editing.
+The file uses ``configparser`` syntax with flat dotted keys::
+
+    [asr]
+    engine = rev
+    engine.rev.key = <api key>
+
+    engine.tencent.id     = <secret-id>
+    engine.tencent.key    = <secret-key>
+    engine.tencent.region = ap-guangzhou
+    engine.tencent.bucket = <cos-bucket>
+
+    engine.aliyun.ak_id     = <ak-id>
+    engine.aliyun.ak_secret = <ak-secret>
+    engine.aliyun.ak_appkey = <appkey>
+
+    engine.openai.key = <api key>
+
+    [translate]
+    engine.google.key = <api key>
+
+    [auth]
+    hf_token = <huggingface token>
+
+    [ud]
+    model_version = 1.7.0
+
+Two access shapes:
+
+* :func:`get_api_key` for the common "one provider has one key" case
+  (Rev.AI, OpenAI, HuggingFace, Google Translate).
+* :func:`get_provider` for engines like Tencent / Aliyun that need
+  several fields. Returns a dict of every ``engine.<provider>.<field>``
+  pair found under the requested section.
+
+All lookups also honor environment variables (``BATCHALIGN_<PROVIDER>_*``)
+so CI and containerized runs can avoid touching the home directory.
 """
 
 from __future__ import annotations
 
 import configparser
-from dataclasses import dataclass
+import os
 from pathlib import Path
+from typing import Mapping
 
-from batchalign.errors import ConfigNotFoundError
+CONFIG_PATH = Path.home() / ".batchalign.ini"
 
+# Map of provider names (used in `get_api_key`) to the (section, option)
+# pair in BA2's ini layout. New providers go here.
+_API_KEY_LOCATIONS: Mapping[str, tuple[str, str]] = {
+    "rev": ("asr", "engine.rev.key"),
+    "revai": ("asr", "engine.rev.key"),
+    "openai": ("asr", "engine.openai.key"),
+    "qwen": ("asr", "engine.aliyun.ak_secret"),
+    "google_translate": ("translate", "engine.google.key"),
+    "google": ("translate", "engine.google.key"),
+    "hf": ("auth", "hf_token"),
+    "huggingface": ("auth", "hf_token"),
+}
 
-@dataclass(frozen=True, slots=True)
-class LegacyConfigRuntime:
-    """Typed runtime inputs for locating the legacy ``.batchalign.ini`` file."""
-
-    config_path: Path
-
-    @classmethod
-    def from_sources(
-        cls,
-        config_path: str | Path | None = None,
-        home_dir: str | Path | None = None,
-    ) -> LegacyConfigRuntime:
-        """Build the config runtime from explicit path/home sources."""
-        if config_path is not None and str(config_path).strip():
-            return cls(config_path=Path(config_path).expanduser())
-
-        if home_dir is not None and str(home_dir).strip():
-            home_path = Path(home_dir).expanduser()
-        else:
-            home_path = Path.home()
-        return cls(config_path=home_path / ".batchalign.ini")
-
-
-def interactive_setup() -> configparser.ConfigParser:
-    """Compatibility shim for removed Python interactive setup.
-
-    Interactive setup was retired with the Python CLI/server migration.
-    Use ``batchalign3 setup`` instead.
-    """
-    raise ConfigNotFoundError(
-        "Interactive Python setup is retired. Run 'batchalign3 setup' to create "
-        "or update ~/.batchalign.ini."
-    )
+# Map of provider -> (section, prefix). `get_provider("tencent")` returns
+# every option under `[asr]` whose name starts with `engine.tencent.`, with
+# the prefix stripped (e.g. ``engine.tencent.id`` → key ``id``).
+_PROVIDER_LOCATIONS: Mapping[str, tuple[str, str]] = {
+    "tencent": ("asr", "engine.tencent."),
+    "aliyun": ("asr", "engine.aliyun."),
+    "funasr": ("asr", "engine.funasr."),
+    "qwen": ("asr", "engine.qwen."),
+    "openai": ("asr", "engine.openai."),
+    "rev": ("asr", "engine.rev."),
+    "google": ("translate", "engine.google."),
+}
 
 
-def config_read(
-    interactive: bool = False,
-    *,
-    runtime: LegacyConfigRuntime | None = None,
-) -> configparser.ConfigParser:
-    """Read ``~/.batchalign.ini`` and backfill required defaults.
-
-    Parameters
-    ----------
-    interactive:
-        Kept for backward compatibility. If ``True`` and the file is missing,
-        this function raises with guidance to use ``batchalign3 setup``.
-    """
-    resolved_runtime = runtime or LegacyConfigRuntime.from_sources()
-    config_path = resolved_runtime.config_path
-
+def _load_config(path: Path = CONFIG_PATH) -> configparser.ConfigParser | None:
+    """Read and return a parsed config, or ``None`` if the file doesn't exist."""
+    if not path.exists():
+        return None
+    cfg = configparser.ConfigParser()
     try:
-        with open(config_path, "r+", encoding="utf-8") as df:
-            config = configparser.ConfigParser()
-            config.read_file(df)
+        cfg.read(path)
+    except (configparser.Error, OSError):
+        return None
+    return cfg
 
-            # Backfill legacy default expected by pipeline dispatch; keep file forward-compatible.
-            if not config.has_option("ud", "model_version"):
-                if not config.has_section("ud"):
-                    config["ud"] = {}
-                config["ud"]["model_version"] = "1.7.0"
-                df.seek(0)
-                config.write(df)
-                df.truncate()
 
-            return config
-    except FileNotFoundError:
-        if interactive:
-            return interactive_setup()
+def get(section: str, option: str, *, path: Path = CONFIG_PATH) -> str | None:
+    """Generic config getter. Returns ``None`` if absent."""
+    cfg = _load_config(path)
+    if cfg is None or not cfg.has_option(section, option):
+        return None
+    return cfg.get(section, option)
 
-        raise ConfigNotFoundError(
-            f"Batchalign cannot find {config_path}. Run 'batchalign3 setup' to "
-            "generate the legacy config file (for example when using Rev.AI keys)."
-        )
+
+def get_api_key(provider: str, *, path: Path = CONFIG_PATH) -> str | None:
+    """Return the API key for ``provider``, or ``None`` if not configured.
+
+    Resolution order:
+      1. ``BATCHALIGN_<PROVIDER>_KEY`` env var (uppercased).
+      2. ``~/.batchalign.ini`` per :data:`_API_KEY_LOCATIONS`.
+    """
+    env_var = f"BATCHALIGN_{provider.upper()}_KEY"
+    env_val = os.environ.get(env_var)
+    if env_val:
+        return env_val
+    loc = _API_KEY_LOCATIONS.get(provider.lower())
+    if loc is None:
+        return None
+    return get(loc[0], loc[1], path=path)
+
+
+def get_provider(
+    provider: str,
+    *,
+    path: Path = CONFIG_PATH,
+) -> dict[str, str]:
+    """Return every ``engine.<provider>.<field>`` value as a flat dict.
+
+    Empty dict when the section / prefix is absent. Environment variables
+    of the form ``BATCHALIGN_<PROVIDER>_<FIELD>`` override the file values
+    (uppercased; e.g. ``BATCHALIGN_TENCENT_ID``).
+    """
+    out: dict[str, str] = {}
+    loc = _PROVIDER_LOCATIONS.get(provider.lower())
+    if loc is not None:
+        section, prefix = loc
+        cfg = _load_config(path)
+        if cfg is not None and cfg.has_section(section):
+            for name, value in cfg.items(section):
+                if name.startswith(prefix):
+                    out[name[len(prefix):]] = value
+    env_prefix = f"BATCHALIGN_{provider.upper()}_"
+    for env_name, env_value in os.environ.items():
+        if env_name.startswith(env_prefix):
+            out[env_name[len(env_prefix):].lower()] = env_value
+    return out
+
+
+def has_config(path: Path = CONFIG_PATH) -> bool:
+    """Whether ``~/.batchalign.ini`` exists and is readable."""
+    return _load_config(path) is not None
+
+
+__all__ = [
+    "CONFIG_PATH",
+    "get",
+    "get_api_key",
+    "get_provider",
+    "has_config",
+]

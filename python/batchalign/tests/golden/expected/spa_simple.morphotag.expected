@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	spa
-@Participants:	PAR Participant
-@ID:	spa|test|PAR|||||Participant|||
-*PAR:	el gato es grande .
-%mor:	det|el-Masc-Def-Art-Sing noun|gato-Masc aux|ser-Fin-Ind-Pres-S3 adj|grande-S1 .
-%gra:	1|2|DET 2|4|NSUBJ 3|4|COP 4|0|ROOT 5|4|PUNCT
-@End

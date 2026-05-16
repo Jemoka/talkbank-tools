@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
 
-use generators::spec::error_corpus::ErrorCorpusSpec;
+use talkbank_spec_testgen::spec::error_corpus::ErrorCorpusSpec;
 
 /// Generates a Markdown coverage dashboard showing validation implementation status by category and priority.
 fn main() -> Result<()> {

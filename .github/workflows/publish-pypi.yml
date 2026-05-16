@@ -1,17 +1,22 @@
-name: publish · pypi (batchalign3)
+name: publish · pypi (batchalign)
 
-# Builds the batchalign3 wheel via Bazel + maturin, then uploads to PyPI
-# via the trusted-publisher action. Build half is bazelified; PyPI
-# upload is workflow-only (needs OIDC permissions).
+# Multi-platform wheel matrix + trusted-publisher upload to PyPI.
 #
-# Dry-run: leave `publish` unchecked → builds wheels for every supported
-# platform and uploads them as workflow artifacts only.
+# Per-cell flow:
+#   bazel + setup-rust + setup-uv → pins asserted by hermeticity_guard
+#   → `just batchalign wheel-<platform>` → maturin → wheel artifact
+#
+# manylinux retagging happens via auditwheel inside the Linux cells
+# (maturin's build invokes it when MATURIN_USE_AUDITWHEEL is set).
+#
+# Dry-run: leave `publish` unchecked → builds for every supported platform
+# and uploads as workflow artifacts only.
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Wheel version (e.g. 0.1.5)"
+        description: "Wheel version (must match python/pyproject.toml [project].version)"
         required: true
         type: string
       publish:
@@ -24,26 +29,74 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert pyproject.toml version matches input tag
+        run: |
+          pyver=$(awk -F'"' '/^version *= *"/ {print $2; exit}' python/pyproject.toml)
+          if [[ "$pyver" != "${{ inputs.tag }}" ]]; then
+            echo "::error::pyproject.toml version ($pyver) does not match input tag (${{ inputs.tag }})"
+            echo "  fix: bump python/pyproject.toml [project].version before re-dispatching"
+            exit 1
+          fi
+
   build:
-    runs-on: ${{ matrix.os }}
+    needs: [verify-version]
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        # macOS-14 = arm64 · macOS-13 = intel · ubuntu = manylinux glibc
-        os: [ubuntu-latest, macos-13, macos-14]
+        include:
+          # platform = justfile recipe suffix; triple = Rust target triple
+          - { runner: macos-14,      platform: macos-arm64,   triple: aarch64-apple-darwin }
+          - { runner: macos-13,      platform: macos-x86_64,  triple: x86_64-apple-darwin }
+          - { runner: ubuntu-latest, platform: linux-x86_64,  triple: x86_64-unknown-linux-gnu }
+          - { runner: ubuntu-24.04-arm, platform: linux-aarch64, triple: aarch64-unknown-linux-gnu }
+          - { runner: windows-latest, platform: windows-x86_64, triple: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v4
+
       - uses: bazel-contrib/setup-bazel@0.15.0
-        with: { bazelisk-cache: true, disk-cache: publish-pypi }
+        with:
+          bazelisk-cache: true
+          disk-cache: publish-pypi-${{ matrix.platform }}
+          repository-cache: true
+
+      # Pinned to match python/pyproject.toml [tool.batchalign.pinned_tools].rust.
+      # The hermeticity guard will fail the build if rustc reports a different
+      # version, so the pin is asserted as well as set.
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.95.0"
+          targets: ${{ matrix.triple }}
+
+      # Same pin discipline: setup-uv version must equal the pin in
+      # pyproject.toml [tool.batchalign.pinned_tools].uv; mismatch fails fast.
       - uses: astral-sh/setup-uv@v3
-      - name: Build wheel (bazel → maturin)
+        with:
+          version: "0.5.18"
+
+      # justfile recipe runner. extras `wheel-<platform>` invoke
+      # `bazel run //python/batchalign:wheel` with MATURIN_TARGET=<triple>.
+      - uses: extractions/setup-just@v2
+
+      - name: Build wheel for ${{ matrix.platform }}
         env:
           MATURIN_PROFILE: release
-        run: bazel run //python/batchalign:wheel
+          # `MATURIN_USE_AUDITWHEEL=1` triggers manylinux retagging on Linux;
+          # no-op on macOS/Windows. Linux cells produce manylinux_2_28-tagged
+          # wheels that work across modern glibc distributions.
+          MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
+        run: just batchalign wheel-${{ matrix.platform }}
+
       - uses: actions/upload-artifact@v4
         with:
-          name: batchalign3-wheel-${{ matrix.os }}
+          name: batchalign-wheel-${{ matrix.platform }}
           path: python/target/wheels/*.whl
+          if-no-files-found: error
 
   publish:
     if: ${{ inputs.publish }}
@@ -51,11 +104,17 @@ jobs:
     needs: [build]
     environment: pypi
     permissions:
-      id-token: write  # PyPI trusted-publisher (OIDC)
+      # Required for the trusted-publisher OIDC flow (configure on PyPI
+      # side at https://pypi.org/manage/project/batchalign/settings/publishing/).
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: batchalign3-wheel-*
+          pattern: batchalign-wheel-*
           path: dist/
           merge-multiple: true
+      - name: List artifacts to upload
+        run: ls -lh dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true  # idempotent re-runs at the same version

@@ -12,7 +12,7 @@ use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
 
-use generators::spec::error_corpus::ErrorCorpusSpec;
+use talkbank_spec_testgen::spec::error_corpus::ErrorCorpusSpec;
 
 /// CLI arguments: spec directory, output directory for generated test `.rs` files, and fixture directory for `.cha` inputs.
 #[derive(Parser)]
@@ -211,7 +211,7 @@ fn generate_validation_test_body(
 
 /// Generate a single validation test
 fn generate_validation_test(
-    example: &generators::spec::error_corpus::ErrorCorpusExample,
+    example: &talkbank_spec_testgen::spec::error_corpus::ErrorCorpusExample,
     _level: &str,
     _fixture_dir: &std::path::Path,
 ) -> String {
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_generate_validation_test() -> Result<(), Box<dyn Error>> {
-        use generators::spec::error_corpus::ErrorCorpusExample;
+        use talkbank_spec_testgen::spec::error_corpus::ErrorCorpusExample;
         use std::path::PathBuf;
 
         let example = ErrorCorpusExample {

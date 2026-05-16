@@ -1,68 +1,119 @@
-"""batchalign3 — Python product (PyO3 wheel via maturin).
+"""Bazel-native dev / test path for the batchalign Python package.
 
-Mirrors the crate tier convention: this BUILD.bazel lives at the
-package source root (`python/batchalign/`). Targets:
+Runtime targets (no maturin, no uv at `bazel run` time):
 
-    bazel run //python/batchalign:develop   # maturin develop (editable install)
-    bazel run //python/batchalign:wheel     # maturin build --release
-    bazel run //python/batchalign:test      # pytest
-    bazel run //python/batchalign:lint      # mypy (+ ruff)
+    bazel run  //python/batchalign            # CLI (py_binary)
+    bazel test //python/batchalign:tests      # pytest (py_test)
+    bazel build //python/batchalign           # py_binary + .so + py_library
 
-Maturin is the wheel builder — no Bazel ruleset packages PyO3 wheels.
-See `python/BUILD.bazel` and `bazel/python/` for the orchestration story.
+The cdylib is built natively by `rust_shared_library` in
+`//crates/batchalign/batchalign-engine` and lands at `_core.so`
+alongside the Python sources in the runfiles tree.
 
-Convenience aliases at `//batchalign:wheel`, `//batchalign:develop`, etc.
+Release-only (still maturin — sole reader of pyproject.toml's full
+multi-platform tagging matrix + optional-deps groups):
+
+    bazel run //python/batchalign:wheel       # maturin build
+    bazel run //python/batchalign:publish     # twine upload
+
+`pyproject.toml` is the single source of truth for the wheel
+(version, runtime deps, all `[project.optional-dependencies]`
+groups, scripts, classifiers).
 """
 
+load("@pypi//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
-load("@rules_uv//uv:venv.bzl", "create_venv")
 
 package(default_visibility = ["//visibility:public"])
 
-# `runtime_constants.toml` is embedded into batchalign-cli at compile
-# time via `include_str!`. Re-export so other packages (notably
-# //crates/batchalign/batchalign-cli) can list it as compile_data.
-exports_files(["runtime_constants.toml"])
-
-# Source tree maturin and uv touch. `data` so any target consuming
-# these scripts invalidates when the Python sources change.
-_SRC = glob(["**/*"], exclude = ["BUILD.bazel"])
-_DATA = _SRC + [
-    "//python:project_metadata",
-    "//python:batchalign_core_src",
-    "//python:stubs_src",
-    "//python:batchalign_core.pyi",
+# Runtime Python deps — declared in pyproject.toml `[project] dependencies`,
+# resolved through pip.parse into the `@pypi//*` hub. Bazel-test path uses
+# only these (no optional-deps groups; those gate maturin-built wheel users).
+_RUNTIME_DEPS = [
+    requirement("typer"),
+    requirement("tqdm"),
+    requirement("numpy"),
+    requirement("polars"),
+    requirement("soundfile"),
 ]
 
-create_venv(
-    name = "venv",
-    requirements_txt = "//python:uv.lock",
+py_library(
+    name = "batchalign_lib",
+    srcs = glob(
+        ["**/*.py"],
+        exclude = ["tests/**"],
+    ),
+    # `imports = ["../.."]` puts python/ on PYTHONPATH so `import batchalign`
+    # resolves. The package layout is python/batchalign/{__init__,...}.py.
+    imports = [".."],
+    # The cdylib must be in runfiles next to the Python sources so
+    # `from batchalign._core import ...` finds it. The genrule writes to
+    # the engine package's bindir; py_library carries it as runfiles.
+    data = ["//crates/batchalign/batchalign-engine:_core_so"],
+    deps = _RUNTIME_DEPS,
 )
 
-sh_binary(
-    name = "develop",
-    srcs = ["//bazel/python:maturin_develop.sh"],
-    args = ["$(rootpath @multitool//tools/uv)"],
-    data = _DATA + ["@multitool//tools/uv"],
+# Default runnable target — `bazel run //python/batchalign` invokes
+# `python -m batchalign` against the Bazel-built `.so`.
+py_binary(
+    name = "batchalign",
+    srcs = ["__main__.py"],
+    main = "__main__.py",
+    deps = [":batchalign_lib"],
 )
+
+py_test(
+    name = "pytest",
+    srcs = glob(["tests/**/*.py"]) + ["_pytest_runner.py"],
+    main = "_pytest_runner.py",
+    args = ["python/batchalign/tests", "-q"],
+    deps = [":batchalign_lib"] + _RUNTIME_DEPS + [
+        requirement("pytest"),
+        requirement("pytest-xdist"),
+    ],
+)
+
+# ---------------------------------------------------------------------------
+# Maturin-driven wheel + publish (release path only).
+# ---------------------------------------------------------------------------
+_WHEEL_DATA = [
+    "//bazel/python:hermeticity_guard.sh",
+    "//crates/batchalign/batchalign-engine:_core",
+    "//crates/batchalign/batchalign-core:batchalign_core",
+    "//crates/core/talkbank-model:talkbank_model",
+    "//crates/core/talkbank-parser:talkbank_parser",
+    "//crates/core/talkbank-transform:talkbank_transform",
+    "//python:pyproject.toml",
+]
 
 sh_binary(
     name = "wheel",
     srcs = ["//bazel/python:maturin_build.sh"],
     args = ["$(rootpath @multitool//tools/uv)"],
-    data = _DATA + ["@multitool//tools/uv"],
+    data = ["@multitool//tools/uv"] + _WHEEL_DATA,
 )
 
 sh_binary(
-    name = "test",
-    srcs = ["//bazel/python:pytest.sh"],
+    name = "publish",
+    srcs = ["//bazel/python:twine_upload.sh"],
     args = ["$(rootpath @multitool//tools/uv)"],
-    data = _DATA + ["@multitool//tools/uv"],
+    data = [
+        "@multitool//tools/uv",
+        "//bazel/python:hermeticity_guard.sh",
+        "//python:pyproject.toml",
+    ],
 )
 
+# Lint kept as a shell-out because mypy/ruff configs sit in the uv-managed
+# venv. Could become a py_test rule later; for now sh_binary is enough.
 sh_binary(
     name = "lint",
     srcs = ["//bazel/python:lint.sh"],
     args = ["$(rootpath @multitool//tools/uv)"],
-    data = _DATA + ["@multitool//tools/uv"],
+    data = [
+        "@multitool//tools/uv",
+        "//bazel/python:hermeticity_guard.sh",
+        "//python:pyproject.toml",
+    ],
 )

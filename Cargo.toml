@@ -18,15 +18,13 @@ members = [
     # CLAN (analysis library + FFI to the legacy CLAN app)
     "crates/clan/clan-core",
     "crates/clan/send2clan-sys",
-    # Batchalign (runtime / shared types / Python FFI bridge)
-    "crates/batchalign/batchalign-cli",
-    "crates/batchalign/batchalign-types",
-    "crates/batchalign/batchalign-pyo3",
+    # Batchalign rewrite (spec2.md): types+traits crate, then tokio engine.
+    "crates/batchalign/batchalign-core",
+    "crates/batchalign/batchalign-engine",
     # Workspace dev tooling
     "crates/xtask",
     # Tauri desktop shells (tiered by product)
     "apps/chatter/chatter-gui/src-tauri",
-    "apps/batchalign/batchalign-gui-dashboard/src-tauri",
 ]
 exclude = [
     "fuzz",  # cargo-fuzz uses its own nightly toolchain with sanitizer flags

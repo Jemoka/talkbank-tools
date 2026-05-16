@@ -1,0 +1,54 @@
+[package]
+name = "batchalign-engine"
+version = "0.3.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Tokio runtime, per-backend batching, SQLite cache, and PyO3 Pipeline for batchalign (spec2.md §11–§13)."
+publish = false
+
+[lib]
+name = "_core"
+# `cdylib` is what maturin packages into the Python wheel as `batchalign._core`.
+# `rlib` keeps in-tree Rust integration tests usable.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# Forwarded to PyO3 by maturin during wheel build. Plain `cargo build` leaves
+# it off so tests can link without the Python embed/extension shim toggle.
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+batchalign-core = { path = "../batchalign-core", version = "0.3.0", features = ["python"] }
+talkbank-model = { path = "../../core/talkbank-model", version = "0.2.0" }
+talkbank-parser = { path = "../../core/talkbank-parser", version = "0.2.0" }
+talkbank-transform = { path = "../../core/talkbank-transform", version = "0.2.0" }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+# spec2.md §13 wanted rusqlite for the KV cache, but the monorepo's
+# libsqlite3-sys links-conflict (talkbank-transform pulls sqlx 0.8 which
+# pins a different libsqlite3-sys major than rusqlite 0.34) plus this host's
+# broken macOS SDK for the bundled sqlite3.c build pushed us to a pure-Rust
+# embedded KV store. `redb` is an embedded ACID KV with bytes->bytes keys/values
+# — the perfect shape for our blake3(input) -> serde_json(output) entries.
+redb = "2"
+dirs = "5"
+num_cpus = "1"
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+async-trait = "0.1"
+futures = "0.3"
+blake3 = "1"
+smol_str = { version = "0.3", features = ["serde"] }
+tracing = "0.1"
+
+pyo3 = { version = "0.28", features = ["macros"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

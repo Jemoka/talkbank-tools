@@ -4,8 +4,8 @@
 //! in tree-sitter native format directly to tree-sitter-talkbank.
 
 use clap::Parser;
-use generators::output::tree_sitter;
-use generators::spec::{ConstructSpec, ErrorSpec};
+use talkbank_spec_testgen::output::tree_sitter;
+use talkbank_spec_testgen::spec::{ConstructSpec, ErrorSpec};
 use std::path::PathBuf;
 
 /// CLI arguments: construct/error spec directories, output corpus directory, and template directory.

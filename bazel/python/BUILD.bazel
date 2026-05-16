@@ -1,16 +1,30 @@
-"""Shell scripts that drive Python work from Bazel.
+"""Shell scripts driving the Python release-only path.
 
-These shell out to `uv` (provided by the rules_uv toolchain) and to
-`maturin` (the PyO3 wheel builder). They are NOT user-invokable; the
-user-facing targets live at `//python:*`.
+Dev / test / CLI are pure Bazel via py_binary/py_test against the
+natively-built `.so`. The scripts here handle the maturin-owned wheel
+build (sole reader of pyproject.toml's multi-platform tagging matrix)
+and friends — twine publish, lint. Every script invokes
+`hermeticity_guard.sh` first to assert uv/maturin/python/rustc versions
+match the pins in `python/pyproject.toml [tool.batchalign.pinned_tools]`.
 """
 
 # Only the //python package needs these scripts.
-package(default_visibility = ["//python:__pkg__"])
+package(default_visibility = ["//python:__subpackages__"])
 
 exports_files([
-    "maturin_develop.sh",
     "maturin_build.sh",
     "pytest.sh",
     "lint.sh",
+    "twine_upload.sh",
+    "hermeticity_guard.sh",
+    "pyo3-config.txt",
 ])
+
+# Exposed as a filegroup so crate_universe annotations can reference it
+# via a label without triggering "exports_files() must be in this package"
+# resolution issues from generated BUILD files.
+filegroup(
+    name = "pyo3_config",
+    srcs = ["pyo3-config.txt"],
+    visibility = ["//visibility:public"],
+)

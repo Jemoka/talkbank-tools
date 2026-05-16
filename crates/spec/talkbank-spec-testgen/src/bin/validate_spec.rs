@@ -3,7 +3,7 @@
 //! Checks that all spec files have valid format and required fields.
 
 use clap::Parser;
-use generators::spec::ConstructSpec;
+use talkbank_spec_testgen::spec::ConstructSpec;
 use std::path::PathBuf;
 
 /// CLI arguments: root directory containing spec files to validate.

@@ -1,43 +1,64 @@
 """Python product root.
 
-Mirrors the crates/ tier structure: per-package BUILD.bazels live under
-`//python/<package>/`. Right now there's only one: `//python/batchalign/`.
+`pyproject.toml` is the source of truth for Python deps. `pip_compile`
+(`rules_uv`) renders it into a hash-locked, universal `requirements.lock.txt`
+that `pip.parse` (in MODULE.bazel) consumes.
 
-This BUILD.bazel exposes the project-wide metadata (`pyproject.toml`,
-`uv.lock`, `.python-version`, mypy/pytest/ty configs) as a filegroup
-so the per-package BUILD.bazels can consume them as data deps.
+  bazel run  //python:requirements         # regenerate after pyproject edit
+  bazel test //python:requirements_test    # CI gate: fails if lockfile drifted
+
+`bazel test //...` runs `:requirements_test` automatically because
+`pip_compile` puts it in the default test set. A PR that touches
+`pyproject.toml` without regenerating the lockfile will fail CI here,
+which is the closest we get to "every build keeps everything in sync"
+without making pip.parse itself a build-time action.
+
+The wheel build path remains maturin (sole pyproject reader for the
+multi-platform tagging matrix); it lives at //python/batchalign:wheel.
 """
 
+load("@rules_uv//uv:pip.bzl", "pip_compile")
+
 package(default_visibility = ["//visibility:public"])
+
+pip_compile(
+    name = "requirements",
+    requirements_in = "pyproject.toml",
+    requirements_txt = "requirements.lock.txt",
+    # Universal lockfile covers all platforms; uv picks the highest
+    # version compatible with every supported marker. Optional-deps
+    # groups (whisper/stanza/etc.) are not included here — they only
+    # affect wheel METADATA at maturin-build time, not the runtime
+    # Bazel test env. Dev tools (pytest/twine/etc.) are pulled in via
+    # --extra dev so py_test can resolve them.
+    extra_args = [
+        "--extra",
+        "dev",
+    ],
+    universal = True,
+)
 
 filegroup(
     name = "project_metadata",
     srcs = [
         "pyproject.toml",
-        "uv.lock",
-        ".python-version",
-        "mypy.ini",
         "pytest.ini",
-        "ty.toml",
     ],
 )
 
-# Sibling Python sources that live alongside `python/batchalign/` but are
-# needed by maturin/pytest invocations rooted there. Globbed here (in the
-# parent package) so child packages can depend on them as labels — Bazel
-# globs cannot escape their declaring package via `..`.
 filegroup(
-    name = "batchalign_core_src",
-    srcs = glob(["batchalign_core/**/*"], allow_empty = True),
-)
-
-filegroup(
-    name = "stubs_src",
-    srcs = glob(["stubs/**/*"], allow_empty = True),
+    name = "python_sources",
+    srcs = glob(
+        [
+            "batchalign/**/*.py",
+            "batchalign/**/*.pyi",
+        ],
+        allow_empty = True,
+    ),
 )
 
 exports_files([
-    "uv.lock",
     "pyproject.toml",
-    "batchalign_core.pyi",
+    "pytest.ini",
+    "requirements.lock.txt",
 ])

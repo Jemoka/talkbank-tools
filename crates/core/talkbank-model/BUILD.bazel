@@ -58,6 +58,11 @@ rust_test(
         normal_dev = True,
         proc_macro_dev = True,
     ),
+    # insta opens `.snap` files at test time relative to the source file's
+    # path. Bazel's sandbox excludes anything not declared, so without this
+    # glob insta writes `.snap.new` and the test fails.
+    data = glob(["src/**/*.snap"]),
+    env = {"INSTA_WORKSPACE_ROOT": "."},
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
     deps = all_crate_deps(normal_dev = True),
 )

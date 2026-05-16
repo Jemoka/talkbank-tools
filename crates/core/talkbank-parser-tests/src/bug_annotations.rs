@@ -63,11 +63,17 @@ pub enum BugAnnotationError {
 }
 
 impl GoldenBugs {
-    /// Load bug annotations from golden_bugs.toml in the crate root
+    /// Load bug annotations from golden_bugs.toml in the crate root.
+    ///
+    /// The file is embedded at compile time via `include_str!` so the
+    /// loader works under both Cargo (where `$CARGO_MANIFEST_DIR` is the
+    /// live crate dir) and Bazel sandboxing (where it's a sandbox path
+    /// that doesn't exist at test-runtime). The `BugAnnotationError::Io`
+    /// variant survives for API stability even though this codepath no
+    /// longer touches disk.
     pub fn load() -> Result<Self, BugAnnotationError> {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/golden_bugs.toml");
-        let contents = std::fs::read_to_string(path)?;
-        Ok(toml::from_str(&contents)?)
+        const GOLDEN_BUGS_TOML: &str = include_str!("../golden_bugs.toml");
+        Ok(toml::from_str(GOLDEN_BUGS_TOML)?)
     }
 
     /// Check if a word should be skipped in tests

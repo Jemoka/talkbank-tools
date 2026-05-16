@@ -1,11 +1,20 @@
 # Contributing to talkbank-tools
 
-**Last updated:** 2026-05-15 20:24 IST
+**Last updated:** 2026-05-16 12:39 EDT
 
-Welcome. This repo is a polyglot monorepo: Rust workspace + Python (PyO3
-via maturin) + TypeScript (VS Code extension + React dashboard) +
-tree-sitter grammar + Tauri desktop apps + mdBook documentation. All of
-it is orchestrated by **Bazel**.
+Welcome. This repo is a polyglot monorepo orchestrated by **Bazel**. It
+ships two end-user products:
+
+  - **batchalign** — Rust engine (`crates/batchalign/batchalign-engine`)
+    surfaced as a Python wheel + `batchalign3` CLI. Pyo3 cdylib built
+    natively by Bazel; release wheel built by maturin.
+  - **chatter** — CHAT validation CLI (`chatter`), language server
+    (`chatter-lsp`), VS Code extension, and a Tauri desktop GUI
+    (`Chatter.app`).
+
+Plus shared infrastructure: a tree-sitter grammar, a CHAT specification
++ test-generator, the `clan-core` analysis library, JSON Schemas, an
+mdBook, and a fuzz workspace.
 
 ---
 
@@ -13,74 +22,382 @@ it is orchestrated by **Bazel**.
 
 ```bash
 # Prerequisites (install once)
-# - bazelisk (will auto-fetch the Bazel version pinned in .bazelversion)
-brew install bazelisk          # macOS
-# or: npm install -g @bazel/bazelisk
+brew install bazelisk just     # macOS
+# or: npm install -g @bazel/bazelisk && cargo install just
 
-# Everything else (uv, mdbook, tree-sitter) is fetched hermetically by
-# Bazel from `multitool.lock.json` the first time you build.
+# Everything else (uv, maturin, mdbook, tree-sitter) is fetched
+# hermetically by Bazel from `multitool.lock.json` the first time
+# you build.
 
-# Clone + build everything you need to run anything
 git clone https://github.com/TalkBank/talkbank-tools && cd talkbank-tools
-bazel build //...               # Compile every Rust crate, dashboard, book
-bazel test  //...               # Run every Rust unit test
+just build                     # `bazel build --config=release //...`
+just test                      # `bazel test  --config=release //...`
 ```
 
-If the first build complains about `crate_universe`, run:
+If the first build complains about `crate_universe`, run
+`just tooling cargo-repin` (which is `bazel run //bazel/cargo:repin`).
+
+`just --list` shows every recipe. Each product has its own scope:
 
 ```bash
-bazel run //bazel/cargo:repin   # syncs MODULE.bazel.lock with Cargo.lock
+just --list                # workspace hub
+just --list batchalign     # batchalign recipes
+just --list chatter        # chatter recipes
+just --list spec           # spec generators
+just --list clan           # CLAN crate
+just --list vscode         # VS Code extension
+just --list docs           # mdBook
+just --list tooling        # cargo-repin, sqlx-prepare, xtask
 ```
 
-That's it. Every other workflow is below.
+Most recipes accept a `profile` argument: `release` (default; opt
+build, stripped) or `debug` (dbg build, fast incremental). They map to
+Bazel's `--config=release` / `--config=dev`.
 
 ---
 
-## How this repo is built
+## Product: batchalign
+
+### Architecture
+
+```
+crates/batchalign/
+  batchalign-core      pure Rust library (Chat, BAValue, TaskRunner, etc.)
+  batchalign-engine    pyo3 bindings; produces `_core.so` cdylib
+
+python/batchalign/     Python package; CLI (typer), backends, recipes
+python/pyproject.toml  source of truth for wheel version + deps
+```
+
+The cdylib is built **natively by Bazel** via `rust_shared_library` +
+macOS `-undefined dynamic_lookup` + a static
+`bazel/python/pyo3-config.txt` (abi3-py312,
+`suppress_build_script_link_lines=true`). `py_library`/`py_binary`/
+`py_test` consume the `.so` directly. There is no `maturin develop`
+loop on the dev path. The release wheel is built by maturin —
+the only path that needs uv + maturin pinned by the hermeticity guard.
+
+### Build
+
+| Command | What it does |
+|---|---|
+| `just batchalign build`            | release build of all batchalign Bazel targets |
+| `just batchalign build debug`      | debug build (fast incremental, dbg symbols) |
+| `bazel build //crates/batchalign/batchalign-engine:_core_so` | just the cdylib (`bazel-bin/.../_core.so`) |
+| `bazel build //python/batchalign:batchalign` | py_binary CLI launcher |
+| `bazel build //python/batchalign:wheel`      | release wheel via maturin |
+
+### Run
+
+| Command | What it does |
+|---|---|
+| `just batchalign cli -- --help`      | run the `batchalign3` CLI (Bazel-native; no maturin needed) |
+| `just batchalign cli -- transcribe foo.wav` | full CLI invocation |
+| `bazel run //python/batchalign -- <args>` | same, direct Bazel invocation |
+
+### Test
+
+| Command | What it does |
+|---|---|
+| `just batchalign test`             | release-build test of Rust + Python |
+| `just batchalign test debug`       | debug-build test (faster iteration on failures) |
+| `just batchalign pytest`           | only the pytest suite via py_test |
+| `just batchalign pytest -- -k whisper` | pytest with extra args |
+
+### Debug
+
+For Rust-side debugging:
+
+```bash
+just batchalign build debug                                 # dbg build
+bazel test --config=dev //crates/batchalign/batchalign-engine:cache_smoke
+# or directly with cargo nextest:
+cargo nextest run -p batchalign-engine --features extension-module
+```
+
+For Python-side debugging:
+
+```bash
+just batchalign build debug                                  # build dbg .so
+bazel run //python/batchalign -- <subcommand> --verbose
+# attach a debugger via VS Code's "Python: Attach" + pdb in code,
+# or stick a `breakpoint()` in the source and run via `bazel run`.
+```
+
+### Edit-and-rebuild reactivity
+
+Any `.rs` edit in the engine's transitive closure (batchalign-engine,
+batchalign-core, talkbank-model, talkbank-parser, talkbank-transform)
+invalidates `_core.so` automatically. Re-running `bazel run
+//python/batchalign` rebuilds the .so and the py_binary launcher in one
+shot — no `maturin develop` step.
+
+When you edit `python/pyproject.toml` (adding a dep, bumping the
+version), regenerate the Bazel-side lockfile:
+
+```bash
+just batchalign relock
+# = bazel run //python:requirements
+```
+
+CI gates drift via `bazel test //python:requirements_test`, so a PR
+that touches `pyproject.toml` without re-running this fails.
+
+### Release a wheel
+
+`python/pyproject.toml [project].version` is the source of truth for
+the wheel version. Bump it, regenerate the lockfile, then build a wheel
+on each platform:
+
+```bash
+just batchalign relock                                       # if deps changed
+just batchalign wheel                                        # host-platform wheel
+just batchalign wheel-macos-arm64                            # cross-tag (host triple only)
+just batchalign wheel-macos-x86_64
+just batchalign wheel-linux-x86_64
+just batchalign wheel-linux-aarch64
+just batchalign wheel-windows-x86_64
+just batchalign multiwheel                                   # all of the above
+just batchalign publish                                      # twine upload python/target/wheels/*.whl
+```
+
+Wheel artifacts land at `python/target/wheels/`. Multi-platform builds
+that require cross-compile sysroots succeed locally only for the host
+triple; the others are handled by the `.github/workflows/publish-pypi.yml`
+CI matrix (5 runners, one per platform, OIDC trusted-publisher to PyPI).
+
+To cut a real release:
+
+1. Bump `python/pyproject.toml [project].version`.
+2. `just batchalign relock`.
+3. Open a PR; CI runs the lockfile drift test + the Bazel-native py_test.
+4. After merge, dispatch `publish-pypi.yml` from the Actions UI with the
+   new version as the input `tag` and `publish=true`.
+
+### Hermeticity pins
+
+The maturin/wheel path uses tools outside Bazel's hermetic sandbox
+(cargo, the host clang). `bazel/python/hermeticity_guard.sh` asserts
+uv/maturin/python/rustc versions match the pins in `python/pyproject.toml
+[tool.batchalign.pinned_tools]` before any shell-out, and scrubs
+leak-prone env vars (`CC`, `CXX`, `CFLAGS`, `LDFLAGS`, `DYLD_LIBRARY_PATH`,
+`RUSTFLAGS`, `OPENSSL_DIR`, etc.) so a shell with weird state can't
+silently produce a divergent wheel. Bumping a tool: update the pin in
+`pyproject.toml` AND in `MODULE.bazel` AND in `rust-toolchain.toml` in
+the same commit.
+
+---
+
+## Product: chatter
+
+### Architecture
+
+```
+crates/chatter/
+  chatter-cli          `chatter` binary (validate, normalize, to-json, clan ...)
+  chatter-lsp          `chatter-lsp` Language Server Protocol server
+
+apps/chatter/
+  chatter-gui          Tauri v2 desktop app (Chatter.app); React + TS frontend +
+                       Rust backend linking talkbank-* + send2clan-sys
+
+apps/vscode-extension  VS Code marketplace extension (TS; talks to chatter-lsp)
+```
+
+The CLI + LSP + desktop GUI share the same Rust foundation
+(`talkbank-model`, `talkbank-parser`, `talkbank-transform`,
+`clan-core`, `send2clan-sys`).
+
+### Build
+
+| Command | What it does |
+|---|---|
+| `just chatter build`           | release build of CLI + LSP + Tauri-deps |
+| `just chatter build debug`     | debug build |
+| `bazel build //crates/chatter/chatter-cli:chatter` | only the CLI |
+| `bazel build //crates/chatter/chatter-lsp:chatter-lsp` | only the LSP |
+
+The Tauri GUI itself is built by `cargo tauri build` (not Bazel —
+Tauri's bundling chain includes codesign/notarytool/signtool which
+aren't modelled in Bazel rules). Bazel does build the intra-workspace
+Rust crates the GUI links against.
+
+### Run
+
+| Command | What it does |
+|---|---|
+| `just chatter cli -- validate file.cha`     | validation |
+| `just chatter cli -- to-json file.cha`      | parse + emit JSON |
+| `just chatter cli -- clan freq file.cha`    | CLAN frequency analysis |
+| `just chatter lsp`                          | LSP server (stdin/stdout) |
+| `just chatter gui`                          | bundle the desktop app (release) |
+| `just chatter gui debug`                    | bundle in debug mode |
+| `cd apps/chatter/chatter-gui && cargo tauri dev` | dev mode with hot reload |
+
+### Test
+
+| Command | What it does |
+|---|---|
+| `just chatter test`         | release-build test |
+| `just chatter test debug`   | debug-build test |
+| `bazel test //crates/chatter/...` | direct invocation |
+| `cargo nextest run -p chatter-cli` | Cargo-side; useful for filtering |
+
+### Debug
+
+For the CLI + LSP:
+
+```bash
+just chatter build debug
+bazel run --config=dev //crates/chatter/chatter-cli:chatter -- validate file.cha
+# or under a debugger:
+lldb -- bazel-bin/crates/chatter/chatter-cli/chatter validate file.cha
+```
+
+For the LSP, configure your editor's LSP client to spawn
+`bazel-bin/crates/chatter/chatter-lsp/chatter-lsp` (after a debug
+build). The LSP logs to stderr; capture via your client's log redirect.
+
+For the Tauri GUI, dev mode with hot reload is the fast loop:
+
+```bash
+cd apps/chatter/chatter-gui
+cargo tauri dev
+```
+
+Frontend React DevTools work inside the webview; backend logs go to
+stderr (visible in the terminal that spawned `cargo tauri dev`).
+
+### Release
+
+The CLI + LSP ship as platform binaries on GitHub Releases. The
+desktop GUI ships as signed/notarized `.app`/`.msi`/`.AppImage`
+bundles via the (TODO) `publish-chatter.yml` and `publish-desktop.yml`
+workflows. Until those land, manual release is:
+
+```bash
+just chatter build                                                    # release builds
+cp bazel-bin/crates/chatter/chatter-cli/chatter chatter-$(uname -s)-$(uname -m)
+cp bazel-bin/crates/chatter/chatter-lsp/chatter-lsp chatter-lsp-$(uname -s)-$(uname -m)
+# upload to a GitHub Release draft
+
+cd apps/chatter/chatter-gui && cargo tauri build                      # GUI bundle
+# bundle output at apps/chatter/chatter-gui/src-tauri/target/release/bundle/
+# sign + notarize per book/src/operations/code-signing-and-distribution.md
+```
+
+VS Code extension:
+
+```bash
+just vscode build
+just vscode package                                                    # produces .vsix
+# Manual upload to marketplace via `vsce publish` (configured token), or
+# dispatch the (TODO) publish-vscode.yml workflow.
+```
+
+### Versioning
+
+Chatter's Rust artifacts inherit the workspace version
+(`Cargo.toml [workspace.package].version`). The desktop bundle has its
+own version pin in `apps/chatter/chatter-gui/src-tauri/Cargo.toml` and
+`tauri.conf.json` (they must match). Print all source-of-truth
+versions:
+
+```bash
+just versions
+```
+
+---
+
+## Library crates (publishing to crates.io)
+
+The repo holds these as library crates that may eventually publish to
+crates.io:
+
+  - `talkbank-model`, `talkbank-derive`, `talkbank-parser`,
+    `talkbank-transform`, `talkbank-parser-re2c` — the CHAT data model
+    + parsing stack
+  - `clan-core` — CLAN analysis library
+  - `chatter-lsp` — LSP server (can be consumed as a crate)
+  - `batchalign-core` — batchalign's pure-Rust core (TaskRunner traits
+    etc.)
+
+None are published today. The expected workflow when you want to:
+
+```bash
+# from the workspace root
+cargo publish -p talkbank-model              # publishes that one crate
+# or, in dep order, the whole stack:
+cargo publish -p talkbank-derive
+cargo publish -p talkbank-model
+cargo publish -p talkbank-parser-re2c
+cargo publish -p talkbank-parser
+cargo publish -p talkbank-transform
+cargo publish -p clan-core
+cargo publish -p chatter-lsp
+cargo publish -p batchalign-core
+```
+
+Each crate's `Cargo.toml` must declare `[package] description`,
+`license`, `repository`, `readme`, etc., or `cargo publish` will
+refuse. The workspace's `Cargo.toml [workspace.package]` inherits most
+of these; check that any individual `[package]` overrides don't omit
+required fields.
+
+Bazel does not run `cargo publish`. Use a personal crates.io token (or
+a CI secret) when running these locally.
+
+To wire a CI workflow for crates.io: copy the structure of
+`publish-pypi.yml`, swap maturin/twine for `cargo publish`, and gate
+on a tag like `crates-v<x.y.z>`. Not done yet.
+
+---
+
+## How this repo is built (overview)
 
 **Bazel is the single entry point.** It orchestrates each ecosystem's
-canonical tooling rather than replacing it:
+canonical tooling rather than replacing it.
 
 | Surface | Tool Bazel calls | Why |
 |---|---|---|
-| Rust workspace | `rules_rust` + `crate_universe` | Bazel handles deps + caching natively. |
-| Python wheel (PyO3) | `maturin` via shell wrapper | No Bazel ruleset packages PyO3 wheels (manylinux, abi3, universal2). Maturin is canonical. |
-| React dashboard | `vite` via shell wrapper | Vite plugins (openapi-typescript codegen, tailwind) aren't modelled in Bazel. |
+| Rust workspace | `rules_rust` + `crate_universe` | Native Bazel-cached Rust builds. |
+| Pyo3 cdylib | `rust_shared_library` + `pyo3-config.txt` | Hand-rolled abi3 path; no `rules_rust_pyo3` toolchain dance (it requires a newer Bazel). |
+| Python deps | `rules_uv` `pip_compile` → `rules_python` `pip.parse` | Lockfile drift gated by `:requirements_test`. |
+| Python execution | `rules_python` `py_library`/`py_binary`/`py_test` | Bazel-native; `_core.so` carried via runfiles `data`. |
+| Python wheel (release) | `maturin` via shell wrapper | No Bazel ruleset packages PyO3 wheels (manylinux, abi3, universal2). Maturin is canonical here. |
 | VS Code extension | `npm` + `vsce` via shell wrappers | `vsce` is npm-only. |
 | Tauri desktop bundles | `cargo tauri build` via shell wrapper | Tauri's bundling chain (codesign, notarytool, signtool) isn't modelled in Bazel. |
-| tree-sitter grammar | `tree-sitter generate` via shell wrapper | Multi-language bindings (JS/Python/Go/Swift/Rust); only the Rust binding compiles through `cargo_build_script`. |
+| tree-sitter grammar | `tree-sitter generate` via shell wrapper | Multi-language bindings; only the Rust binding compiles through `cargo_build_script`. |
 | mdBook | `mdbook` via shell wrapper | Hermetic `mdbook` binary fetched via multitool. |
 
-The Cargo workspace at the repo root still works (`cargo build`,
-`cargo nextest run`, `cargo run -p chatter-cli -- ...`) — Bazel does not
-disable Cargo; it adds a hermetic, cache-friendly path on top. Bazel is
-canonical; Cargo is the escape hatch.
+Cargo still works at the workspace root (`cargo build`, `cargo nextest
+run`, `cargo run -p chatter-cli -- ...`). Bazel is canonical; Cargo is
+the escape hatch.
 
 ---
 
-## `bazel run` reference for every major binary
+## `bazel run` reference
 
-### CHAT validation / LSP (Rust)
+### Chatter
 
 ```bash
 bazel run //crates/chatter/chatter-cli:chatter           # `chatter` CLI
 bazel run //crates/chatter/chatter-lsp:chatter-lsp        # Language Server
+bazel run //apps/chatter/chatter-gui/src-tauri:bundle     # cargo tauri build wrapper
 ```
 
-Example: `bazel run //crates/chatter/chatter-cli:chatter -- validate
-path/to/file.cha`
-
-### Batchalign (Rust + Python)
+### Batchalign
 
 ```bash
-bazel run //crates/batchalign/batchalign-cli:batchalign3   # batchalign3 server/CLI
-bazel run //python/batchalign:develop                      # editable install (maturin develop)
-bazel run //python/batchalign:wheel                        # build distributable wheel
-bazel run //python/batchalign:test                         # pytest
-bazel run //python/batchalign:lint                         # mypy (+ ruff)
+bazel run //python/batchalign                             # `batchalign3` CLI (py_binary)
+bazel run //python/batchalign:wheel                       # maturin build → python/target/wheels/
+bazel run //python/batchalign:publish                     # twine upload
+bazel run //python/batchalign:lint                        # mypy (+ ruff)
+bazel test //python/batchalign:pytest                     # pytest via py_test
+bazel run //python:requirements                           # regenerate requirements.lock.txt
 ```
 
-### CLAN spec generators
+### Spec generators
 
 ```bash
 bazel run //crates/spec/talkbank-spec-testgen:gen_tree_sitter_tests
@@ -97,30 +414,25 @@ bazel run //crates/spec/talkbank-spec-testrun:extract_corpus_candidates
 
 ```bash
 bazel run //crates/xtask:xtask -- <subcommand>
-bazel run //bazel/cargo:repin                       # after any Cargo.toml edit
-bazel run //bazel/sqlx:prepare                      # after any sqlx::query! edit
+bazel run //bazel/cargo:repin                           # after any Cargo.toml edit
+bazel run //bazel/sqlx:prepare                          # after any sqlx::query! edit
 ```
 
 ### Docs
 
 ```bash
-bazel run //book:serve         # preview at http://localhost:3000
-bazel run //book:html          # static HTML at book/build/html/
-bazel run //book:linkcheck     # mdbook build + linkcheck preprocessor
+bazel run //book:serve                                  # preview at http://localhost:3000
+bazel run //book:html                                   # static HTML at book/build/html/
+bazel run //book:linkcheck                              # mdbook build + linkcheck preprocessor
 ```
 
-### Apps
+### VS Code extension
 
 ```bash
 bazel run //apps/vscode-extension:build
-bazel run //apps/vscode-extension:package           # produces .vsix
+bazel run //apps/vscode-extension:package               # produces .vsix
 bazel run //apps/vscode-extension:test
-bazel build //apps/batchalign/batchalign-cli-webdashboard:dist  # hermetic vite → dist/ TreeArtifact
 ```
-
-Tauri desktop bundles are produced by the `publish-desktop` workflow
-because the bundling chain needs platform signing certificates. Locally:
-`cd apps/<...>/<gui>/ && cargo tauri dev`.
 
 ### Tree-sitter grammar (Rust binding only via Bazel)
 
@@ -129,28 +441,6 @@ bazel build //grammar:tree_sitter_talkbank
 bazel test  //grammar:tree_sitter_talkbank_unit_test
 ```
 
-Grammar regeneration (`tree-sitter generate`) runs against
-`@multitool//tools/tree-sitter`. See `book/src/contributing/grammar.md`
-for the workflow.
-
----
-
-## Tests
-
-```bash
-bazel test //...                                  # every Rust unit test
-bazel test //crates/core/...                      # core tier only
-bazel test //crates/chatter/...                   # chatter tier only
-bazel test //crates/batchalign/...                # batchalign tier only
-bazel test //crates/clan/...                      # CLAN tier only
-bazel run  //python/batchalign:test                       # Python tests
-bazel run  //apps/vscode-extension:test           # VS Code extension tests
-```
-
-Integration tests (workspace-level `talkbank-utils/tests/`, batchalign's
-`tests/`, the React dashboard's Playwright E2E) are not yet wired into
-`bazel test`. They run via the GitHub workflows for now.
-
 ---
 
 ## Common workflows
@@ -158,54 +448,64 @@ Integration tests (workspace-level `talkbank-utils/tests/`, batchalign's
 ### "I edited a Cargo.toml"
 
 ```bash
-bazel run //bazel/cargo:repin
+just tooling cargo-repin                                  # = bazel run //bazel/cargo:repin
 ```
 
 ### "I edited a `sqlx::query!` in batchalign"
 
 ```bash
-bazel run //bazel/sqlx:prepare
+just tooling sqlx-prepare                                 # = bazel run //bazel/sqlx:prepare
 ```
 
-Commit the resulting `crates/batchalign/batchalign-cli/.sqlx/` directory.
+Commit the resulting `crates/batchalign/.../.sqlx/` directory.
 
 ### "I edited grammar.js"
 
 ```bash
-bazel run //grammar:tree_sitter_generate          # regenerates src/parser.c
+bazel run //grammar:tree_sitter_generate                  # regenerates src/parser.c
 bazel build //grammar:tree_sitter_talkbank
 bazel test  //crates/core/talkbank-parser:talkbank_parser_unit_test
 ```
 
-(Tree-sitter generate target wraps `@multitool//tools/tree-sitter`.)
-
 ### "I edited a spec under resources/spec/"
 
 ```bash
-bazel run //crates/spec/talkbank-spec-testgen:gen_tree_sitter_tests
-bazel run //crates/spec/talkbank-spec-testgen:gen_rust_tests
-bazel run //crates/spec/talkbank-spec-testgen:gen_validation_tests
-bazel run //crates/spec/talkbank-spec-testgen:gen_error_docs
-bazel test //crates/core/talkbank-parser-tests:...
+just spec gen-tree-sitter-tests
+just spec gen-rust-tests
+just spec gen-validation-tests
+just spec gen-error-docs
+just spec validate
 ```
 
 ### "I edited Python in python/batchalign/"
 
 ```bash
-bazel run //python/batchalign:develop            # rebuild the .so and reinstall
-bazel run //python/batchalign:test
-bazel run //python/batchalign:lint
+just batchalign cli -- --help                             # smoke: rebuilds .so, runs CLI
+just batchalign pytest                                    # full test suite
+just batchalign lint                                      # mypy + ruff
+```
+
+No `maturin develop` step — `bazel run` rebuilds the `.so` natively
+via the rust_shared_library → genrule → py_library chain.
+
+### "I edited pyproject.toml"
+
+```bash
+just batchalign relock                                    # regenerate lockfile
+# commit pyproject.toml + python/requirements.lock.txt together
 ```
 
 ### "I want a release wheel"
 
 ```bash
-bazel run //python/batchalign:wheel
-ls python/target/wheels/                    # batchalign3-0.1.0-py3-*.whl
+just batchalign multiwheel                                # builds every supported platform
+ls python/target/wheels/
+just batchalign publish                                   # twine upload
 ```
 
-The release workflow (`.github/workflows/publish-pypi.yml`) does this
-in CI across Linux + macOS x86_64 + arm64 and uploads to PyPI.
+In practice the CI matrix (`publish-pypi.yml`) is the canonical wheel
+builder — it fans out to one runner per `(platform, arch)` cell so
+every triple gets a native build.
 
 ---
 
@@ -217,15 +517,13 @@ changes affecting its surface (path filters do the gating):
 | Workflow | When it runs | What it does |
 |---|---|---|
 | `bazel-rust.yml` | crates/, grammar/, Cargo.toml, MODULE.bazel | build + unit-test every Rust crate |
-| `bazel-python.yml` | python/, batchalign-pyo3/, batchalign-types/, talkbank-transform/ | maturin develop + pytest + mypy |
-| `bazel-typescript.yml` | apps/vscode-extension/, apps/batchalign/batchalign-cli-webdashboard/ | extension build + .vsix package + dashboard SPA build |
+| `bazel-python.yml` | python/, batchalign-{core,engine}/, talkbank-{model,parser,transform}/, bazel/python/ | `:requirements_test` drift gate + Bazel-native cdylib + py_library + py_test + CLI smoke |
+| `bazel-wheels.yml` | python/, crates/batchalign/, etc. (any path that affects the wheel) | 5-platform wheel matrix on every PR (artifact upload only, no publish); installs wheel into a fresh venv and verifies `import batchalign._core` |
+| `bazel-typescript.yml` | apps/vscode-extension/, schemas/ | extension build + .vsix package |
 | `bazel-grammar.yml` | grammar/, resources/spec/symbols/ | Rust binding + regen-drift check |
 | `bazel-docs.yml` | book/ | mdbook build + linkcheck |
 | `bazel-build-all.yml` | cron (06:00 UTC) + manual | `bazel build //...` + `bazel test //...` |
-| `publish-pypi.yml` | manual | batchalign3 wheel → PyPI (OIDC trusted-publisher) |
-| `publish-chatter.yml` | manual | chatter + chatter-lsp binaries → GitHub Release |
-| `publish-vscode.yml` | manual | .vsix → VS Code Marketplace |
-| `publish-desktop.yml` | manual | signed Tauri bundles → GitHub Release |
+| `publish-pypi.yml` | manual | batchalign wheel matrix (macOS arm/x86, Linux x86/arm, Windows x86) → PyPI (OIDC trusted-publisher) |
 
 All workflows use `bazel-contrib/setup-bazel@0.15.0` for Bazel + cache.
 
@@ -235,23 +533,22 @@ All workflows use `bazel-contrib/setup-bazel@0.15.0` for Bazel + cache.
 
 ```
 crates/
-  core/      talkbank-{model, derive, parser, transform, parser-re2c,
-                       parser-tests, spec-testgen, spec-testrun, utils}
+  core/      talkbank-{model, derive, parser, transform, parser-re2c, parser-tests}
   chatter/   chatter-{cli, lsp}                  → produces `chatter` + `chatter-lsp`
   clan/      clan-core, send2clan-sys            → CLAN analysis + macOS FFI shim
-  batchalign/  batchalign-{cli, types, pyo3}     → produces `batchalign3`
+  batchalign/  batchalign-{core, engine}         → pyo3 engine for the wheel
+  spec/      talkbank-spec-{testgen, testrun}    → spec → test generators
   xtask/     workspace dev automation
+  utils/     workspace utilities
 apps/
-  chatter/      chatter-gui                       (Tauri)
-  batchalign/   batchalign-cli-webdashboard       (React+Vite)
-                batchalign-gui-dashboard          (Tauri)
+  chatter/         chatter-gui                    (Tauri v2 desktop app)
   vscode-extension                                (TypeScript)
-python/      pyproject.toml + uv.lock; batchalign/, batchalign_core/
+python/      pyproject.toml + requirements.lock.txt; batchalign/ + batchalign_core/
 grammar/     tree-sitter CHAT grammar (multi-language bindings)
 resources/   corpus/ (sacred), fixtures/, spec/ (source of truth)
 schemas/     chat-file/, ipc/ (JSON Schema)
 book/        mdBook documentation
-build/       Bazel-internal shell wrappers (uv, mdbook, vite, vsce, sqlx, …)
+bazel/       Bazel-internal shell wrappers + pyo3-config + hermeticity guard
 fuzz/        cargo-fuzz workspace (separate from root)
 ```
 
@@ -268,8 +565,8 @@ Tier-by-tier deep dives:
 
 ## Coding standards (cross-cutting)
 
-- **Rust:** edition 2024, `cargo fmt`, `cargo clippy --all-targets`, no panic-in-control-flow (see `[lints.clippy]` table in each crate's Cargo.toml; the panic-site audit notes live under `book/src/operations/panic-audit/`).
-- **TypeScript:** strict mode on; lint with the project's `tsconfig.json` defaults.
+- **Rust:** edition 2024, `cargo fmt`, `cargo clippy --all-targets`, no panic-in-control-flow.
+- **TypeScript:** strict mode on; lint with project `tsconfig.json` defaults.
 - **Python:** mypy strict (see `python/mypy.ini`); pytest in `python/pytest.ini`.
 - **Comments:** explain WHY, never WHAT. Don't write commit/PR-context into source files.
 - **CLAUDE.md files:** if you touch any documentation file, update its `Last modified:` stamp. Run `date '+%Y-%m-%d %H:%M %Z'` for the actual time.
@@ -283,6 +580,6 @@ The book has the full coding-standards chapter at
 ## Get help
 
 - Open an issue on GitHub
-- Read the book first: `bazel run //book:serve`
+- Read the book first: `just docs serve`
 - For Bazel-specific gotchas: `book/src/contributing/bazel-workflows.md`
 - For the release chain: `book/src/operations/release-pipeline.md`

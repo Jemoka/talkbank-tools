@@ -21,7 +21,6 @@ chrono = "0.4"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate"] }
 tokio = { version = "1.52", features = ["full", "rt", "macros"] }
 regex = "1.12"
-batchalign-types = { path = "../batchalign/batchalign-types", version = "0.2.0" }
 
 [lints]
 workspace = true

@@ -52,6 +52,36 @@ crate.annotation(
     patch_args = ["-p1"],
 )
 
+# PyO3 build-script handling. The default pyo3-build-config / pyo3-ffi
+# build scripts probe the host CPython and emit
+# `cargo:rustc-link-lib=python3.X`, which forces the linker to find
+# libpython. We avoid that by pointing the build scripts at a static
+# config file (`//bazel/python:pyo3_config`) that declares
+# abi3-py312 + `suppress_build_script_link_lines=true` — no host probe,
+# no libpython link directive. The macOS rustc flag
+# `-C link-arg=-undefined -C link-arg=dynamic_lookup` (set on the
+# `rust_shared_library` in batchalign-engine) handles the actual link.
+crate.annotation(
+    crate = "pyo3-build-config",
+    build_script_data = ["@@//bazel/python:pyo3_config"],
+    build_script_env = {
+        "PYO3_CONFIG_FILE": "$(execpath @@//bazel/python:pyo3_config)",
+    },
+)
+crate.annotation(
+    crate = "pyo3-ffi",
+    build_script_data = ["@@//bazel/python:pyo3_config"],
+    build_script_env = {
+        "PYO3_CONFIG_FILE": "$(execpath @@//bazel/python:pyo3_config)",
+    },
+)
+# Enable abi3 + abi3-py312 features on the pyo3 crate itself so its
+# macros emit Py_LIMITED_API guards matching what pyo3-ffi was built for.
+crate.annotation(
+    crate = "pyo3",
+    crate_features = ["abi3", "abi3-py312"],
+)
+
 # Feed hermetic protoc into every crate whose build script invokes it.
 # Without these annotations, crate_universe-generated BUILD files have
 # no protoc input and prost-build panics with "Could not find protoc".
@@ -78,19 +108,8 @@ _PROTOC_ENV = {
     # "external/protobuf~/src",
 }
 
-[
-    crate.annotation(
-        crate = c,
-        build_script_data = _PROTOC_DATA,
-        build_script_env = _PROTOC_ENV,
-    )
-    for c in [
-        "prost-build",
-        "prost-wkt-types",
-        "temporalio-common",
-        "tonic-build",
-    ]
-]
+# protoc annotations retired with the batchalign-cli/temporal stack
+# (spec2.md torch-and-rewrite). Reintroduce if a future crate needs protoc.
 
 crate.from_cargo(
     name = "crates",
@@ -102,25 +121,52 @@ crate.from_cargo(
 use_repo(crate, "crates")
 
 # =============================================================================
-# Python — toolchain via rules_uv, wheel build via maturin
+# Python — rules_uv (deps) → rules_python (py_*) → rules_rust (cdylib via
+# maturin) → wheel ready to ship.
 # =============================================================================
-# rules_uv provides a hermetic `uv` toolchain. Dependency resolution
-# uses uv.lock (the source of truth) rather than rules_python's pip
-# parsing — uv is faster and matches the project's tooling.
+# Pinned to Python 3.12 across the board: rules_python's hermetic toolchain,
+# the uv-resolved venv (`uv.lock`), and pyproject's `requires-python` all
+# agree. Bumping requires updating MODULE.bazel, .bazelrc, python/pyproject.toml,
+# and python/uv.lock in a single commit.
 #
-# Maturin builds the PyO3 wheel; we shell out to it from `//python/batchalign:wheel`
-# rather than re-modelling cdylib + wheel packaging in Bazel.
+# rules_uv exposes a hermetic `uv` binary; uv.lock is the source of truth
+# for runtime Python deps. Maturin (the PyO3 wheel backend) is invoked as
+# `uv run maturin build --release` from sh_binary wrappers — modelling the
+# cdylib + ABI-tagged rename + wheel packaging in Bazel buys nothing here.
 bazel_dep(name = "rules_python", version = "0.39.0")
 bazel_dep(name = "rules_uv", version = "0.59.0")
+# aspect_rules_py adoption deferred — version 1.11.5 calls
+# `repository_ctx.repo_metadata`, a Bazel 8+ API; this workspace pins
+# an older Bazel. Re-add once we bump Bazel, or pin aspect_rules_py to
+# the last 1.x release that ships without that call (TODO: try 1.10).
 
+# Single source of truth for the Python interpreter pin. Flows into the
+# rules_python toolchain, the uv-managed venv, and the maturin host
+# (asserted at script entry — see bazel/python/hermeticity_guard.sh).
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
     python_version = "3.12",
     is_default = True,
 )
 
+# rules_uv provides the hermetic `uv` binary. Version pinned here is the
+# only uv that maturin / pytest / lint ever see; the guard script asserts
+# that the binary handed in via $1 reports a matching version.
 uv = use_extension("@rules_uv//uv:extensions.bzl", "uv")
 uv.toolchain(uv_version = "0.5.18")
+
+# Python deps. `pyproject.toml` is the source of truth; the Bazel-side
+# `requirements.lock.txt` is a hash-locked render produced by
+# `bazel run //python:requirements`. `pip.parse` consumes that lock so
+# `py_library` / `py_binary` / `py_test` resolve runtime deps via the
+# `@pypi//*` hub. CI gates lockfile drift via `//python:requirements_test`.
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "pypi",
+    python_version = "3.12",
+    requirements_lock = "//python:requirements.lock.txt",
+)
+use_repo(pip, "pypi")
 
 # =============================================================================
 # JavaScript / TypeScript
@@ -148,12 +194,10 @@ npm.npm_translate_lock(
 )
 use_repo(npm, "npm_vscode")
 
-npm.npm_translate_lock(
-    name = "npm_dashboard",
-    pnpm_lock = "//apps/batchalign/batchalign-cli-webdashboard:pnpm-lock.yaml",
-    verify_node_modules_ignored = "//:.bazelignore",
-)
-use_repo(npm, "npm_dashboard")
+# Batchalign dashboards (cli-webdashboard, gui-dashboard) are retired —
+# the Tauri shell at apps/batchalign/dashboard-desktop replaces them and is
+# built outside Bazel via `cargo tauri build`. Re-add an npm_translate_lock
+# stanza here only when a Bazel-built JS bundle returns.
 
 # =============================================================================
 # Shell / OCI / archive utilities

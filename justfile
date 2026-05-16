@@ -1,8 +1,11 @@
-# Workspace-wide runner. Replaces the former `//:<project>/<role>`
-# aliases in the root BUILD.bazel. Each scope lives in its own module
-# (`just <scope> <recipe>`).
+# Workspace-wide runner. Per-product recipes live under `just/<product>/...`;
+# this hub exposes the cross-cutting build/test commands.
 #
-# Discovery: `just --list` or `just <scope> --list`.
+# Discovery: `just --list` for the hub, `just --list <scope>` for each scope.
+# Two top-level products:
+#   - batchalign  (Rust engine + Python wheel)   → `just --list batchalign`
+#   - chatter     (Rust CLI + LSP + Tauri GUI)   → `just --list chatter`
+# Plus per-surface scopes: clan, spec, vscode, docs, tooling.
 
 set shell := ["bash", "-c"]
 set positional-arguments := true
@@ -19,9 +22,20 @@ default:
     @just --list
 
 # Build every Bazel target in the workspace.
-build:
-    bazel build //...
+# Profile: `release` (default; opt build, stripped) or `debug` (dbg build, fast).
+build profile="release":
+    bazel build --config={{ if profile == "release" { "release" } else { "dev" } }} //...
 
 # Run every Bazel test target in the workspace.
-test:
-    bazel test //...
+test profile="release":
+    bazel test --config={{ if profile == "release" { "release" } else { "dev" } }} //...
+
+# Print all product versions (source-of-truth view).
+versions:
+    @just batchalign versions
+    @echo ""
+    @echo "Chatter (root Cargo.toml [workspace.package].version, applies to chatter-cli + chatter-lsp + clan-core + talkbank-*):"
+    @awk -F'"' '/^\[workspace.package\]/,/^\[/ {if (/^version *= *"/) {print "  " $2; exit}}' Cargo.toml
+    @echo ""
+    @echo "Chatter GUI bundle (apps/chatter/chatter-gui/src-tauri/tauri.conf.json):"
+    @awk -F'"' '/"version":/ {print "  " $4; exit}' apps/chatter/chatter-gui/src-tauri/tauri.conf.json

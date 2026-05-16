@@ -5,7 +5,7 @@
 //! full coverage metrics.
 
 use clap::Parser;
-use generators::spec::{ConstructSpec, ErrorSpec};
+use talkbank_spec_testgen::spec::{ConstructSpec, ErrorSpec};
 use regex::Regex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

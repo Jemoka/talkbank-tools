@@ -3,8 +3,8 @@
 //! Reads error specs and generates publishable documentation.
 
 use clap::Parser;
-use generators::output::markdown;
-use generators::spec::ErrorSpec;
+use talkbank_spec_testgen::output::markdown;
+use talkbank_spec_testgen::spec::ErrorSpec;
 use std::path::PathBuf;
 
 /// CLI arguments: input error spec directory and output directory for generated Markdown docs.

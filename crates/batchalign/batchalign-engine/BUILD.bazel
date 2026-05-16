@@ -1,0 +1,130 @@
+"""batchalign-engine — tokio runtime, batching, redb cache, PyO3 Pipeline.
+
+Three Bazel artifacts:
+
+  * `:_core` — `rust_library` (rlib). Linked by in-tree Rust tests and
+    any Rust crate that consumes the engine as a regular library.
+  * `:_core_so_shared` — `rust_shared_library` (cdylib) with the
+    extension-module link flags. macOS gets `-undefined dynamic_lookup`
+    so the linker doesn't hunt for libpython at link time; the
+    `PYO3_NO_PYTHON=1` build-script env (set in MODULE.bazel via
+    `crate.annotation` on pyo3-build-config + pyo3-ffi) suppresses the
+    `cargo:rustc-link-lib=python3.X` directive that would otherwise
+    bring libpython back in.
+  * `:_core_so` — genrule renaming the dylib output to the canonical
+    Python-importable name (`_core.so`). Sibling py_library at
+    //python/batchalign consumes this via `data = [...]`.
+
+The wheel artifact (multi-platform tagging, manylinux retagging) is
+still produced by maturin from `//python/batchalign:wheel` — Bazel
+builds the cdylib for the dev/test path, maturin builds it again for
+the wheel. Double-compile is the explicit tradeoff for keeping
+pyproject.toml as the wheel source of truth.
+
+External deps flow through crate_universe's `all_crate_deps()`;
+intra-workspace links are explicit (batchalign-core, talkbank-*).
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_shared_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+_INTRA = [
+    "//crates/batchalign/batchalign-core:batchalign_core",
+    "//crates/core/talkbank-model:talkbank_model",
+    "//crates/core/talkbank-parser:talkbank_parser",
+    "//crates/core/talkbank-transform:talkbank_transform",
+]
+
+rust_library(
+    name = "_core",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = aliases(),
+    crate_features = ["extension-module"],
+    crate_name = "batchalign_engine",
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + _INTRA,
+)
+
+# Python-loadable cdylib. Renamed to `_core.so` (no ABI tag) — CPython's
+# import machinery accepts unsuffixed extension modules, and the
+# unsuffixed name keeps the rule platform-independent at Bazel level
+# (Linux .so, macOS .dylib, Windows .dll all get normalized).
+rust_shared_library(
+    name = "_core_so_shared",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = aliases(),
+    crate_features = ["extension-module"],
+    crate_name = "_core",
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + _INTRA,
+    # macOS: tell the linker the libpython symbols will resolve at load
+    # time, not link time. `-no_fixup_chains` works around
+    # https://github.com/PyO3/pyo3/issues/5035.
+    rustc_flags = select({
+        "@platforms//os:macos": [
+            "-C", "link-arg=-undefined",
+            "-C", "link-arg=dynamic_lookup",
+            "-C", "link-arg=-Wl,-no_fixup_chains",
+        ],
+        "//conditions:default": [],
+    }),
+    # Inhibit `cargo test` doctesting via `crate-type` mismatch.
+    tags = ["manual"],
+)
+
+# Bazel produces `lib_core.{dylib,so,dll}` from a `rust_shared_library`
+# named `_core`. Python expects `_core.so` (or `_core.pyd` on Windows).
+# Copy to the canonical name and place in bindir so py_library can
+# carry it under `data`.
+genrule(
+    name = "_core_so",
+    srcs = [":_core_so_shared"],
+    outs = ["_core.so"],
+    cmd = "cp $(SRCS) $@",
+    output_to_bindir = True,
+    # Windows wheel builds go through maturin via //python/batchalign:wheel;
+    # that path produces a proper `_core.pyd`. The Bazel-native dev/test
+    # path is macOS + Linux only.
+    target_compatible_with = select({
+        "@platforms//os:macos": [],
+        "@platforms//os:linux": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)
+
+# Engine-side Rust tests — kept manual; see commentary on rust_library above.
+rust_test(
+    name = "batchalign_engine_unit_test",
+    crate = ":_core",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    crate_features = ["extension-module"],
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+    tags = ["manual"],
+)
+
+rust_test(
+    name = "cache_smoke",
+    srcs = ["tests/cache_smoke.rs"],
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    crate_features = ["extension-module"],
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True) + _INTRA + [":_core"],
+    tags = ["manual"],
+)
+
+rust_test(
+    name = "pipeline_smoke",
+    srcs = ["tests/pipeline_smoke.rs"],
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    crate_features = ["extension-module"],
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True) + _INTRA + [":_core"],
+    tags = ["manual"],
+)

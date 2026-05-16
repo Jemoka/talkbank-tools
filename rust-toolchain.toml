@@ -1,0 +1,12 @@
+# Host-cargo Rust pin. Read by `cargo` / `rustup` when maturin (or any
+# raw `cargo` invocation outside Bazel) builds the engine cdylib.
+#
+# Must match `MODULE.bazel` -> `rust.toolchain(versions = [...])` so the
+# wheel produced by maturin uses the same compiler as `bazel build`.
+# `bazel/python/hermeticity_guard.sh` asserts the live rustc matches the
+# pin recorded in `python/pyproject.toml [tool.batchalign.pinned_tools].rust`,
+# which must also stay in sync.
+[toolchain]
+channel = "1.95.0"
+profile = "minimal"
+components = ["rustc", "cargo", "rust-std", "rust-analyzer"]

@@ -1,20 +1,21 @@
 name: bazel · typescript
 
-# VS Code extension + React dashboard. Wraps npm/vite/vsce — there's
-# no first-class Bazel modelling of those tools.
+# VS Code extension is the only TypeScript surface still in the repo.
+# The Batchalign React dashboard (`apps/batchalign/batchalign-cli-webdashboard`)
+# was retired — the live Batchalign UI lives in the Tauri shell under
+# `apps/batchalign/dashboard-desktop/` and builds via `cargo tauri build`
+# (not modelled here).
 
 on:
   push:
     branches: [main]
     paths:
       - "apps/vscode-extension/**"
-      - "apps/batchalign/batchalign-cli-webdashboard/**"
       - "schemas/**"
       - ".github/workflows/bazel-typescript.yml"
   pull_request:
     paths:
       - "apps/vscode-extension/**"
-      - "apps/batchalign/batchalign-cli-webdashboard/**"
       - "schemas/**"
       - ".github/workflows/bazel-typescript.yml"
 
@@ -37,33 +38,9 @@ jobs:
         run: bazel run //apps/vscode-extension:build
       - name: Run extension tests
         run: bazel run //apps/vscode-extension:test
-      - name: Package .vsix (artifact only on PRs)
+      - name: Package .vsix (artifact only)
         run: bazel run //apps/vscode-extension:package
       - uses: actions/upload-artifact@v4
         with:
           name: vscode-extension-vsix
           path: apps/vscode-extension/*.vsix
-
-  dashboard-spa:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: bazel-contrib/setup-bazel@0.15.0
-        with:
-          bazelisk-cache: true
-          disk-cache: ${{ github.workflow }}-dashboard
-      - name: Build dashboard SPA (vite, hermetic)
-        # `:dist` is the Vite TreeArtifact emitted by vite_bin.vite into
-        # bazel-out/. No shell wrapper, no `npm install` at build time —
-        # node_modules comes from rules_js + npm_link_all_packages, and
-        # the host's Node toolchain is irrelevant.
-        run: bazel build //apps/batchalign/batchalign-cli-webdashboard:dist
-      - name: Upload dashboard dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: batchalign-dashboard-dist
-          # The TreeArtifact lives under bazel-bin (which is a symlink
-          # to bazel-out/<cfg>/bin). Convention.txt would be `bazel cquery
-          # --output=files`, but for a known-good label the symlinked
-          # path is stable.
-          path: bazel-bin/apps/batchalign/batchalign-cli-webdashboard/dist

@@ -1,0 +1,58 @@
+"""batchalign-core — types and traits for the batchalign rewrite (spec2.md).
+
+Pure-Rust crate (no tokio, no sqlite). PyO3 #[pyclass] bindings are gated
+behind the `python` cargo feature; `batchalign-engine` enables that feature
+when compiling its #[pymodule].
+
+External deps flow through `crate_universe`'s `all_crate_deps()`; intra-
+workspace links are listed explicitly per MEMORY.md.
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+_INTRA = [
+    "//crates/core/talkbank-model:talkbank_model",
+    "//crates/core/talkbank-parser:talkbank_parser",
+    "//crates/core/talkbank-transform:talkbank_transform",
+]
+
+rust_library(
+    name = "batchalign_core",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = aliases(),
+    crate_features = ["python"],
+    crate_name = "batchalign_core",
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + _INTRA,
+)
+
+rust_test(
+    name = "batchalign_core_unit_test",
+    crate = ":batchalign_core",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)
+
+# proto_parity.rs spawns a python3 subprocess that imports batchalign._core.proto
+# and probes for class existence. It is skip-tolerant: if the wheel hasn't been
+# built (no `maturin develop` yet), the test prints SKIP and passes — that's the
+# spec §18.2 design. Run via: `bazel test //crates/batchalign/batchalign-core:proto_parity`.
+rust_test(
+    name = "proto_parity",
+    srcs = ["tests/proto_parity.rs"],
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True) + _INTRA + [":batchalign_core"],
+)
+
+# Each of the four spec2.md goal scenarios — ASR, UtSeg, Compare,
+# Morphosyntax with-and-without retokenize — is exercised by unit tests
+# inside the corresponding `runners/<task>.rs` module, run as part of
+# `batchalign_core_unit_test` above. See `bazel run ... -- --list` for
+# the full list; counts: 16 unit tests total.

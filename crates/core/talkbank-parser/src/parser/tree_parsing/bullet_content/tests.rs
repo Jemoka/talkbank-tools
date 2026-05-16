@@ -4,27 +4,23 @@
 use super::parse_bullet_content;
 use crate::error::{ErrorCollector, ParseError};
 use crate::node_types::{TEXT_WITH_BULLETS, TEXT_WITH_BULLETS_AND_PICS};
-use std::fs;
-use std::path::PathBuf;
 use talkbank_model::model::{BulletContent, BulletContentSegment};
 use tree_sitter::Parser;
 
-/// Parse a real test file and extract the %act tier content
-fn parse_test_file(filename: &str) -> Result<(BulletContent, Vec<ParseError>), String> {
+/// Reference-corpus snippet exercising bullet rendering on a real `%act` tier.
+/// Embedded via `include_str!` so the test runs identically under Cargo
+/// (live source tree) and Bazel (sandboxed runfiles).
+const MEDIA_BULLETS_CHA: &str =
+    include_str!("../../../../../../../resources/corpus/reference/content/media-bullets.cha");
+
+/// Parse the embedded test file and extract a bullet-bearing tier's content.
+fn parse_test_file(_filename: &str) -> Result<(BulletContent, Vec<ParseError>), String> {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_talkbank::LANGUAGE.into())
         .map_err(|err| format!("Failed to set tree-sitter language: {err}"))?;
 
-    // Read test file from local reference corpus.
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.pop(); // crates
-    path.pop(); // repo root
-    path.push("resources/corpus/reference");
-    path.push(filename);
-
-    let source = fs::read_to_string(&path)
-        .map_err(|err| format!("Could not read test file {:?}: {err}", path))?;
+    let source = MEDIA_BULLETS_CHA.to_string();
 
     let tree = parser
         .parse(&source, None)

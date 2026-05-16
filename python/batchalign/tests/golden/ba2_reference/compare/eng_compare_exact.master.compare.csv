@@ -1,2 +1,0 @@
-file,wer,accuracy,matches,insertions,deletions,total_gold_words,total_main_words,INTJ:matches,INTJ:insertions,INTJ:deletions,INTJ:total,NOUN:matches,NOUN:insertions,NOUN:deletions,NOUN:total
-eng_compare_exact.cha,0.0,1.0,2,0,0,2,2,1,0,0,1,1,0,0,1

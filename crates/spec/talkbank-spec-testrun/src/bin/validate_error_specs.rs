@@ -19,7 +19,7 @@
 //! Returns exit code 0 if all specs are valid, 1 otherwise.
 
 use clap::Parser;
-use generators::spec::error::ErrorSpec;
+use talkbank_spec_testgen::spec::error::ErrorSpec;
 use std::path::PathBuf;
 use talkbank_model::ErrorCollector;
 use talkbank_parser::TreeSitterParser;
@@ -184,7 +184,7 @@ fn validate_all_specs(args: &Args) -> Result<(), String> {
 fn validate_example(
     parser: &TreeSitterParser,
     status: &str,
-    example: &generators::spec::error::ErrorExample,
+    example: &talkbank_spec_testgen::spec::error::ErrorExample,
     check_codes: bool,
     include_skipped: bool,
 ) -> ExampleOutcome {

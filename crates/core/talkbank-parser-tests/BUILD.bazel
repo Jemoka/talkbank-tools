@@ -21,7 +21,10 @@ rust_library(
     name = "talkbank_parser_tests",
     srcs = glob(["src/**/*.rs"]),
     aliases = aliases(),
-    compile_data = glob(["golden_*.txt"]),
+    # `bug_annotations.rs::load()` embeds golden_bugs.toml via
+    # `include_str!`, so the file must be visible at library-compile time
+    # (not just at test-compile time).
+    compile_data = glob(["golden_*.txt"]) + ["golden_bugs.toml"],
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
     deps = all_crate_deps(normal = True) + [
@@ -38,7 +41,9 @@ rust_test(
     compile_data = glob([
         "golden_*.txt",
         "error_words_corpus.txt",
-    ]),
+    ]) + ["golden_bugs.toml"],
+    # `bug_annotations::load()` embeds golden_bugs.toml via `include_str!`,
+    # so it needs to be in compile_data, not runtime data.
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
     deps = all_crate_deps(normal_dev = True) + [
         "//crates/core/talkbank-transform:talkbank_transform",

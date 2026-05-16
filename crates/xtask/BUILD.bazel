@@ -17,7 +17,5 @@ rust_binary(
     aliases = aliases(),
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
-    deps = all_crate_deps(normal = True) + [
-        "//crates/batchalign/batchalign-types:batchalign_types",
-    ],
+    deps = all_crate_deps(normal = True),
 )
