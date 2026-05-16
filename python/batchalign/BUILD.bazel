@@ -44,14 +44,28 @@ py_library(
         ["**/*.py"],
         exclude = ["tests/**"],
     ),
-    # `imports = ["../.."]` puts python/ on PYTHONPATH so `import batchalign`
+    # `imports = [".."]` puts python/ on PYTHONPATH so `import batchalign`
     # resolves. The package layout is python/batchalign/{__init__,...}.py.
     imports = [".."],
-    # The cdylib must be in runfiles next to the Python sources so
-    # `from batchalign._core import ...` finds it. The genrule writes to
-    # the engine package's bindir; py_library carries it as runfiles.
-    data = ["//crates/batchalign/batchalign-engine:_core_so"],
+    # The cdylib must land at `python/batchalign/_core/_core.so` in the
+    # runfiles tree — matching what maturin produces and what
+    # `batchalign/_core/__init__.py` imports as `_core._core`. The
+    # `:staged_core_so` genrule below re-routes the engine output.
+    data = [":staged_core_so"],
     deps = _RUNTIME_DEPS,
+)
+
+# Rehome the engine cdylib into this package's path so the runfiles
+# layout matches `from batchalign._core import _core`. Without this,
+# the .so would land at `crates/batchalign/batchalign-engine/_core.so`
+# in runfiles, never at `python/batchalign/_core/_core.so` where the
+# Python import machinery looks.
+genrule(
+    name = "staged_core_so",
+    srcs = ["//crates/batchalign/batchalign-engine:_core_so"],
+    outs = ["_core/_core.so"],
+    cmd = "cp $(SRCS) $@",
+    output_to_bindir = True,
 )
 
 # Default runnable target — `bazel run //python/batchalign` invokes
