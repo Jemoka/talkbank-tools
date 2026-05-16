@@ -1,0 +1,100 @@
+name: bazel · wheels (PR matrix)
+
+# Multi-platform wheel verification on every PR + main push. Produces
+# the same set of wheels as `publish-pypi.yml` but doesn't upload them
+# anywhere — artifacts are downloadable from the workflow run for ~30
+# days for manual inspection. Catches per-platform regressions before
+# they reach the publish path.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "python/**"
+      - "crates/batchalign/**"
+      - "crates/core/talkbank-model/**"
+      - "crates/core/talkbank-parser/**"
+      - "crates/core/talkbank-transform/**"
+      - "bazel/python/**"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/bazel-wheels.yml"
+  pull_request:
+    paths:
+      - "python/**"
+      - "crates/batchalign/**"
+      - "crates/core/talkbank-model/**"
+      - "crates/core/talkbank-parser/**"
+      - "crates/core/talkbank-transform/**"
+      - "bazel/python/**"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/bazel-wheels.yml"
+
+concurrency:
+  group: bazel-wheels-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-14,         platform: macos-arm64,    triple: aarch64-apple-darwin }
+          - { runner: macos-13,         platform: macos-x86_64,   triple: x86_64-apple-darwin }
+          - { runner: ubuntu-latest,    platform: linux-x86_64,   triple: x86_64-unknown-linux-gnu }
+          - { runner: ubuntu-24.04-arm, platform: linux-aarch64,  triple: aarch64-unknown-linux-gnu }
+          - { runner: windows-latest,   platform: windows-x86_64, triple: x86_64-pc-windows-msvc }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: bazel-wheels-${{ matrix.platform }}
+          repository-cache: true
+
+      # Match python/pyproject.toml [tool.batchalign.pinned_tools].rust.
+      - name: Pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.95.0"
+          targets: ${{ matrix.triple }}
+
+      # Match python/pyproject.toml [tool.batchalign.pinned_tools].uv.
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.5.18"
+
+      - uses: extractions/setup-just@v2
+
+      - name: Build wheel for ${{ matrix.platform }}
+        env:
+          MATURIN_PROFILE: release
+          MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
+        run: just batchalign wheel-${{ matrix.platform }}
+
+      - name: Smoke test the wheel installs + imports
+        if: matrix.runner != 'windows-latest'
+        shell: bash
+        run: |
+          set -e
+          # Create a fresh venv outside the source tree, install just the
+          # produced wheel, and verify the cdylib loads cleanly. This
+          # catches link-time issues that bazel-test alone misses.
+          uv venv /tmp/wheel-smoke
+          source /tmp/wheel-smoke/bin/activate
+          uv pip install python/target/wheels/batchalign-*.whl
+          python -c "import batchalign; from batchalign import _core; print('import ok:', _core)"
+          batchalign3 --help
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: batchalign-wheel-${{ matrix.platform }}
+          path: python/target/wheels/*.whl
+          if-no-files-found: error
+          retention-days: 30

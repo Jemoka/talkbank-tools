@@ -16,7 +16,6 @@ Thumbs.db
 /target/
 **/target/
 **/*.rs.bk
-Cargo.lock
 
 # Python
 __pycache__/
@@ -67,3 +66,6 @@ lcov*.info
 **/.build/
 **/.tmp-review-venv/
 /bazel-*
+
+# Coordination scratch (multi-agent talk doc; not source of truth)
+talk.txt
