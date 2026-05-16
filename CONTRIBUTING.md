@@ -169,6 +169,35 @@ To cut a real release:
 4. After merge, dispatch `publish-pypi.yml` from the Actions UI with the
    new version as the input `tag` and `publish=true`.
 
+### Known local-build gotcha: macOS SDK + `libsqlite3-sys`
+
+If `just batchalign wheel` (or `cargo build` on the engine's transitive
+deps) on macOS prints errors like:
+
+```
+sys/proc.h:126:2: error: unknown type name 'u_quad_t'
+sys/proc.h:138:17: error: use of undeclared identifier 'MAXCOMLEN'
+```
+
+— that's `libsqlite3-sys 0.30.1` (transitively from `sqlx-sqlite`)
+trying to compile its vendored SQLite against a Command Line Tools
+SDK whose headers it doesn't tolerate. Two workarounds (pick one):
+
+```bash
+# 1. Use a homebrew sqlite instead of the vendored compile.
+brew install sqlite
+export SQLITE3_LIB_DIR="$(brew --prefix sqlite)/lib"
+export SQLITE3_INCLUDE_DIR="$(brew --prefix sqlite)/include"
+just batchalign wheel
+
+# 2. Install full Xcode (not just CLT) and point xcode-select at it.
+sudo xcode-select -s /Applications/Xcode.app
+```
+
+Linux + Windows runners ship clean SDKs and are unaffected. A
+permanent fix lives upstream in libsqlite3-sys; tracked as a TODO to
+bump it in Cargo.toml when we next sweep deps.
+
 ### Hermeticity pins
 
 The maturin/wheel path uses tools outside Bazel's hermetic sandbox

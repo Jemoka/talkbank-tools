@@ -36,7 +36,10 @@ use talkbank_transform::parse_and_validate;
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
-#[cfg_attr(feature = "python", pyo3::pyclass(eq, eq_int, rename_all = "PascalCase"))]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(eq, eq_int, hash, frozen, rename_all = "PascalCase")
+)]
 pub enum Task {
     /// Automatic speech recognition.
     Asr,
@@ -465,8 +468,8 @@ pub struct ProgressEvent {
 }
 
 /// Closed set of progress signals.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[cfg_attr(feature = "python", pyo3::pyclass(eq, eq_int))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "python", pyo3::pyclass(eq, eq_int, hash, frozen))]
 pub enum ProgressKind {
     /// A stage started for the given source.
     StageStarted,
