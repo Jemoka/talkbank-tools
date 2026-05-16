@@ -9,7 +9,7 @@ set -euo pipefail
 UV="$1"; shift
 
 # shellcheck source=hermeticity_guard.sh
-source "$(dirname "${BASH_SOURCE[0]}")/hermeticity_guard.sh"
+source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/hermeticity_guard.sh"
 hermeticity_guard "$UV"
 
 cd "$BUILD_WORKSPACE_DIRECTORY/python"
