@@ -20,6 +20,7 @@ on:
       - ".bazelignore"
       - ".bazelrc"
       - "MODULE.bazel.lock"
+      - "multitool.lock.json"
       - "rust-toolchain.toml"
       - ".github/workflows/bazel-wheels.yml"
   pull_request:
@@ -34,6 +35,7 @@ on:
       - ".bazelignore"
       - ".bazelrc"
       - "MODULE.bazel.lock"
+      - "multitool.lock.json"
       - "rust-toolchain.toml"
       - ".github/workflows/bazel-wheels.yml"
 
@@ -90,7 +92,13 @@ jobs:
           # Create a fresh venv outside the source tree, install just the
           # produced wheel, and verify the cdylib loads cleanly. This
           # catches link-time issues that bazel-test alone misses.
-          uv venv /tmp/wheel-smoke
+          # Pin the smoke-venv Python to 3.12 to match the wheel ABI tag.
+          # Without `--python 3.12`, uv picks whatever interpreter happens
+          # to be on the runner (e.g. Homebrew's python@3.14 on macos-14),
+          # producing
+          #   error: A path dependency is incompatible with the current
+          #   platform: batchalign-...-cp312-cp312-...whl
+          uv venv --python 3.12 /tmp/wheel-smoke
           source /tmp/wheel-smoke/bin/activate
           uv pip install python/target/wheels/batchalign-*.whl
           python -c "import batchalign; from batchalign import _core; print('import ok:', _core)"
