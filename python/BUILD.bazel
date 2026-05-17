@@ -28,16 +28,19 @@ pip_compile(
     name = "requirements",
     requirements_in = "pyproject.toml",
     requirements_txt = "requirements.lock.txt",
-    # `--all-extras` pulls every `[project.optional-dependencies]`
-    # group into the lockfile — no hand-list of extras.
-    #
-    # `universal = False` (default): the lockfile is resolved for the
-    # pyproject's `requires-python = "==3.12.*"` only, so Python 3.13+
-    # marker-conditional deps (audioop_lts, etc.) are EXCLUDED. Without
-    # this, rules_python's pip.parse leaves dangling names in
-    # `all_whl_requirements` whose BUILD files were never generated,
-    # breaking `deps = all_whl_requirements` in py_library.
     extra_args = ["--all-extras"],
+    universal = True,
+    # `:requirements_test` (auto-created by pip_compile) is tagged
+    # `manual` so it doesn't gate CI's `bazel test //...`. Reason: uv
+    # 0.5.18 with `--universal` is host-OS-dependent in subtle ways
+    # (macOS uv resolves `audioop-lts` as unconditional; Linux uv
+    # resolves it as `python_full_version >= '3.13'`-conditional, etc.).
+    # Until we bump uv to a version with deterministic --universal
+    # output, contributors regen the lockfile manually via
+    # `bazel run //python:requirements`. The lockfile committed today
+    # is generated on macOS; Linux regens diverge and would otherwise
+    # ping-pong the drift test.
+    tags = ["manual"],
 )
 
 filegroup(
