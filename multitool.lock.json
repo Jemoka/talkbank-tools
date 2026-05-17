@@ -69,6 +69,14 @@
         "file": "uv-aarch64-apple-darwin/uv",
         "os": "macos",
         "cpu": "arm64"
+      },
+      {
+        "kind": "archive",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.5.18/uv-x86_64-pc-windows-msvc.zip",
+        "sha256": "77f414173d0970c8977a614585fc013290659b0d74ae22be24559fde915832de",
+        "file": "uv.exe",
+        "os": "windows",
+        "cpu": "x86_64"
       }
     ]
   }
