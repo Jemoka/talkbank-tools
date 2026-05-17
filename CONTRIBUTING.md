@@ -356,6 +356,28 @@ The Dockerfiles live at `docker/Dockerfile.dev` and
 toolchain versions (uv, rust, just) used by CI, so a green local
 docker e2e is a strong proxy for "CI will also be green".
 
+**Docker Desktop RAM requirement:** `dev-test` compiles the full Rust
+workspace inside the container, so the container needs ≥ 8 GiB RAM
+(Docker Desktop → Settings → Resources → Memory). Some installs
+default to 2 GiB which OOM-kills the Bazel server mid-build. CI
+runners are unaffected. `wheel-test` is much lighter (only
+`pip install`s a pre-built wheel) and runs in the default config.
+
+**`wheel-test` source of wheels:** by default the recipe builds a host
+wheel via `just batchalign wheel` (maturin). If the host can't build
+locally (e.g. macOS Command Line Tools SDK issue, or just slow),
+drop a CI-built wheel into `python/target/wheels/` first:
+
+```bash
+gh run download <run-id> --name batchalign-wheel-linux-aarch64 \
+                         -D python/target/wheels/
+just docker wheel-test
+```
+
+The recipe matches the wheel's platform tag (`manylinux_*_x86_64` →
+`docker --platform=linux/amd64`, etc.) and skips the host build when
+a wheel is already present.
+
 ---
 
 ## Library crates (publishing to crates.io)
