@@ -21,21 +21,18 @@ multi-platform tagging matrix + optional-deps groups):
 groups, scripts, classifiers).
 """
 
-# Zero hand-listed deps. `all_whl_requirements` is rules_python's
-# marker-filtered wildcard: it yields every package whose wheel was
-# actually resolved + extracted for the current platform/Python
-# version. Critically (unlike `all_requirements`) it drops names that
-# the lockfile lists with `python_full_version >= '3.13'`-style
-# markers and that pip.parse therefore skipped writing BUILD files
-# for. The dep list is implicit in pyproject.toml + the regenerated
-# requirements.lock.txt — no name appears in this BUILD file ever.
-load("@pypi//:requirements.bzl", "all_requirements")
+# Zero hand-listed deps. `all_runtime_deps()` returns every package in
+# requirements.lock.txt, with rules_python's marker-conditional dangling
+# names filtered out (see `//bazel/python:deps.bzl` for the why; the
+# filter is a per-name list of *marker-excluded names from
+# requirements.lock.txt*, not a list of deps to include).
+load("//bazel/python:deps.bzl", "all_runtime_deps")
 load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 package(default_visibility = ["//visibility:public"])
 
-_RUNTIME_DEPS = all_requirements
+_RUNTIME_DEPS = all_runtime_deps()
 
 py_library(
     name = "batchalign_lib",
