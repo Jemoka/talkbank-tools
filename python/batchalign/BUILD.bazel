@@ -73,7 +73,10 @@ py_binary(
     name = "batchalign",
     srcs = ["__main__.py"],
     main = "__main__.py",
-    package_collisions = "warning",
+    # Many pypi packages ship overlapping benign `docs/` / `tests/`
+    # paths that aspect's venv-builder flags as conflicts; suppress
+    # entirely since none are runtime-load-relevant.
+    package_collisions = "ignore",
     deps = [":batchalign_lib"],
 )
 
@@ -84,7 +87,10 @@ py_test(
     args = ["python/batchalign/tests", "-q"],
     # Same package-collision tolerance as `:batchalign` — heavy ML extras
     # ship overlapping benign data paths (e.g. `audmath/docs/index.rst`).
-    package_collisions = "warning",
+    # Many pypi packages ship overlapping benign `docs/` / `tests/`
+    # paths that aspect's venv-builder flags as conflicts; suppress
+    # entirely since none are runtime-load-relevant.
+    package_collisions = "ignore",
     # all_requirements already contains pytest + pytest-xdist via the
     # dev extra in pyproject; don't re-list them or Bazel errors on
     # duplicate-deps.
