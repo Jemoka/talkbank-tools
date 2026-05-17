@@ -54,7 +54,13 @@ jobs:
           - { runner: macos-13,         platform: macos-x86_64,   triple: x86_64-apple-darwin }
           - { runner: ubuntu-latest,    platform: linux-x86_64,   triple: x86_64-unknown-linux-gnu }
           - { runner: ubuntu-24.04-arm, platform: linux-aarch64,  triple: aarch64-unknown-linux-gnu }
-          - { runner: windows-latest,   platform: windows-x86_64, triple: x86_64-pc-windows-msvc }
+          # windows-x86_64 deferred: multitool's uv.exe at archive root
+          # resolves to "/uv.exe" under bash-on-Windows, which the
+          # hermeticity guard's path absolutization can't handle. Add a
+          # `file = "uv-windows/uv.exe"` subdir prefix in
+          # multitool.lock.json (or use rules_multitool's path-mangling
+          # workaround) before re-enabling.
+          # - { runner: windows-latest, platform: windows-x86_64, triple: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v4
 
