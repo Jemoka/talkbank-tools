@@ -342,11 +342,16 @@ cantonese = [
     { name = "tencentcloud-sdk-python-asr" },
 ]
 dev = [
+    { name = "build" },
+    { name = "hatchling" },
     { name = "maturin" },
     { name = "mypy" },
+    { name = "poetry-core" },
     { name = "pytest" },
     { name = "pytest-xdist" },
+    { name = "setuptools" },
     { name = "twine" },
+    { name = "wheel" },
 ]
 opensmile = [
     { name = "opensmile" },
@@ -360,6 +365,7 @@ revai = [
 ]
 stanza = [
     { name = "stanza" },
+    { name = "transformers" },
 ]
 translate = [
     { name = "googletrans" },
@@ -376,17 +382,36 @@ whisper = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "build" },
+    { name = "hatchling" },
+    { name = "mypy" },
+    { name = "poetry-core" },
     { name = "pytest" },
+    { name = "pytest-xdist" },
+    { name = "setuptools" },
+    { name = "twine" },
+    { name = "wheel" },
+]
+runtime = [
+    { name = "numpy" },
+    { name = "polars" },
+    { name = "soundfile" },
+    { name = "stanza" },
+    { name = "tqdm" },
+    { name = "transformers" },
+    { name = "typer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "aliyun-python-sdk-core", marker = "extra == 'all'", specifier = ">=2.13" },
     { name = "aliyun-python-sdk-core", marker = "extra == 'cantonese'", specifier = ">=2.13" },
+    { name = "build", marker = "extra == 'dev'" },
     { name = "funasr", marker = "extra == 'all'" },
     { name = "funasr", marker = "extra == 'cantonese'" },
     { name = "googletrans", marker = "extra == 'all'" },
     { name = "googletrans", marker = "extra == 'translate'" },
+    { name = "hatchling", marker = "extra == 'dev'" },
     { name = "librosa", marker = "extra == 'all'", specifier = ">=0.10" },
     { name = "librosa", marker = "extra == 'vllm'", specifier = ">=0.10" },
     { name = "maturin", marker = "extra == 'dev'", specifier = "==1.7.4" },
@@ -398,6 +423,7 @@ requires-dist = [
     { name = "openai", marker = "extra == 'vllm'", specifier = ">=1.0" },
     { name = "opensmile", marker = "extra == 'all'", specifier = ">=2.5" },
     { name = "opensmile", marker = "extra == 'opensmile'", specifier = ">=2.5" },
+    { name = "poetry-core", marker = "extra == 'dev'" },
     { name = "polars", specifier = ">=0.20" },
     { name = "praat-parselmouth", marker = "extra == 'all'", specifier = ">=0.4.6" },
     { name = "praat-parselmouth", marker = "extra == 'avqi'", specifier = ">=0.4.6" },
@@ -409,6 +435,7 @@ requires-dist = [
     { name = "pytest-xdist", marker = "extra == 'dev'" },
     { name = "rev-ai", marker = "extra == 'all'" },
     { name = "rev-ai", marker = "extra == 'revai'" },
+    { name = "setuptools", marker = "extra == 'dev'" },
     { name = "soundfile", specifier = ">=0.12" },
     { name = "stanza", marker = "extra == 'all'", specifier = ">=1.12" },
     { name = "stanza", marker = "extra == 'stanza'", specifier = ">=1.12" },
@@ -420,14 +447,49 @@ requires-dist = [
     { name = "torchaudio", marker = "extra == 'whisper'", specifier = ">=2.0" },
     { name = "tqdm", specifier = ">=4" },
     { name = "transformers", marker = "extra == 'all'", specifier = ">=4.38" },
+    { name = "transformers", marker = "extra == 'stanza'", specifier = ">=4.38" },
     { name = "transformers", marker = "extra == 'whisper'", specifier = ">=4.38" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=5" },
     { name = "typer", specifier = ">=0.12" },
+    { name = "wheel", marker = "extra == 'dev'" },
 ]
 provides-extras = ["whisper", "vllm", "stanza", "pyannote", "revai", "cantonese", "opensmile", "avqi", "translate", "all", "dev"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.0.3" }]
+dev = [
+    { name = "build" },
+    { name = "hatchling" },
+    { name = "mypy" },
+    { name = "poetry-core" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-xdist" },
+    { name = "setuptools" },
+    { name = "twine", specifier = ">=5" },
+    { name = "wheel" },
+]
+runtime = [
+    { name = "numpy", specifier = ">=1.24" },
+    { name = "polars", specifier = ">=0.20" },
+    { name = "soundfile", specifier = ">=0.12" },
+    { name = "stanza", specifier = ">=1.12" },
+    { name = "tqdm", specifier = ">=4" },
+    { name = "transformers", specifier = ">=4.38" },
+    { name = "typer", specifier = ">=0.12" },
+]
+
+[[package]]
+name = "build"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "os_name == 'nt'" },
+    { name = "packaging" },
+    { name = "pyproject-hooks" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/e0/df5e171f685f82f37b12e1f208064e24244911079d7b767447d1af7e0d70/build-1.5.0.tar.gz", hash = "sha256:302c22c3ba2a0fd5f3911918651341ebb3896176cbdec15bd421f80b1afc7647", size = 89796, upload-time = "2026-04-30T03:18:25.17Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/fe/6bea5c9162869c5beba5d9c8abbed835ec85bf1ec1fba05a3822325c45f3/build-1.5.0-py3-none-any.whl", hash = "sha256:13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f", size = 26018, upload-time = "2026-04-30T03:18:23.644Z" },
+]
 
 [[package]]
 name = "certifi"
@@ -915,6 +977,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1d/17/afa56379f94ad0fe8defd37d6eb3f89a25404ffc71d4d848893d270325fc/h2-4.3.0.tar.gz", hash = "sha256:6c59efe4323fa18b47a632221a1888bd7fde6249819beda254aeca909f221bf1", size = 2152026, upload-time = "2025-08-23T18:12:19.778Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/69/b2/119f6e6dcbd96f9069ce9a2665e0146588dc9f88f29549711853645e736a/h2-4.3.0-py3-none-any.whl", hash = "sha256:c438f029a25f7945c69e0ccf0fb951dc3f73a5f6412981daee861431b70e2bdd", size = 61779, upload-time = "2025-08-23T18:12:17.779Z" },
+]
+
+[[package]]
+name = "hatchling"
+version = "1.29.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pathspec" },
+    { name = "pluggy" },
+    { name = "trove-classifiers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/9c/b4cfe330cd4f49cff17fd771154730555fa4123beb7f292cf0098b4e6c20/hatchling-1.29.0.tar.gz", hash = "sha256:793c31816d952cee405b83488ce001c719f325d9cda69f1fc4cd750527640ea6", size = 55656, upload-time = "2026-02-23T19:42:06.539Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/8a/44032265776062a89171285ede55a0bdaadc8ac00f27f0512a71a9e3e1c8/hatchling-1.29.0-py3-none-any.whl", hash = "sha256:50af9343281f34785fab12da82e445ed987a6efb34fd8c2fc0f6e6630dbcc1b0", size = 76356, upload-time = "2026-02-23T19:42:05.197Z" },
 ]
 
 [[package]]
@@ -2095,6 +2172,15 @@ wheels = [
 ]
 
 [[package]]
+name = "poetry-core"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b0/97/f7bb55470bb7890d9b3d3f9fa761083d5c9a6838b17c94a41bf2939f89ef/poetry_core-2.4.0.tar.gz", hash = "sha256:4e8c7496cf797998ffc493f2e23eba4b038c894c08eadacdcdf688945de6b43a", size = 413541, upload-time = "2026-05-03T13:43:00.168Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6f/7f/6d97fb5b00cdb89159b648d16bee1d7c2c5046605c83868f36f940c99098/poetry_core-2.4.0-py3-none-any.whl", hash = "sha256:4305848477da00272bebd3f615bbec87f64bd117cdb858ab660b626a06a9d96c", size = 374844, upload-time = "2026-05-03T13:42:58.72Z" },
+]
+
+[[package]]
 name = "polars"
 version = "1.40.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2444,6 +2530,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f3/91/9c6ee907786a473bf81c5f53cf703ba0957b23ab84c264080fb5a450416f/pyparsing-3.3.2.tar.gz", hash = "sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc", size = 6851574, upload-time = "2026-01-21T03:57:59.36Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl", hash = "sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d", size = 122781, upload-time = "2026-01-21T03:57:55.912Z" },
+]
+
+[[package]]
+name = "pyproject-hooks"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e7/82/28175b2414effca1cdac8dc99f76d660e7a4fb0ceefa4b4ab8f5f6742925/pyproject_hooks-1.2.0.tar.gz", hash = "sha256:1e859bd5c40fae9448642dd871adf459e5e2084186e8d2c2a79a824c970da1f8", size = 19228, upload-time = "2024-09-29T09:24:13.293Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl", hash = "sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913", size = 10216, upload-time = "2024-09-29T09:24:11.978Z" },
 ]
 
 [[package]]
@@ -3138,6 +3233,15 @@ wheels = [
 ]
 
 [[package]]
+name = "trove-classifiers"
+version = "2026.5.7.17"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/35/68/175e7c07c5be13200387d5c0995b0da1e198e360047c08eb17d1002fcd92/trove_classifiers-2026.5.7.17.tar.gz", hash = "sha256:a04a48f8f0a787cb996514d3969ac7608aa3c60cb15d073c1e02801e60533e80", size = 17041, upload-time = "2026-05-07T17:48:01.931Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7b/e3/d81b065a2d866a33a541ac63a2a4cc5737e03ce2379ac3191c98bb8867e3/trove_classifiers-2026.5.7.17-py3-none-any.whl", hash = "sha256:5ec0800de5e2ddbd7c663cb4c0c15328f132dc168813897c18866c5c7b93db33", size = 14201, upload-time = "2026-05-07T17:48:00.488Z" },
+]
+
+[[package]]
 name = "twine"
 version = "6.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3264,6 +3368,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/48/bf/c706b56243f1641159ff211b51d3341024e1cdf63defc2b74595b6319039/websocket-client-0.59.0.tar.gz", hash = "sha256:d376bd60eace9d437ab6d7ee16f4ab4e821c9dae591e1b783c58ebd8aaf80c5c", size = 57897, upload-time = "2021-05-05T01:43:07.811Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/0c/d52a2a63512a613817846d430d16a8fbe5ea56dd889e89c68facf6b91cb6/websocket_client-0.59.0-py2.py3-none-any.whl", hash = "sha256:2e50d26ca593f70aba7b13a489435ef88b8fc3b5c5643c1ce8808ff9b40f0b32", size = 67216, upload-time = "2021-05-05T01:43:04.863Z" },
+]
+
+[[package]]
+name = "wheel"
+version = "0.47.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/39/62/75f18a0f03b4219c456652c7780e4d749b929eb605c098ce3a5b6b6bc081/wheel-0.47.0.tar.gz", hash = "sha256:cc72bd1009ba0cf63922e28f94d9d83b920aa2bb28f798a31d0691b02fa3c9b3", size = 63854, upload-time = "2026-04-22T15:51:27.727Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/1b/9e33c09813d65e248f7f773119148a612516a4bea93e9c6f545f78455b7c/wheel-0.47.0-py3-none-any.whl", hash = "sha256:212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced", size = 32218, upload-time = "2026-04-22T15:51:26.296Z" },
 ]
 
 [[package]]

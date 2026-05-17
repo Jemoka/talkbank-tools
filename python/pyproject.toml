@@ -45,7 +45,7 @@ dependencies = [
 [project.optional-dependencies]
 whisper      = ["transformers>=4.38", "torch>=2.0", "torchaudio>=2.0"]
 vllm         = ["openai>=1.0", "librosa>=0.10"]
-stanza       = ["stanza>=1.12"]
+stanza       = ["stanza>=1.12", "transformers>=4.38"]
 pyannote     = ["pyannote.audio>=3.0", "onnxruntime>=1.16"]
 revai        = ["rev-ai"]
 cantonese    = ["pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "aliyun-python-sdk-core>=2.13", "funasr"]
@@ -69,6 +69,14 @@ dev = [
     "pytest-xdist",
     "mypy",
     "twine>=5",        # used by `just batchalign publish`
+    # PEP 517 build frontends. aspect_rules_py's uv extension needs
+    # versions for any build backend in the resolution graph; pulling
+    # them in via dev ensures they land in uv.lock.
+    "build",
+    "wheel",
+    "setuptools",
+    "hatchling",
+    "poetry-core",
 ]
 
 [project.scripts]
@@ -131,6 +139,36 @@ maturin = "1.7.4"    # used for `maturin develop` and `maturin build` —
 rust = "1.95.0"      # mirror MODULE.bazel rust.toolchain(versions = [...])
 
 [dependency-groups]
+# PEP 735 dependency groups. aspect_rules_py's `uv.project` extension
+# reads these (not `[project] dependencies` directly) to populate
+# `@pypi//*` Bazel deps. Adding a runtime/dev/etc. dep here makes it
+# reachable as `@pypi//<name>` after the next `cd python && uv lock`.
+#
+# `runtime` mirrors `[project] dependencies` + the lazily-imported
+# optional groups that batchalign actually wires for the Bazel-run path
+# (stanza + its transformers tagger). Other extras (whisper / pyannote
+# / vllm / rev-ai / opensmile / avqi / translate / cantonese) only
+# matter to wheel consumers; they live in `[project.optional-dependencies]`
+# above and reach the wheel via maturin's pyproject.toml reader.
+runtime = [
+    "numpy>=1.24",
+    "polars>=0.20",
+    "soundfile>=0.12",
+    "stanza>=1.12",
+    "tqdm>=4",
+    "transformers>=4.38",
+    "typer>=0.12",
+]
 dev = [
     "pytest>=9.0.3",
+    "pytest-xdist",
+    "mypy",
+    "twine>=5",
+    # PEP 517 build frontends — aspect_rules_py needs versions for
+    # build backends in the resolution graph.
+    "build",
+    "wheel",
+    "setuptools",
+    "hatchling",
+    "poetry-core",
 ]

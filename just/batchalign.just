@@ -35,29 +35,23 @@ set positional-arguments := true
 default:
     @just --list --justfile {{ justfile() }}
 
-# Build every Batchalign Bazel target (Rust + sh_binary wrappers).
+# Build every Batchalign Bazel target (Rust + py_binary + wheel).
 build profile="release":
     bazel build --config={{ if profile == "release" { "release" } else { "dev" } }} \
         //crates/batchalign/... //python/batchalign/...
 
-# Run every Batchalign Bazel test target.
+# Run every Batchalign Bazel test target. Includes
+# //python:uv_lock_check which fails if pyproject.toml drifted from
+# uv.lock (`cd python && uv lock` to fix).
 test profile="release":
     bazel test --config={{ if profile == "release" { "release" } else { "dev" } }} \
-        //crates/batchalign/... //python/batchalign/...
+        //crates/batchalign/... //python/batchalign/... //python:uv_lock_check
 
-# Run the Python `batchalign3` CLI. py_binary; Bazel builds the cdylib
-# natively via the engine `rust_shared_library` and runs `python -m
-# batchalign` against it — no maturin, no `:develop` round-trip.
+# Run the Python `batchalign3` CLI via py_binary.
 cli *args:
     bazel run //python/batchalign -- "$@"
 
-# Lockfile regen (`pip_compile` reads pyproject.toml → requirements.lock.txt).
-# Run after editing `[project] dependencies` in pyproject.toml; CI's
-# `//python:requirements_test` gates drift.
-relock:
-    bazel run //python:requirements
-
-# Pytest. py_test; Bazel builds the cdylib + Python deps, then runs.
+# Pytest via py_test.
 pytest *args:
     bazel test //python/batchalign:pytest -- "$@"
 

@@ -135,15 +135,14 @@ use_repo(crate, "crates")
 # cdylib + ABI-tagged rename + wheel packaging in Bazel buys nothing here.
 bazel_dep(name = "rules_python", version = "1.6.3")
 bazel_dep(name = "rules_uv", version = "0.59.0")
-# aspect_rules_py replaces rules_python's stub-script launcher with a
-# bash-only launcher (no system-python bootstrap) and provides
-# virtual_deps + resolutions for the override-package pattern. Requires
-# Bazel 8.x (uses repository_ctx.repo_metadata).
+# aspect_rules_py provides the bash-based py_binary launcher (no
+# system-python bootstrap) which fixes the
+# `/usr/bin/env: 'python3': Permission denied` failure under clean
+# Linux containers. aspect's uv-direct extension is more invasive
+# (introduces a venv-config layer) than this repo needs today — we
+# stay on rules_uv/pip_compile for dep resolution and only borrow
+# aspect's py_* defs.
 bazel_dep(name = "aspect_rules_py", version = "1.11.5")
-# aspect_rules_py adoption deferred — version 1.11.5 calls
-# `repository_ctx.repo_metadata`, a Bazel 8+ API; this workspace pins
-# an older Bazel. Re-add once we bump Bazel, or pin aspect_rules_py to
-# the last 1.x release that ships without that call (TODO: try 1.10).
 
 # Single source of truth for the Python interpreter pin. Flows into the
 # rules_python toolchain, the uv-managed venv, and the maturin host
@@ -154,17 +153,17 @@ python.toolchain(
     is_default = True,
 )
 
-# rules_uv provides the hermetic `uv` binary. Version pinned here is the
-# only uv that maturin / pytest / lint ever see; the guard script asserts
-# that the binary handed in via $1 reports a matching version.
+# uv binary (rules_uv toolchain). pip_compile uses it to render
+# pyproject.toml → requirements.lock.txt at `bazel run //python:requirements`
+# time. The same uv is invoked by the maturin wheel build path.
 uv = use_extension("@rules_uv//uv:extensions.bzl", "uv")
 uv.toolchain(uv_version = "0.5.18")
 
-# Python deps. `pyproject.toml` is the source of truth; the Bazel-side
-# `requirements.lock.txt` is a hash-locked render produced by
-# `bazel run //python:requirements`. `pip.parse` consumes that lock so
-# `py_library` / `py_binary` / `py_test` resolve runtime deps via the
-# `@pypi//*` hub. CI gates lockfile drift via `//python:requirements_test`.
+# `@pypi//*` hub generated from python/requirements.lock.txt (which
+# `pip_compile` produces from pyproject.toml's `[project] dependencies`
+# + all `[project.optional-dependencies]` via `--all-extras`).
+# `all_requirements` from this hub gives BUILD files a wildcard
+# import — no hand-listed names.
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
     hub_name = "pypi",
