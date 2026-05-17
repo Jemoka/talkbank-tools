@@ -11,26 +11,17 @@ use crate::proto::asr::{AsrSegment, AsrWord, LanguageSpec};
 use crate::proto::fa::{FaInput, FaOutput};
 use crate::utils::{BAError, BAResult, SpeakerLabel, prepare_pcm};
 use async_trait::async_trait;
-use serde::Deserialize;
 use talkbank_model::Line;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 
 pub struct FaTaskRunner;
 
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct FaConfig {
-    #[serde(default)]
-    pub language: LanguageSpec,
-}
-
 #[async_trait]
 impl TaskRunner for FaTaskRunner {
     const TASK: Task = Task::Fa;
-    type Config = FaConfig;
 
     async fn apply(
         &self,
-        cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,
@@ -62,7 +53,9 @@ impl TaskRunner for FaTaskRunner {
             source_id: chat.source_id().clone(),
             audio,
             utterances,
-            language: cfg.language.clone(),
+            // FA reads `@Languages:` off the chat anyway; backends that
+            // need a hard-pinned language pull it from their constructor.
+            language: LanguageSpec::PerFile,
         };
 
         let output_raw = dispatcher.dispatch(TaskInput::Fa(input)).await?;

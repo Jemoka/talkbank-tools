@@ -14,22 +14,16 @@ use crate::metrics::{MetricsArtifact, MetricsKind};
 use crate::proto::avqi::{AvqiInput, AvqiOutput};
 use crate::utils::{BAError, BAResult, prepare_pcm};
 use async_trait::async_trait;
-use serde::Deserialize;
 use smol_str::SmolStr;
 
 pub struct AvqiTaskRunner;
 
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct AvqiConfig {}
-
 #[async_trait]
 impl TaskRunner for AvqiTaskRunner {
     const TASK: Task = Task::Avqi;
-    type Config = AvqiConfig;
 
     async fn apply(
         &self,
-        _cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,

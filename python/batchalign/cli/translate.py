@@ -34,9 +34,9 @@ def register(app: typer.Typer) -> None:
         ba = import_ba()
         backend: Any
         if engine is TranslateEngine.google:
-            backend = ba.GoogleTranslateBackend()
+            backend = ba.GoogleTranslateBackend(target=target)
         else:
-            backend = ba.VllmTranslateBackend()
-        pipeline = ba.recipes.translate(translate_backend=backend, target=target)
+            backend = ba.VllmTranslateBackend(target=target)
+        pipeline = ba.recipes.translate(translate_backend=backend)
         outcomes = pipeline.run(collect_chat(paths))
         write_outcomes(outcomes, out)

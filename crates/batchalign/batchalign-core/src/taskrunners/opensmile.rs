@@ -15,37 +15,16 @@ use crate::metrics::{MetricsArtifact, MetricsKind};
 use crate::proto::opensmile::{OpenSmileInput, OpenSmileOutput};
 use crate::utils::{BAError, BAResult, prepare_pcm};
 use async_trait::async_trait;
-use serde::Deserialize;
 use smol_str::SmolStr;
 
 pub struct OpenSmileTaskRunner;
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct OpenSmileConfig {
-    #[serde(default = "default_feature_set")]
-    pub feature_set: SmolStr,
-}
-
-fn default_feature_set() -> SmolStr {
-    SmolStr::new_static("eGeMAPSv02")
-}
-
-impl Default for OpenSmileConfig {
-    fn default() -> Self {
-        Self {
-            feature_set: default_feature_set(),
-        }
-    }
-}
-
 #[async_trait]
 impl TaskRunner for OpenSmileTaskRunner {
     const TASK: Task = Task::OpenSmile;
-    type Config = OpenSmileConfig;
 
     async fn apply(
         &self,
-        cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,
@@ -72,7 +51,10 @@ impl TaskRunner for OpenSmileTaskRunner {
         let input = OpenSmileInput {
             source_id: media.source_id.clone(),
             audio,
-            feature_set: cfg.feature_set.clone(),
+            // The default eGeMAPS feature set lives on the input only as a
+            // hint; backends select the actual set via their own constructor
+            // (`OpenSmileBackend(feature_set="ComParE_2016")`).
+            feature_set: SmolStr::new_static("eGeMAPSv02"),
         };
 
         let output_raw = dispatcher.dispatch(TaskInput::OpenSmile(input)).await?;

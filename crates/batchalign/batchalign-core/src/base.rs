@@ -8,6 +8,7 @@
 use crate::metrics::MetricsArtifact;
 use crate::proto::asr::{AsrInput, AsrOutput};
 use crate::proto::avqi::{AvqiInput, AvqiOutput};
+use crate::proto::compare::{CompareInput, CompareOutput};
 use crate::proto::coref::{CorefInput, CorefOutput};
 use crate::proto::fa::{FaInput, FaOutput};
 use crate::proto::morphosyntax::{MorphosyntaxInput, MorphosyntaxOutput};
@@ -19,7 +20,6 @@ use crate::utils::{BAError, BAResult, MediaInput, SourceId};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use schemars::JsonSchema;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::path::Path;
@@ -75,11 +75,6 @@ impl Task {
             Task::Translate => &[Task::Morphosyntax],
             Task::Compare => &[],
         }
-    }
-
-    /// `true` if this task dispatches to a backend.
-    pub const fn needs_backend(self) -> bool {
-        !matches!(self, Task::Compare)
     }
 
     /// Stable, short name used in `@Comment:` provenance and progress events.
@@ -180,6 +175,7 @@ union_input_output! {
         Coref(CorefInput) => Coref,
         OpenSmile(OpenSmileInput) => OpenSmile,
         Avqi(AvqiInput) => Avqi,
+        Compare(CompareInput) => Compare,
     }
     output {
         Asr(AsrOutput),
@@ -191,6 +187,7 @@ union_input_output! {
         Coref(CorefOutput),
         OpenSmile(OpenSmileOutput),
         Avqi(AvqiOutput),
+        Compare(CompareOutput),
     }
 }
 
@@ -221,6 +218,7 @@ try_from_output! {
     Coref(CorefOutput),
     OpenSmile(OpenSmileOutput),
     Avqi(AvqiOutput),
+    Compare(CompareOutput),
 }
 
 // ---------------------------------------------------------------------------
@@ -362,6 +360,13 @@ impl Paired {
         (self.main, self.gold)
     }
 
+    /// Borrow both sides mutably. Used by runners that need to operate on
+    /// each chat in place — most notably the morphosyntax runner running
+    /// over a Paired before Compare, so both sides pick up `%mor` tiers.
+    pub fn as_mut_parts(&mut self) -> (&mut Chat<Validated>, &mut Chat<Validated>) {
+        (&mut self.main, &mut self.gold)
+    }
+
     /// The pipeline-facing identity — always the main side.
     pub fn source_id(&self) -> &SourceId {
         self.main.source_id()
@@ -373,6 +378,12 @@ impl Paired {
 // ---------------------------------------------------------------------------
 
 /// The runtime value flowing through a pipeline.
+///
+/// `Cons` + `Nil` give us a Lisp-style list so a single task can emit more
+/// than one artifact for one source — e.g. Compare returns
+/// `Cons(Chat(annotated), Cons(Metrics(per-pos CSV), Nil))`. The driver
+/// walks the list and writes each variant to its natural file extension
+/// (Chat → `.cha`, Metrics → `.compare.csv` / `.avqi.csv` / etc.).
 #[derive(Debug)]
 pub enum BAValue {
     /// A reference to media on disk (the typical pipeline input).
@@ -383,6 +394,14 @@ pub enum BAValue {
     Paired(Paired),
     /// Terminal metrics (openSMILE, AVQI, compare summaries, …).
     Metrics(MetricsArtifact),
+    /// Lisp-style list cell. Tasks that emit multiple artifacts return a
+    /// chain of these terminated by `Nil`.
+    Cons {
+        head: Box<BAValue>,
+        tail: Box<BAValue>,
+    },
+    /// Empty list — the only way `Cons` chains terminate.
+    Nil,
     /// Poison-pill: the run died for this source.
     Failed {
         /// The source the run was associated with.
@@ -395,6 +414,20 @@ pub enum BAValue {
 }
 
 impl BAValue {
+    /// Lisp-style list builder: chain values into a `Cons` list terminated
+    /// by `Nil`. Convenience for runners that emit more than one artifact
+    /// (`BAValue::list(vec![chat, metrics])`).
+    pub fn list(items: Vec<BAValue>) -> BAValue {
+        let mut acc = BAValue::Nil;
+        for item in items.into_iter().rev() {
+            acc = BAValue::Cons {
+                head: Box::new(item),
+                tail: Box::new(acc),
+            };
+        }
+        acc
+    }
+
     /// Identify the source this value belongs to.
     pub fn source_id(&self) -> SourceId {
         match self {
@@ -403,12 +436,24 @@ impl BAValue {
             BAValue::Paired(p) => p.source_id().clone(),
             BAValue::Metrics(m) => m.source_id.clone(),
             BAValue::Failed { source_id, .. } => source_id.clone(),
+            // Lists adopt the head's identity. An empty list has no obvious
+            // source, but downstream code shouldn't be writing one either —
+            // return a placeholder so error paths don't panic.
+            BAValue::Cons { head, .. } => head.source_id(),
+            BAValue::Nil => SourceId::try_new("nil").unwrap_or_else(|_| {
+                SourceId::try_new("unknown").expect("'unknown' is non-empty")
+            }),
         }
     }
 
-    /// `true` if this value has poison-pilled.
+    /// `true` if this value has poison-pilled. `Cons` is failed iff any
+    /// element is failed; `Nil` is never failed.
     pub fn is_failed(&self) -> bool {
-        matches!(self, BAValue::Failed { .. })
+        match self {
+            BAValue::Failed { .. } => true,
+            BAValue::Cons { head, tail } => head.is_failed() || tail.is_failed(),
+            _ => false,
+        }
     }
 
     /// Short kind tag, used in errors and progress events.
@@ -419,20 +464,27 @@ impl BAValue {
             BAValue::Paired(_) => "Paired",
             BAValue::Metrics(_) => "Metrics",
             BAValue::Failed { .. } => "Failed",
+            BAValue::Cons { .. } => "Cons",
+            BAValue::Nil => "Nil",
         }
     }
 
-    /// Persist this value to `path`.
+    /// Persist this value to `path`. `Cons` walks the list, writing each
+    /// element to a path derived from the base (Chat keeps the base path,
+    /// Metrics re-extensions to `<kind>.csv`, `Nil` is a no-op).
     pub fn write(&self, path: &Path) -> BAResult<()> {
         match self {
             BAValue::Chat(c) => c.write(path),
             BAValue::Paired(p) => p.main().write(path),
-            BAValue::Metrics(_) => Err(BAError::Internal(
-                "metrics writing is implemented in batchalign-engine".into(),
-            )),
+            BAValue::Metrics(m) => write_metrics_csv(m, path),
             BAValue::Media(_) => Err(BAError::Internal(
                 "pipeline did not process media into a writable output".into(),
             )),
+            BAValue::Cons { head, tail } => {
+                head.write(path)?;
+                tail.write(path)
+            }
+            BAValue::Nil => Ok(()),
             BAValue::Failed { error, partial, .. } => {
                 let log_path = path.with_extension("error.log");
                 std::fs::write(&log_path, format!("{error:#}\n"))?;
@@ -442,6 +494,82 @@ impl BAValue {
                 Ok(())
             }
         }
+    }
+}
+
+/// File-extension picker per metrics kind. Mirrors `engine/metrics_writer`'s
+/// table — kept here so `BAValue::write` can render metrics without a
+/// dependency on the engine crate.
+fn metrics_extension(kind: crate::metrics::MetricsKind) -> &'static str {
+    use crate::metrics::MetricsKind;
+    match kind {
+        MetricsKind::Opensmile => "opensmile.csv",
+        MetricsKind::Avqi => "avqi.csv",
+        MetricsKind::Compare => "compare.csv",
+        MetricsKind::Benchmark => "benchmark.csv",
+        MetricsKind::Custom => "metrics.csv",
+    }
+}
+
+/// Render one `MetricsArtifact` as CSV to `<path>.with_extension(<kind>.csv)`.
+fn write_metrics_csv(artifact: &MetricsArtifact, path: &Path) -> BAResult<()> {
+    use std::fmt::Write as _;
+    let target = path.with_extension(metrics_extension(artifact.kind));
+    let mut out = String::new();
+    write_csv_row(&mut out, &artifact.table.schema);
+    for row in &artifact.table.rows {
+        let cells: Vec<String> = artifact
+            .table
+            .schema
+            .iter()
+            .map(|col| {
+                row.columns
+                    .get(col)
+                    .map(json_cell)
+                    .unwrap_or_default()
+            })
+            .collect();
+        write_csv_row(&mut out, &cells);
+    }
+    std::fs::write(&target, out)?;
+    Ok(())
+}
+
+fn json_cell(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Null => String::new(),
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
+}
+
+fn write_csv_row(out: &mut String, cells: &[String]) {
+    use std::fmt::Write as _;
+    for (i, cell) in cells.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write_csv_cell(out, cell);
+    }
+    let _ = writeln!(out);
+}
+
+fn write_csv_cell(out: &mut String, cell: &str) {
+    let needs_quotes = cell
+        .chars()
+        .any(|c| c == ',' || c == '"' || c == '\n' || c == '\r');
+    if needs_quotes {
+        out.push('"');
+        for c in cell.chars() {
+            if c == '"' {
+                out.push_str("\"\"");
+            } else {
+                out.push(c);
+            }
+        }
+        out.push('"');
+    } else {
+        out.push_str(cell);
     }
 }
 
@@ -558,18 +686,18 @@ pub trait Dispatcher: Send + Sync {
     async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput>;
 }
 
-/// Typed runner.
+/// Typed runner. Runners are *canonical* (one per `Task`) and stateless —
+/// they have no per-invocation config; per-pipeline tunables live on the
+/// backend constructor side, and per-file hints (language) are read off
+/// the chat's `@Languages:` header at dispatch time.
 #[async_trait]
 pub trait TaskRunner: Send + Sync {
     /// The DAG node this runner services.
     const TASK: Task;
-    /// Per-task config; populated from a JSON dict on the Python side.
-    type Config: DeserializeOwned + Default + Send + Sync + 'static;
 
     /// Run the stage: mutate or replace `value` using `dispatcher`.
     async fn apply(
         &self,
-        cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,
@@ -580,10 +708,9 @@ pub trait TaskRunner: Send + Sync {
 pub trait DynTaskRunner: Send + Sync {
     /// Which task this runner services.
     fn task(&self) -> Task;
-    /// Apply the runner with a JSON-encoded config.
+    /// Apply the runner.
     fn apply<'a>(
         &'a self,
-        config_json: &'a serde_json::Value,
         value: &'a mut BAValue,
         dispatcher: &'a dyn Dispatcher,
         sink: &'a dyn ProgressSink,
@@ -597,20 +724,12 @@ impl<T: TaskRunner + 'static> DynTaskRunner for T {
 
     fn apply<'a>(
         &'a self,
-        config_json: &'a serde_json::Value,
         value: &'a mut BAValue,
         dispatcher: &'a dyn Dispatcher,
         sink: &'a dyn ProgressSink,
     ) -> BoxFuture<'a, BAResult<()>> {
         Box::pin(async move {
-            let cfg: T::Config = if config_json.is_null() {
-                T::Config::default()
-            } else {
-                serde_json::from_value(config_json.clone()).map_err(|e| {
-                    BAError::Internal(format!("invalid config for {:?}: {e}", T::TASK))
-                })?
-            };
-            <T as TaskRunner>::apply(self, &cfg, value, dispatcher, sink).await
+            <T as TaskRunner>::apply(self, value, dispatcher, sink).await
         })
     }
 }
@@ -647,14 +766,6 @@ mod tests {
             for r in t.requires() {
                 assert!(Task::ALL.contains(r), "{t:?}.requires references {r:?}");
             }
-        }
-    }
-
-    #[test]
-    fn only_compare_skips_backend() {
-        for t in Task::ALL {
-            let needs = t.needs_backend();
-            assert_eq!(needs, !matches!(t, Task::Compare));
         }
     }
 

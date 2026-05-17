@@ -10,27 +10,18 @@ use crate::base::{Dispatcher, TaskRunner};
 use crate::proto::speaker::{SpeakerInput, SpeakerOutput};
 use crate::utils::{BAError, BAResult, prepare_pcm};
 use async_trait::async_trait;
-use serde::Deserialize;
 use talkbank_model::Line;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_model::content::UtteranceContent;
 
 pub struct SpeakerTaskRunner;
 
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct SpeakerConfig {
-    #[serde(default)]
-    pub num_speakers: u32,
-}
-
 #[async_trait]
 impl TaskRunner for SpeakerTaskRunner {
     const TASK: Task = Task::Speaker;
-    type Config = SpeakerConfig;
 
     async fn apply(
         &self,
-        cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,
@@ -58,7 +49,10 @@ impl TaskRunner for SpeakerTaskRunner {
         let input = SpeakerInput {
             source_id: chat.source_id().clone(),
             audio,
-            num_speakers: cfg.num_speakers,
+            // Default 0 = "let the backend decide". The backend's
+            // constructor (`PyannoteBackend(num_speakers=3)`) is where the
+            // user pins a specific count.
+            num_speakers: 0,
         };
 
         let output_raw = dispatcher.dispatch(TaskInput::Speaker(input)).await?;

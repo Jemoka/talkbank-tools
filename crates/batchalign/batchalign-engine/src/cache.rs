@@ -8,6 +8,23 @@
 //!
 //! Key layout: blake3(format!("{task:?}|{backend_name}|") || serde_json(input))
 //! Value layout: serde_json(TaskOutput) as UTF-8 bytes.
+//!
+//! ## Known caveat — no backend-code-version stamp
+//!
+//! The cache keys on `task`, `backend.name()`, and the serialized input.
+//! It does NOT include a hash of the backend's *implementation*. Two
+//! consequences:
+//!
+//! 1. If a backend's `name()` is stable across a code change (which it
+//!    usually is — backend names are user-visible), edits to the algorithm
+//!    silently serve old outputs.
+//! 2. Bump the backend's `name` suffix (e.g. `compare:rust:v1` → `:v2`)
+//!    every time you change behaviour, or call `nuke_cache()` after a
+//!    rebuild.
+//!
+//! TODO(spec2.md follow-up): add a `code_version: u64` field to
+//! `BackendMeta` and include it in the cache key so this discipline isn't
+//! manual.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

@@ -18,7 +18,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use batchalign_core::{
-    BAError, BAValue, DynTaskRunner, MediaInput, ProgressEvent, ProgressKind, ProgressSink,
+    BAError, BAValue, Chat, ChatInput, DynTaskRunner, MediaInput, PairedInput, Paired,
+    ProgressEvent, ProgressKind, ProgressSink,
     SourceId, Task,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
@@ -41,7 +42,6 @@ pub struct Pipeline {
 struct PipelineInner {
     order: Vec<Task>,
     runners: HashMap<Task, Box<dyn DynTaskRunner>>,
-    configs: HashMap<Task, serde_json::Value>,
     engine: Arc<BatchalignEngine>,
     runtime: Arc<tokio::runtime::Runtime>,
     sem: Arc<Semaphore>,
@@ -50,11 +50,16 @@ struct PipelineInner {
 #[pymethods]
 impl Pipeline {
     /// Construct a Pipeline.
+    ///
+    /// `tasks` is just a list of `Task` enum values — runners are stateless
+    /// and canonical, so there's no per-task config dict to thread through.
+    /// Per-pipeline tunables live on the backend constructors (e.g.
+    /// `StanzaBackend(retokenize=True)`).
     #[new]
     #[pyo3(signature = (tasks, backends, cache=None))]
     fn py_new(
-        py: Python<'_>,
-        tasks: Vec<(Task, Py<PyDict>)>,
+        _py: Python<'_>,
+        tasks: Vec<Task>,
         backends: Vec<Py<PyAny>>,
         cache: Option<CacheSpec>,
     ) -> PyResult<Self> {
@@ -76,15 +81,9 @@ impl Pipeline {
                 .map_err(|e| PyRuntimeError::new_err(format!("tokio init: {e}")))?,
         );
 
-        // 3. Parse task configs and expand the DAG via requires().
-        let mut declared: Vec<Task> = Vec::with_capacity(tasks.len());
-        let mut configs: HashMap<Task, serde_json::Value> = HashMap::new();
-        for (task, dict) in tasks {
-            declared.push(task);
-            let bound = dict.bind(py);
-            let json = pydict_to_json(py, bound)?;
-            configs.insert(task, json);
-        }
+        // 3. Order the declared task set by `Task::requires()` (no
+        // auto-expansion — see `expand_with_requires`'s doc).
+        let declared: Vec<Task> = tasks;
         let task_set = expand_with_requires(&declared);
         let order = topo_sort_stable(&declared, &task_set);
 
@@ -103,9 +102,11 @@ impl Pipeline {
                 .map_err(|e| PyValueError::new_err(format!("register backend: {e}")))?;
         }
 
-        // 6. Capability gate.
+        // 6. Capability gate — every task dispatches to a backend, including
+        // Compare (which uses the native Rust `CompareBackend` from
+        // `batchalign_core::backends::compare`).
         for &task in &order {
-            if task.needs_backend() && !engine.serves(task) {
+            if !engine.serves(task) {
                 return Err(PyValueError::new_err(format!(
                     "no backend registered for required task {task:?}"
                 )));
@@ -118,7 +119,6 @@ impl Pipeline {
             inner: Arc::new(PipelineInner {
                 order,
                 runners,
-                configs,
                 engine,
                 runtime,
                 sem,
@@ -174,28 +174,75 @@ impl Pipeline {
     }
 }
 
-/// Coerce a single Python input object into a `BAValue::Media`.
+/// Coerce a single Python input object into a `BAValue`.
+///
+/// Accepts (in order): `MediaInput` → `BAValue::Media`, `ChatInput` →
+/// `BAValue::Chat` (parsed + validated), `PairedInput` → `BAValue::Paired`
+/// (both sides parsed + validated), a filesystem path string → `BAValue::Media`,
+/// or any object exposing a `.path` and (optional) `.source_id` attribute.
+/// Compare pipelines need `PairedInput`; FA / morphotag / translate / coref
+/// can take `ChatInput` to skip ASR.
 fn convert_py_input(py: Python<'_>, obj: Py<PyAny>) -> PyResult<BAValue> {
     let bound = obj.bind(py);
     if let Ok(m) = bound.extract::<MediaInput>() {
         return Ok(BAValue::Media(m));
     }
+    if let Ok(c) = bound.extract::<ChatInput>() {
+        return load_chat_input(&c).map(BAValue::Chat);
+    }
+    if let Ok(p) = bound.extract::<PairedInput>() {
+        let main = load_chat_at(&p.main, &p.source_id)?;
+        let gold_sid = SourceId::try_new(
+            p.gold
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("gold"),
+        )
+        .map_err(|e| PyValueError::new_err(format!("invalid gold source_id: {e}")))?;
+        let gold = load_chat_at(&p.gold, &gold_sid)?;
+        return Ok(BAValue::Paired(Paired::new(main, gold)));
+    }
     if let Ok(path_str) = bound.extract::<String>() {
-        let path = std::path::PathBuf::from(&path_str);
-        let stem = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .ok_or_else(|| PyValueError::new_err(format!("bad path stem: {path_str}")))?;
-        let sid = SourceId::try_new(stem)
-            .map_err(|e| PyValueError::new_err(format!("invalid source_id from {path_str}: {e}")))?;
-        return Ok(BAValue::Media(MediaInput::new(sid, path)));
+        return media_from_string(&path_str);
+    }
+    // Duck-typed fallback: anything with `.main` + `.gold` is treated as a
+    // pair; anything else falls back to `.path` (media or chat depending on
+    // extension).
+    if let (Ok(main_attr), Ok(gold_attr)) = (
+        bound.getattr("main").and_then(|p| p.extract::<String>()),
+        bound.getattr("gold").and_then(|p| p.extract::<String>()),
+    ) {
+        let main_path = std::path::PathBuf::from(&main_attr);
+        let gold_path = std::path::PathBuf::from(&gold_attr);
+        let sid_attr = bound
+            .getattr("source_id")
+            .and_then(|s| s.extract::<String>())
+            .unwrap_or_else(|_| {
+                main_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("input")
+                    .to_owned()
+            });
+        let sid = SourceId::try_new(&sid_attr)
+            .map_err(|e| PyValueError::new_err(format!("invalid source_id {sid_attr}: {e}")))?;
+        let main = load_chat_at(&main_path, &sid)?;
+        let gold_sid = SourceId::try_new(
+            gold_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("gold"),
+        )
+        .map_err(|e| PyValueError::new_err(format!("invalid gold source_id: {e}")))?;
+        let gold = load_chat_at(&gold_path, &gold_sid)?;
+        return Ok(BAValue::Paired(Paired::new(main, gold)));
     }
     let path_attr = bound
         .getattr("path")
         .and_then(|p| p.extract::<String>())
         .map_err(|e| {
             PyValueError::new_err(format!(
-                "input is not MediaInput / path / has no .path: {e}"
+                "input is not MediaInput / ChatInput / PairedInput / path / has no .path: {e}"
             ))
         })?;
     let sid_attr = bound
@@ -210,10 +257,43 @@ fn convert_py_input(py: Python<'_>, obj: Py<PyAny>) -> PyResult<BAValue> {
         });
     let sid = SourceId::try_new(&sid_attr)
         .map_err(|e| PyValueError::new_err(format!("invalid source_id {sid_attr}: {e}")))?;
-    Ok(BAValue::Media(MediaInput::new(
-        sid,
-        std::path::PathBuf::from(path_attr),
-    )))
+    let path = std::path::PathBuf::from(&path_attr);
+    // Route by extension: `.cha`/`.chat` → BAValue::Chat (parsed), else Media.
+    if matches!(
+        path.extension().and_then(|s| s.to_str()),
+        Some("cha") | Some("chat")
+    ) {
+        return load_chat_at(&path, &sid).map(BAValue::Chat);
+    }
+    Ok(BAValue::Media(MediaInput::new(sid, path)))
+}
+
+fn media_from_string(path_str: &str) -> PyResult<BAValue> {
+    let path = std::path::PathBuf::from(path_str);
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| PyValueError::new_err(format!("bad path stem: {path_str}")))?;
+    let sid = SourceId::try_new(stem)
+        .map_err(|e| PyValueError::new_err(format!("invalid source_id from {path_str}: {e}")))?;
+    if matches!(
+        path.extension().and_then(|s| s.to_str()),
+        Some("cha") | Some("chat")
+    ) {
+        return load_chat_at(&path, &sid).map(BAValue::Chat);
+    }
+    Ok(BAValue::Media(MediaInput::new(sid, path)))
+}
+
+fn load_chat_input(c: &ChatInput) -> PyResult<Chat> {
+    load_chat_at(&c.path, &c.source_id)
+}
+
+fn load_chat_at(path: &std::path::Path, sid: &SourceId) -> PyResult<Chat> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| PyValueError::new_err(format!("cannot read {}: {e}", path.display())))?;
+    Chat::parse(&text, sid.clone())
+        .map_err(|e| PyValueError::new_err(format!("parse {}: {e}", path.display())))
 }
 
 impl Drop for Pipeline {
@@ -298,14 +378,8 @@ async fn try_step(
             };
         }
     };
-    let cfg = inner
-        .configs
-        .get(&task)
-        .cloned()
-        .unwrap_or(serde_json::Value::Null);
-
     let engine: &dyn batchalign_core::base::Dispatcher = inner.engine.as_ref();
-    let result = runner.apply(&cfg, &mut value, engine, sink).await;
+    let result = runner.apply(&mut value, engine, sink).await;
 
     match result {
         Ok(()) => {
@@ -337,18 +411,17 @@ async fn try_step(
     }
 }
 
-/// Walk `Task::requires()` transitively to materialize the full task set.
+/// Materialize the task set from what the caller declared. We do NOT
+/// auto-expand transitive `Task::requires()` prerequisites — those describe
+/// the ordering relationship ("Morphosyntax can't run before UtSeg" *when
+/// both are present*), not an implicit "if you ask for Morphosyntax I'll
+/// also run ASR + UtSeg". The latter would break legitimate pipelines that
+/// start from a `BAValue::Chat` or `BAValue::Paired` (e.g.
+/// `[Morphosyntax, Compare]` on a Paired of already-tokenized CHATs needs
+/// neither ASR nor UtSeg). Callers who *do* want the full chain just
+/// declare each task they want explicitly in `recipes.*`.
 fn expand_with_requires(declared: &[Task]) -> HashSet<Task> {
-    let mut out: HashSet<Task> = HashSet::new();
-    let mut stack: Vec<Task> = declared.to_vec();
-    while let Some(t) = stack.pop() {
-        if out.insert(t) {
-            for &req in t.requires() {
-                stack.push(req);
-            }
-        }
-    }
-    out
+    declared.iter().copied().collect()
 }
 
 /// Stable topological sort: Kahn's algorithm with ties broken by
@@ -410,10 +483,3 @@ fn canonical_runner(t: Task) -> Box<dyn DynTaskRunner> {
     batchalign_core::taskrunners::canonical(t)
 }
 
-/// Convert a Python dict to `serde_json::Value` via the stdlib `json` module.
-fn pydict_to_json(py: Python<'_>, dict: &Bound<'_, PyDict>) -> PyResult<serde_json::Value> {
-    let json_mod = py.import("json")?;
-    let s: String = json_mod.getattr("dumps")?.call1((dict,))?.extract()?;
-    serde_json::from_str(&s)
-        .map_err(|e| PyValueError::new_err(format!("config dict not JSON-serializable: {e}")))
-}

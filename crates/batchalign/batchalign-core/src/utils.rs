@@ -175,6 +175,45 @@ impl MediaInput {
     }
 }
 
+/// A reference to an existing CHAT file on disk. Compare-, FA-, morphotag-,
+/// translate-style pipelines start here instead of from `MediaInput`.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, set_all))]
+pub struct ChatInput {
+    /// Pipeline identifier for this transcript.
+    pub source_id: SourceId,
+    /// Path to the `.cha` file.
+    pub path: PathBuf,
+}
+
+impl ChatInput {
+    pub fn new(source_id: SourceId, path: PathBuf) -> Self {
+        Self { source_id, path }
+    }
+}
+
+/// A pair `(main, gold)` of CHAT files. Compare pipelines start here.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, set_all))]
+pub struct PairedInput {
+    /// Pipeline identifier (typically the main file's stem).
+    pub source_id: SourceId,
+    /// Path to the candidate (main) transcript.
+    pub main: PathBuf,
+    /// Path to the gold reference transcript.
+    pub gold: PathBuf,
+}
+
+impl PairedInput {
+    pub fn new(source_id: SourceId, main: PathBuf, gold: PathBuf) -> Self {
+        Self {
+            source_id,
+            main,
+            gold,
+        }
+    }
+}
+
 /// Decoded PCM ready to ship to a backend.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all))]

@@ -28,11 +28,17 @@ class GoogleTranslateBackend(Translate):
     def __init__(
         self,
         *,
+        target: str = "eng",
         api_key: str | None = None,
         batch_size: int = 16,
         batch_window_ms: int = 50,
         force_free: bool = False,
     ) -> None:
+        # Target language pin. The runner ships a default `"eng"` on the
+        # input; we honour our own constructor arg over it so callers can
+        # do `GoogleTranslateBackend(target="zho")` without touching the
+        # task wiring.
+        self._target = target
         key = api_key if api_key is not None else config.get_api_key("google_translate")
         self._client: Any = None
         self._mode: str
@@ -79,7 +85,7 @@ class GoogleTranslateBackend(Translate):
             translations = self._translate_many(
                 item.utterances,
                 source=item.source.value if item.source.kind == "code" else None,
-                target=item.target,
+                target=self._target,
             )
             outputs.append(
                 TranslateOutput(source_id=item.source_id, utterances=translations)

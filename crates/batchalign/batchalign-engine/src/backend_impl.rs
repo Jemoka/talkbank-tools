@@ -40,14 +40,38 @@ pub struct PyBackendHandle {
 }
 
 impl BackendImpl {
-    /// Constructs a `BackendImpl::Python` from a Python `Backend` instance.
+    /// Constructs a `BackendImpl` from any Python-side backend instance.
     ///
-    /// Reads `obj.name` (property), `obj.batch_policy` (property), and
-    /// dispatches to `batchalign.backends.base.declared_tasks(obj)` for the
-    /// task set (spec §10.1).
+    /// If the object is a Rust-native wrapper (currently
+    /// `batchalign._core.CompareBackend`, recognised via the
+    /// `__batchalign_native__` marker), this unwraps the inner `Arc<dyn
+    /// Backend>` and returns `BackendImpl::Native`, so the engine drives the
+    /// algorithm directly with no GIL acquisition and no JSON round-trip on
+    /// the hot path.
+    ///
+    /// Otherwise reads `obj.name`, `obj.batch_policy`, and dispatches to
+    /// `batchalign.backends.base.declared_tasks(obj)` for the task set
+    /// (spec §10.1) and stores the handle as `BackendImpl::Python`.
     pub fn from_py(obj: Py<PyAny>) -> PyResult<Self> {
         Python::attach(|py| {
             let bound = obj.bind(py);
+
+            // Native-wrapper short circuit: a class exposed by the engine
+            // that holds an `Arc<dyn Backend>` advertises itself via the
+            // `__batchalign_native__` getter. Try each known wrapper type
+            // by `extract::<...>()` so future native backends only need a
+            // case here, not a parallel marker protocol.
+            let is_native = bound
+                .getattr("__batchalign_native__")
+                .and_then(|v| v.extract::<bool>())
+                .unwrap_or(false);
+            if is_native {
+                if let Ok(cmp) = bound.extract::<crate::native_backends::PyCompareBackend>() {
+                            return Ok(BackendImpl::Native(cmp.as_backend()));
+                }
+                    // Unknown native wrapper — fall through to the Python path,
+                // it will still work, just slower.
+            }
 
             let name: String = bound
                 .getattr("name")?
@@ -147,10 +171,21 @@ fn call_py_backend(h: &PyBackendHandle, batch: Vec<TaskInput>) -> BAResult<Vec<T
         let json_mod = py
             .import("json")
             .map_err(|e| BAError::Worker(format!("import json: {e}")))?;
-        let py_batch = json_mod
+        let proto_mod = py
+            .import("batchalign._core.proto")
+            .map_err(|e| BAError::Worker(format!("import batchalign._core.proto: {e}")))?;
+
+        // Rehydrate: tagged-dict JSON -> typed proto dataclass instances.
+        // Backends do `isinstance(item, MorphosyntaxInput)` checks, so we
+        // can't hand them plain dicts.
+        let tagged_dicts = json_mod
             .getattr("loads")
             .and_then(|f| f.call1((request_json,)))
             .map_err(|e| BAError::Worker(format!("json.loads on serialized batch: {e}")))?;
+        let py_batch = proto_mod
+            .getattr("rebuild_tagged_inputs")
+            .and_then(|f| f.call1((tagged_dicts,)))
+            .map_err(|e| BAError::Worker(format!("rebuild_tagged_inputs: {e}")))?;
 
         let result = h
             .obj
@@ -158,9 +193,15 @@ fn call_py_backend(h: &PyBackendHandle, batch: Vec<TaskInput>) -> BAResult<Vec<T
             .call_method1("call", (py_batch,))
             .map_err(|e| BAError::Worker(format!("Backend.call raised: {e}")))?;
 
+        // Reverse the rehydration: typed *Output dataclasses -> tagged-dict
+        // JSON -> Vec<TaskOutput>.
+        let response_tagged = proto_mod
+            .getattr("serialize_tagged_outputs")
+            .and_then(|f| f.call1((result,)))
+            .map_err(|e| BAError::Worker(format!("serialize_tagged_outputs: {e}")))?;
         let response_str = json_mod
             .getattr("dumps")
-            .and_then(|f| f.call1((result,)))
+            .and_then(|f| f.call1((response_tagged,)))
             .and_then(|s| s.extract::<String>())
             .map_err(|e| BAError::Worker(format!("json.dumps on backend response: {e}")))?;
 

@@ -19,32 +19,21 @@ use crate::base::TaskInput;
 use crate::base::{BAValue};
 use crate::utils::SourceId;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// ASR runner — `Task::Asr` entry point.
+/// ASR runner — `Task::Asr` entry point. The runner ships an `AsrInput`
+/// with `LanguageSpec::Auto` and default `AsrOptions`; the backend supplies
+/// its own language pin / batch tunables at construction time
+/// (`WhisperBackend(language="eng")`, `RevAI(num_speakers=2)`, etc.).
 pub struct AsrTaskRunner;
-
-/// Per-task config.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct AsrConfig {
-    /// Language hint.
-    #[serde(default)]
-    pub language: LanguageSpec,
-    /// Backend tunables.
-    #[serde(default)]
-    pub options: crate::proto::asr::AsrOptions,
-}
 
 #[async_trait]
 impl TaskRunner for AsrTaskRunner {
     const TASK: Task = Task::Asr;
-    type Config = AsrConfig;
 
     async fn apply(
         &self,
-        cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,
@@ -65,17 +54,18 @@ impl TaskRunner for AsrTaskRunner {
         let audio = crate::utils::prepare_pcm(&media)
             .map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
 
+        let language = LanguageSpec::Auto;
         let input = AsrInput {
             source_id: media.source_id.clone(),
             audio,
-            language: cfg.language.clone(),
-            options: cfg.options.clone(),
+            language: language.clone(),
+            options: Default::default(),
         };
 
         let output_raw = dispatcher.dispatch(TaskInput::Asr(input)).await?;
         let output: AsrOutput = output_raw.try_into()?;
 
-        let chat = build_chat_from_asr(&media.source_id, &cfg.language, &output, "asr")?
+        let chat = build_chat_from_asr(&media.source_id, &language, &output, "asr")?
             .with_media(media.clone());
         *value = BAValue::Chat(chat);
 
@@ -301,12 +291,8 @@ mod tests {
             canned: Mutex::new(Some(canned)),
         };
         let runner = AsrTaskRunner;
-        let cfg = AsrConfig {
-            language: LanguageSpec::Code("eng".into()),
-            options: Default::default(),
-        };
         runner
-            .apply(&cfg, &mut value, &disp, &NullSink)
+            .apply(&mut value, &disp, &NullSink)
             .await
             .expect("apply ok");
         match value {

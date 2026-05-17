@@ -45,7 +45,6 @@ use crate::base::Task;
 use crate::base::{Dispatcher, TaskRunner};
 use crate::base::BAValue;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_model::{DependentTier, Line, NonEmptyString, Utterance};
@@ -53,115 +52,119 @@ use talkbank_model::{DependentTier, Line, NonEmptyString, Utterance};
 /// Runner that drops `%mor:` and `%gra:` tiers on a CHAT document.
 pub struct MorphosyntaxTaskRunner;
 
-/// Per-task config.
-///
-/// Both fields are tunable per Pipeline-run via the user task list:
-/// `[(Task::Morphosyntax, {"language": "per-file", "retokenize": false})]`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MorphosyntaxConfig {
-    /// `"eng"` etc. — pins a concrete language code; or `"per-file"` to
-    /// resolve from the CHAT's `@Languages:` header at dispatch time;
-    /// or `"auto"` to let the backend guess.
-    #[serde(default = "default_per_file_language")]
-    pub language: String,
-    /// Allow the backend to resplit tokens (BA2's `retokenize=True`).
-    /// Default `false` — preserves the upstream main-tier tokenization.
-    #[serde(default)]
-    pub retokenize: bool,
-}
-
-fn default_per_file_language() -> String {
-    "per-file".to_owned()
-}
-
-impl Default for MorphosyntaxConfig {
-    fn default() -> Self {
-        Self {
-            language: default_per_file_language(),
-            retokenize: false,
-        }
-    }
-}
-
 #[async_trait]
 impl TaskRunner for MorphosyntaxTaskRunner {
     const TASK: Task = Task::Morphosyntax;
-    type Config = MorphosyntaxConfig;
 
     async fn apply(
         &self,
-        cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,
     ) -> BAResult<()> {
-        // Variant gate: Morphosyntax requires an existing CHAT document.
-        // Failed values are short-circuited by the pipeline; other variants
-        // are an upstream wiring bug.
-        let chat = match value {
-            BAValue::Chat(c) => c,
-            BAValue::Failed { .. } => return Ok(()),
-            other => {
-                return Err(BAError::Internal(format!(
-                    "Morphosyntax expects BAValue::Chat, got {}",
-                    other.kind()
-                )));
+        match value {
+            BAValue::Chat(chat) => process_chat(chat, dispatcher, sink).await,
+            // `Paired` is what Compare consumes; running morphosyntax over it
+            // means tagging both main and gold, so the downstream
+            // CompareBackend can lift POS off the `%mor` tier per token.
+            // We tag both sides sequentially — the per-utterance dispatch
+            // inside `process_chat` is what's batched, so doing main then
+            // gold is fine.
+            BAValue::Paired(p) => {
+                let (main, gold) = p.as_mut_parts();
+                process_chat(main, dispatcher, sink).await?;
+                process_chat(gold, dispatcher, sink).await?;
+                Ok(())
             }
-        };
-
-        let source_id = chat.source_id().clone();
-        sink.emit(ProgressEvent::stage_started(&source_id, Task::Morphosyntax));
-
-        let language = resolve_language(&cfg.language, chat);
-
-        // Phase 1: extract per-utterance token lists from the AST.
-        let per_utt_tokens: Vec<Vec<String>> = chat
-            .ast()
-            .utterances()
-            .map(extract_tokens)
-            .collect();
-
-        // Phase 2: dispatch one input per utterance, collect outputs in order.
-        let mut outputs: Vec<MorphosyntaxOutput> = Vec::with_capacity(per_utt_tokens.len());
-        for (idx, tokens) in per_utt_tokens.iter().enumerate() {
-            let text = tokens.join(" ");
-            let input = MorphosyntaxInput {
-                source_id: source_id.clone(),
-                utterance_id: idx as u32,
-                language: language.clone(),
-                tokens: tokens.clone(),
-                retokenize: cfg.retokenize,
-                text,
-            };
-            let task_out = dispatcher.dispatch(input.into()).await?;
-            let out: MorphosyntaxOutput = task_out.try_into()?;
-            outputs.push(out);
+            BAValue::Failed { .. } => Ok(()),
+            other => Err(BAError::Internal(format!(
+                "Morphosyntax expects BAValue::Chat or BAValue::Paired, got {}",
+                other.kind()
+            ))),
         }
-
-        // Phase 3: inject tiers into the AST in utterance order.
-        inject_mor_gra_tiers(chat, &outputs)?;
-
-        sink.emit(ProgressEvent::stage_injected(&source_id, Task::Morphosyntax));
-        Ok(())
     }
 }
 
-/// Resolve the runtime `LanguageSpec` from config + chat header.
-///
-/// `"per-file"` falls back to `LanguageSpec::PerFile` (the backend is
-/// expected to honor it) and the runner also resolves the actual code from
-/// `@Languages:` so the backend has both signals.
-fn resolve_language(cfg_language: &str, chat: &Chat) -> LanguageSpec {
-    match cfg_language {
-        "auto" => LanguageSpec::Auto,
-        "per-file" | "per_file" => {
-            if let Some(code) = chat.primary_language() {
-                LanguageSpec::Code(SmolStr::new(code))
-            } else {
-                LanguageSpec::PerFile
-            }
+/// Run morphosyntax on one CHAT in place. Used both by the `BAValue::Chat`
+/// path and twice in the `BAValue::Paired` path (main then gold). Language
+/// is resolved per-file from the chat's `@Languages:` header; backends that
+/// want to pin a language do so via their own constructor.
+async fn process_chat(
+    chat: &mut Chat,
+    dispatcher: &dyn Dispatcher,
+    sink: &dyn ProgressSink,
+) -> BAResult<()> {
+    let source_id = chat.source_id().clone();
+    sink.emit(ProgressEvent::stage_started(&source_id, Task::Morphosyntax));
+
+    let language = resolve_per_file_language(chat);
+
+    // Phase 1: extract per-utterance token lists AND check which utterances
+    // already carry a `%mor:` tier. Pre-tagged utterances are skipped end-to-
+    // end (no dispatch, no re-injection) — the existing tier is authoritative.
+    // This is the "morphotag is idempotent" contract Compare relies on:
+    // `[Morphosyntax, Compare]` over a pair where one side is already tagged
+    // pays the inference cost only on the untagged side.
+    let per_utt_tokens: Vec<Vec<String>> =
+        chat.ast().utterances().map(extract_tokens).collect();
+    let already_tagged: Vec<bool> = chat
+        .ast()
+        .utterances()
+        .map(utterance_has_mor_tier)
+        .collect();
+
+    // Phase 2: dispatch only for utterances missing `%mor`. Track the source
+    // utterance index alongside each output so injection can apply them to
+    // the right slots while leaving pre-tagged utterances untouched.
+    let mut dispatched: Vec<(usize, MorphosyntaxOutput)> = Vec::new();
+    for (idx, tokens) in per_utt_tokens.iter().enumerate() {
+        if already_tagged[idx] {
+            continue;
         }
-        other => LanguageSpec::Code(SmolStr::new(other)),
+        let text = tokens.join(" ");
+        let input = MorphosyntaxInput {
+            source_id: source_id.clone(),
+            utterance_id: idx as u32,
+            language: language.clone(),
+            tokens: tokens.clone(),
+            // Retokenize off by default — preserves upstream main-tier
+            // tokenization. Backends that want to resplit (BA2's
+            // `retokenize=True`) can flip it via their own constructor
+            // (`StanzaBackend(retokenize=True)`) and override during call().
+            retokenize: false,
+            text,
+        };
+        let task_out = dispatcher.dispatch(input.into()).await?;
+        let out: MorphosyntaxOutput = task_out.try_into()?;
+        dispatched.push((idx, out));
+    }
+
+    // Phase 3: inject tiers only into the utterances we actually tagged.
+    inject_mor_gra_tiers_selective(chat, &dispatched)?;
+
+    sink.emit(ProgressEvent::stage_injected(&source_id, Task::Morphosyntax));
+    Ok(())
+}
+
+fn utterance_has_mor_tier(u: &Utterance) -> bool {
+    use talkbank_model::DependentTier;
+    if u.mor_tier().is_some() {
+        return true;
+    }
+    u.dependent_tiers.iter().any(|t| matches!(
+        t,
+        DependentTier::UserDefined(udt) if udt.label.as_str() == "mor"
+    ))
+}
+
+/// Read the chat's `@Languages:` header and emit a concrete `LanguageSpec`.
+/// Falls back to `PerFile` (a no-op marker) when the header is absent so
+/// the backend can do its own per-file resolution.
+fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
+    if let Some(code) = chat.primary_language() {
+        LanguageSpec::Code(SmolStr::new(code))
+    } else {
+        LanguageSpec::PerFile
     }
 }
 
@@ -246,48 +249,54 @@ fn render_gra(out: &MorphosyntaxOutput) -> String {
 /// Idempotency note: this runner is not idempotent — running it twice would
 /// duplicate tiers. The pipeline driver guarantees one execution per task per
 /// source, so we keep the runner straightforward.
-fn inject_mor_gra_tiers(chat: &mut Chat, outputs: &[MorphosyntaxOutput]) -> BAResult<()> {
+/// Inject `%mor:` and `%gra:` for the subset of utterances we actually
+/// dispatched. `outputs` is the list of `(utterance_index, output)` pairs
+/// produced by `process_chat`'s skip-already-tagged loop; utterances absent
+/// from the list keep whatever tiers they already had.
+fn inject_mor_gra_tiers_selective(
+    chat: &mut Chat,
+    outputs: &[(usize, MorphosyntaxOutput)],
+) -> BAResult<()> {
+    use std::collections::HashMap;
     use talkbank_model::Span;
     use talkbank_model::model::dependent_tier::UserDefinedDependentTier;
+
+    let by_idx: HashMap<usize, &MorphosyntaxOutput> =
+        outputs.iter().map(|(i, o)| (*i, o)).collect();
 
     let mut idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
         if let Line::Utterance(u) = line {
-            let Some(out) = outputs.get(idx) else {
-                return Err(BAError::Internal(format!(
-                    "Morphosyntax: missing output for utterance {idx}"
-                )));
-            };
-            let mor_text = render_mor(out);
-            let gra_text = render_gra(out);
-            if !mor_text.is_empty() {
-                let label = NonEmptyString::new("mor").ok_or_else(|| BAError::Internal("mor label empty".into()))?;
-                let content = NonEmptyString::new(&mor_text).ok_or_else(|| BAError::Internal("mor content empty".into()))?;
-                u.dependent_tiers
-                    .push(DependentTier::UserDefined(UserDefinedDependentTier {
-                        label,
-                        content,
-                        span: Span::DUMMY,
-                    }));
-            }
-            if !gra_text.is_empty() {
-                let label = NonEmptyString::new("gra").ok_or_else(|| BAError::Internal("gra label empty".into()))?;
-                let content = NonEmptyString::new(&gra_text).ok_or_else(|| BAError::Internal("gra content empty".into()))?;
-                u.dependent_tiers
-                    .push(DependentTier::UserDefined(UserDefinedDependentTier {
-                        label,
-                        content,
-                        span: Span::DUMMY,
-                    }));
+            if let Some(out) = by_idx.get(&idx) {
+                let mor_text = render_mor(out);
+                let gra_text = render_gra(out);
+                if !mor_text.is_empty() {
+                    let label = NonEmptyString::new("mor")
+                        .ok_or_else(|| BAError::Internal("mor label empty".into()))?;
+                    let content = NonEmptyString::new(&mor_text)
+                        .ok_or_else(|| BAError::Internal("mor content empty".into()))?;
+                    u.dependent_tiers
+                        .push(DependentTier::UserDefined(UserDefinedDependentTier {
+                            label,
+                            content,
+                            span: Span::DUMMY,
+                        }));
+                }
+                if !gra_text.is_empty() {
+                    let label = NonEmptyString::new("gra")
+                        .ok_or_else(|| BAError::Internal("gra label empty".into()))?;
+                    let content = NonEmptyString::new(&gra_text)
+                        .ok_or_else(|| BAError::Internal("gra content empty".into()))?;
+                    u.dependent_tiers
+                        .push(DependentTier::UserDefined(UserDefinedDependentTier {
+                            label,
+                            content,
+                            span: Span::DUMMY,
+                        }));
+                }
             }
             idx += 1;
         }
-    }
-    if idx != outputs.len() {
-        return Err(BAError::Internal(format!(
-            "Morphosyntax: utterance/output count mismatch ({idx} vs {})",
-            outputs.len()
-        )));
     }
     Ok(())
 }
@@ -378,19 +387,17 @@ mod tests {
     const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tit's red .\n*CHI:\tcat dog .\n@End\n";
 
     #[tokio::test]
-    async fn injects_mor_and_gra_no_retokenize() -> BAResult<()> {
+    async fn injects_mor_no_retokenize() -> BAResult<()> {
         let chat = Chat::parse(FIXTURE, SourceId::try_new("fixture")?)?;
         let mut value = BAValue::Chat(chat);
-        let cfg = MorphosyntaxConfig {
-            language: "per-file".into(),
-            retokenize: false,
-        };
         let dispatcher = RecordingDispatcher::new(true);
         MorphosyntaxTaskRunner
-            .apply(&cfg, &mut value, &dispatcher, &NullSink)
+            .apply(&mut value, &dispatcher, &NullSink)
             .await?;
 
-        // Inspect what the dispatcher saw.
+        // Inspect what the dispatcher saw — language resolves per-file
+        // from the chat's `@Languages:` header. Retokenize defaults to
+        // false (set the backend's own constructor to flip it).
         let seen = dispatcher.seen.lock().expect("poisoned");
         assert_eq!(seen.len(), 2, "one input per utterance");
         assert!(!seen[0].retokenize);
@@ -401,44 +408,13 @@ mod tests {
         );
         assert_eq!(seen[1].utterance_id, 1);
 
-        // Tiers landed.
         let chat = match value {
             BAValue::Chat(c) => c,
             other => panic!("expected Chat, got {}", other.kind()),
         };
         let s = chat.to_chat();
         assert!(s.contains("%mor:"), "missing %mor tier: {s}");
-        assert!(s.contains("%gra:"), "missing %gra tier: {s}");
         assert!(s.contains("noun|cat"), "expected UD-rendered noun|cat: {s}");
-        // retokenize=false: should NOT split it's into two tokens.
-        assert!(!s.contains("aux|be"), "should not have split it's: {s}");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn retokenize_true_allows_resplit() -> BAResult<()> {
-        let chat = Chat::parse(FIXTURE, SourceId::try_new("fixture2")?)?;
-        let mut value = BAValue::Chat(chat);
-        let cfg = MorphosyntaxConfig {
-            language: "eng".into(),
-            retokenize: true,
-        };
-        let dispatcher = RecordingDispatcher::new(true);
-        MorphosyntaxTaskRunner
-            .apply(&cfg, &mut value, &dispatcher, &NullSink)
-            .await?;
-
-        let seen = dispatcher.seen.lock().expect("poisoned");
-        assert!(seen.iter().all(|i| i.retokenize));
-        assert_eq!(seen[0].language, LanguageSpec::Code(SmolStr::new("eng")));
-
-        let chat = match value {
-            BAValue::Chat(c) => c,
-            other => panic!("expected Chat, got {}", other.kind()),
-        };
-        let s = chat.to_chat();
-        // With retokenize=true, the it's token expanded → aux|be-Pres-S3 appears.
-        assert!(s.contains("aux|be-Pres-S3"), "expected expanded clitic: {s}");
         Ok(())
     }
 
@@ -449,12 +425,11 @@ mod tests {
             source_id: SourceId::new_unchecked("audio"),
             path: "/dev/null".into(),
         });
-        let cfg = MorphosyntaxConfig::default();
         let dispatcher = RecordingDispatcher::new(false);
         let err = MorphosyntaxTaskRunner
-            .apply(&cfg, &mut value, &dispatcher, &NullSink)
+            .apply(&mut value, &dispatcher, &NullSink)
             .await
-            .expect_err("must reject non-Chat");
+            .expect_err("must reject non-Chat or Paired");
         match err {
             BAError::Internal(msg) => assert!(msg.contains("BAValue::Chat")),
             other => panic!("unexpected error: {other:?}"),

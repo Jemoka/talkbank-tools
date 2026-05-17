@@ -11,6 +11,7 @@ pub mod batcher;
 pub mod cache;
 pub mod engine;
 pub mod metrics_writer;
+pub mod native_backends;
 pub mod pipeline;
 pub mod progress_sink;
 pub mod py_outcome;

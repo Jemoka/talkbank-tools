@@ -85,6 +85,9 @@ py_test(
     srcs = glob(["tests/**/*.py"]) + ["_pytest_runner.py"],
     main = "_pytest_runner.py",
     args = ["python/batchalign/tests", "-q"],
+    # Same package-collision tolerance as `:batchalign` — heavy ML extras
+    # ship overlapping benign data paths (e.g. `audmath/docs/index.rst`).
+    package_collisions = "warning",
     # all_requirements already contains pytest + pytest-xdist via the
     # dev extra in pyproject; don't re-list them or Bazel errors on
     # duplicate-deps.

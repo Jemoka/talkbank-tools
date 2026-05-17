@@ -10,23 +10,17 @@ use crate::base::{Dispatcher, TaskRunner};
 use crate::proto::coref::{CorefInput, CorefOutput};
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
-use serde::Deserialize;
 use talkbank_model::Line;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 
 pub struct CorefTaskRunner;
 
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct CorefConfig {}
-
 #[async_trait]
 impl TaskRunner for CorefTaskRunner {
     const TASK: Task = Task::Coref;
-    type Config = CorefConfig;
 
     async fn apply(
         &self,
-        _cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,

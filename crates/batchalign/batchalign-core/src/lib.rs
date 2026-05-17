@@ -32,5 +32,6 @@ pub use base::{
 };
 pub use metrics::{MetricsArtifact, MetricsKind, MetricsRow, MetricsTable};
 pub use utils::{
-    AudioError, BAError, BAResult, MediaInput, PreparedAudio, SourceId, SpeakerLabel, prepare_pcm,
+    AudioError, BAError, BAResult, ChatInput, MediaInput, PairedInput, PreparedAudio, SourceId,
+    SpeakerLabel, prepare_pcm,
 };

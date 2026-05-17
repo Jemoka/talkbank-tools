@@ -10,6 +10,7 @@
 
 pub mod asr;
 pub mod avqi;
+pub mod compare;
 pub mod coref;
 pub mod fa;
 pub mod morphosyntax;
@@ -20,6 +21,7 @@ pub mod utseg;
 
 pub use asr::{AsrInput, AsrOptions, AsrOutput, AsrSegment, AsrWord, LanguageSpec};
 pub use avqi::{AvqiInput, AvqiOutput};
+pub use compare::{CompareInput, CompareOutput};
 pub use coref::{CorefInput, CorefOutput};
 pub use fa::{FaInput, FaOutput};
 pub use morphosyntax::{

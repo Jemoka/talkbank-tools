@@ -13,6 +13,7 @@ class VllmTranslateBackend(Translate):
     def __init__(
         self,
         *,
+        target: str = "eng",
         model: str = "Qwen/Qwen2.5-7B-Instruct",
         base_url: str = "http://localhost:8000/v1",
         api_key: str = "EMPTY",
@@ -23,6 +24,10 @@ class VllmTranslateBackend(Translate):
 
         self._client = OpenAI(base_url=base_url, api_key=api_key)
         self._model = model
+        # Target language pin (see GoogleTranslateBackend.__init__ for the
+        # same pattern). The runner-shipped `target` on the input is
+        # ignored in favour of this constructor arg.
+        self._target = target
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
@@ -51,7 +56,7 @@ class VllmTranslateBackend(Translate):
                         {
                             "role": "system",
                             "content": (
-                                f"Translate the user's text from {src} to {item.target}. "
+                                f"Translate the user's text from {src} to {self._target}. "
                                 "Reply with only the translation."
                             ),
                         },

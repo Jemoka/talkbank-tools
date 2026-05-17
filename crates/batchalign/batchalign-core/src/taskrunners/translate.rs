@@ -11,29 +11,18 @@ use crate::proto::asr::LanguageSpec;
 use crate::proto::translate::{TranslateInput, TranslateOutput};
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
-use serde::Deserialize;
 use smol_str::SmolStr;
 use talkbank_model::Line;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 
 pub struct TranslateTaskRunner;
 
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct TranslateConfig {
-    #[serde(default)]
-    pub source: LanguageSpec,
-    #[serde(default)]
-    pub target: SmolStr,
-}
-
 #[async_trait]
 impl TaskRunner for TranslateTaskRunner {
     const TASK: Task = Task::Translate;
-    type Config = TranslateConfig;
 
     async fn apply(
         &self,
-        cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,
@@ -57,16 +46,15 @@ impl TaskRunner for TranslateTaskRunner {
             return Ok(());
         }
 
-        let target = if cfg.target.is_empty() {
-            SmolStr::new("eng")
-        } else {
-            cfg.target.clone()
-        };
         let input = TranslateInput {
             source_id: chat.source_id().clone(),
             utterances,
-            source: cfg.source.clone(),
-            target,
+            // Source: read per-file from `@Languages:`. Target: the backend
+            // pins it at construction (`GoogleTranslateBackend(target="eng")`);
+            // the input field stays as the conventional default so the proto
+            // shape doesn't drift.
+            source: LanguageSpec::PerFile,
+            target: SmolStr::new_static("eng"),
         };
 
         let output_raw = dispatcher.dispatch(TaskInput::Translate(input)).await?;

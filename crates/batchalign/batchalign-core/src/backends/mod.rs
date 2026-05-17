@@ -17,6 +17,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod compare;
+pub use compare::CompareBackend;
+
 /// Backend-call failure.
 #[derive(Debug, Error)]
 pub enum BackendCallError {

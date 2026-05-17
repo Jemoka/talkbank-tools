@@ -19,31 +19,16 @@ use crate::base::TaskInput;
 use crate::base::{BAValue};
 use crate::utils::SourceId;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 
 /// UtSeg runner — `Task::UtSeg` entry point.
 pub struct UtSegTaskRunner;
 
-/// Per-task config.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct UtSegConfig {
-    /// Language hint.
-    #[serde(default)]
-    pub language: LanguageSpec,
-    /// Allow Stanza punctuation fallback if no segmentation model is loaded.
-    /// Mirrors the `--utseg-fallback-stanza` chatter-cli flag.
-    #[serde(default)]
-    pub stanza_fallback: bool,
-}
-
 #[async_trait]
 impl TaskRunner for UtSegTaskRunner {
     const TASK: Task = Task::UtSeg;
-    type Config = UtSegConfig;
 
     async fn apply(
         &self,
-        cfg: &Self::Config,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
         sink: &dyn ProgressSink,
@@ -79,8 +64,11 @@ impl TaskRunner for UtSegTaskRunner {
                 let input = UtSegInput {
                     source_id: source_id.clone(),
                     segments: vec![row.as_segment()],
-                    language: cfg.language.clone(),
-                    stanza_fallback: cfg.stanza_fallback,
+                    // Language: per-file from `@Languages:`. Stanza fallback:
+                    // off here; if you want it, wire it on the backend
+                    // (`StanzaUtSegBackend(...)` or similar).
+                    language: LanguageSpec::PerFile,
+                    stanza_fallback: false,
                 };
                 let out_raw = dispatcher.dispatch(TaskInput::UtSeg(input)).await?;
                 let out: UtSegOutput = out_raw.try_into()?;
@@ -255,7 +243,7 @@ mod tests {
             }]),
         };
         UtSegTaskRunner
-            .apply(&UtSegConfig::default(), &mut value, &disp, &NullSink)
+            .apply(&mut value, &disp, &NullSink)
             .await
             .expect("apply");
         let BAValue::Chat(c) = value else {

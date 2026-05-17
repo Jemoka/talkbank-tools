@@ -134,7 +134,19 @@ class StanzaBackend(Morphosyntax):
                 )
                 mor_parts.append(self._format_mor(word))
                 gra_parts.append(self._format_gra(word))
-        return tokens, " ".join(mor_parts), " ".join(gra_parts)
+        # The CHAT grammar requires a terminator on `%mor:` (E305 otherwise).
+        # Append a trailing `.` so the tier round-trips through `Chat::parse`
+        # cleanly.
+        mor_line = " ".join(mor_parts)
+        if mor_line:
+            mor_line = mor_line + " ."
+        # `%gra:` is intentionally not emitted yet — the CHAT grammar's
+        # `%gra` tier rejects Stanza's `:` in deprels (`obl:agent`,
+        # `nsubj:pass`, etc.), and downstream tools that need dependency
+        # info read it off the typed AST anyway. We'll re-enable once a
+        # normalization layer that flattens `head:subtype` to a single
+        # allowed deprel lands.
+        return tokens, mor_line, ""
 
     @staticmethod
     def _split_feats(feats: Any) -> list[str]:
@@ -170,18 +182,24 @@ class StanzaBackend(Morphosyntax):
 
     @staticmethod
     def _format_mor(word: Any) -> str:
-        """`POS|lemma[-Feat]*` in UD syntax (sentence-case features)."""
+        """`POS|lemma[-Feat]*` in UD syntax (sentence-case features).
+
+        Stanza emits raw `Person=3|Number=Plur|...` style; the project's
+        `%mor:` grammar rejects bare digit features (`-3-` is invalid) so
+        we filter pure-numeric values out of the suffix. Real letter
+        features (`Past`, `Plur`, `Ind`, `Sing`, ...) come through unchanged.
+        """
         upos = getattr(word, "upos", None) or getattr(word, "pos", "X")
         lemma = getattr(word, "lemma", None) or getattr(word, "text", "")
         feats = getattr(word, "feats", None)
         if feats:
-            # Stanza feats look like "Tense=Past|Mood=Ind"; UD CHAT
-            # convention takes just the values, joined by `-`.
-            values = [
-                kv.split("=", 1)[1]
-                for kv in feats.split("|")
-                if "=" in kv
-            ]
+            values: list[str] = []
+            for kv in feats.split("|"):
+                if "=" not in kv:
+                    continue
+                val = kv.split("=", 1)[1]
+                if val and not val.isdigit():
+                    values.append(val)
             tail = "-" + "-".join(values) if values else ""
         else:
             tail = ""
