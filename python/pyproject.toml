@@ -85,7 +85,14 @@ Issues = "https://github.com/TalkBank/talkbank-tools/issues"
 [tool.maturin]
 manifest-path = "../crates/batchalign/batchalign-engine/Cargo.toml"
 python-source = "."
-module-name   = "batchalign._core"
+# `module-name = "batchalign._core._core"` nests the cdylib INSIDE the
+# existing `batchalign/_core/` Python package. Without the extra
+# `._core` segment, maturin places the .so at `batchalign/_core.<abi>.so`
+# — shadowed at import time by the `batchalign/_core/` directory
+# (Python prefers packages over modules at the same path), and
+# `batchalign/_core/__init__.py`'s `from batchalign._core._core import *`
+# fails with `No module named 'batchalign._core._core'`.
+module-name   = "batchalign._core._core"
 features      = ["pyo3/extension-module"]
 profile       = "dev"
 
