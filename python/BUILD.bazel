@@ -26,14 +26,26 @@ pip_compile(
     requirements_in = "pyproject.toml",
     requirements_txt = "requirements.lock.txt",
     # Universal lockfile covers all platforms; uv picks the highest
-    # version compatible with every supported marker. Optional-deps
-    # groups (whisper/stanza/etc.) are not included here — they only
-    # affect wheel METADATA at maturin-build time, not the runtime
-    # Bazel test env. Dev tools (pytest/twine/etc.) are pulled in via
-    # --extra dev so py_test can resolve them.
+    # version compatible with every supported marker.
+    #
+    # Extras included in the lockfile (so `requirement("foo")` works in
+    # py_library/py_binary/py_test):
+    #   dev     — pytest, twine, mypy (test/lint deps)
+    #   stanza  — stanza + its transitive torch closure; needed by
+    #             `recipes.compare()` via `MorphosyntaxTaskRunner` and
+    #             surfaces under `bazel run //python/batchalign:batchalign
+    #             -- compare ...`.
+    #
+    # Other optional-dep groups (whisper, vllm, pyannote, etc.) are NOT
+    # in the lockfile because they're huge and would slow down every
+    # `bazel test //...` invocation. Wheel consumers pick them up via
+    # `pip install batchalign[whisper]` — maturin reads pyproject.toml
+    # directly for those.
     extra_args = [
         "--extra",
         "dev",
+        "--extra",
+        "stanza",
     ],
     universal = True,
 )

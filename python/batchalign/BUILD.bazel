@@ -29,13 +29,18 @@ package(default_visibility = ["//visibility:public"])
 
 # Runtime Python deps — declared in pyproject.toml `[project] dependencies`,
 # resolved through pip.parse into the `@pypi//*` hub. Bazel-test path uses
-# only these (no optional-deps groups; those gate maturin-built wheel users).
+# these plus the `stanza` extra (also pinned in //python:requirements via
+# `--extra stanza`) so `recipes.compare()` / `MorphosyntaxTaskRunner`
+# work end-to-end under `bazel run //python/batchalign`. Other optional-
+# dep groups (whisper, vllm, pyannote, etc.) are NOT linked in here —
+# wheel consumers install them via `pip install batchalign[whisper]`.
 _RUNTIME_DEPS = [
     requirement("typer"),
     requirement("tqdm"),
     requirement("numpy"),
     requirement("polars"),
     requirement("soundfile"),
+    requirement("stanza"),
 ]
 
 py_library(
