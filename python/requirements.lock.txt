@@ -139,7 +139,7 @@ alembic==1.18.4 \
 aliyun-python-sdk-core==2.16.0 \
     --hash=sha256:651caad597eb39d4fad6cf85133dffe92837d53bdf62db9d8f37dab6508bb8f9
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   aliyun-python-sdk-kms
     #   oss2
 aliyun-python-sdk-kms==2.16.5 \
@@ -234,7 +234,7 @@ audiofile==1.6.0 \
     # via
     #   audformat
     #   audinterface
-audioop-lts==0.2.2 ; python_full_version >= '3.13' \
+audioop-lts==0.2.2 \
     --hash=sha256:0337d658f9b81f4cd0fdb1f47635070cc084871a3d4646d9de74fdf4e7c3d24a \
     --hash=sha256:03f061a1915538fd96272bac9551841859dbb2e3bf73ebe4a23ef043766f5449 \
     --hash=sha256:068aa17a38b4e0e7de771c62c60bbca2455924b67a8814f3b0dee92b5820c0b3 \
@@ -313,7 +313,7 @@ audresample==1.3.6 \
 build==1.5.0 \
     --hash=sha256:13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f \
     --hash=sha256:302c22c3ba2a0fd5f3911918651341ebb3896176cbdec15bd421f80b1afc7647
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 certifi==2026.4.22 \
     --hash=sha256:3cb2210c8f88ba2318d29b0388d1023c8492ff72ecdde4ebdaddbb13a31b1c4a \
     --hash=sha256:8d455352a37b71bf76a79caa83a3d6c25afee4a385d632127b6afb3963f1c580
@@ -1026,7 +1026,7 @@ fsspec[http]==2026.4.0 \
 funasr==1.3.1 \
     --hash=sha256:ed813c0ecade7d24393943a82a91f7cee822178ab4bfd303adb8ad318605e0a5 \
     --hash=sha256:f63050d7d625f287ec741b84a0325365699c49550a4bfd3ace4acb43e41a87a8
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 googleapis-common-protos==1.75.0 \
     --hash=sha256:53a062ff3c32552fbd62c11fe23768b78e4ddf0494d5e5fd97d3f4689c75fbbd \
     --hash=sha256:961ed60399c457ceb0ee8f285a84c870aabc9c6a832b9d37bb281b5bebde43ed
@@ -1036,7 +1036,7 @@ googleapis-common-protos==1.75.0 \
 googletrans==4.0.2 \
     --hash=sha256:19e4fbbf7463e0cf4cd8f03479372910368730ac13dfb023fed6db58fd093547 \
     --hash=sha256:d9ef126b5d92fabeec0bb9ddcdbeecd43865fc00e17f1dfa07717837827a17de
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 greenlet==3.5.0 ; platform_machine == 'AMD64' or platform_machine == 'WIN32' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'ppc64le' or platform_machine == 'win32' or platform_machine == 'x86_64' \
     --hash=sha256:0ecec963079cd58cbd14723582384f11f166fd58883c15dcbfb342e0bc9b5846 \
     --hash=sha256:0ed006e4b86c59de7467eb2601cd1b77b5a7d657d1ee55e30fe30d76451edba4 \
@@ -1172,7 +1172,7 @@ h2==4.3.0 \
 hatchling==1.29.0 \
     --hash=sha256:50af9343281f34785fab12da82e445ed987a6efb34fd8c2fc0f6e6630dbcc1b0 \
     --hash=sha256:793c31816d952cee405b83488ce001c719f325d9cda69f1fc4cd750527640ea6
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 hf-xet==1.5.0 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' \
     --hash=sha256:1e60df5a42e9bed8628b6416af2cba4cba57ae9f02de226a06b020d98e1aab18 \
     --hash=sha256:2806c7c17b4d23f8d88f7c4814f838c3b6150773fe339c20af23e1cfaf2797e4 \
@@ -1551,7 +1551,7 @@ librosa==0.11.0 \
     --hash=sha256:0b6415c4fd68bff4c29288abe67c6d80b587e0e1e2cfb0aad23e4559504a7fa1 \
     --hash=sha256:f5ed951ca189b375bbe2e33b2abd7e040ceeee302b9bbaeeffdfddb8d0ace908
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   funasr
 librt==0.11.0 ; platform_python_implementation != 'PyPy' \
     --hash=sha256:05fb8fb2ab90e21c8d12ea240d744ad514da9baf381ebfa70d91d20d21713175 \
@@ -1857,7 +1857,7 @@ maturin==1.7.4 \
     --hash=sha256:f3d38a6d0c7fd7b04bec30dd470b2173cf9bd184ab6220c1acaf49df6b48faf5 \
     --hash=sha256:f70c1c8ec9bd4749a53c0f3ae8fdbb326ce45be4f1c5551985ee25a6d7150328 \
     --hash=sha256:fd5b4b95286f2f376437340f8a4908f4761587212170263084455be8099099a7
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 mdurl==0.1.2 \
     --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8 \
     --hash=sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba
@@ -2135,7 +2135,7 @@ mypy==2.1.0 \
     --hash=sha256:ecfe70d43775ab99562ab128ce49854a362044c9f894961f68f898c23cb7429d \
     --hash=sha256:fcaa0e479066e31f7cceb6a3bea39cb22b2ff51a6b2f24f193d19179ba17c389 \
     --hash=sha256:ff715050c127d724fd260a2e666e7747fdd83511c0c47d449d98238970aef780
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 mypy-extensions==1.1.0 \
     --hash=sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505 \
     --hash=sha256:52e68efc3284861e772bbcd66823fde5ae21fd2fdb51c62a211403730b916558
@@ -2279,7 +2279,7 @@ numpy==2.4.5 \
     --hash=sha256:fb4a6c9c537d6ccec9cc4aeae4261bd3cc79b070c67ddc0646f5b1c07fddde42 \
     --hash=sha256:fe28b64777ddfa0eca9b5f51474034ebe3dcb8324f48f27b28f479085673ae33
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   asteroid-filterbanks
     #   audiofile
     #   audmath
@@ -2417,11 +2417,11 @@ onnxruntime==1.26.0 \
     --hash=sha256:e90c00732c4553618103149d93f688e8c3063017938f8983e21a71d9f3b6d22e \
     --hash=sha256:ee1109ef4ef27cad90e823399e61e03b3c6c7bfe0fb820b4baf3678c15be8b3c \
     --hash=sha256:f5fc48a91a046a6a5c9b147f83fb41d65d24d24923373b222cdd248f0f4f4aac
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 openai==2.37.0 \
     --hash=sha256:814633888b8f3b1ffd6615697c6e4ef93632d08b7c2e28c8c5ef3556e5a10107 \
     --hash=sha256:f4bc562cc5f3a43d40d678105572d9d44765f6e0f50c125f63055419b72f4bd9
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 opensmile==2.6.0 \
     --hash=sha256:03d2faae9f3a7a9a7d8ababfe32e290454b1dce3dc5179de38c0be29a27465b5 \
     --hash=sha256:4377d53cc678c119015b7771df00d88a835d9fec946982efc23717b54cf5320d \
@@ -2430,7 +2430,7 @@ opensmile==2.6.0 \
     --hash=sha256:98b2dd93075a1966c53d04cddadf1b9290b0933e35af176a8466998704341e15 \
     --hash=sha256:faf81435f169d378136337e66bfbe5537a71feeae2f9ea16bcb90e1e91350ca6 \
     --hash=sha256:fd17585ad147879dac3da640fcaac46dc38aa42db4364d8025ff40bf55edf9aa
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 opentelemetry-api==1.41.1 \
     --hash=sha256:0ad1814d73b875f84494387dae86ce0b12c68556331ce6ce8fe789197c949621 \
     --hash=sha256:a22df900e75c76dc08440710e51f52f1aa6b451b429298896023e60db5b3139f
@@ -2683,11 +2683,11 @@ pluggy==1.6.0 \
 poetry-core==2.4.0 \
     --hash=sha256:4305848477da00272bebd3f615bbec87f64bd117cdb858ab660b626a06a9d96c \
     --hash=sha256:4e8c7496cf797998ffc493f2e23eba4b038c894c08eadacdcdf688945de6b43a
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 polars==1.40.1 \
     --hash=sha256:ab2694134b137596b5a59bfd7b4c54ebbc9b59f9403127f18e32d363777552e8 \
     --hash=sha256:c0f861219d1319cdea45c4ce4d30355a47176b8f98dcedf95ea8269f131b8abd
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 polars-runtime-32==1.40.1 \
     --hash=sha256:37f3065615d1bf90d03b5326222df4c5c1f8a5d33e50470aa588e3465e6eb814 \
     --hash=sha256:5987b30e7aa1059d069498496e8dda35afd592b0ac3d46ed87e3ff8df1ad652c \
@@ -2804,7 +2804,7 @@ praat-parselmouth==0.4.7 \
     --hash=sha256:fd6f1946e463dfc1b29a8ac4ad5b9792f5bb2436db74f42f2ee4b04168220583 \
     --hash=sha256:fe123f5004e77a3a39150fc0b64b8960404c87ca8bb2a2e031c73ebd32d8e548 \
     --hash=sha256:ff6ed2b45740a645c9dd57f8ade2d18f34209593093b9507eae4661189826fba
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 primepy==1.3 \
     --hash=sha256:25fd7e25344b0789a5984c75d89f054fcf1f180bef20c998e4befbac92de4669 \
     --hash=sha256:5ed443718765be9bf7e2ff4c56cdff71b42140a15b39d054f9d99f0009e2317a
@@ -2954,7 +2954,7 @@ protobuf==6.33.6 \
 pyannote-audio==4.0.4 \
     --hash=sha256:dee724dc3cff17dac9ea5afd36053f373ab7839f7b3044e617ff51e099deb131 \
     --hash=sha256:f9f8f597a938789684dd3efa22b427ebb1755d172dab2049ff322bfae9cd528a
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 pyannote-core==6.0.1 \
     --hash=sha256:4b4ada3276f6df4e073fa79166636e3597d0dcb5a0fe26014a3477867cc033fb \
     --hash=sha256:924550d6ecf6b05ad13bf3f66f59c29fc740cf1c62a6fca860ac2e66908203e5
@@ -3041,7 +3041,7 @@ pycantonese==4.3.0 \
     --hash=sha256:61efabd3a9bdec9abd1625c08c2e8c2398c75fcf5c7b4afd7a1f8abe8538d825 \
     --hash=sha256:c8f97e14cde9e7bc50f4a52906692ba6c3ec3aef6d3bcea93b46b964078d0c9b \
     --hash=sha256:f3d01128ef90fb1dcd31b336cbf56f815e46f8bde6f047b1251f1925e4728946
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 pycparser==3.0 ; implementation_name != 'PyPy' \
     --hash=sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29 \
     --hash=sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992
@@ -3238,12 +3238,12 @@ pytest==9.0.3 \
     --hash=sha256:2c5efc453d45394fdd706ade797c0a81091eccd1d6e4bccfcd476e2b8e0ab5d9 \
     --hash=sha256:b86ada508af81d19edeb213c681b1d48246c1a91d304c6c81a427674c17eb91c
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   pytest-xdist
 pytest-xdist==3.8.0 \
     --hash=sha256:202ca578cfeb7370784a8c33d6d05bc6e13b4f25b5053c30a152269fd10f0b88 \
     --hash=sha256:7e578125ec9bc6050861aa93f2d59f1d8d085595d6551c2c90b6f4fad8d3a9f1
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 python-dateutil==2.9.0.post0 \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
@@ -3496,7 +3496,7 @@ requests-toolbelt==1.0.0 \
 rev-ai==2.21.0 \
     --hash=sha256:2d191698ade897b50655aa4b03393e51af63948b92f096da4208f4556cc894d3 \
     --hash=sha256:fd30cc4d7047d959e66de627f288363daee71372ea3d4177e317f029a223228d
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 rfc3986==2.0.0 \
     --hash=sha256:50b1502b60e289cb37883f3dfd34532b8873c7de9f49bb546641ce9cbd256ebd \
     --hash=sha256:97aacf9dbd4bfd829baad6e6309fa6573aaf1be3f6fa735c8ab05e46cecb261c
@@ -3731,7 +3731,7 @@ setuptools==82.0.1 \
     --hash=sha256:7d872682c5d01cfde07da7bccc7b65469d3dca203318515ada1de5eda35efbf9 \
     --hash=sha256:a59e362652f08dcd477c78bb6e7bd9d80a7995bc73ce773050228a348ce2e5bb
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   modelscope
     #   torch
 shellingham==1.5.4 \
@@ -3764,7 +3764,7 @@ soundfile==0.13.1 \
     --hash=sha256:b2c68dab1e30297317080a5b43df57e302584c49e2942defdde0acccc53f0e5b \
     --hash=sha256:c734564fab7c5ddf8e9be5bf70bab68042cd17e9c214c06e365e20d64f9a69d5
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   audiofile
     #   funasr
     #   librosa
@@ -3863,17 +3863,17 @@ sqlalchemy==2.0.49 \
     # via
     #   alembic
     #   optuna
-standard-aifc==3.13.0 ; python_full_version >= '3.13' \
+standard-aifc==3.13.0 \
     --hash=sha256:64e249c7cb4b3daf2fdba4e95721f811bde8bdfc43ad9f936589b7bb2fae2e43 \
     --hash=sha256:f7ae09cc57de1224a0dd8e3eb8f73830be7c3d0bc485de4c1f82b4a7f645ac66
     # via
     #   audioread
     #   librosa
-standard-chunk==3.13.0 ; python_full_version >= '3.13' \
+standard-chunk==3.13.0 \
     --hash=sha256:17880a26c285189c644bd5bd8f8ed2bdb795d216e3293e6dbe55bbd848e2982c \
     --hash=sha256:4ac345d37d7e686d2755e01836b8d98eda0d1a3ee90375e597ae43aaf064d654
     # via standard-aifc
-standard-sunau==3.13.0 ; python_full_version >= '3.13' \
+standard-sunau==3.13.0 \
     --hash=sha256:53af624a9529c41062f4c2fd33837f297f3baa196b0cfceffea6555654602622 \
     --hash=sha256:b319a1ac95a09a2378a8442f403c66f4fd4b36616d6df6ae82b8e536ee790908
     # via
@@ -3882,7 +3882,7 @@ standard-sunau==3.13.0 ; python_full_version >= '3.13' \
 stanza==1.12.0 \
     --hash=sha256:39831d940de8335b9b2735709be2fe814b2578dec353048d1ca7881fbafc9897 \
     --hash=sha256:5ce1c665498f0cec73d76fd3ac6d2bbdef07cf909552a42e77b99dc0896fadb2
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 sympy==1.14.0 \
     --hash=sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517 \
     --hash=sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5
@@ -3890,7 +3890,7 @@ sympy==1.14.0 \
 tencentcloud-sdk-python-asr==3.1.68 \
     --hash=sha256:05f0482ee10b61967153443d46074d21ea6f78d258ceeb6ae66e8d43f2dab8cf \
     --hash=sha256:a339c533383571c27a17a2945c9256bf3199ef2fdda798ec1297a0c035ba812d
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 tencentcloud-sdk-python-common==3.1.97 \
     --hash=sha256:b5ca932a8853407942dcc7009a21e8009b36e004dcb2e1d918ebea5280b10788 \
     --hash=sha256:da0b76e48cc877cec1e6797cebe476dd65f5a55d6be71590f1777ff2a820f6b8
@@ -3974,7 +3974,7 @@ torch==2.10.0 \
     --hash=sha256:f5ab4ba32383061be0fb74bda772d470140a12c1c3b58a0cfbf3dae94d164c28 \
     --hash=sha256:ff43db38af76fda183156153983c9a096fc4c78d0cd1e07b14a2314c7f01c2c8
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   asteroid-filterbanks
     #   julius
     #   lightning
@@ -4027,7 +4027,7 @@ torchaudio==2.11.0 \
     --hash=sha256:e3f9696a9ef1d49acc452159b052370c636406d072e9d8f10895fda87b591ea9 \
     --hash=sha256:ed404c4399ad7f172c86a47c1b25293d322d1d58e26b10b0456a86cf67d37d84
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   pyannote-audio
     #   torch-audiomentations
     #   torch-pitch-shift
@@ -4064,7 +4064,7 @@ tqdm==4.67.3 \
     --hash=sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb \
     --hash=sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   audeer
     #   funasr
     #   huggingface-hub
@@ -4081,7 +4081,7 @@ tqdm==4.67.3 \
 transformers==5.8.1 \
     --hash=sha256:4dd5b6de4105725104d84fd6abd74b305f4debfc251b38c648ee5dd087cf543b \
     --hash=sha256:5340fb95962162cdfdae5cc91d7f8fedd92ed75216c1154c5e1f590fcf56dd0e
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 triton==3.6.0 ; platform_machine == 'x86_64' and sys_platform == 'linux' \
     --hash=sha256:0b3a97e8ed304dfa9bd23bb41ca04cdf6b2e617d5e782a8653d616037a5d537d \
     --hash=sha256:10c7f76c6e72d2ef08df639e3d0d30729112f47a56b0c81672edc05ee5116ac9 \
@@ -4105,21 +4105,19 @@ trove-classifiers==2026.5.7.17 \
 twine==6.2.0 \
     --hash=sha256:418ebf08ccda9a8caaebe414433b0ba5e25eb5e4a927667122fbe8f829f985d8 \
     --hash=sha256:e5ed0d2fd70c9959770dce51c8f39c8945c574e18173a7b81802dab51b4b75cf
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 typer==0.25.1 \
     --hash=sha256:75caa44ed46a03fb2dab8808753ffacdbfea88495e74c85a28c5eefcf5f39c89 \
     --hash=sha256:9616eb8853a09ffeabab1698952f33c6f29ffdbceb4eaeecf571880e8d7664cc
     # via
-    #   batchalign (pyproject.toml)
+    #   batchalign (python/pyproject.toml)
     #   huggingface-hub
     #   transformers
 typing-extensions==4.15.0 \
     --hash=sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466 \
     --hash=sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548
     # via
-    #   aiosignal
     #   alembic
-    #   anyio
     #   asteroid-filterbanks
     #   grpcio
     #   huggingface-hub
@@ -4174,7 +4172,7 @@ websocket-client==0.59.0 \
 wheel==0.47.0 \
     --hash=sha256:212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced \
     --hash=sha256:cc72bd1009ba0cf63922e28f94d9d83b920aa2bb28f798a31d0691b02fa3c9b3
-    # via batchalign (pyproject.toml)
+    # via batchalign (python/pyproject.toml)
 yarl==1.23.0 \
     --hash=sha256:03214408cfa590df47728b84c679ae4ef00be2428e11630277be0727eba2d7cc \
     --hash=sha256:041b1a4cefacf65840b4e295c6985f334ba83c30607441ae3cf206a0eed1a2e4 \
