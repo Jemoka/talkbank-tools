@@ -23,12 +23,19 @@ cargo_build_script(
     name = "tree_sitter_talkbank_build_script",
     srcs = ["bindings/rust/build.rs"],
     aliases = aliases(build = True),
-    data = glob([
-        "src/parser.c",
-        "src/parser.h",
-        "src/tree_sitter/*.h",
-        "src/scanner.c",
-    ]),
+    # `allow_empty = True` — Bazel 8 defaults globs to disallow empty
+    # matches; src/parser.h and src/scanner.c don't exist in this
+    # grammar (the parser is the only generated artifact, and
+    # tree_sitter/parser.h lives under src/tree_sitter/).
+    data = glob(
+        [
+            "src/parser.c",
+            "src/parser.h",
+            "src/tree_sitter/*.h",
+            "src/scanner.c",
+        ],
+        allow_empty = True,
+    ),
     edition = "2021",
     proc_macro_deps = all_crate_deps(build_proc_macro = True),
     deps = all_crate_deps(build = True),

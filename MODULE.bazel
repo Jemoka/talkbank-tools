@@ -133,8 +133,13 @@ use_repo(crate, "crates")
 # for runtime Python deps. Maturin (the PyO3 wheel backend) is invoked as
 # `uv run maturin build --release` from sh_binary wrappers — modelling the
 # cdylib + ABI-tagged rename + wheel packaging in Bazel buys nothing here.
-bazel_dep(name = "rules_python", version = "0.39.0")
+bazel_dep(name = "rules_python", version = "1.6.3")
 bazel_dep(name = "rules_uv", version = "0.59.0")
+# aspect_rules_py replaces rules_python's stub-script launcher with a
+# bash-only launcher (no system-python bootstrap) and provides
+# virtual_deps + resolutions for the override-package pattern. Requires
+# Bazel 8.x (uses repository_ctx.repo_metadata).
+bazel_dep(name = "aspect_rules_py", version = "1.11.5")
 # aspect_rules_py adoption deferred — version 1.11.5 calls
 # `repository_ctx.repo_metadata`, a Bazel 8+ API; this workspace pins
 # an older Bazel. Re-add once we bump Bazel, or pin aspect_rules_py to
@@ -205,6 +210,10 @@ use_repo(npm, "npm_vscode")
 bazel_dep(name = "rules_shell", version = "0.3.0")
 bazel_dep(name = "rules_pkg", version = "1.0.1")
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
+# Bazel 8 stops transitively re-exporting @platforms from other rules.
+# Targets that `select()` on @platforms//os or @platforms//cpu need an
+# explicit bazel_dep here.
+bazel_dep(name = "platforms", version = "1.0.0")
 # `copy_to_directory` is used wherever a Rust target needs an
 # in-sandbox manifest-dir layout that mirrors the source tree
 # (sqlx::migrate! and friends parse a string literal and require
