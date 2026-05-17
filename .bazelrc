@@ -25,6 +25,13 @@ build --experimental_remote_cache_compression
 build --legacy_external_runfiles=false              # tighter sandbox
 build --incompatible_strict_action_env              # reproducible env
 
+# Bazel 8 default would error on `glob(["src/parser.h"])` when that
+# file doesn't exist. Many BUILD files in this workspace glob over
+# patterns that are conditionally present (generated artifacts,
+# optional headers, deleted dashboards, etc.). Restoring Bazel 7
+# behavior is cheaper than per-glob `allow_empty = True` everywhere.
+common --noincompatible_disallow_empty_glob
+
 # ---- Test ergonomics -------------------------------------------------------
 test --test_output=errors                           # show output only on failure
 test --test_summary=detailed
