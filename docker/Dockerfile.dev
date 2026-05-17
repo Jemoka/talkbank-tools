@@ -1,0 +1,53 @@
+# Dockerfile.dev — exercises the local debug path end-to-end inside a
+# clean Ubuntu image. Clones the repo from the bind-mounted source,
+# installs minimal host prerequisites (bazelisk, just, build-essential
+# for cargo's C deps, the pinned rustup channel), and runs
+# `just batchalign cli -- compare ...`.
+#
+# Local-only path: NO maturin in the run path. The cdylib is built by
+# Bazel's `rust_shared_library` and consumed by `py_binary` via
+# runfiles. This image only exists to *prove* a fresh machine can do
+# `git clone && just batchalign cli` without a maturin install.
+#
+# Built / invoked from `just docker dev-test` (see just/docker.just).
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Host prerequisites: bazelisk, just, build-essential (needed by cargo
+# for any C deps cargo-builds at action time), curl/git, libsqlite3-dev
+# (for libsqlite3-sys to skip its vendored compile and link the system
+# library — sidesteps the macOS-only header bug on this Linux image).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl git unzip xz-utils \
+        build-essential pkg-config \
+        libsqlite3-dev \
+        python3.12 python3.12-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Bazelisk (auto-fetches the version pinned in .bazelversion).
+RUN curl -fsSL -o /usr/local/bin/bazel \
+        https://github.com/bazelbuild/bazelisk/releases/download/v1.22.1/bazelisk-linux-amd64 \
+    && chmod +x /usr/local/bin/bazel
+
+# just.
+RUN curl -fsSL --proto '=https' --tlsv1.2 \
+        https://just.systems/install.sh \
+    | bash -s -- --to /usr/local/bin
+
+# Rust toolchain — must match python/pyproject.toml [tool.batchalign.pinned_tools].rust.
+RUN curl -fsSL --proto '=https' --tlsv1.2 \
+        https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.95.0
+ENV PATH=/root/.cargo/bin:${PATH}
+
+# uv — must match the same pin.
+RUN curl -fsSL --proto '=https' --tlsv1.2 \
+        https://astral.sh/uv/0.5.18/install.sh | sh
+ENV PATH=/root/.local/bin:${PATH}
+
+WORKDIR /work
+# Source is bind-mounted at runtime via `just docker dev-test`; the
+# image stays small and rebuilds don't invalidate the apt layer.
+
+CMD ["bash", "-lc", "just batchalign cli -- --help"]

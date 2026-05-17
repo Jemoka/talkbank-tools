@@ -1,0 +1,22 @@
+# Dockerfile.wheel-consumer — installs an already-built wheel into a
+# fresh Python 3.12 image and runs the CLI. Proves the wheel artifact
+# is consumable downstream (PyPI-equivalent install path).
+#
+# Build context expects `*.whl` files at the root. `just docker
+# wheel-test` copies python/target/wheels/*.whl into a scratch context
+# and passes the wheel filename via build-arg.
+
+FROM python:3.12-slim
+
+ARG WHEEL
+# `WHEEL` is the filename of the wheel to install (no path); the
+# justfile recipe copies it into the build context root.
+
+# pip's manylinux wheel install needs nothing else; the wheel embeds
+# the cdylib.
+COPY ${WHEEL} /tmp/${WHEEL}
+RUN pip install --no-cache-dir /tmp/${WHEEL} \
+    && rm /tmp/${WHEEL}
+
+# Smoke: import + CLI help.
+CMD ["bash", "-lc", "python -c 'import batchalign; from batchalign import _core; print(\"import ok:\", _core)' && batchalign3 --help"]

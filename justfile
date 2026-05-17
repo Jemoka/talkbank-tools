@@ -17,6 +17,7 @@ mod spec       "just/spec.just"
 mod vscode     "just/vscode.just"
 mod docs       "just/docs.just"
 mod tooling    "just/tooling.just"
+mod docker     "just/docker.just"
 
 default:
     @just --list
