@@ -30,8 +30,14 @@ pip_compile(
     requirements_txt = "requirements.lock.txt",
     # `--all-extras` pulls every `[project.optional-dependencies]`
     # group into the lockfile — no hand-list of extras.
+    #
+    # `universal = False` (default): the lockfile is resolved for the
+    # pyproject's `requires-python = "==3.12.*"` only, so Python 3.13+
+    # marker-conditional deps (audioop_lts, etc.) are EXCLUDED. Without
+    # this, rules_python's pip.parse leaves dangling names in
+    # `all_whl_requirements` whose BUILD files were never generated,
+    # breaking `deps = all_whl_requirements` in py_library.
     extra_args = ["--all-extras"],
-    universal = True,
 )
 
 filegroup(

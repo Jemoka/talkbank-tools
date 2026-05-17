@@ -53,9 +53,11 @@ dev-test:
         bash -lc 'set -e && \
           mkdir -p $HOME/repo && cp -r /src/. $HOME/repo/ && cd $HOME/repo && \
           just batchalign cli -- --help && \
-          (just batchalign cli -- compare \
-              resources/corpus/reference/morphosyntax/eng.cha \
-              resources/corpus/reference/morphosyntax/eng.cha \
+          (mkdir -p /tmp/compare-out && \
+              just batchalign cli -- compare \
+              "$PWD/resources/corpus/reference/edge-cases/empty-and-minimal.cha" \
+              "$PWD/resources/corpus/reference/edge-cases/empty-and-minimal.cha" \
+              -o /tmp/compare-out \
               || echo "[smoke] compare exit-code is informational only") \
         '
 

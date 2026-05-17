@@ -21,31 +21,21 @@ multi-platform tagging matrix + optional-deps groups):
 groups, scripts, classifiers).
 """
 
-load("@pypi//:requirements.bzl", "requirement")
+# Zero hand-listed deps. `all_whl_requirements` is rules_python's
+# marker-filtered wildcard: it yields every package whose wheel was
+# actually resolved + extracted for the current platform/Python
+# version. Critically (unlike `all_requirements`) it drops names that
+# the lockfile lists with `python_full_version >= '3.13'`-style
+# markers and that pip.parse therefore skipped writing BUILD files
+# for. The dep list is implicit in pyproject.toml + the regenerated
+# requirements.lock.txt — no name appears in this BUILD file ever.
+load("@pypi//:requirements.bzl", "all_requirements")
 load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 package(default_visibility = ["//visibility:public"])
 
-# Direct top-level imports only. Optional backends (whisper, pyannote,
-# revai, etc.) load lazily inside their backend module — wheel
-# consumers get them via `pip install batchalign[<extra>]`. Adding a
-# new dep here = adding it to pyproject.toml first then re-locking;
-# `requirement()` handles platform markers correctly (unlike a naive
-# `all_requirements` wildcard which lists platform-conditional names
-# whose BUILD files pip.parse didn't generate).
-_RUNTIME_DEPS = [
-    requirement(n)
-    for n in (
-        "numpy",
-        "polars",
-        "soundfile",
-        "stanza",
-        "tqdm",
-        "transformers",
-        "typer",
-    )
-]
+_RUNTIME_DEPS = all_requirements
 
 py_library(
     name = "batchalign_lib",
@@ -78,11 +68,15 @@ genrule(
 )
 
 # Default runnable target — `bazel run //python/batchalign` invokes
-# `python -m batchalign` against the Bazel-built `.so`.
+# `python -m batchalign` against the Bazel-built `.so`. Some pypi
+# packages overlap on benign data paths (e.g. `docs/index.rst`);
+# `package_collisions = "warning"` lets the venv build finish with a
+# warning instead of erroring on the duplicate file.
 py_binary(
     name = "batchalign",
     srcs = ["__main__.py"],
     main = "__main__.py",
+    package_collisions = "warning",
     deps = [":batchalign_lib"],
 )
 
