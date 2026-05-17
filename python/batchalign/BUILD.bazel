@@ -22,7 +22,11 @@ groups, scripts, classifiers).
 """
 
 load("@pypi//:requirements.bzl", "requirement")
-load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+# aspect_rules_py's py_* use a bash launcher that bundles its own
+# python instead of `#!/usr/bin/env python3`. Fixes the runtime
+# `/usr/bin/env: 'python3': Permission denied` we saw in the
+# Colima dev-test loop and makes `bazel run` invariant of host PATH.
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 package(default_visibility = ["//visibility:public"])
@@ -41,6 +45,11 @@ _RUNTIME_DEPS = [
     requirement("polars"),
     requirement("soundfile"),
     requirement("stanza"),
+    # Stanza's depparse imports `transformers` lazily and references the
+    # name unconditionally even when not running BERT — keeping it in the
+    # runfiles avoids a NameError on first call. Both ship via the
+    # `stanza` extra in pyproject.
+    requirement("transformers"),
 ]
 
 py_library(

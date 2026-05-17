@@ -67,5 +67,16 @@ lcov*.info
 **/.tmp-review-venv/
 /bazel-*
 
+# Compiled native extensions — built by maturin (host wheel) or
+# Bazel's rust_shared_library (dev-loop cdylib); never source.
+*.so
+*.dylib
+*.pyd
+*.dll
+# Maturin's editable install writes into python/batchalign/_core/
+python/batchalign/_core/_core.*.so
+python/batchalign/_core/_core.*.dylib
+python/batchalign/_core/_core.*.pyd
+
 # Coordination scratch (multi-agent talk doc; not source of truth)
 talk.txt
