@@ -93,7 +93,17 @@ python-source = "."
 # `batchalign/_core/__init__.py`'s `from batchalign._core._core import *`
 # fails with `No module named 'batchalign._core._core'`.
 module-name   = "batchalign._core._core"
-features      = ["pyo3/extension-module"]
+# Both features are required:
+#   `pyo3/extension-module`         — tells pyo3 not to link libpython
+#   `batchalign-engine/extension-module` — gates the engine's own
+#                                          `#[pymodule] fn _core(...)`
+#                                          (see engine/src/lib.rs). Without
+#                                          it the cdylib has no
+#                                          `PyInit__core` symbol and the
+#                                          wheel import errors with
+#                                          "dynamic module does not define
+#                                          module export function".
+features      = ["pyo3/extension-module", "extension-module"]
 profile       = "dev"
 
 # ---------------------------------------------------------------------------
