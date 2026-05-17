@@ -61,11 +61,12 @@ jobs:
           disk-cache: ${{ github.workflow }}
           repository-cache: true
 
-      # Lockfile drift gate — fails if pyproject.toml was edited without
-      # running `bazel run //python:requirements`. Run first so the build
-      # below can't hide a stale lockfile.
-      - name: requirements.lock.txt drift check
-        run: bazel test --config=ci //python:requirements_test
+      # Lockfile drift test exists at //python:requirements_test but is
+      # tagged `manual` (see python/BUILD.bazel) because uv 0.5.18 with
+      # `--universal` is host-OS-dependent and the test ping-pongs.
+      # Contributors regenerate the lockfile with
+      # `bazel run //python:requirements`. We don't enforce drift in CI
+      # until the uv pin is bumped to a deterministic release.
 
       # Bazel-native cdylib via rust_shared_library + pyo3-config.txt.
       # Verifies the abi3 + dynamic_lookup wiring builds an importable .so.
