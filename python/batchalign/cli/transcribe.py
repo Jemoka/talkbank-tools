@@ -65,8 +65,12 @@ def register(app: typer.Typer) -> None:
         vllm_url: str = typer.Option("http://localhost:8000/v1", "--vllm-url", help="Base URL for the vLLM OpenAI-compatible server (engine=vllm)."),
         segment: bool = typer.Option(
             True, "--segment/--no-segment",
-            help="Run BA2's CHATUtterance BERT utterance segmentation after ASR "
-            "(ignored for chatwhisper, which segments internally).",
+            help="Run BA2's CHATUtterance BERT utterance segmentation after ASR.",
+        ),
+        force_cpu: bool = typer.Option(
+            False, "--force-cpu",
+            help="Run the ASR model on CPU (BA2's --force-cpu). Needed on Apple "
+            "MPS, where Whisper's bfloat16 attention kernel is unsupported.",
         ),
     ) -> None:
         """Transcribe media into CHAT (.cha) files.
@@ -86,7 +90,10 @@ def register(app: typer.Typer) -> None:
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
-            asr_backend, rev_diarizes = _build_asr(ba, engine, model, language, vllm_url, num_speakers)
+            device = "cpu" if force_cpu else None
+            asr_backend, rev_diarizes = _build_asr(
+                ba, engine, model, language, vllm_url, num_speakers, device
+            )
             # Rev does its own diarization; for the Whisper family add Pyannote
             # when --diarize is requested.
             speaker_backend: Any = None
@@ -112,22 +119,21 @@ def register(app: typer.Typer) -> None:
         raise typer.Exit(code=ui.exit_code)
 
 
-def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vllm_url: str, num_speakers: int = 2):
+def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vllm_url: str, num_speakers: int = 2, device: str | None = None):
     """Construct the ASR backend for `engine`. Returns (backend, rev_diarizes)."""
     m = model or _DEFAULT_MODEL.get(engine)
     if engine is AsrEngine.rev:
         return ba.RevAI(language=language, num_speakers=num_speakers), True
     if engine is AsrEngine.whisperx:
-        return ba.WhisperXBackend(model=m, language=None if language == "auto" else language), False
+        return ba.WhisperXBackend(model=m, language=None if language == "auto" else language, device=device), False
     if engine is AsrEngine.whisper:
-        return ba.WhisperBackend(model=m, language=language), False
+        return ba.WhisperBackend(model=m, language=language, device=device), False
     if engine is AsrEngine.chatwhisper:
-        # CHATWhisper resolves its own model per language; it also performs
-        # BA2's BERT utterance segmentation internally (one segment per
-        # utterance), so it needs no separate UtSeg stage.
-        return ba.ChatWhisperBackend(lang="eng" if language in ("auto", "en") else language), False
+        # CHATWhisper resolves its own model per language. Emits raw ASR words;
+        # the CHATUtterance UtSeg pairing handles segmentation.
+        return ba.ChatWhisperBackend(lang="eng" if language in ("auto", "en") else language, device=device), False
     if engine is AsrEngine.openai:
-        return ba.OpenAIWhisperBackend(model=m, language=language), False
+        return ba.OpenAIWhisperBackend(model=m, language=language, device=device), False
     if engine is AsrEngine.vllm:
         return ba.VllmAsrBackend(model=m, language=language, base_url=vllm_url), False
     raise typer.BadParameter(f"unknown engine: {engine}")
