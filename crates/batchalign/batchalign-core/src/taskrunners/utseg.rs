@@ -8,16 +8,16 @@
 //!
 //! Per spec2.md §5 / §8 and the BA2 `pipelines/utterance/` reference.
 
+use crate::base::BAValue;
 use crate::base::Chat;
-use crate::utils::{BAError, BAResult};
+use crate::base::Task;
+use crate::base::TaskInput;
+use crate::base::{Dispatcher, TaskRunner};
 use crate::base::{ProgressEvent, ProgressSink};
 use crate::proto::asr::{AsrSegment, LanguageSpec};
 use crate::proto::utseg::{UtSegInput, UtSegOutput};
-use crate::base::Task;
-use crate::base::{Dispatcher, TaskRunner};
-use crate::base::TaskInput;
-use crate::base::{BAValue};
 use crate::utils::SourceId;
+use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
 
 /// UtSeg runner — `Task::UtSeg` entry point.
@@ -158,10 +158,6 @@ fn emit_split_lines(row: &UtteranceRow, out: &UtSegOutput, sink: &mut String) {
         return;
     }
     for span in &out.utterances {
-        // Preserve the terminator the segmenter chose (`.`/`?`/`!`) so
-        // questions/exclamations survive — matches BA2, whose utterance model
-        // predicts sentence-final punctuation. Default to `.`.
-        let terminator = terminator_of(&span.text);
         let text = sanitize_text(&span.text);
         if text.is_empty() {
             continue;
@@ -171,27 +167,19 @@ fn emit_split_lines(row: &UtteranceRow, out: &UtSegOutput, sink: &mut String) {
         } else {
             format!(" \u{15}{}_{}\u{15}", span.start_ms, span.end_ms)
         };
-        sink.push_str(&format!("*{}:\t{} {}{}\n", row.speaker, text, terminator, bullet));
-    }
-}
-
-/// The sentence-final terminator the segmenter chose, as a CHAT token.
-/// Reads the last non-space char; `?`/`!` pass through, everything else
-/// (including `.`) maps to `.`.
-fn terminator_of(s: &str) -> &'static str {
-    match s.trim_end().chars().last() {
-        Some('?') => "?",
-        Some('!') => "!",
-        _ => ".",
+        sink.push_str(&format!("*{}:\t{} .{}\n", row.speaker, text, bullet));
     }
 }
 
 fn sanitize_text(s: &str) -> String {
-    // Keep CHAT content markers (`< > [ ] /`) so retrace (`[/]`, `<a b>`)
-    // added by the cleanup stage survives; strip only line-structural chars.
     let cleaned: String = s
         .chars()
-        .filter(|c| !matches!(c, '\t' | '\n' | '\r' | '*' | '%' | '@' | '\\'))
+        .filter(|c| {
+            !matches!(
+                c,
+                '\t' | '\n' | '\r' | '*' | '%' | '@' | '<' | '>' | '[' | ']' | '/' | '\\'
+            )
+        })
         .collect();
     cleaned
         .trim()
@@ -204,8 +192,8 @@ fn sanitize_text(s: &str) -> String {
 mod tests {
     use super::*;
     use crate::base::NullSink;
-    use crate::proto::utseg::UtteranceSpan;
     use crate::base::TaskOutput;
+    use crate::proto::utseg::UtteranceSpan;
     use std::sync::Mutex;
 
     struct ScriptedDispatcher {

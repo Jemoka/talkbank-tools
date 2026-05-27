@@ -44,8 +44,8 @@ impl TaskRunner for FaTaskRunner {
 
         sink.emit(ProgressEvent::stage_started(chat.source_id(), Task::Fa));
 
-        let audio = prepare_pcm(&media)
-            .map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
+        let audio =
+            prepare_pcm(&media).map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
 
         let utterances = extract_utterances_for_fa(chat);
 
@@ -86,20 +86,9 @@ fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
             }
         });
         let speaker = Some(SpeakerLabel::new(u.main.speaker.as_str()));
-        // Pass the utterance's media bullet (`*SPK: … start_end`) as the FA
-        // window — BA2 aligns each utterance's words *within* its bullet time
-        // span. Without this the backend aligns against the whole file and
-        // produces nonsense timings.
-        let (start_ms, end_ms) = u
-            .main
-            .content
-            .bullet
-            .as_ref()
-            .map(|b| (b.timing.start_ms, b.timing.end_ms))
-            .unwrap_or((0, 0));
         out.push(AsrSegment {
-            start_ms,
-            end_ms,
+            start_ms: 0,
+            end_ms: 0,
             text: words
                 .iter()
                 .map(|w| w.text.clone())
@@ -125,25 +114,12 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             )));
         };
         if !seg.words.is_empty() {
-            // BA2 updates the utterance media bullet to span the FA word
-            // timings (first timed word start → last timed word end).
-            use talkbank_model::model::content::Bullet;
-            let timed: Vec<&AsrWord> = seg.words.iter().filter(|w| w.end_ms > 0).collect();
-            if let (Some(first), Some(last)) = (timed.first(), timed.last()) {
-                u.main.content.bullet = Some(Bullet::new(first.start_ms, last.end_ms));
-            }
-            let mut blob = seg
+            let blob = seg
                 .words
                 .iter()
                 .map(|w| format!("{} \u{15}{}_{}\u{15}", w.text, w.start_ms, w.end_ms))
                 .collect::<Vec<_>>()
                 .join(" ");
-            // BA2's %wor carries the utterance terminator (un-bulleted) at the
-            // end, e.g. `… you 2288_2405 .`. Append it for parity.
-            if let Some(term) = u.main.content.terminator.as_ref() {
-                blob.push(' ');
-                blob.push_str(&term.to_string());
-            }
             let label = NonEmptyString::new("wor")
                 .ok_or_else(|| BAError::Internal("wor label empty".into()))?;
             let content = NonEmptyString::new(&blob)

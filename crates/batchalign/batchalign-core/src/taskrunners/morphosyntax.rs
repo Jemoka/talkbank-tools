@@ -9,23 +9,31 @@
 //!    on the main tier do not align with `%mor` slots).
 //! 2. Builds a per-utterance [`MorphosyntaxInput`] and dispatches it through
 //!    the engine.
-//! 3. Attaches the resulting `%mor:` / `%gra:` tiers to the corresponding
-//!    [`Utterance`] via [`Utterance::with_mor`] / [`Utterance::with_gra`].
+//! 3. Converts the structured [`MorphosyntaxOutput`] into **typed**
+//!    `talkbank_model` [`MorTier`] / [`GraTier`] values and attaches them as
+//!    [`DependentTier::Mor`] / [`DependentTier::Gra`].
+//!
+//! ## Typed construction, never strings
+//!
+//! The backend returns a structured analysis (per word: a head morpho-unit plus
+//! `~`-post-clitics; per chunk: a `%gra` triple). This runner maps that onto the
+//! typed model with [`try_align_mor_gra`], which guarantees `%mor`/`%gra`
+//! chunk-count alignment as a construction invariant, then lets the official
+//! CHAT writer serialize the tiers. We never assemble `%mor:`/`%gra:` text by
+//! hand — building CHAT by string concatenation is forbidden (see `CLAUDE.md`).
 //!
 //! ## Retokenize semantics
 //!
 //! Two modes, controlled by `MorphosyntaxConfig::retokenize`:
 //!
 //! - `retokenize = false` (default). Mirrors BA2's `retokenize=False` path.
-//!   The upstream main-tier tokenization is authoritative; the backend MUST
-//!   produce exactly one `%mor` item per input token. This is the right mode
-//!   for already-segmented CHAT documents, where word boundaries are
-//!   linguistically meaningful (split contractions, marked compounds, etc.).
-//! - `retokenize = true`. Mirrors BA2's `retokenize=True` path. The backend
-//!   is allowed to resplit tokens — for example expanding `gonna` into
-//!   `going to`, or recovering an MWT it knows about. The runner then
-//!   propagates the (possibly different) token count into the `%mor`/`%gra`
-//!   tiers it injects.
+//!   The upstream main-tier tokenization is authoritative; the backend produces
+//!   one [`MorphosyntaxToken`] per input token (clitics live inside a token's
+//!   `units`, so a contraction still counts as one main-tier word). This is the
+//!   right mode for already-segmented CHAT documents.
+//! - `retokenize = true`. Mirrors BA2's `retokenize=True` path. The backend may
+//!   resplit tokens (expanding `gonna` → `going to`). The number of emitted
+//!   `%mor` words may then differ from the input token count.
 //!
 //! In both modes the runner ships the raw token list AND the joined text so
 //! the backend can reconstruct whichever signal it needs.
@@ -36,20 +44,28 @@
 //! `noun|cat-Plur`. CLAN MOR's `&`-style fusional markers (`aux|be&PRES`) are
 //! never emitted. See `CLAUDE.md` §17.3 (project policy: UD-only).
 
+use crate::base::BAValue;
 use crate::base::Chat;
-use crate::utils::{BAError, BAResult};
-use crate::base::{ProgressEvent, ProgressSink};
-use crate::proto::asr::LanguageSpec;
-use crate::proto::morphosyntax::{MorphosyntaxInput, MorphosyntaxOutput, MorphosyntaxToken};
 use crate::base::Task;
 use crate::base::{Dispatcher, TaskRunner};
-use crate::base::BAValue;
+use crate::base::{ProgressEvent, ProgressSink};
+use crate::proto::asr::LanguageSpec;
+use crate::proto::morphosyntax::{
+    MorphosyntaxInput, MorphosyntaxOutput, MorphosyntaxToken, MorphosyntaxUnit,
+};
+use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
 use smol_str::SmolStr;
+use talkbank_model::Span;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
-use talkbank_model::{DependentTier, Line, NonEmptyString, Utterance};
+use talkbank_model::alignment::{MorGraTerminatorSlot, try_align_mor_gra};
+use talkbank_model::model::{
+    DependentTier, GraTier, GrammaticalRelation, Mor, MorFeature, MorStem, MorTier, MorWord,
+    PosCategory, Terminator,
+};
+use talkbank_model::{Line, Utterance};
 
-/// Runner that drops `%mor:` and `%gra:` tiers on a CHAT document.
+/// Runner that drops typed `%mor` and `%gra` tiers on a CHAT document.
 pub struct MorphosyntaxTaskRunner;
 
 #[async_trait]
@@ -67,9 +83,6 @@ impl TaskRunner for MorphosyntaxTaskRunner {
             // `Paired` is what Compare consumes; running morphosyntax over it
             // means tagging both main and gold, so the downstream
             // CompareBackend can lift POS off the `%mor` tier per token.
-            // We tag both sides sequentially — the per-utterance dispatch
-            // inside `process_chat` is what's batched, so doing main then
-            // gold is fine.
             BAValue::Paired(p) => {
                 let (main, gold) = p.as_mut_parts();
                 process_chat(main, dispatcher, sink).await?;
@@ -102,16 +115,8 @@ async fn process_chat(
     // Phase 1: extract per-utterance token lists AND check which utterances
     // already carry a `%mor:` tier. Pre-tagged utterances are skipped end-to-
     // end (no dispatch, no re-injection) — the existing tier is authoritative.
-    // This is the "morphotag is idempotent" contract Compare relies on:
-    // `[Morphosyntax, Compare]` over a pair where one side is already tagged
-    // pays the inference cost only on the untagged side.
-    let per_utt_tokens: Vec<Vec<String>> =
-        chat.ast().utterances().map(extract_tokens).collect();
-    // BA2 appends the utterance terminator verbatim to `%mor` and points
-    // `%gra`'s trailing PUNCT at ROOT, so it must reach the backend. The
-    // typed terminator renders to its canonical CHAT token via `Display`.
-    let per_utt_terminator: Vec<String> =
-        chat.ast().utterances().map(extract_terminator).collect();
+    // This is the "morphotag is idempotent" contract Compare relies on.
+    let per_utt_tokens: Vec<Vec<String>> = chat.ast().utterances().map(extract_tokens).collect();
     let already_tagged: Vec<bool> = chat
         .ast()
         .utterances()
@@ -134,33 +139,35 @@ async fn process_chat(
             tokens: tokens.clone(),
             // Retokenize off by default — preserves upstream main-tier
             // tokenization. Backends that want to resplit (BA2's
-            // `retokenize=True`) can flip it via their own constructor
-            // (`StanzaBackend(retokenize=True)`) and override during call().
+            // `retokenize=True`) flip it via their own constructor.
             retokenize: false,
             text,
-            terminator: per_utt_terminator[idx].clone(),
         };
         let task_out = dispatcher.dispatch(input.into()).await?;
         let out: MorphosyntaxOutput = task_out.try_into()?;
         dispatched.push((idx, out));
     }
 
-    // Phase 3: inject tiers only into the utterances we actually tagged.
+    // Phase 3: build typed tiers and inject into the utterances we tagged.
     inject_mor_gra_tiers_selective(chat, &dispatched)?;
 
-    sink.emit(ProgressEvent::stage_injected(&source_id, Task::Morphosyntax));
+    sink.emit(ProgressEvent::stage_injected(
+        &source_id,
+        Task::Morphosyntax,
+    ));
     Ok(())
 }
 
 fn utterance_has_mor_tier(u: &Utterance) -> bool {
-    use talkbank_model::DependentTier;
     if u.mor_tier().is_some() {
         return true;
     }
-    u.dependent_tiers.iter().any(|t| matches!(
-        t,
-        DependentTier::UserDefined(udt) if udt.label.as_str() == "mor"
-    ))
+    u.dependent_tiers.iter().any(|t| {
+        matches!(
+            t,
+            DependentTier::UserDefined(udt) if udt.label.as_str() == "mor"
+        )
+    })
 }
 
 /// Read the chat's `@Languages:` header and emit a concrete `LanguageSpec`.
@@ -190,94 +197,102 @@ fn extract_tokens(u: &Utterance) -> Vec<String> {
     out
 }
 
-/// Render the utterance's terminator as its canonical CHAT token (`.`, `?`,
-/// `!`, `+//.`, …). Falls back to `.` when the main tier has no terminator —
-/// BA2's `morphoanalyze` uses the same default for utterances missing one.
-fn extract_terminator(u: &Utterance) -> String {
-    u.main
-        .content
-        .terminator
-        .as_ref()
-        .map(|t| t.to_string())
-        .unwrap_or_else(|| ".".to_string())
-}
-
-/// Build `%mor:` / `%gra:` text from a per-utterance [`MorphosyntaxOutput`].
-///
-/// We attach the rendered text as `UserDefined` dependent tiers so the
-/// downstream serializer roundtrips correctly without us having to construct
-/// fully-typed `MorTier` / `GraTier` AST values from scratch (which would
-/// require synthesizing alignment indices). The serializer emits user-defined
-/// tiers as `%LABEL:\t<content>` — the resulting CHAT text re-parses into
-/// proper typed `%mor` / `%gra` tiers on the next round-trip.
-fn render_mor(out: &MorphosyntaxOutput) -> String {
-    if let Some(s) = &out.mor {
-        return s.clone();
-    }
-    let mut parts: Vec<String> = Vec::with_capacity(out.tokens.len());
-    for tok in &out.tokens {
-        parts.push(render_mor_token(tok));
-    }
-    parts.join(" ")
-}
-
-/// Render one token in UD `%mor` syntax: `POS|lemma[-Feature]*`.
-///
-/// UD-only per CLAUDE.md §17.3 — no `&` fusional markers.
-fn render_mor_token(tok: &MorphosyntaxToken) -> String {
-    let pos = if tok.upos.is_empty() { "x" } else { tok.upos.as_str() };
-    let lemma = if tok.lemma.is_empty() {
-        tok.text.as_str()
-    } else {
-        tok.lemma.as_str()
-    };
-    let mut s = format!("{pos}|{lemma}");
-    for feat in &tok.features {
+/// Build one typed [`MorWord`] from a structured unit (`pos|lemma-feat...`).
+fn build_mor_word(u: &MorphosyntaxUnit) -> MorWord {
+    let mut word = MorWord::new(
+        PosCategory::new(u.pos.as_str()),
+        MorStem::new(u.lemma.as_str()),
+    );
+    for feat in &u.features {
         if feat.is_empty() {
             continue;
         }
-        s.push('-');
-        s.push_str(feat);
+        // `flat` keeps the feature value verbatim (no `Key=Value` splitting);
+        // BA2 emits flat UD feature tokens (`Past`, `S3`, …).
+        word = word.with_feature(MorFeature::flat(feat.as_str()));
     }
-    s
+    word
 }
 
-fn render_gra(out: &MorphosyntaxOutput) -> String {
-    if let Some(s) = &out.gra {
-        return s.clone();
-    }
-    // Synthesize from head/deprel when present; otherwise a flat ROOT chain.
-    let mut parts: Vec<String> = Vec::with_capacity(out.tokens.len());
-    for (i, tok) in out.tokens.iter().enumerate() {
-        let idx = (i + 1) as u32;
-        let head = tok.head.unwrap_or(0);
-        let deprel = tok
-            .deprel
-            .as_deref()
-            .filter(|s| !s.is_empty())
-            .unwrap_or("ROOT");
-        parts.push(format!("{idx}|{head}|{deprel}"));
-    }
-    parts.join(" ")
+/// Build the `%gra` relation for a single unit/chunk, verbatim from the
+/// backend's computed `(index, head, deprel)`.
+fn build_relation(u: &MorphosyntaxUnit) -> GrammaticalRelation {
+    GrammaticalRelation::new(u.index as usize, u.head as usize, u.deprel.as_str())
 }
 
-/// Walk lines in document order; for each utterance, append a `%mor:` and
-/// `%gra:` user-defined tier from the matching `MorphosyntaxOutput`.
+/// Convert one [`MorphosyntaxToken`] into a typed [`Mor`] (head + post-clitics)
+/// plus the `%gra` relations for each of its chunks. Returns `None` for an
+/// empty-unit token (defensive — backends should never emit one).
+fn build_mor(tok: &MorphosyntaxToken) -> Option<(Mor, Vec<GrammaticalRelation>)> {
+    let mut units = tok.units.iter();
+    let main = units.next()?;
+    let mut mor = Mor::new(build_mor_word(main));
+    let mut relations = vec![build_relation(main)];
+    for clitic in units {
+        mor = mor.with_post_clitic(build_mor_word(clitic));
+        relations.push(build_relation(clitic));
+    }
+    Some((mor, relations))
+}
+
+/// Assemble the typed `(MorTier, GraTier)` for one tagged utterance.
 ///
-/// Idempotency note: this runner is not idempotent — running it twice would
-/// duplicate tiers. The pipeline driver guarantees one execution per task per
-/// source, so we keep the runner straightforward.
-/// Inject `%mor:` and `%gra:` for the subset of utterances we actually
-/// dispatched. `outputs` is the list of `(utterance_index, output)` pairs
-/// produced by `process_chat`'s skip-already-tagged loop; utterances absent
-/// from the list keep whatever tiers they already had.
+/// `terminator` is the utterance's typed main-tier terminator (`.`/`?`/…),
+/// read from the AST by the caller; only the terminator's `%gra` triple comes
+/// from the backend. Returns `Ok(None)` for a degenerate analysis (no tokens
+/// or no terminator) so the caller injects nothing — matching BA2, which emits
+/// no `%mor` line for such utterances.
+fn build_tiers(
+    out: &MorphosyntaxOutput,
+    terminator: Terminator,
+) -> BAResult<Option<(MorTier, GraTier)>> {
+    if out.tokens.is_empty() {
+        return Ok(None);
+    }
+    let Some(term) = out.terminator.as_ref() else {
+        return Ok(None);
+    };
+
+    let mut mor_items: Vec<Mor> = Vec::with_capacity(out.tokens.len());
+    let mut relations: Vec<GrammaticalRelation> = Vec::new();
+    for tok in &out.tokens {
+        let Some((mor, rels)) = build_mor(tok) else {
+            continue;
+        };
+        mor_items.push(mor);
+        relations.extend(rels);
+    }
+    if mor_items.is_empty() {
+        return Ok(None);
+    }
+
+    let slot = MorGraTerminatorSlot {
+        terminator,
+        relation: GrammaticalRelation::new(
+            term.index as usize,
+            term.head as usize,
+            term.deprel.as_str(),
+        ),
+    };
+    let (mor_tier, gra_tier) =
+        try_align_mor_gra(mor_items, relations, slot, Span::DUMMY).map_err(|e| {
+            BAError::Internal(format!(
+                "mor/gra alignment failed (utterance {}): {e}",
+                out.utterance_id
+            ))
+        })?;
+    Ok(Some((mor_tier, gra_tier)))
+}
+
+/// Build typed `%mor`/`%gra` tiers for the subset of utterances we dispatched
+/// and attach them. `outputs` is the `(utterance_index, output)` list produced
+/// by `process_chat`'s skip-already-tagged loop; utterances absent from the
+/// list keep whatever tiers they already had.
 fn inject_mor_gra_tiers_selective(
     chat: &mut Chat,
     outputs: &[(usize, MorphosyntaxOutput)],
 ) -> BAResult<()> {
     use std::collections::HashMap;
-    use talkbank_model::Span;
-    use talkbank_model::model::dependent_tier::UserDefinedDependentTier;
 
     let by_idx: HashMap<usize, &MorphosyntaxOutput> =
         outputs.iter().map(|(i, o)| (*i, o)).collect();
@@ -286,31 +301,18 @@ fn inject_mor_gra_tiers_selective(
     for line in chat.ast_mut().lines.0.iter_mut() {
         if let Line::Utterance(u) = line {
             if let Some(out) = by_idx.get(&idx) {
-                let mor_text = render_mor(out);
-                let gra_text = render_gra(out);
-                if !mor_text.is_empty() {
-                    let label = NonEmptyString::new("mor")
-                        .ok_or_else(|| BAError::Internal("mor label empty".into()))?;
-                    let content = NonEmptyString::new(&mor_text)
-                        .ok_or_else(|| BAError::Internal("mor content empty".into()))?;
-                    u.dependent_tiers
-                        .push(DependentTier::UserDefined(UserDefinedDependentTier {
-                            label,
-                            content,
-                            span: Span::DUMMY,
-                        }));
-                }
-                if !gra_text.is_empty() {
-                    let label = NonEmptyString::new("gra")
-                        .ok_or_else(|| BAError::Internal("gra label empty".into()))?;
-                    let content = NonEmptyString::new(&gra_text)
-                        .ok_or_else(|| BAError::Internal("gra content empty".into()))?;
-                    u.dependent_tiers
-                        .push(DependentTier::UserDefined(UserDefinedDependentTier {
-                            label,
-                            content,
-                            span: Span::DUMMY,
-                        }));
+                // The %mor/%gra terminator kind comes from the utterance's own
+                // typed terminator; default to a period when the main tier has
+                // none (BA2's fallback).
+                let terminator = u
+                    .main
+                    .content
+                    .terminator
+                    .clone()
+                    .unwrap_or(Terminator::Period { span: Span::DUMMY });
+                if let Some((mor_tier, gra_tier)) = build_tiers(out, terminator)? {
+                    u.dependent_tiers.push(DependentTier::Mor(mor_tier));
+                    u.dependent_tiers.push(DependentTier::Gra(gra_tier));
                 }
             }
             idx += 1;
@@ -328,23 +330,22 @@ mod tests {
     use super::*;
     use crate::base::NullSink;
     use crate::base::{TaskInput, TaskOutput};
+    use crate::proto::morphosyntax::GraTerminator;
     use crate::utils::SourceId;
     use async_trait::async_trait;
     use std::sync::Mutex;
 
-    /// Stub dispatcher: records inputs, returns canned outputs (token-per-token
-    /// when retokenize=false; doubles each token when retokenize=true so tests
-    /// can observe the difference).
+    /// Stub dispatcher: records inputs and returns one `noun|<token>` unit per
+    /// input token, with sequential `%gra` indices and a trailing PUNCT
+    /// terminator — enough to exercise the typed-tier construction path.
     struct RecordingDispatcher {
         seen: Mutex<Vec<MorphosyntaxInput>>,
-        expand_on_retokenize: bool,
     }
 
     impl RecordingDispatcher {
-        fn new(expand_on_retokenize: bool) -> Self {
+        fn new() -> Self {
             Self {
                 seen: Mutex::new(Vec::new()),
-                expand_on_retokenize,
             }
         }
     }
@@ -354,48 +355,36 @@ mod tests {
         async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
             let m = match input {
                 TaskInput::Morphosyntax(m) => m,
-                other => return Err(BAError::Internal(format!("unexpected: {:?}", other.task()))),
-            };
-            // Echo tokens. If retokenize, split each token by ' into two when
-            // it contains an apostrophe; otherwise mirror 1:1.
-            let mut out_tokens: Vec<MorphosyntaxToken> = Vec::new();
-            let resplit = self.expand_on_retokenize && m.retokenize;
-            for t in &m.tokens {
-                if resplit && t.contains('\'') {
-                    let (head, tail) = t.split_once('\'').unwrap_or((t.as_str(), ""));
-                    out_tokens.push(MorphosyntaxToken {
-                        text: head.to_owned(),
-                        lemma: head.to_owned(),
-                        upos: "pron".to_owned(),
-                        features: vec![],
-                        head: Some(2),
-                        deprel: Some("nsubj".to_owned()),
-                    });
-                    out_tokens.push(MorphosyntaxToken {
-                        text: tail.to_owned(),
-                        lemma: "be".to_owned(),
-                        upos: "aux".to_owned(),
-                        features: vec!["Pres".to_owned(), "S3".to_owned()],
-                        head: Some(0),
-                        deprel: Some("root".to_owned()),
-                    });
-                } else {
-                    out_tokens.push(MorphosyntaxToken {
-                        text: t.clone(),
-                        lemma: t.clone(),
-                        upos: "noun".to_owned(),
-                        features: vec![],
-                        head: Some(0),
-                        deprel: Some("root".to_owned()),
-                    });
+                other => {
+                    return Err(BAError::Internal(format!("unexpected: {:?}", other.task())));
                 }
-            }
+            };
+            let tokens: Vec<MorphosyntaxToken> = m
+                .tokens
+                .iter()
+                .enumerate()
+                .map(|(i, t)| MorphosyntaxToken {
+                    text: t.clone(),
+                    units: vec![MorphosyntaxUnit {
+                        pos: "noun".to_owned(),
+                        lemma: t.clone(),
+                        features: vec![],
+                        index: (i + 1) as u32,
+                        head: 0,
+                        deprel: "ROOT".to_owned(),
+                    }],
+                })
+                .collect();
+            let n = tokens.len() as u32;
             let out = MorphosyntaxOutput {
                 source_id: m.source_id.clone(),
                 utterance_id: m.utterance_id,
-                tokens: out_tokens,
-                mor: None,
-                gra: None,
+                tokens,
+                terminator: Some(GraTerminator {
+                    index: n + 1,
+                    head: if n == 0 { 0 } else { 1 },
+                    deprel: "PUNCT".to_owned(),
+                }),
             };
             self.seen.lock().expect("poisoned").push(m);
             Ok(out.into())
@@ -405,17 +394,16 @@ mod tests {
     const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tit's red .\n*CHI:\tcat dog .\n@End\n";
 
     #[tokio::test]
-    async fn injects_mor_no_retokenize() -> BAResult<()> {
+    async fn injects_typed_mor_and_gra() -> BAResult<()> {
         let chat = Chat::parse(FIXTURE, SourceId::try_new("fixture")?)?;
         let mut value = BAValue::Chat(chat);
-        let dispatcher = RecordingDispatcher::new(true);
+        let dispatcher = RecordingDispatcher::new();
         MorphosyntaxTaskRunner
             .apply(&mut value, &dispatcher, &NullSink)
             .await?;
 
-        // Inspect what the dispatcher saw — language resolves per-file
-        // from the chat's `@Languages:` header. Retokenize defaults to
-        // false (set the backend's own constructor to flip it).
+        // Inputs: one per utterance, language resolved per-file from the
+        // `@Languages:` header, retokenize off by default.
         let seen = dispatcher.seen.lock().expect("poisoned");
         assert_eq!(seen.len(), 2, "one input per utterance");
         assert!(!seen[0].retokenize);
@@ -425,6 +413,7 @@ mod tests {
             "per-file should resolve to eng from @Languages"
         );
         assert_eq!(seen[1].utterance_id, 1);
+        drop(seen);
 
         let chat = match value {
             BAValue::Chat(c) => c,
@@ -432,7 +421,10 @@ mod tests {
         };
         let s = chat.to_chat();
         assert!(s.contains("%mor:"), "missing %mor tier: {s}");
-        assert!(s.contains("noun|cat"), "expected UD-rendered noun|cat: {s}");
+        assert!(s.contains("%gra:"), "missing %gra tier: {s}");
+        assert!(s.contains("noun|cat"), "expected typed noun|cat: {s}");
+        // Terminator rendered by the typed writer (period after the last word).
+        assert!(s.contains("noun|dog ."), "expected terminator on %mor: {s}");
         Ok(())
     }
 
@@ -443,7 +435,7 @@ mod tests {
             source_id: SourceId::new_unchecked("audio"),
             path: "/dev/null".into(),
         });
-        let dispatcher = RecordingDispatcher::new(false);
+        let dispatcher = RecordingDispatcher::new();
         let err = MorphosyntaxTaskRunner
             .apply(&mut value, &dispatcher, &NullSink)
             .await

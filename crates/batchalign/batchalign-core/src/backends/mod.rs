@@ -10,9 +10,9 @@
 //!
 //! See `spec2.md` §10.
 
-use crate::utils::BAResult;
 use crate::base::Task;
 use crate::base::{TaskInput, TaskOutput};
+use crate::utils::BAResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

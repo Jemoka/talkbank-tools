@@ -286,31 +286,7 @@ fn media_from_string(path_str: &str) -> PyResult<BAValue> {
 }
 
 fn load_chat_input(c: &ChatInput) -> PyResult<Chat> {
-    let chat = load_chat_at(&c.path, &c.source_id)?;
-    // Attach a sibling media file so audio tasks (FA/align) can decode. CHAT's
-    // `@Media:` names the base (e.g. `clip` → `clip.wav`); we look for the
-    // `.cha` stem with a known audio extension in the same directory. Harmless
-    // when none exists (text-only tasks ignore media).
-    Ok(attach_sibling_media(chat, &c.path))
-}
-
-/// Audio extensions FA/align can decode, in resolution-preference order.
-const MEDIA_EXTS: &[&str] = &["wav", "mp3", "m4a", "flac", "ogg", "mp4"];
-
-/// If an audio file with the `.cha`'s stem sits beside it, attach it as media.
-fn attach_sibling_media(chat: Chat, cha_path: &std::path::Path) -> Chat {
-    let Some(stem) = cha_path.file_stem() else {
-        return chat;
-    };
-    let dir = cha_path.parent().unwrap_or_else(|| std::path::Path::new("."));
-    for ext in MEDIA_EXTS {
-        let candidate = dir.join(stem).with_extension(ext);
-        if candidate.is_file() {
-            let sid = chat.source_id().clone();
-            return chat.with_media(MediaInput::new(sid, candidate));
-        }
-    }
-    chat
+    load_chat_at(&c.path, &c.source_id)
 }
 
 fn load_chat_at(path: &std::path::Path, sid: &SourceId) -> PyResult<Chat> {

@@ -38,11 +38,17 @@ impl TaskRunner for TranslateTaskRunner {
             }
         };
 
-        sink.emit(ProgressEvent::stage_started(chat.source_id(), Task::Translate));
+        sink.emit(ProgressEvent::stage_started(
+            chat.source_id(),
+            Task::Translate,
+        ));
 
         let utterances = utterance_texts(chat);
         if utterances.is_empty() {
-            sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Translate));
+            sink.emit(ProgressEvent::stage_injected(
+                chat.source_id(),
+                Task::Translate,
+            ));
             return Ok(());
         }
 
@@ -62,7 +68,10 @@ impl TaskRunner for TranslateTaskRunner {
 
         inject_translation_tiers(chat, &output.utterances)?;
 
-        sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Translate));
+        sink.emit(ProgressEvent::stage_injected(
+            chat.source_id(),
+            Task::Translate,
+        ));
         Ok(())
     }
 }
@@ -79,12 +88,6 @@ fn utterance_texts(chat: &Chat) -> Vec<String> {
                 }
             }
         });
-        // BA2 feeds the terminator to the translator too (`i.strip(...)`
-        // includes it), so the translation carries sentence-final punctuation
-        // that the backend then spaces out (`apple .`). Append it here.
-        if let Some(term) = u.main.content.terminator.as_ref() {
-            parts.push(term.to_string());
-        }
         out.push(parts.join(" "));
     }
     out

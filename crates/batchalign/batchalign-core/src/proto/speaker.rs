@@ -4,8 +4,8 @@
 //! SpeakerOutput, Diarization, DiarizationSegment`. !!!
 
 use crate::register_proto_schema;
-use crate::utils::{PreparedAudio, SpeakerLabel};
 use crate::utils::SourceId;
+use crate::utils::{PreparedAudio, SpeakerLabel};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

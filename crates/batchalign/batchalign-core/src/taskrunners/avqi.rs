@@ -44,8 +44,8 @@ impl TaskRunner for AvqiTaskRunner {
 
         sink.emit(ProgressEvent::stage_started(&media.source_id, Task::Avqi));
 
-        let audio = prepare_pcm(&media)
-            .map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
+        let audio =
+            prepare_pcm(&media).map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
 
         let input = AvqiInput {
             source_id: media.source_id.clone(),

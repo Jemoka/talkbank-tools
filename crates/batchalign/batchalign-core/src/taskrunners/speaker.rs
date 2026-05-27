@@ -41,10 +41,13 @@ impl TaskRunner for SpeakerTaskRunner {
             BAError::Internal("SpeakerTaskRunner: chat has no attached media".into())
         })?;
 
-        sink.emit(ProgressEvent::stage_started(chat.source_id(), Task::Speaker));
+        sink.emit(ProgressEvent::stage_started(
+            chat.source_id(),
+            Task::Speaker,
+        ));
 
-        let audio = prepare_pcm(&media)
-            .map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
+        let audio =
+            prepare_pcm(&media).map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
 
         let input = SpeakerInput {
             source_id: chat.source_id().clone(),
@@ -60,7 +63,10 @@ impl TaskRunner for SpeakerTaskRunner {
 
         relabel_utterances_by_diarization(chat, &output)?;
 
-        sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Speaker));
+        sink.emit(ProgressEvent::stage_injected(
+            chat.source_id(),
+            Task::Speaker,
+        ));
         Ok(())
     }
 }

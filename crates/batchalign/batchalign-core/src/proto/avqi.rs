@@ -3,9 +3,9 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::AvqiInput,
 //! AvqiOutput`. !!!
 
+use crate::metrics::MetricsTable;
 use crate::register_proto_schema;
 use crate::utils::PreparedAudio;
-use crate::metrics::MetricsTable;
 use crate::utils::SourceId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

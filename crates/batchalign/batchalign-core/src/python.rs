@@ -5,10 +5,10 @@
 //! its own `cdylib`.
 
 use crate::backends::BatchPolicy;
-use crate::utils::{ChatInput, MediaInput, PairedInput};
-use crate::base::{ProgressEvent, ProgressKind};
 use crate::base::Task;
+use crate::base::{ProgressEvent, ProgressKind};
 use crate::utils::SourceId;
+use crate::utils::{ChatInput, MediaInput, PairedInput};
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 

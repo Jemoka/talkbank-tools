@@ -2,9 +2,9 @@
 //!
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::FaInput, FaOutput`. !!!
 
+use crate::proto::asr::{AsrSegment, LanguageSpec};
 use crate::register_proto_schema;
 use crate::utils::PreparedAudio;
-use crate::proto::asr::{AsrSegment, LanguageSpec};
 use crate::utils::SourceId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

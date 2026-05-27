@@ -8,10 +8,12 @@ preprocessing that BA2's `morphoanalyze` did (deriving the terminator,
 cleaning the line, running Stanza with `tokenize_no_ssplit`, taking the first
 sentence, and the `~part|s verb` post-substitution).
 
-The Rust morphosyntax runner passes the backend's pre-rendered `mor`/`gra`
-strings straight through (`render_mor`/`render_gra` return `out.mor`/`out.gra`
-verbatim when present), so producing BA2-identical tier strings here is
-sufficient for `%mor`/`%gra` parity — no Rust changes needed for rendering.
+This backend emits a fully *structured* analysis — per main-tier word, a head
+morpho-unit plus `~`-post-clitics, and per chunk a `%gra` triple (see
+`render.SentenceAnalysis`). It never builds `%mor`/`%gra` tier text. The Rust
+morphosyntax taskrunner turns that structure into typed `MorTier`/`GraTier`
+values and serializes them with the official CHAT writer; there is no
+pre-rendered-string escape hatch.
 
 Pipeline config mirrors BA2 (`ud.py:_build_nlp`):
   - `tokenize_no_ssplit=True` — the whole utterance is one sentence.
@@ -41,8 +43,11 @@ _MWT_EXCLUSION = frozenset(
     }
 )
 
-# Post-substitution BA2 applies to the rendered %mor (ud.py:826).
-_PART_S_VERB_RE = re.compile(r"~part\|s verb\|(\w+)-Ger-S")
+# NOTE: BA2 applies one post-render string fixup to the %mor tier
+# (`~part|s verb|X-Ger-S` → `~aux|is verb|X-Part-Pres-S`, ud.py:826) for a rare
+# English gerund+'s pattern. It operated on rendered tier text, which we no
+# longer build; reproducing it structurally is deferred (TODO) until a parity
+# fixture exercises it.
 
 # CHAT-marker cleanup applied to the line before Stanza (BA2 ud.py:730).
 _CLEANUP_RE = re.compile(r"\+<|\+/|\(|\)|\+\^|\+//|\+\.\.\.|_|[#]")
@@ -140,9 +145,11 @@ class StanzaBackend(Morphosyntax):
 
     def call(self, batch: list[Any]) -> list[Any]:
         from batchalign._core.proto import (
+            GraTerminator,
             MorphosyntaxInput,
             MorphosyntaxOutput,
             MorphosyntaxToken,
+            MorphosyntaxUnit,
         )
 
         outputs: list[Any] = []
@@ -152,38 +159,52 @@ class StanzaBackend(Morphosyntax):
                     f"StanzaBackend does not handle input type: {type(item).__name__}"
                 )
             text = item.text or " ".join(item.tokens)
-            # The Rust runner strips the utterance terminator before building
-            # the token list, so it ships it separately. Pre-`terminator`
-            # builds (no field) default to a period.
-            ending = getattr(item, "terminator", "") or "."
-            tokens, mor_line, gra_line = self._tag_utterance(text, ending)
+            analysis = self._tag_utterance(text)
+
+            tokens: list[Any] = []
+            for word in analysis.words:
+                units = [
+                    MorphosyntaxUnit(
+                        pos=u.pos,
+                        lemma=u.lemma,
+                        features=list(u.features),
+                        index=u.index,
+                        head=u.head,
+                        deprel=u.deprel,
+                    )
+                    for u in word.units
+                ]
+                tokens.append(MorphosyntaxToken(text=word.text, units=units))
+
+            terminator = None
+            if tokens and analysis.terminator is not None:
+                t_index, t_head, t_deprel = analysis.terminator
+                terminator = GraTerminator(index=t_index, head=t_head, deprel=t_deprel)
+
             outputs.append(
                 MorphosyntaxOutput(
                     source_id=item.source_id,
                     utterance_id=item.utterance_id,
                     tokens=tokens,
-                    mor=mor_line,
-                    gra=gra_line,
+                    terminator=terminator,
                 )
             )
         return outputs
 
     # ----- internals -----------------------------------------------------
 
-    def _tag_utterance(self, text: str, ending: str) -> tuple[list[Any], str, str]:
-        """Run Stanza on one utterance and render BA2-faithful tiers.
+    def _tag_utterance(self, text: str) -> "render.SentenceAnalysis":
+        """Run Stanza on one utterance and return its structured analysis.
 
-        Returns `(tokens, mor_line, gra_line)`: `tokens` is a best-effort
-        list of `MorphosyntaxToken` (one per Stanza word); `mor_line` /
-        `gra_line` are the pre-rendered tier strings (no leading label) that
-        the Rust runner drops straight into the AST.
+        The result is a [`render.SentenceAnalysis`] (word groups + terminator
+        `%gra` relation). The terminator *kind* (`.`/`?`/…) is applied later by
+        the Rust runner from the typed main-tier terminator, so we pass a
+        placeholder delimiter here.
         """
-        from batchalign._core.proto import MorphosyntaxToken
-
         line_cut = render.clean_sentence(text)
         line_cut = _CLEANUP_RE.sub("", line_cut).strip()
         if not line_cut:
-            return [], "", ""
+            return render.SentenceAnalysis([], None)
 
         # BA2 spaces commas out before tokenizing so they tokenize as their own
         # word (`cm|cm`). The runner drops main-tier separators, so this only
@@ -195,34 +216,11 @@ class StanzaBackend(Morphosyntax):
         doc = self._nlp(self._current_sentence)
         sents = getattr(doc, "sentences", [])
         if not sents:
-            return [], "", ""
+            return render.SentenceAnalysis([], None)
 
         # BA2 processes only the first sentence (tokenize_no_ssplit makes the
         # whole utterance one sentence).
-        sent = sents[0]
-        mor_line, gra_line = render.parse_sentence(sent, ending, [], self._lang)
-        mor_line = _PART_S_VERB_RE.sub(r"~aux|is verb|\1-Part-Pres-S", mor_line)
-
-        tokens: list[MorphosyntaxToken] = []
-        for word in sent.words:
-            tokens.append(
-                MorphosyntaxToken(
-                    text=getattr(word, "text", ""),
-                    lemma=getattr(word, "lemma", "") or getattr(word, "text", ""),
-                    upos=getattr(word, "upos", None) or getattr(word, "pos", "X"),
-                    features=self._split_feats(getattr(word, "feats", None)),
-                    head=getattr(word, "head", None),
-                    deprel=getattr(word, "deprel", None),
-                )
-            )
-        return tokens, mor_line, gra_line
-
-    @staticmethod
-    def _split_feats(feats: Any) -> list[str]:
-        """Split a Stanza `feats` string ("Tense=Past|Mood=Ind") into UD values."""
-        if not feats:
-            return []
-        return [kv.split("=", 1)[1] for kv in feats.split("|") if "=" in kv]
+        return render.parse_sentence(sents[0], ".", [], self._lang)
 
 
 __all__ = ["StanzaBackend"]

@@ -258,9 +258,7 @@ impl Chat<Validated> {
             // `talkbank-model/src/errors/parse_error.rs:328`). Pass that
             // through instead of summarising as a count — downstream Python
             // CLI surfaces it directly to the user.
-            talkbank_transform::PipelineError::Parse(errs) => {
-                BAError::Parse(format!("{errs}"))
-            }
+            talkbank_transform::PipelineError::Parse(errs) => BAError::Parse(format!("{errs}")),
             talkbank_transform::PipelineError::Validation(errs) => {
                 let joined = errs
                     .iter()
@@ -268,35 +266,6 @@ impl Chat<Validated> {
                     .collect::<Vec<_>>()
                     .join("; ");
                 BAError::Validation(joined)
-            }
-            other => BAError::Internal(format!("pipeline: {other}")),
-        })?;
-        let collector = talkbank_model::ErrorCollector::new();
-        let validated = chat_file.validate_into(&collector, None);
-        Ok(Self {
-            ast: validated,
-            source_id,
-            media: None,
-            _state: PhantomData,
-        })
-    }
-
-    /// Parse CHAT text WITHOUT the structural-validation gate.
-    ///
-    /// Identical to [`Chat::parse`] except it omits `with_validation()`, so
-    /// genuinely malformed input (parse errors) still fails, but *validation*
-    /// findings (E-codes like `E724` circular `%gra`) are collected
-    /// non-fatally rather than rejecting the document. This is for re-parsing
-    /// text **we generated ourselves** — e.g. Compare's `annotated_main`,
-    /// which carries the morphotag `%gra` whose BA2-faithful ROOT assignment
-    /// is intentionally retained for parity even though it trips a validator
-    /// invariant. Do NOT use this for untrusted user input; use
-    /// [`Chat::parse`] there so real errors surface.
-    pub fn parse_lenient(text: &str, source_id: SourceId) -> BAResult<Self> {
-        let options = ParseValidateOptions::default();
-        let chat_file = parse_and_validate(text, options).map_err(|e| match e {
-            talkbank_transform::PipelineError::Parse(errs) => {
-                BAError::Parse(format!("{errs}"))
             }
             other => BAError::Internal(format!("pipeline: {other}")),
         })?;
@@ -482,9 +451,8 @@ impl BAValue {
             // source, but downstream code shouldn't be writing one either —
             // return a placeholder so error paths don't panic.
             BAValue::Cons { head, .. } => head.source_id(),
-            BAValue::Nil => SourceId::try_new("nil").unwrap_or_else(|_| {
-                SourceId::try_new("unknown").expect("'unknown' is non-empty")
-            }),
+            BAValue::Nil => SourceId::try_new("nil")
+                .unwrap_or_else(|_| SourceId::try_new("unknown").expect("'unknown' is non-empty")),
         }
     }
 
@@ -564,12 +532,7 @@ fn write_metrics_csv(artifact: &MetricsArtifact, path: &Path) -> BAResult<()> {
             .table
             .schema
             .iter()
-            .map(|col| {
-                row.columns
-                    .get(col)
-                    .map(json_cell)
-                    .unwrap_or_default()
-            })
+            .map(|col| row.columns.get(col).map(json_cell).unwrap_or_default())
             .collect();
         write_csv_row(&mut out, &cells);
     }
@@ -770,9 +733,7 @@ impl<T: TaskRunner + 'static> DynTaskRunner for T {
         dispatcher: &'a dyn Dispatcher,
         sink: &'a dyn ProgressSink,
     ) -> BoxFuture<'a, BAResult<()>> {
-        Box::pin(async move {
-            <T as TaskRunner>::apply(self, value, dispatcher, sink).await
-        })
+        Box::pin(async move { <T as TaskRunner>::apply(self, value, dispatcher, sink).await })
     }
 }
 

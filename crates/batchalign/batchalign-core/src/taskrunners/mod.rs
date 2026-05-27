@@ -14,8 +14,8 @@ pub mod speaker;
 pub mod translate;
 pub mod utseg;
 
-use crate::base::Task;
 use crate::base::DynTaskRunner;
+use crate::base::Task;
 
 /// Return the canonical (default) runner for a given `Task`.
 ///
@@ -26,15 +26,15 @@ use crate::base::DynTaskRunner;
 /// for the phasing.
 pub fn canonical(task: Task) -> Box<dyn DynTaskRunner> {
     match task {
-        Task::Asr          => Box::new(asr::AsrTaskRunner),
-        Task::Fa           => Box::new(fa::FaTaskRunner),
-        Task::Speaker      => Box::new(speaker::SpeakerTaskRunner),
-        Task::UtSeg        => Box::new(utseg::UtSegTaskRunner),
+        Task::Asr => Box::new(asr::AsrTaskRunner),
+        Task::Fa => Box::new(fa::FaTaskRunner),
+        Task::Speaker => Box::new(speaker::SpeakerTaskRunner),
+        Task::UtSeg => Box::new(utseg::UtSegTaskRunner),
         Task::Morphosyntax => Box::new(morphosyntax::MorphosyntaxTaskRunner),
-        Task::Translate    => Box::new(translate::TranslateTaskRunner),
-        Task::Coref        => Box::new(coref::CorefTaskRunner),
-        Task::Compare      => Box::new(compare::CompareTaskRunner),
-        Task::OpenSmile    => Box::new(opensmile::OpenSmileTaskRunner),
-        Task::Avqi         => Box::new(avqi::AvqiTaskRunner),
+        Task::Translate => Box::new(translate::TranslateTaskRunner),
+        Task::Coref => Box::new(coref::CorefTaskRunner),
+        Task::Compare => Box::new(compare::CompareTaskRunner),
+        Task::OpenSmile => Box::new(opensmile::OpenSmileTaskRunner),
+        Task::Avqi => Box::new(avqi::AvqiTaskRunner),
     }
 }

@@ -29,8 +29,8 @@ use crate::proto::compare::{CompareInput, CompareOutput};
 use crate::utils::{BAError, BAResult, SourceId};
 use async_trait::async_trait;
 use smol_str::SmolStr;
-use std::mem;
 use std::collections::BTreeMap;
+use std::mem;
 
 pub struct CompareTaskRunner;
 
@@ -89,12 +89,10 @@ impl TaskRunner for CompareTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Compare(input)).await?;
         let output: CompareOutput = output_raw.try_into()?;
 
-        // Lenient re-parse: `annotated_main` is text we generated, and it
-        // carries the morphotag `%gra` whose BA2-faithful ROOT assignment trips
-        // the `%gra` circular-dependency invariant (E724). We keep that tier
-        // verbatim for parity, so validation findings must be non-fatal here.
-        let annotated: Chat = Chat::parse_lenient(&output.annotated_main, main_source_id.clone())
-            .map_err(|e| BAError::Worker(format!("compare: failed to re-parse annotated_main: {e}")))?;
+        let annotated: Chat =
+            Chat::parse(&output.annotated_main, main_source_id.clone()).map_err(|e| {
+                BAError::Worker(format!("compare: failed to re-parse annotated_main: {e}"))
+            })?;
         // Keep media reference if the upstream Paired carried one (won't
         // typically be the case for Compare, but harmless and consistent).
         let attached = match main_chat.media() {
@@ -114,7 +112,10 @@ impl TaskRunner for CompareTaskRunner {
             BAValue::Metrics(metrics_artifact),
         ]);
 
-        sink.emit(ProgressEvent::stage_injected(&main_source_id, Task::Compare));
+        sink.emit(ProgressEvent::stage_injected(
+            &main_source_id,
+            Task::Compare,
+        ));
         Ok(())
     }
 }
@@ -144,7 +145,10 @@ fn compare_metrics_to_artifact(output: &CompareOutput, source_id: &SourceId) -> 
     }
 
     let mut columns: BTreeMap<String, serde_json::Value> = BTreeMap::new();
-    columns.insert("file".to_owned(), serde_json::Value::String(m.file_label.clone()));
+    columns.insert(
+        "file".to_owned(),
+        serde_json::Value::String(m.file_label.clone()),
+    );
     columns.insert(
         "wer".to_owned(),
         serde_json::Value::from(format!("{:.4}", m.wer)),

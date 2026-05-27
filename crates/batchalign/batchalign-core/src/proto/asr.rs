@@ -7,8 +7,8 @@
 //! `tests/proto_parity.rs` pin existence only.
 
 use crate::register_proto_schema;
-use crate::utils::{PreparedAudio, SpeakerLabel};
 use crate::utils::SourceId;
+use crate::utils::{PreparedAudio, SpeakerLabel};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;

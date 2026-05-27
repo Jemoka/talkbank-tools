@@ -53,11 +53,12 @@ from batchalign._core._proto_generated import (  # noqa: F401
     UtSegOutput,
     UtteranceSpan,
     # Morphosyntax
+    GraTerminator,
     MorphosyntaxInput,
     MorphosyntaxOutput,
     MorphosyntaxToken,
+    MorphosyntaxUnit,
     MorphosyntaxUtterance,
-    TaggedUtterance,
     # Translate
     TranslateInput,
     TranslateOutput,

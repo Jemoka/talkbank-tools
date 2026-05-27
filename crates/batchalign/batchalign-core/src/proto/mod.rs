@@ -39,8 +39,8 @@ pub use compare::{CompareInput, CompareMetrics, CompareMetricsPos, CompareOutput
 pub use coref::{CorefInput, CorefOutput};
 pub use fa::{FaInput, FaOutput};
 pub use morphosyntax::{
-    MorphosyntaxInput, MorphosyntaxOutput, MorphosyntaxToken, MorphosyntaxUtterance,
-    TaggedUtterance,
+    GraTerminator, MorphosyntaxInput, MorphosyntaxOutput, MorphosyntaxToken, MorphosyntaxUnit,
+    MorphosyntaxUtterance,
 };
 pub use opensmile::{OpenSmileInput, OpenSmileOutput};
 pub use speaker::{Diarization, DiarizationSegment, SpeakerInput, SpeakerOutput};

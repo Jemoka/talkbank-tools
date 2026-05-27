@@ -43,10 +43,13 @@ impl TaskRunner for OpenSmileTaskRunner {
             }
         };
 
-        sink.emit(ProgressEvent::stage_started(&media.source_id, Task::OpenSmile));
+        sink.emit(ProgressEvent::stage_started(
+            &media.source_id,
+            Task::OpenSmile,
+        ));
 
-        let audio = prepare_pcm(&media)
-            .map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
+        let audio =
+            prepare_pcm(&media).map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
 
         let input = OpenSmileInput {
             source_id: media.source_id.clone(),

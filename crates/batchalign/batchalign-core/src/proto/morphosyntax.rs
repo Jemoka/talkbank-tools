@@ -1,24 +1,32 @@
 //! Morphosyntax proto types — drive Stanza-style UD POS / `%mor` / `%gra` tagging.
 //!
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::MorphosyntaxInput,
-//! MorphosyntaxOutput, MorphosyntaxUtterance, MorphosyntaxToken, TaggedUtterance`. !!!
+//! MorphosyntaxOutput, MorphosyntaxToken, MorphosyntaxUnit, GraTerminator,
+//! MorphosyntaxUtterance`. !!!
+//!
+//! ## Structured, never stringly
+//!
+//! The backend emits a fully *structured* morphological analysis: per main-tier
+//! word, a head morpho-unit plus any `~`-joined post-clitics, and per chunk a
+//! `%gra` dependency triple. It never emits rendered `%mor` / `%gra` tier text.
+//! The [`MorphosyntaxTaskRunner`](crate::taskrunners) turns this structure into
+//! typed `talkbank_model` `MorTier` / `GraTier` values via
+//! `talkbank_model::alignment::try_align_mor_gra` and serializes them with the
+//! official CHAT writer. There is deliberately no pre-rendered-string escape
+//! hatch in this pipeline — building CHAT text by string concatenation is
+//! forbidden (see `CLAUDE.md`).
 //!
 //! ## Per-utterance dispatch
 //!
 //! Unlike BA2's whole-file pipeline, the rewrite dispatches **one utterance at a
 //! time** to the backend. The backend keeps its language-specific resources
-//! (Stanza pipeline, BERT segmenter) loaded across calls; per-call payloads
-//! carry only what the tagger needs for this utterance: pre-split tokens
-//! (so the tagger preserves the upstream tokenization unless `retokenize`),
-//! the raw text (for retokenize=true), and the resolved language.
-//!
-//! `MorphosyntaxUtterance` / `TaggedUtterance` are retained as standalone
-//! data shapes for the Python parity probe (`tests/proto_parity.rs`) and for
-//! cases where engines want to ship grouped batches; the runtime dispatch path
-//! is per-utterance.
+//! (Stanza pipeline) loaded across calls; per-call payloads carry only what the
+//! tagger needs for this utterance: pre-split tokens (so the tagger preserves
+//! the upstream tokenization unless `retokenize`), the raw text (for
+//! `retokenize=true`), and the resolved language.
 
-use crate::register_proto_schema;
 use crate::proto::asr::LanguageSpec;
+use crate::register_proto_schema;
 use crate::utils::SourceId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -36,43 +44,70 @@ pub struct MorphosyntaxUtterance {
     pub text: String,
 }
 
-/// One tagged token in a tagged utterance.
+/// One morpho-unit: a single `pos|lemma-feat...` analysis together with its
+/// `%gra` dependency relation.
+///
+/// A unit is the atom of `%mor`: it renders to exactly one
+/// [`MorWord`](talkbank_model::model::MorWord) (`pos|lemma` plus hyphen-joined
+/// features) and occupies exactly one `%gra` *chunk*. A plain word is one unit;
+/// a clitic/MWT word (e.g. `it's`) is a [`MorphosyntaxToken`] holding several
+/// units, each its own chunk.
+///
+/// The `%gra` triple (`index` / `head` / `deprel`) is carried verbatim from the
+/// backend rather than recomputed in Rust: BA2's dependency numbering has
+/// quirks (skipped tokens shift indices; a ROOT's head renders as the trailing
+/// chunk index) that the backend already reproduces. Passing the computed
+/// triple keeps parity without re-deriving that logic in two places.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct MorphosyntaxToken {
-    /// Surface form.
-    pub text: String,
-    /// Lemma (UD).
+pub struct MorphosyntaxUnit {
+    /// CHAT part-of-speech (lowercase UD, e.g. `pron`, `verb`, `det`). May carry
+    /// a leading `0` for an untranscribed/zero form (BA2 convention).
+    pub pos: String,
+    /// Cleaned lemma / stem (UD). Never contains `&` fusional markers.
     pub lemma: String,
-    /// UD POS tag — emitted as the `%mor` POS field verbatim.
-    pub upos: String,
-    /// UD features in `Key=Value` or flat form, lossless. Emitted hyphen-joined
-    /// after the lemma (`verb|run-Past-S3`). Never use `&` markers.
+    /// Ordered morphological features, hyphen-joined after the lemma by the
+    /// writer (`verb|run-Past-S3`). Each entry is one feature token (`Past`,
+    /// `S3`, …) with no separators.
     pub features: Vec<String>,
-    /// Optional dependency head index (1-based within the utterance, 0 for ROOT).
-    #[serde(default)]
-    pub head: Option<u32>,
-    /// Optional UD dependency relation label (e.g. `nsubj`, `root`, `punct`).
-    #[serde(default)]
-    pub deprel: Option<String>,
+    /// 1-based `%gra` chunk index for this unit (BA2 numbering, skip-adjusted).
+    pub index: u32,
+    /// `%gra` head: the chunk index this unit attaches to (`0` = root in UD;
+    /// BA2's trailing-chunk quirk for ROOT is preserved verbatim).
+    pub head: u32,
+    /// `%gra` dependency relation label (uppercased, `:`→`-`, e.g. `NSUBJ`,
+    /// `ROOT`, `AUX`).
+    pub deprel: String,
 }
 
-/// One utterance after tagging — carries optional rendered `%mor` and `%gra`
-/// strings the runner can drop into the AST directly.
+/// One main-tier word's morphology: a head unit followed by `~`-joined
+/// post-clitic units.
 ///
-/// Retained as a stable parity name; the per-call runtime shape is
-/// [`MorphosyntaxOutput`].
+/// Maps 1:1 to a typed [`Mor`](talkbank_model::model::Mor): `units[0]` is the
+/// `main` [`MorWord`](talkbank_model::model::MorWord); `units[1..]` are the
+/// `post_clitics`. A non-clitic word has exactly one unit.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub struct TaggedUtterance {
-    /// Echoes the input order; runners use this to reattach.
-    pub speaker: String,
-    /// Tokens in document order.
-    pub tokens: Vec<MorphosyntaxToken>,
-    /// Pre-rendered `%mor` content (no leading `%mor:` label).
-    #[serde(default)]
-    pub mor: Option<String>,
-    /// Pre-rendered `%gra` content.
-    #[serde(default)]
-    pub gra: Option<String>,
+pub struct MorphosyntaxToken {
+    /// Surface form of the whole word (diagnostics / alignment aid).
+    pub text: String,
+    /// Head unit (`[0]`) plus any post-clitic units. Always non-empty for a
+    /// rendered word.
+    pub units: Vec<MorphosyntaxUnit>,
+}
+
+/// The trailing terminator's `%gra` relation (BA2 appends one `…|root|PUNCT`
+/// relation after the word chunks).
+///
+/// The terminator *kind* (`.`/`?`/`!`/…) is read from the utterance's typed
+/// main-tier terminator by the runner, so only the dependency triple travels
+/// here.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct GraTerminator {
+    /// 1-based chunk index of the terminator (one past the last word chunk).
+    pub index: u32,
+    /// Head chunk index the terminator attaches to (the ROOT chunk).
+    pub head: u32,
+    /// Relation label — conventionally `PUNCT`.
+    pub deprel: String,
 }
 
 /// Per-utterance input to the morphosyntax backend.
@@ -91,8 +126,8 @@ pub struct MorphosyntaxInput {
     pub language: LanguageSpec,
     /// Pre-segmented tokens from the upstream AST.
     ///
-    /// When `retokenize` is `false` the backend MUST use these tokens
-    /// verbatim and produce exactly `tokens.len()` `%mor` items.
+    /// When `retokenize` is `false` the backend MUST treat these tokens as the
+    /// authoritative word boundaries.
     pub tokens: Vec<String>,
     /// When `true`, the backend may re-split tokens (e.g. expanding
     /// `gonna` → `going to`). When `false`, the upstream tokenization is
@@ -105,47 +140,33 @@ pub struct MorphosyntaxInput {
     /// `tokens.join(" ")` when empty).
     #[serde(default)]
     pub text: String,
-    /// The utterance's CHAT terminator, rendered as its canonical token
-    /// (`.`, `?`, `!`, `+//.`, …). BA2's morphosyntax appends this verbatim
-    /// to the `%mor` tier and points `%gra`'s final PUNCT at ROOT; the
-    /// runner strips the terminator out of `tokens`/`text`, so it travels
-    /// here instead. Defaults to `.` for inputs that predate this field.
-    #[serde(default = "default_terminator")]
-    pub terminator: String,
-}
-
-/// Default terminator (`.`) for `MorphosyntaxInput` — keeps deserialization of
-/// payloads written before the field existed working, and matches BA2's
-/// fallback for utterances missing an explicit terminator.
-fn default_terminator() -> String {
-    ".".to_string()
 }
 
 /// Per-utterance output from the morphosyntax backend.
 ///
 /// One per [`MorphosyntaxInput`]; `utterance_id` echoes input so the runner
-/// can reattach defensively even if the engine reorders.
+/// can reattach defensively even if the engine reorders. An empty `tokens`
+/// list means "no `%mor`/`%gra` for this utterance" (BA2 emits nothing for
+/// degenerate/empty analyses) — the runner injects no tiers in that case.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct MorphosyntaxOutput {
     /// Echoes the input's `source_id` for routing.
     pub source_id: SourceId,
     /// Echoes the input's `utterance_id`.
     pub utterance_id: u32,
-    /// Tokens in document order. When `retokenize=true` this may differ
-    /// in length from the input `tokens`.
+    /// One [`MorphosyntaxToken`] per main-tier word, in document order. Each
+    /// carries its head unit + post-clitics; together their units form the
+    /// `%gra` chunk sequence.
     pub tokens: Vec<MorphosyntaxToken>,
-    /// Pre-rendered `%mor` content (no leading `%mor:` label). If absent,
-    /// the runner renders from `tokens`.
+    /// The terminator's `%gra` relation, present whenever `tokens` is
+    /// non-empty. `None` only for degenerate analyses with no tiers.
     #[serde(default)]
-    pub mor: Option<String>,
-    /// Pre-rendered `%gra` content. If absent, the runner renders from
-    /// `tokens` (using head/deprel where available).
-    #[serde(default)]
-    pub gra: Option<String>,
+    pub terminator: Option<GraTerminator>,
 }
 
 register_proto_schema!(MorphosyntaxUtterance);
+register_proto_schema!(MorphosyntaxUnit);
 register_proto_schema!(MorphosyntaxToken);
-register_proto_schema!(TaggedUtterance);
+register_proto_schema!(GraTerminator);
 register_proto_schema!(MorphosyntaxInput);
 register_proto_schema!(MorphosyntaxOutput);

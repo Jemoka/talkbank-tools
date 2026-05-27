@@ -127,8 +127,7 @@ fn compare_one(input: CompareInput) -> BAResult<CompareOutput> {
         }
     }
 
-    let conformed_main_text: Vec<&str> =
-        main_conformed.iter().map(|t| t.text.as_str()).collect();
+    let conformed_main_text: Vec<&str> = main_conformed.iter().map(|t| t.text.as_str()).collect();
     // POS tag for each conformed main token, drawn from the source word's
     // `%mor:` POS. Multi-token conform expansions (`gonna → going to`) share
     // the source word's single POS — BA2 does the same since `_get_pos`
@@ -189,22 +188,13 @@ fn compare_one(input: CompareInput) -> BAResult<CompareOutput> {
 
         // Phase D: Levenshtein alignment.
         let alignment = levenshtein_align(&window_main, &g_text);
-        let mut cmp = build_utt_cmp(
-            &alignment,
-            &window_main,
-            &window_main_pos,
-            &g_text,
-            &g_pos,
-        );
+        let mut cmp = build_utt_cmp(&alignment, &window_main, &window_main_pos, &g_text, &g_pos);
 
         // Phase E: re-append the gold utterance's terminator so the rendered
         // `%xsrep:` / `%xsmor:` tiers end with `.` / `?` / `!` exactly as
         // BA2 does. This is BA2's `gold_punct` reinsertion specialised to
         // the terminator (the only mid-or-end punctuation our corpus has).
-        if let Some(term) = gold_terminators
-            .get(gold_utt_idx)
-            .and_then(|t| t.as_ref())
-        {
+        if let Some(term) = gold_terminators.get(gold_utt_idx).and_then(|t| t.as_ref()) {
             cmp.tokens
                 .push((term.clone(), TokStatus::Match, TokPos::Punct));
         }
@@ -304,9 +294,7 @@ fn parse_chat(text: &str) -> BAResult<ChatFile<ModelValidated>> {
         // message) — see `talkbank-model/src/errors/parse_error.rs:328`.
         // The CLI surfaces this verbatim; collapsing to a count strips
         // every actionable detail.
-        talkbank_transform::PipelineError::Parse(errs) => {
-            BAError::Parse(format!("{errs}"))
-        }
+        talkbank_transform::PipelineError::Parse(errs) => BAError::Parse(format!("{errs}")),
         talkbank_transform::PipelineError::Validation(errs) => {
             let joined = errs
                 .iter()
@@ -428,14 +416,12 @@ fn utterance_pos_by_index(utt: &Utterance) -> Option<Vec<String>> {
         let _ = mor.write_content(&mut s);
         s
     } else {
-        utt.dependent_tiers
-            .iter()
-            .find_map(|t| match t {
-                DependentTier::UserDefined(udt) if udt.label.as_str() == "mor" => {
-                    Some(udt.content.as_str().to_owned())
-                }
-                _ => None,
-            })?
+        utt.dependent_tiers.iter().find_map(|t| match t {
+            DependentTier::UserDefined(udt) if udt.label.as_str() == "mor" => {
+                Some(udt.content.as_str().to_owned())
+            }
+            _ => None,
+        })?
     };
     Some(
         content
@@ -579,11 +565,7 @@ fn conform_with_mapping(words: &[SrcWord]) -> Vec<ConformedTok> {
 //     (b) latest end position, (c) lower waste (`span - overlap`).
 // ---------------------------------------------------------------------------
 
-fn find_best_segment(
-    gold: &[&str],
-    main: &[&str],
-    main_utts: &[usize],
-) -> (usize, usize) {
+fn find_best_segment(gold: &[&str], main: &[&str], main_utts: &[usize]) -> (usize, usize) {
     if gold.is_empty() || main.is_empty() {
         return (0, 0);
     }
@@ -663,9 +645,7 @@ fn find_best_segment(
                         // (b) latest end position
                         best = (ts, te);
                         best_waste = Some(waste);
-                    } else if te == best.1
-                        && best_waste.map_or(true, |prev| waste < prev)
-                    {
+                    } else if te == best.1 && best_waste.map_or(true, |prev| waste < prev) {
                         // (c) lower waste
                         best = (ts, te);
                         best_waste = Some(waste);
@@ -820,7 +800,11 @@ fn match_fn(x: &str, y: &str) -> bool {
     if xl == yl {
         return true;
     }
-    let strip_all = |s: &str| s.chars().filter(|c| *c != '(' && *c != ')').collect::<String>();
+    let strip_all = |s: &str| {
+        s.chars()
+            .filter(|c| *c != '(' && *c != ')')
+            .collect::<String>()
+    };
     if strip_all(&xl) == strip_all(&yl) {
         return true;
     }
@@ -1065,10 +1049,7 @@ fn summary_json(s: &Summary) -> String {
 ///
 /// POS is `"?"` for every token in this port — we don't run morphosyntax
 /// here, and BA2 also falls back to `"?"` when `form.morphology` is empty.
-fn inject_per_utt_tiers(
-    ast: &mut ChatFile<ModelValidated>,
-    per_utt: &[UttCmp],
-) -> BAResult<()> {
+fn inject_per_utt_tiers(ast: &mut ChatFile<ModelValidated>, per_utt: &[UttCmp]) -> BAResult<()> {
     let mut idx = 0usize;
     for line in ast.lines.iter_mut() {
         if let Line::Utterance(u) = line {
@@ -1163,10 +1144,7 @@ fn serialize_xcmp(cmp: &UttCmp) -> String {
     )
 }
 
-fn inject_summary_header(
-    ast: &mut ChatFile<ModelValidated>,
-    s: &Summary,
-) -> BAResult<()> {
+fn inject_summary_header(ast: &mut ChatFile<ModelValidated>, s: &Summary) -> BAResult<()> {
     let body = format!("ba.compare.summary: {}", summary_json(s));
     let header = Header::Comment {
         content: BulletContent::from_text(body),
@@ -1212,8 +1190,14 @@ mod tests {
 
     #[test]
     fn conform_contractions() {
-        assert_eq!(conform_one("he's"), vec!["he".to_string(), "is".to_string()]);
-        assert_eq!(conform_one("gonna"), vec!["going".to_string(), "to".to_string()]);
+        assert_eq!(
+            conform_one("he's"),
+            vec!["he".to_string(), "is".to_string()]
+        );
+        assert_eq!(
+            conform_one("gonna"),
+            vec!["going".to_string(), "to".to_string()]
+        );
         // BA2 doesn't expand `n't` so `can't` stays as one token.
         assert_eq!(conform_one("can't"), vec!["can't".to_string()]);
         assert_eq!(conform_one("OK"), vec!["okay".to_string()]);
@@ -1229,8 +1213,12 @@ mod tests {
         let r = levenshtein_align(&a, &b);
         assert_eq!(r.len(), 4, "got {r:?}");
         assert!(matches!(r[0], AlignItem::Match { .. }));
-        assert!(matches!(r[1], AlignItem::Insert { .. }) || matches!(r[1], AlignItem::Delete { .. }));
-        assert!(matches!(r[2], AlignItem::Insert { .. }) || matches!(r[2], AlignItem::Delete { .. }));
+        assert!(
+            matches!(r[1], AlignItem::Insert { .. }) || matches!(r[1], AlignItem::Delete { .. })
+        );
+        assert!(
+            matches!(r[2], AlignItem::Insert { .. }) || matches!(r[2], AlignItem::Delete { .. })
+        );
         // One of r[1] / r[2] is Insert, the other Delete.
         assert!(
             matches!(r[1], AlignItem::Insert { .. }) ^ matches!(r[2], AlignItem::Insert { .. })
@@ -1280,9 +1268,7 @@ mod tests {
             main_chat: MAIN_CHA.to_owned(),
             gold_chat: GOLD_CHA.to_owned(),
         };
-        let outputs = backend
-            .call(vec![TaskInput::Compare(input)])
-            .expect("call");
+        let outputs = backend.call(vec![TaskInput::Compare(input)]).expect("call");
         assert_eq!(outputs.len(), 1);
         let TaskOutput::Compare(out) = outputs.into_iter().next().unwrap() else {
             panic!("wrong output variant");

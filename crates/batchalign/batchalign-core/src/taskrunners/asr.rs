@@ -7,17 +7,16 @@
 //!
 //! Per spec2.md §8 and the BA2 `pipelines/asr/` reference.
 
-
+use crate::base::BAValue;
 use crate::base::Chat;
-use crate::utils::{BAError, BAResult};
-use crate::utils::SpeakerLabel;
+use crate::base::Task;
+use crate::base::TaskInput;
+use crate::base::{Dispatcher, TaskRunner};
 use crate::base::{ProgressEvent, ProgressSink};
 use crate::proto::asr::{AsrInput, AsrOutput, AsrSegment, LanguageSpec};
-use crate::base::Task;
-use crate::base::{Dispatcher, TaskRunner};
-use crate::base::TaskInput;
-use crate::base::{BAValue};
 use crate::utils::SourceId;
+use crate::utils::SpeakerLabel;
+use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -88,17 +87,7 @@ fn build_chat_from_asr(
 ) -> BAResult<Chat> {
     let lang_code = resolve_lang_code(language);
 
-    // Label each speaker `PAR<raw>` from the engine's raw speaker id (Rev's
-    // monologue speaker, Whisper's `0`). BA2 does `PAR{speaker}` directly
-    // (`PAR0`, `PAR1`, …) rather than renumbering, so we mirror that; a
-    // missing speaker (single-speaker Whisper) defaults to `0` → `PAR0`.
-    let label_for = |raw: &str| -> String {
-        if raw.starts_with("PAR") {
-            raw.to_string()
-        } else {
-            format!("PAR{raw}")
-        }
-    };
+    // Discover speakers in order of first appearance; assign PAR1, PAR2, ...
     let mut speakers: BTreeMap<String, String> = BTreeMap::new();
     let mut speaker_order: Vec<String> = Vec::new();
     for seg in &output.segments {
@@ -106,15 +95,16 @@ fn build_chat_from_asr(
             .speaker
             .as_ref()
             .map(|s| s.as_str().to_string())
-            .unwrap_or_else(|| "0".to_string());
+            .unwrap_or_else(|| "PAR1".to_string());
         if !speakers.contains_key(&raw) {
-            speakers.insert(raw.clone(), label_for(&raw));
+            let code = format!("PAR{}", speakers.len() + 1);
+            speakers.insert(raw.clone(), code);
             speaker_order.push(raw);
         }
     }
     if speakers.is_empty() {
-        speakers.insert("0".to_string(), "PAR0".to_string());
-        speaker_order.push("0".to_string());
+        speakers.insert("PAR1".to_string(), "PAR1".to_string());
+        speaker_order.push("PAR1".to_string());
     }
 
     let mut out = String::new();
@@ -140,19 +130,15 @@ fn build_chat_from_asr(
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    out.push_str(&format!(
-        "@Comment:\tba.asr.v1: {ts} {backend_name}\n"
-    ));
-    out.push_str(
-        "@Comment:\tASR result follows. Please review and correct before alignment.\n",
-    );
+    out.push_str(&format!("@Comment:\tba.asr.v1: {ts} {backend_name}\n"));
+    out.push_str("@Comment:\tASR result follows. Please review and correct before alignment.\n");
 
     for seg in &output.segments {
         let raw = seg
             .speaker
             .as_ref()
             .map(SpeakerLabel::as_str)
-            .unwrap_or("0");
+            .unwrap_or("PAR1");
         let code = speakers
             .get(raw)
             .ok_or_else(|| BAError::Internal(format!("ASR: unknown speaker {raw}")))?;
@@ -180,12 +166,14 @@ fn resolve_lang_code(spec: &LanguageSpec) -> String {
 /// Strip characters that would re-tokenize as CHAT structural markers (so
 /// downstream parsing doesn't choke on raw ASR punctuation).
 fn sanitize_segment_text(s: &str) -> String {
-    // Strip only line-structural characters; keep CHAT content markers
-    // (`< > [ ] /`) so retrace (`[/]`, `<a b>`) and similar annotations the
-    // ASR cleanup adds survive the re-parse.
     let cleaned: String = s
         .chars()
-        .filter(|c| !matches!(c, '\t' | '\n' | '\r' | '*' | '%' | '@' | '\\'))
+        .filter(|c| {
+            !matches!(
+                c,
+                '\t' | '\n' | '\r' | '*' | '%' | '@' | '<' | '>' | '[' | ']' | '/' | '\\'
+            )
+        })
         .collect();
     let trimmed = cleaned.trim();
     // Drop a terminal . / ? / ! — we append our own ` .` punctuation.
@@ -207,10 +195,10 @@ fn format_bullet(seg: &AsrSegment) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::MediaInput;
     use crate::base::NullSink;
-    use crate::proto::asr::{AsrSegment, AsrWord};
     use crate::base::TaskOutput;
+    use crate::proto::asr::{AsrSegment, AsrWord};
+    use crate::utils::MediaInput;
     use std::path::PathBuf;
     use std::sync::Mutex;
 
@@ -261,8 +249,8 @@ mod tests {
                 fake_segment("spk_1", "general kenobi", 1000, 2200),
             ],
         };
-        let chat =
-            build_chat_from_asr(&sid, &LanguageSpec::Code("eng".into()), &out, "stub").expect("chat");
+        let chat = build_chat_from_asr(&sid, &LanguageSpec::Code("eng".into()), &out, "stub")
+            .expect("chat");
         let text = chat.to_chat();
         assert!(text.contains("@Languages:\teng"));
         assert!(text.contains("@Participants:"));
