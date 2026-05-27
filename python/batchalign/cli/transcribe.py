@@ -143,7 +143,7 @@ def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vll
 _UTSEG_LANG = {
     "auto": "eng", "en": "eng", "eng": "eng",
     "zh": "zho", "zho": "zho", "zh-hans": "zho", "cmn": "zho",
-    "yue": "yue",
+    "yue": "yue", "zh-hant": "yue",
 }
 
 

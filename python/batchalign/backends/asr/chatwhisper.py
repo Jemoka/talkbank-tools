@@ -40,7 +40,13 @@ from batchalign.backends.base import ASR, BatchPolicy
 _WHISPER_RESOLVE = {
     "eng": ("talkbank/CHATWhisper-en", "openai/whisper-large-v2"),
     "en": ("talkbank/CHATWhisper-en", "openai/whisper-large-v2"),
+    "yue": ("alvanlii/whisper-small-cantonese", "alvanlii/whisper-small-cantonese"),
 }
+# Cantonese decode config (BA2 infer_asr.py): no timestamps token + DTW
+# alignment heads, and generate drops task/language.
+_CANTONESE_ALIGNMENT_HEADS = [
+    [5, 3], [5, 9], [8, 0], [8, 4], [8, 8], [9, 0], [9, 7], [9, 9], [10, 5],
+]
 _UTTERANCE_RESOLVE = {
     "eng": "talkbank/CHATUtterance-en",
     "en": "talkbank/CHATUtterance-en",
@@ -122,6 +128,105 @@ class BertUtteranceModel:
             nltk.download("punkt")
             nltk.download("punkt_tab")
             return sent_tokenize(final_passage)
+
+
+class BertCantoneseUtteranceModel:
+    """TalkBank Cantonese utterance segmenter — port of BA2.
+
+    Different inference from the English `BertUtteranceModel`: it first splits
+    the passage on Cantonese sentence-final particles, then per chunk runs the
+    BERT token classifier (char-level) to restore punctuation, then sentence-
+    tokenizes on `.?!`. Port of
+    `batchalign2/batchalign/models/utterance/cantonese_infer.py`.
+    """
+
+    _KEYWORDS = ["呀", "啦", "喎", "嘞", "㗎喇", "囉", "㗎", "啊", "嗯"]
+
+    def __init__(self, model: str) -> None:
+        import torch  # type: ignore[import-not-found]
+        from transformers import (  # type: ignore[import-not-found]
+            AutoTokenizer,
+            BertForTokenClassification,
+        )
+
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.tokenizer = AutoTokenizer.from_pretrained(model)
+        self.model = BertForTokenClassification.from_pretrained(model).to(device)
+        self.device = device
+        self.max_length = 512
+        self.model.eval()
+
+    def __call__(self, passage: str) -> list[str]:
+        import re as _re
+        import torch  # type: ignore[import-not-found]
+
+        passage = passage.lower()
+        for ch in (".", ",", "!", "！", "？", "。", "，", "?", "（", "）", "：", "＊", "ｌ"):
+            passage = passage.replace(ch, "")
+
+        # Split on sentence-final particles.
+        chunks: list[str] = []
+        start = 0
+        while start < len(passage):
+            positions = [(k, passage.find(k, start)) for k in self._KEYWORDS]
+            positions = [kp for kp in positions if kp[1] != -1]
+            if positions:
+                kw, pos = min(positions, key=lambda x: x[1])
+                chunks.append(passage[start : pos + len(kw)])
+                start = pos + len(kw)
+            else:
+                chunks.append(passage[start:])
+                break
+
+        final_passage: list[str] = []
+        for chunk in chunks:
+            tokenized_chunk = list(chunk)  # char-level for Chinese
+            if not tokenized_chunk:
+                continue
+            tokd = self.tokenizer.batch_encode_plus(
+                [tokenized_chunk], return_tensors="pt", truncation=True,
+                padding=True, max_length=self.max_length, is_split_into_words=True,
+            ).to(self.device)
+            try:
+                res = self.model(**tokd).logits
+            except Exception:
+                return []
+            classified = torch.argmax(res, dim=2).cpu()
+            res_toks: list[str] = []
+            prev = None
+            wids = tokd.word_ids(0)
+            for indx, elem in enumerate(wids):
+                if elem is None or elem == prev:
+                    continue
+                prev = elem
+                action = classified[0][indx]
+                w = tokenized_chunk[elem]
+                will_action = bool(indx < len(wids) - 2 and classified[0][indx + 1] > 0)
+                if not will_action:
+                    if action == 1:
+                        w = w[0].upper() + w[1:]
+                    elif action == 2:
+                        w = w + "."
+                    elif action == 3:
+                        w = w + "?"
+                    elif action == 4:
+                        w = w + "!"
+                    elif action == 5:
+                        w = w + ","
+                res_toks.append(w)
+            final_passage.append(self.tokenizer.convert_tokens_to_string(res_toks))
+
+        text = " ".join(final_passage)
+        endings = _re.compile(r"([.!?])")
+        parts = _re.split(endings, text)
+        out: list[str] = []
+        for i in range(0, len(parts) - 1, 2):
+            s = parts[i] + parts[i + 1]
+            if s.strip():
+                out.append(s)
+        if len(parts) % 2 != 0 and parts[-1].strip():
+            out.append(parts[-1].strip())
+        return out
 
 
 def num2words_en(word: str) -> str:
@@ -225,9 +330,14 @@ class ChatWhisperBackend(ASR):
         self._model_id = model
 
         # BA2 decode config (infer_asr.py): discourage repetition, cache on.
+        self._cantonese = lang == "yue"
         config = GenerationConfig.from_pretrained(base)
         config.no_repeat_ngram_size = 4
         config.use_cache = True
+        if self._cantonese:
+            # BA2's Cantonese branch sets these on the generation config.
+            config.no_timestamps_token_id = 50363
+            config.alignment_heads = _CANTONESE_ALIGNMENT_HEADS
         self._gen_config = config
 
         # BA2 runs the pipeline in bfloat16 (infer_asr.py), falling back to
@@ -275,14 +385,17 @@ class ChatWhisperBackend(ASR):
         from batchalign._core.proto import AsrSegment, AsrWord
 
         wave = np.frombuffer(item.audio.pcm_f32le, dtype=np.float32)
+        # BA2's Cantonese branch omits task/language in generate_kwargs.
+        gen_kwargs: dict[str, Any] = {
+            "generation_config": self._gen_config,
+            "repetition_penalty": 1.001,
+        }
+        if not self._cantonese:
+            gen_kwargs["task"] = "transcribe"
         result = self._pipe(
             {"array": wave, "sampling_rate": item.audio.sample_rate},
             return_timestamps="word",
-            generate_kwargs={
-                "generation_config": self._gen_config,
-                "repetition_penalty": 1.001,
-                "task": "transcribe",
-            },
+            generate_kwargs=gen_kwargs,
         )
 
         # Flatten to (text, start_ms, end_ms), expanding number words, dropping
@@ -322,4 +435,10 @@ class ChatWhisperBackend(ASR):
         return AsrOutput(source_id=item.source_id, segments=[segment])
 
 
-__all__ = ["ChatWhisperBackend", "BertUtteranceModel", "segment_words", "num2words_en"]
+__all__ = [
+    "ChatWhisperBackend",
+    "BertUtteranceModel",
+    "BertCantoneseUtteranceModel",
+    "segment_words",
+    "num2words_en",
+]

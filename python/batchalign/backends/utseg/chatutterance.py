@@ -46,7 +46,10 @@ class CHATUtteranceBackend(UtSeg):
         batch_size: int = 8,
         batch_window_ms: int = 50,
     ) -> None:
-        from batchalign.backends.asr.chatwhisper import BertUtteranceModel
+        from batchalign.backends.asr.chatwhisper import (
+            BertCantoneseUtteranceModel,
+            BertUtteranceModel,
+        )
 
         model = _UTTERANCE_RESOLVE.get(lang)
         if model is None:
@@ -56,7 +59,11 @@ class CHATUtteranceBackend(UtSeg):
             )
         self._lang = lang
         self._model_id = model
-        self._segmenter = BertUtteranceModel(model)
+        # Cantonese uses a distinct inference (particle-chunking) model.
+        if lang == "yue":
+            self._segmenter = BertCantoneseUtteranceModel(model)
+        else:
+            self._segmenter = BertUtteranceModel(model)
         # Disfluency / replacement table for this language (BA2 pairs the
         # disfluency stage with utterance segmentation in the ASR pipeline).
         self._cleanup = load_cleanup(SUPPORT_SUFFIX.get(lang, lang))
