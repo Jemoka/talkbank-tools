@@ -105,6 +105,20 @@ pub struct MorphosyntaxInput {
     /// `tokens.join(" ")` when empty).
     #[serde(default)]
     pub text: String,
+    /// The utterance's CHAT terminator, rendered as its canonical token
+    /// (`.`, `?`, `!`, `+//.`, …). BA2's morphosyntax appends this verbatim
+    /// to the `%mor` tier and points `%gra`'s final PUNCT at ROOT; the
+    /// runner strips the terminator out of `tokens`/`text`, so it travels
+    /// here instead. Defaults to `.` for inputs that predate this field.
+    #[serde(default = "default_terminator")]
+    pub terminator: String,
+}
+
+/// Default terminator (`.`) for `MorphosyntaxInput` — keeps deserialization of
+/// payloads written before the field existed working, and matches BA2's
+/// fallback for utterances missing an explicit terminator.
+fn default_terminator() -> String {
+    ".".to_string()
 }
 
 /// Per-utterance output from the morphosyntax backend.

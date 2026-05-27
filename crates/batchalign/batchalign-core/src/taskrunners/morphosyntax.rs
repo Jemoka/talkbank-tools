@@ -107,6 +107,11 @@ async fn process_chat(
     // pays the inference cost only on the untagged side.
     let per_utt_tokens: Vec<Vec<String>> =
         chat.ast().utterances().map(extract_tokens).collect();
+    // BA2 appends the utterance terminator verbatim to `%mor` and points
+    // `%gra`'s trailing PUNCT at ROOT, so it must reach the backend. The
+    // typed terminator renders to its canonical CHAT token via `Display`.
+    let per_utt_terminator: Vec<String> =
+        chat.ast().utterances().map(extract_terminator).collect();
     let already_tagged: Vec<bool> = chat
         .ast()
         .utterances()
@@ -133,6 +138,7 @@ async fn process_chat(
             // (`StanzaBackend(retokenize=True)`) and override during call().
             retokenize: false,
             text,
+            terminator: per_utt_terminator[idx].clone(),
         };
         let task_out = dispatcher.dispatch(input.into()).await?;
         let out: MorphosyntaxOutput = task_out.try_into()?;
@@ -182,6 +188,18 @@ fn extract_tokens(u: &Utterance) -> Vec<String> {
         WordItem::Separator(_) => {}
     });
     out
+}
+
+/// Render the utterance's terminator as its canonical CHAT token (`.`, `?`,
+/// `!`, `+//.`, …). Falls back to `.` when the main tier has no terminator —
+/// BA2's `morphoanalyze` uses the same default for utterances missing one.
+fn extract_terminator(u: &Utterance) -> String {
+    u.main
+        .content
+        .terminator
+        .as_ref()
+        .map(|t| t.to_string())
+        .unwrap_or_else(|| ".".to_string())
 }
 
 /// Build `%mor:` / `%gra:` text from a per-utterance [`MorphosyntaxOutput`].
