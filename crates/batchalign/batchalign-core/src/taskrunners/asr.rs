@@ -88,7 +88,17 @@ fn build_chat_from_asr(
 ) -> BAResult<Chat> {
     let lang_code = resolve_lang_code(language);
 
-    // Discover speakers in order of first appearance; assign PAR1, PAR2, ...
+    // Label each speaker `PAR<raw>` from the engine's raw speaker id (Rev's
+    // monologue speaker, Whisper's `0`). BA2 does `PAR{speaker}` directly
+    // (`PAR0`, `PAR1`, …) rather than renumbering, so we mirror that; a
+    // missing speaker (single-speaker Whisper) defaults to `0` → `PAR0`.
+    let label_for = |raw: &str| -> String {
+        if raw.starts_with("PAR") {
+            raw.to_string()
+        } else {
+            format!("PAR{raw}")
+        }
+    };
     let mut speakers: BTreeMap<String, String> = BTreeMap::new();
     let mut speaker_order: Vec<String> = Vec::new();
     for seg in &output.segments {
@@ -96,16 +106,15 @@ fn build_chat_from_asr(
             .speaker
             .as_ref()
             .map(|s| s.as_str().to_string())
-            .unwrap_or_else(|| "PAR1".to_string());
+            .unwrap_or_else(|| "0".to_string());
         if !speakers.contains_key(&raw) {
-            let code = format!("PAR{}", speakers.len() + 1);
-            speakers.insert(raw.clone(), code);
+            speakers.insert(raw.clone(), label_for(&raw));
             speaker_order.push(raw);
         }
     }
     if speakers.is_empty() {
-        speakers.insert("PAR1".to_string(), "PAR1".to_string());
-        speaker_order.push("PAR1".to_string());
+        speakers.insert("0".to_string(), "PAR0".to_string());
+        speaker_order.push("0".to_string());
     }
 
     let mut out = String::new();
@@ -143,7 +152,7 @@ fn build_chat_from_asr(
             .speaker
             .as_ref()
             .map(SpeakerLabel::as_str)
-            .unwrap_or("PAR1");
+            .unwrap_or("0");
         let code = speakers
             .get(raw)
             .ok_or_else(|| BAError::Internal(format!("ASR: unknown speaker {raw}")))?;

@@ -45,6 +45,11 @@ py_library(
         ["**/*.py"],
         exclude = ["tests/**"],
     ),
+    # Non-Python data shipped with backends (e.g. BA2's disfluency /
+    # replacement word-lists `backends/utseg/support/*.eng` that the
+    # CHATUtterance segmenter reads at runtime). Without these in runfiles
+    # the lists load empty and `uh` never becomes `&-uh`.
+    data = glob(["**/support/*"]),
     # `imports = [".."]` puts python/ on PYTHONPATH so `import batchalign`
     # resolves. The package layout is python/batchalign/{__init__,...}.py.
     imports = [".."],
