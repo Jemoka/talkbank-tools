@@ -6,6 +6,7 @@
 //! Edits MUST happen in both places. Tests in
 //! `tests/proto_parity.rs` pin existence only.
 
+use crate::register_proto_schema;
 use crate::utils::{PreparedAudio, SpeakerLabel};
 use crate::utils::SourceId;
 use schemars::JsonSchema;
@@ -99,3 +100,10 @@ pub struct AsrOutput {
     /// Ordered segments, time-monotonic.
     pub segments: Vec<AsrSegment>,
 }
+
+register_proto_schema!(LanguageSpec);
+register_proto_schema!(AsrOptions);
+register_proto_schema!(AsrWord);
+register_proto_schema!(AsrSegment);
+register_proto_schema!(AsrInput);
+register_proto_schema!(AsrOutput);

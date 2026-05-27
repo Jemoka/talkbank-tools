@@ -3,6 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::TranslateInput,
 //! TranslateOutput`. !!!
 
+use crate::register_proto_schema;
 use crate::proto::asr::LanguageSpec;
 use crate::utils::SourceId;
 use schemars::JsonSchema;
@@ -30,3 +31,6 @@ pub struct TranslateOutput {
     /// Translated utterances, same length as input.
     pub utterances: Vec<String>,
 }
+
+register_proto_schema!(TranslateInput);
+register_proto_schema!(TranslateOutput);

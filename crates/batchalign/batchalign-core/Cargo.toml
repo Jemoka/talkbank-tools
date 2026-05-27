@@ -11,6 +11,14 @@ publish = false
 name = "batchalign_core"
 path = "src/lib.rs"
 
+# Emits the unified JSON Schema for every proto type. Consumed by the
+# Bazel genrule + datamodel-codegen pipeline that produces
+# `python/batchalign/_core/_proto_generated.py`. See
+# `src/bin/emit_proto_schema.rs` for the type-list source of truth.
+[[bin]]
+name = "emit_proto_schema"
+path = "src/bin/emit_proto_schema.rs"
+
 [features]
 # Re-export PyO3 #[pyclass] bindings. Enabled by `batchalign-engine`, which is
 # the maturin-built cdylib. Pure-Rust unit tests don't need this.
@@ -24,6 +32,12 @@ talkbank-transform = { path = "../../core/talkbank-transform", version = "0.2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = { version = "1", features = [] }
+base64 = "0.22"
+# Used by `proto::register_proto_schema!` so each wire type self-registers
+# at link time. The schema emitter binary walks
+# `inventory::iter::<ProtoSchemaEntry>` instead of carrying a hand-list,
+# so adding a new proto type only touches the proto file itself.
+inventory = "0.3"
 thiserror = "2"
 anyhow = "1"
 async-trait = "0.1"

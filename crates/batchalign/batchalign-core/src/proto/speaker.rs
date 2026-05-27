@@ -3,6 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::SpeakerInput,
 //! SpeakerOutput, Diarization, DiarizationSegment`. !!!
 
+use crate::register_proto_schema;
 use crate::utils::{PreparedAudio, SpeakerLabel};
 use crate::utils::SourceId;
 use schemars::JsonSchema;
@@ -46,3 +47,8 @@ pub struct SpeakerOutput {
     /// Segmentation result.
     pub diarization: Diarization,
 }
+
+register_proto_schema!(SpeakerInput);
+register_proto_schema!(DiarizationSegment);
+register_proto_schema!(Diarization);
+register_proto_schema!(SpeakerOutput);

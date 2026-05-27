@@ -3,6 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::AvqiInput,
 //! AvqiOutput`. !!!
 
+use crate::register_proto_schema;
 use crate::utils::PreparedAudio;
 use crate::metrics::MetricsTable;
 use crate::utils::SourceId;
@@ -26,3 +27,6 @@ pub struct AvqiOutput {
     /// Long-format metrics table (typically one row with the score columns).
     pub table: MetricsTable,
 }
+
+register_proto_schema!(AvqiInput);
+register_proto_schema!(AvqiOutput);

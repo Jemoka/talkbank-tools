@@ -27,6 +27,24 @@
 #
 # Source of truth: python/pyproject.toml owns the wheel version, deps,
 # all optional-deps groups, classifiers, scripts.
+#
+# Proto codegen (Rust → Python wire types). NO `gen-proto` RECIPE.
+#   The pydantic-v2 `_proto_generated.py` is a Bazel-managed artifact,
+#   regenerated from `crates/batchalign/batchalign-core/src/proto/*.rs`
+#   via the `//python/batchalign/_core:_proto_generated_py` genrule any
+#   time a relevant Rust file changes. Every recipe below pulls it in
+#   transparently as a dep:
+#     - `build`/`test` reach it via `//python/batchalign:batchalign_lib`
+#       (which depends on `//python/batchalign/_core:proto`)
+#     - `wheel`/`multiwheel` stage it into the source tree just before
+#       `maturin build` packages (see `bazel/python/maturin_build.sh`)
+#     - Pure `cd python && uv run maturin develop` (no Bazel) gets it
+#       via `crates/batchalign/batchalign-engine/build.rs`, which walks
+#       the in-process `inventory::iter::<ProtoSchemaEntry>` and shells
+#       out to `bazel/python/codegen_proto.py`.
+#   Adding a new wire type means: define the struct, call
+#   `register_proto_schema!(NewThing)` next to it in the proto module —
+#   nothing else.
 
 set shell := ["bash", "-c"]
 set positional-arguments := true
@@ -48,8 +66,14 @@ test profile="release":
         //crates/batchalign/... //python/batchalign/... //python:uv_lock_check
 
 # Run the Python `batchalign3` CLI via py_binary.
+#
+# `bazel run` cd's to its execroot before invoking the binary, which breaks
+# relative-path args (e.g. `../talkbank-alignment/foo`). `--run_under` is
+# prepended as a shell command, so cd-ing back to the user's invocation
+# directory restores the expected cwd semantics for path arguments.
 cli *args:
-    bazel run //python/batchalign -- "$@"
+    bazel run --run_under="cd '{{ invocation_directory() }}' && " \
+        //python/batchalign -- "$@"
 
 # Pytest via py_test.
 pytest *args:

@@ -8,6 +8,8 @@ and friends — twine publish, lint. Every script invokes
 match the pins in `python/pyproject.toml [tool.batchalign.pinned_tools]`.
 """
 
+load("@aspect_rules_py//py:defs.bzl", "py_binary")
+
 # Only the //python package needs these scripts.
 package(default_visibility = ["//python:__subpackages__"])
 
@@ -18,7 +20,25 @@ exports_files([
     "twine_upload.sh",
     "hermeticity_guard.sh",
     "pyo3-config.txt",
+    "codegen_proto.py",
 ])
+
+# Proto codegen wrapper. Invoked by the
+# `//python/batchalign/_core:_proto_generated_py` genrule with the JSON
+# Schema produced by `//crates/batchalign/batchalign-core:proto_schema_json`
+# as input. Runs `datamodel-code-generator` against the schema and applies
+# two post-processing fixes (`Base64Str` → `Base64Bytes`, drop the dead
+# `Model(RootModel[Any])` placeholder). Never invoked by hand.
+py_binary(
+    name = "codegen_proto_bin",
+    srcs = ["codegen_proto.py"],
+    main = "codegen_proto.py",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@pypi//datamodel_code_generator",
+        "@pypi//pydantic",
+    ],
+)
 
 # Exposed as a filegroup so crate_universe annotations can reference it
 # via a label without triggering "exports_files() must be in this package"

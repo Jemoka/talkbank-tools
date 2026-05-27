@@ -3,6 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::UtSegInput,
 //! UtSegOutput, UtteranceSpan`. !!!
 
+use crate::register_proto_schema;
 use crate::proto::asr::{AsrSegment, AsrWord, LanguageSpec};
 use crate::utils::SourceId;
 use schemars::JsonSchema;
@@ -43,3 +44,7 @@ pub struct UtSegOutput {
     /// Segmented utterances.
     pub utterances: Vec<UtteranceSpan>,
 }
+
+register_proto_schema!(UtteranceSpan);
+register_proto_schema!(UtSegInput);
+register_proto_schema!(UtSegOutput);

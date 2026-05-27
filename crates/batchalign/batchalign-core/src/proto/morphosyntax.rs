@@ -17,6 +17,7 @@
 //! cases where engines want to ship grouped batches; the runtime dispatch path
 //! is per-utterance.
 
+use crate::register_proto_schema;
 use crate::proto::asr::LanguageSpec;
 use crate::utils::SourceId;
 use schemars::JsonSchema;
@@ -128,3 +129,9 @@ pub struct MorphosyntaxOutput {
     #[serde(default)]
     pub gra: Option<String>,
 }
+
+register_proto_schema!(MorphosyntaxUtterance);
+register_proto_schema!(MorphosyntaxToken);
+register_proto_schema!(TaggedUtterance);
+register_proto_schema!(MorphosyntaxInput);
+register_proto_schema!(MorphosyntaxOutput);

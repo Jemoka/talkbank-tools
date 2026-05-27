@@ -78,5 +78,12 @@ python/batchalign/_core/_core.*.so
 python/batchalign/_core/_core.*.dylib
 python/batchalign/_core/_core.*.pyd
 
+# Bazel-generated proto wire types (autogen from
+# crates/batchalign/batchalign-core/src/proto/*.rs via the schema emitter
+# + bazel/python/codegen_proto.py). Materialized in the source tree only
+# when maturin packages the wheel; otherwise Bazel py_library consumes the
+# `bazel-bin/` copy directly. Never commit.
+python/batchalign/_core/_proto_generated.py
+
 # Coordination scratch (multi-agent talk doc; not source of truth)
 talk.txt

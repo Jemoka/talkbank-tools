@@ -3,6 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::CorefInput,
 //! CorefOutput`. !!!
 
+use crate::register_proto_schema;
 use crate::utils::SourceId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -27,3 +28,6 @@ pub struct CorefOutput {
     /// Coreference annotation lines, same length as input utterances.
     pub annotations: Vec<String>,
 }
+
+register_proto_schema!(CorefInput);
+register_proto_schema!(CorefOutput);

@@ -1,10 +1,12 @@
 """Shared helpers for the batchalign Typer CLI.
 
 Centralizes:
-* Input collection — expand positional paths (files or directories) into
-  the typed `BAValue` objects pipelines consume.
-* Output writing — ensure the output directory exists and dispatch each
-  outcome's own `.write()`.
+* Recursive input collection — walk a folder for CHAT or media files and
+  build `BAValue` inputs whose `source_id` is the absolute source path,
+  so the writer can map each outcome back to its origin.
+* Output writing — replace the source file in place when no output dir
+  is given, or mirror the source's relative path under an output dir.
+  Transcribe rewrites the suffix to `.cha`; other commands preserve it.
 * Config-key resolution with a clear error message naming the INI key
   and env var when a credential is missing.
 """
@@ -18,50 +20,75 @@ import typer
 
 from batchalign import config as _ba_config
 
-
-def collect_media(paths: Iterable[Path]) -> list[Any]:
-    """Expand positional `paths` into `BAValue` media inputs."""
-    from batchalign.inputs import iter_media, media_from_path
-
-    items: list[Any] = []
-    for p in paths:
-        if p.is_dir():
-            items.extend(iter_media(p))
-        else:
-            items.append(media_from_path(p))
-    return items
+CHAT_EXTENSIONS = (".cha", ".chat")
+MEDIA_EXTENSIONS = (".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4")
 
 
-def collect_chat(paths: Iterable[Path]) -> list[Any]:
-    """Expand positional `paths` into `BAValue` CHAT inputs."""
-    from batchalign.inputs import iter_chat, chat_from_path
-
-    items: list[Any] = []
-    for p in paths:
-        if p.is_dir():
-            items.extend(iter_chat(p))
-        else:
-            items.append(chat_from_path(p))
-    return items
-
-
-def write_outcomes(outcomes: list[Any], out_dir: Path) -> None:
-    """Create `out_dir` and dispatch `.write()` on each outcome."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for outcome in outcomes:
-        sid = getattr(outcome, "source_id", None) or "output"
-        outcome.write(str(out_dir / f"{sid}.cha"))
+def _walk(folder: Path, suffixes: Iterable[str]) -> list[Path]:
+    sset = {s.lower() for s in suffixes}
+    if folder.is_file():
+        return [folder.absolute()]
+    out: list[Path] = []
+    for p in sorted(folder.rglob("*")):
+        if not p.is_file() or p.name.startswith("."):
+            continue
+        if p.suffix.lower() in sset:
+            out.append(p.absolute())
+    return out
 
 
-def import_ba() -> Any:
-    """Lazy import of the top-level `batchalign` package.
+def _root_for(folder: Path) -> Path:
+    return folder.absolute() if folder.is_dir() else folder.parent.absolute()
 
-    Defers loading `_core` so `--help` still works on a fresh clone
-    without a compiled .so.
+
+def collect_chat_inputs(folder: Path) -> tuple[list[Any], Path]:
+    """Walk `folder` for CHAT files; return (inputs, root).
+
+    Each input carries its absolute path as `source_id` so outcomes can
+    be written back next to their source.
     """
-    import batchalign as ba
+    from batchalign.inputs import chat_from_path
 
-    return ba
+    inputs = [chat_from_path(p, source_id=str(p)) for p in _walk(folder, CHAT_EXTENSIONS)]
+    return inputs, _root_for(folder)
+
+
+def collect_media_inputs(folder: Path) -> tuple[list[Any], Path]:
+    """Walk `folder` for media files; return (inputs, root)."""
+    from batchalign.inputs import media_from_path
+
+    inputs = [media_from_path(p, source_id=str(p)) for p in _walk(folder, MEDIA_EXTENSIONS)]
+    return inputs, _root_for(folder)
+
+
+def write_outcomes(
+    outcomes: list[Any],
+    root: Path,
+    out_dir: Path | None,
+    *,
+    output_suffix: str | None = None,
+) -> None:
+    """Write each outcome to disk.
+
+    `out_dir is None` writes next to the source (in-place); `output_suffix`
+    rewrites the source's suffix (transcribe: `.wav` → `.cha`). When
+    `out_dir` is given, the source's relative path under `root` is mirrored
+    under `out_dir`, with the same suffix rule applied.
+    """
+    for outcome in outcomes:
+        src_str = getattr(outcome, "source_id", None)
+        if not src_str:
+            raise typer.BadParameter("outcome missing source_id; cannot determine output path")
+        src = Path(src_str)
+        if out_dir is None:
+            target = src.with_suffix(output_suffix) if output_suffix else src
+        else:
+            rel = src.relative_to(root)
+            if output_suffix:
+                rel = rel.with_suffix(output_suffix)
+            target = out_dir / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        outcome.write(str(target))
 
 
 def require_api_key(provider: str, ini_key: str, env_var: str) -> str:
@@ -80,9 +107,10 @@ def require_api_key(provider: str, ini_key: str, env_var: str) -> str:
 
 
 __all__ = [
-    "collect_media",
-    "collect_chat",
+    "CHAT_EXTENSIONS",
+    "MEDIA_EXTENSIONS",
+    "collect_chat_inputs",
+    "collect_media_inputs",
     "write_outcomes",
-    "import_ba",
     "require_api_key",
 ]

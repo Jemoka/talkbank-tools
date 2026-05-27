@@ -3,6 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::OpenSmileInput,
 //! OpenSmileOutput`. !!!
 
+use crate::register_proto_schema;
 use crate::utils::PreparedAudio;
 use crate::metrics::MetricsTable;
 use crate::utils::SourceId;
@@ -31,3 +32,6 @@ pub struct OpenSmileOutput {
     /// Long-format metrics table.
     pub table: MetricsTable,
 }
+
+register_proto_schema!(OpenSmileInput);
+register_proto_schema!(OpenSmileOutput);

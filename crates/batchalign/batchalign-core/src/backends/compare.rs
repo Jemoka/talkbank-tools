@@ -300,11 +300,20 @@ fn parse_chat(text: &str) -> BAResult<ChatFile<ModelValidated>> {
     // runner.
     let options = ParseValidateOptions::default();
     let chat_file = parse_and_validate(text, options).map_err(|e| match e {
+        // Preserve the rich per-error Display text (code, line, column,
+        // message) — see `talkbank-model/src/errors/parse_error.rs:328`.
+        // The CLI surfaces this verbatim; collapsing to a count strips
+        // every actionable detail.
         talkbank_transform::PipelineError::Parse(errs) => {
-            BAError::Parse(format!("{} parse error(s)", errs.errors.len()))
+            BAError::Parse(format!("{errs}"))
         }
         talkbank_transform::PipelineError::Validation(errs) => {
-            BAError::Validation(format!("{} validation error(s)", errs.len()))
+            let joined = errs
+                .iter()
+                .map(|err| err.to_string())
+                .collect::<Vec<_>>()
+                .join("; ");
+            BAError::Validation(joined)
         }
         other => BAError::Internal(format!("pipeline: {other}")),
     })?;

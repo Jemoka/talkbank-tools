@@ -191,6 +191,9 @@ union_input_output! {
     }
 }
 
+crate::register_proto_schema!(TaskInput);
+crate::register_proto_schema!(TaskOutput);
+
 /// Hand-rolled `TryFrom<TaskOutput>` impls so runners can downcast cleanly.
 macro_rules! try_from_output {
     ($( $variant:ident($ty:ty) ),* $(,)?) => { $(
@@ -250,11 +253,21 @@ impl Chat<Validated> {
     pub fn parse(text: &str, source_id: SourceId) -> BAResult<Self> {
         let options = ParseValidateOptions::default().with_validation();
         let chat_file = parse_and_validate(text, options).map_err(|e| match e {
+            // `ParseErrors` and each `ParseError` have rich `Display` impls
+            // that include error code, line/column, and message (see
+            // `talkbank-model/src/errors/parse_error.rs:328`). Pass that
+            // through instead of summarising as a count — downstream Python
+            // CLI surfaces it directly to the user.
             talkbank_transform::PipelineError::Parse(errs) => {
-                BAError::Parse(format!("{} parse error(s)", errs.errors.len()))
+                BAError::Parse(format!("{errs}"))
             }
             talkbank_transform::PipelineError::Validation(errs) => {
-                BAError::Validation(format!("{} validation error(s)", errs.len()))
+                let joined = errs
+                    .iter()
+                    .map(|err| err.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                BAError::Validation(joined)
             }
             other => BAError::Internal(format!("pipeline: {other}")),
         })?;

@@ -6,22 +6,25 @@ from pathlib import Path
 
 import typer
 
-from ._common import collect_media, import_ba, write_outcomes
+from ._common import collect_media_inputs, write_outcomes
+from ._options import cli_options
+from .tui import Interface, Task
 
 
 def register(app: typer.Typer) -> None:
     @app.command()
     def transcribe(
-        paths: list[Path] = typer.Argument(
+        ctx: typer.Context,
+        folder: Path = typer.Argument(
             ...,
             exists=True,
-            help="Media files or directories.",
+            help="Folder to walk recursively for media files (single file also accepted).",
         ),
-        out: Path = typer.Option(
-            ...,
+        out: Path | None = typer.Option(
+            None,
             "--out",
             "-o",
-            help="Output directory.",
+            help="Optional output folder; if omitted, each `.cha` transcript is written next to its source media file.",
         ),
         language: str = typer.Option("auto", "--language", help="Language code or 'auto'."),
         model: str = typer.Option("openai/whisper-large-v3", "--model", help="ASR model id."),
@@ -33,12 +36,30 @@ def register(app: typer.Typer) -> None:
         `batchalign align` (or `ba.recipes.align(...)`) afterwards if you
         want refined word-level timings.
         """
-        ba = import_ba()
-        asr = ba.WhisperBackend(model=model)
-        speaker = ba.PyannoteBackend() if diarize else None
-        pipeline = ba.recipes.transcribe(
-            asr_backend=asr,
-            speaker_backend=speaker,
-        )
-        outcomes = pipeline.run(collect_media(paths))
-        write_outcomes(outcomes, out)
+        import batchalign as ba
+
+        opts = cli_options(ctx)
+
+        # Interface.open prints the header + spinner immediately. The
+        # backend constructors (which load ML models and can take many
+        # seconds) run INSIDE the `with` block so the user sees the
+        # "preparing pipeline…" indicator during that time.
+        with Interface.open(
+            command="transcribe",
+            params={"asr": model, "diarize": diarize, "lang": language},
+            output=out,
+            verbosity=opts.verbosity,
+            plain=opts.plain,
+            quiet=opts.quiet,
+        ) as ui:
+            pipeline = ba.recipes.transcribe(
+                asr_backend=ba.WhisperBackend(model=model),
+                speaker_backend=ba.PyannoteBackend() if diarize else None,
+            )
+            inputs, root = collect_media_inputs(folder)
+            for inp in inputs:
+                ui.push(Task.from_input(inp))
+            outcomes = list(ui.run_pipeline(pipeline, inputs))
+            write_outcomes(outcomes, root, out, output_suffix=".cha")
+
+        raise typer.Exit(code=ui.exit_code)

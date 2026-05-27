@@ -9,6 +9,7 @@
 //! backend boundary as CHAT text — the runner re-parses the annotated text
 //! back into a validated AST.
 
+use crate::register_proto_schema;
 use crate::utils::SourceId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -74,3 +75,8 @@ pub struct CompareMetricsPos {
     pub deletions: u32,
     pub total: u32,
 }
+
+register_proto_schema!(CompareInput);
+register_proto_schema!(CompareMetricsPos);
+register_proto_schema!(CompareMetrics);
+register_proto_schema!(CompareOutput);

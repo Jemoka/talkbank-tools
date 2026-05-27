@@ -215,10 +215,18 @@ impl PairedInput {
 }
 
 /// Decoded PCM ready to ship to a backend.
+///
+/// `pcm_f32le` rides the JSON wire as a base64 string (`format: "byte"` in
+/// JSON Schema) so it lands on the Python side as `bytes` and stays
+/// `np.frombuffer`-compatible. The byte-array fallback that serde_json picks
+/// for `Vec<u8>` would arrive as `list[int]` — broken for every backend that
+/// does `np.frombuffer(audio.pcm_f32le, ...)`.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all))]
 pub struct PreparedAudio {
     /// Interleaved little-endian f32 PCM samples.
+    #[serde(with = "base64_pcm")]
+    #[schemars(schema_with = "base64_pcm::json_schema")]
     pub pcm_f32le: Vec<u8>,
     /// Sampling rate in Hz.
     pub sample_rate: u32,
@@ -226,6 +234,41 @@ pub struct PreparedAudio {
     pub channels: u16,
     /// Number of frames (samples per channel).
     pub frame_count: u64,
+}
+
+crate::register_proto_schema!(PreparedAudio);
+
+/// Serde + schemars adapter that ships `Vec<u8>` as a base64-encoded string.
+///
+/// Without this, `serde_json` defaults to a JSON array of integers — which
+/// schemars then describes as `array<u8>` and which pydantic decodes as
+/// `list[int]`, breaking every Python backend that calls
+/// `np.frombuffer(audio.pcm_f32le, ...)`. The `format: "byte"` annotation
+/// tells `datamodel-code-generator` to emit a `bytes` field that auto-decodes
+/// the base64 payload at validation time.
+mod base64_pcm {
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD;
+    use schemars::{Schema, SchemaGenerator, json_schema};
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(bytes: &[u8], s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&STANDARD.encode(bytes))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
+        let s = String::deserialize(d)?;
+        STANDARD.decode(s.as_bytes()).map_err(serde::de::Error::custom)
+    }
+
+    pub fn json_schema(_g: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "format": "byte",
+            "contentEncoding": "base64",
+            "description": "Interleaved little-endian f32 PCM samples, base64-encoded."
+        })
+    }
 }
 
 /// A speaker label as it travels through ASR / Speaker outputs.

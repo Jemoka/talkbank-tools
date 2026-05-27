@@ -2,6 +2,7 @@
 //!
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::FaInput, FaOutput`. !!!
 
+use crate::register_proto_schema;
 use crate::utils::PreparedAudio;
 use crate::proto::asr::{AsrSegment, LanguageSpec};
 use crate::utils::SourceId;
@@ -31,3 +32,6 @@ pub struct FaOutput {
     /// Utterances with refined word timings.
     pub utterances: Vec<AsrSegment>,
 }
+
+register_proto_schema!(FaInput);
+register_proto_schema!(FaOutput);

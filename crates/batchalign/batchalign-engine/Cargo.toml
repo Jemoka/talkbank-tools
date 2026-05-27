@@ -47,6 +47,15 @@ tracing = "0.1"
 
 pyo3 = { version = "0.28", features = ["macros"] }
 
+[build-dependencies]
+# Used by `build.rs` to walk the proto-schema inventory and emit
+# `_proto_generated.py` into the Python source tree before maturin
+# packages the wheel. Mirrors the runtime path of `batchalign-core` so
+# the schema build script sees every `register_proto_schema!` registration.
+batchalign-core = { path = "../batchalign-core" }
+inventory = "0.3"
+serde_json = "1"
+
 [dev-dependencies]
 tempfile = "3"
 

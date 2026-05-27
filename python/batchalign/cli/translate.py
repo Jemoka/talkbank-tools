@@ -8,7 +8,9 @@ from typing import Any
 
 import typer
 
-from ._common import collect_chat, import_ba, write_outcomes
+from ._common import collect_chat_inputs, write_outcomes
+from ._options import cli_options
+from .tui import Interface, Task
 
 
 class TranslateEngine(str, Enum):
@@ -21,8 +23,18 @@ class TranslateEngine(str, Enum):
 def register(app: typer.Typer) -> None:
     @app.command()
     def translate(
-        paths: list[Path] = typer.Argument(..., exists=True, help="CHAT files or directories."),
-        out: Path = typer.Option(..., "--out", "-o", help="Output directory."),
+        ctx: typer.Context,
+        folder: Path = typer.Argument(
+            ...,
+            exists=True,
+            help="Folder to walk recursively for CHAT files (single file also accepted).",
+        ),
+        out: Path | None = typer.Option(
+            None,
+            "--out",
+            "-o",
+            help="Optional output folder; if omitted, each source file is overwritten in place.",
+        ),
         target: str = typer.Option("eng", "--target", help="Target language code (ISO 639-3)."),
         engine: TranslateEngine = typer.Option(
             TranslateEngine.google,
@@ -31,12 +43,28 @@ def register(app: typer.Typer) -> None:
         ),
     ) -> None:
         """Translate utterances; emits CHAT with `%eng:` tiers."""
-        ba = import_ba()
-        backend: Any
-        if engine is TranslateEngine.google:
-            backend = ba.GoogleTranslateBackend(target=target)
-        else:
-            backend = ba.VllmTranslateBackend(target=target)
-        pipeline = ba.recipes.translate(translate_backend=backend)
-        outcomes = pipeline.run(collect_chat(paths))
-        write_outcomes(outcomes, out)
+        import batchalign as ba
+
+        opts = cli_options(ctx)
+
+        with Interface.open(
+            command="translate",
+            params={"engine": engine.value, "target": target},
+            output=out,
+            verbosity=opts.verbosity,
+            plain=opts.plain,
+            quiet=opts.quiet,
+        ) as ui:
+            backend: Any
+            if engine is TranslateEngine.google:
+                backend = ba.GoogleTranslateBackend(target=target)
+            else:
+                backend = ba.VllmTranslateBackend(target=target)
+            pipeline = ba.recipes.translate(translate_backend=backend)
+            inputs, root = collect_chat_inputs(folder)
+            for inp in inputs:
+                ui.push(Task.from_input(inp))
+            outcomes = list(ui.run_pipeline(pipeline, inputs))
+            write_outcomes(outcomes, root, out)
+
+        raise typer.Exit(code=ui.exit_code)

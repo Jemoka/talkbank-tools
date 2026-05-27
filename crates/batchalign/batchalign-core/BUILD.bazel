@@ -9,7 +9,7 @@ workspace links are listed explicitly per MEMORY.md.
 """
 
 load("@crates//:defs.bzl", "aliases", "all_crate_deps")
-load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -19,15 +19,43 @@ _INTRA = [
     "//crates/core/talkbank-transform:talkbank_transform",
 ]
 
+# `srcs` excludes `src/bin/**` so the library compile doesn't double-count
+# the binary entry points. The schema emitter is built as its own
+# `rust_binary` below.
 rust_library(
     name = "batchalign_core",
-    srcs = glob(["src/**/*.rs"]),
+    srcs = glob(["src/**/*.rs"], exclude = ["src/bin/**"]),
     aliases = aliases(),
     crate_features = ["python"],
     crate_name = "batchalign_core",
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
     deps = all_crate_deps(normal = True) + _INTRA,
+)
+
+# Schema emitter binary. Consumed by `:proto_schema_json` below as the input
+# to the Python codegen pipeline. The set of emitted types is hand-listed in
+# `src/bin/emit_proto_schema.rs`; adding a Rust proto type means also adding
+# it there.
+rust_binary(
+    name = "emit_proto_schema",
+    srcs = ["src/bin/emit_proto_schema.rs"],
+    aliases = aliases(),
+    crate_features = ["python"],
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + _INTRA + [":batchalign_core"],
+)
+
+# `proto.schema.json` — the unified JSON Schema for every wire type.
+# Regenerated on any change to the schema emitter source or to its
+# transitive Rust deps (i.e. any proto file). Consumed by the Python
+# codegen genrule at `//python/batchalign/_core:_proto_generated`.
+genrule(
+    name = "proto_schema_json",
+    outs = ["proto.schema.json"],
+    cmd = "$(execpath :emit_proto_schema) $@",
+    tools = [":emit_proto_schema"],
 )
 
 rust_test(
@@ -48,7 +76,11 @@ rust_test(
     aliases = aliases(normal_dev = True, proc_macro_dev = True),
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
-    deps = all_crate_deps(normal_dev = True) + _INTRA + [":batchalign_core"],
+    # `inventory` is a regular dep on batchalign-core (used by the
+    # link-time proto registry). The test enumerates registered types so
+    # it needs to depend on inventory directly, not just transitively.
+    deps = all_crate_deps(normal_dev = True) + all_crate_deps(normal = True) +
+        _INTRA + [":batchalign_core"],
 )
 
 # Each of the four spec2.md goal scenarios — ASR, UtSeg, Compare,
