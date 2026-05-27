@@ -2,9 +2,12 @@
 //!
 //! Strategy: walk the validated CHAT in `BAValue::Chat`. For every utterance,
 //! call the UtSeg backend with the utterance's spoken text wrapped as an
-//! `AsrSegment`; the backend returns `UtteranceSpan`s that define how to
-//! cut the blob. Rewrite the CHAT by emitting one main-tier line per span
-//! and reparse via `Chat::parse` to keep the typestate invariants.
+//! `AsrSegment`; the backend returns `UtteranceSpan`s (each its own
+//! sub-utterance, carrying the BERT-predicted terminator). The runner then
+//! rebuilds the document via the typed `talkbank_transform::build_chat`
+//! constructor — no CHAT text is assembled by hand and nothing round-trips
+//! through `to_chat()`/`parse` (building/inspecting CHAT as strings is
+//! forbidden; see `CLAUDE.md`).
 //!
 //! Per spec2.md §5 / §8 and the BA2 `pipelines/utterance/` reference.
 
@@ -19,6 +22,8 @@ use crate::proto::utseg::{UtSegInput, UtSegOutput};
 use crate::utils::SourceId;
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
+use std::collections::BTreeSet;
+use talkbank_model::alignment::helpers::{WordItem, walk_words};
 
 /// UtSeg runner — `Task::UtSeg` entry point.
 pub struct UtSegTaskRunner;
@@ -46,48 +51,44 @@ impl TaskRunner for UtSegTaskRunner {
         let source_id = chat.source_id().clone();
         sink.emit(ProgressEvent::stage_started(&source_id, Task::UtSeg));
 
-        // Collect per-utterance "rows" to dispatch.
+        // Preserve any attached media + the file's languages across the rebuild.
+        let media = chat.media().cloned();
+        let langs: Vec<String> = chat
+            .ast()
+            .languages
+            .iter()
+            .map(|c| c.as_str().to_string())
+            .collect();
+
+        // Per-utterance text (typed extraction via `walk_words`) → dispatch →
+        // collect the re-segmented sub-utterances.
         let rows: Vec<UtteranceRow> = collect_utterance_rows(chat);
-
-        let text_before = chat.to_chat();
-        let mut new_text = String::with_capacity(text_before.len());
-
-        let mut row_iter = rows.into_iter();
-        for line in text_before.lines() {
-            if is_main_tier_line(line) {
-                // Pair with the corresponding row.
-                let Some(row) = row_iter.next() else {
-                    new_text.push_str(line);
-                    new_text.push('\n');
-                    continue;
-                };
-                let input = UtSegInput {
-                    source_id: source_id.clone(),
-                    segments: vec![row.as_segment()],
-                    // Language: per-file from `@Languages:`. Stanza fallback:
-                    // off here; if you want it, wire it on the backend
-                    // (`StanzaUtSegBackend(...)` or similar).
-                    language: LanguageSpec::PerFile,
-                    stanza_fallback: false,
-                };
-                let out_raw = dispatcher.dispatch(TaskInput::UtSeg(input)).await?;
-                let out: UtSegOutput = out_raw.try_into()?;
-                emit_split_lines(&row, &out, &mut new_text);
-            } else {
-                new_text.push_str(line);
-                new_text.push('\n');
-            }
+        let mut new_utts: Vec<NewUtterance> = Vec::new();
+        for row in &rows {
+            let input = UtSegInput {
+                source_id: source_id.clone(),
+                segments: vec![row.as_segment()],
+                // Language is per-file from `@Languages:`; the backend pins its
+                // own model at construction.
+                language: LanguageSpec::PerFile,
+                stanza_fallback: false,
+            };
+            let out_raw = dispatcher.dispatch(TaskInput::UtSeg(input)).await?;
+            let out: UtSegOutput = out_raw.try_into()?;
+            collect_split(row, &out, &mut new_utts);
         }
 
-        let new_chat = Chat::parse(&new_text, source_id.clone())?;
+        let mut new_chat = build_chat_from_utterances(&source_id, &langs, &new_utts)?;
+        if let Some(m) = media {
+            new_chat = new_chat.with_media(m);
+        }
         *value = BAValue::Chat(new_chat);
         sink.emit(ProgressEvent::stage_injected(&source_id, Task::UtSeg));
         Ok(())
     }
 }
 
-/// One utterance's pre-split metadata, used to build the UtSeg request and
-/// later reformat the emitted lines.
+/// One utterance's pre-split metadata: speaker + spoken text + media window.
 #[derive(Debug, Clone)]
 struct UtteranceRow {
     speaker: String,
@@ -108,84 +109,142 @@ impl UtteranceRow {
     }
 }
 
-/// Pull `(speaker, text, span)` for each utterance in document order.
+/// A sub-utterance to emit after segmentation: speaker, its CHAT content
+/// (including the BERT-predicted terminator), and an optional media window.
+#[derive(Debug, Clone)]
+struct NewUtterance {
+    speaker: String,
+    text: String,
+    bullet: Option<(u64, u64)>,
+}
+
+/// Pull `(speaker, spoken text, media window)` for each utterance in document
+/// order, reading the typed AST directly (no `to_chat()` round-trip).
 fn collect_utterance_rows(chat: &Chat) -> Vec<UtteranceRow> {
     chat.ast()
         .utterances()
         .map(|u| {
-            let speaker = u.main.speaker.to_string();
-            // `to_chat()` round-trips the tier content faithfully.
-            let line = u.to_chat();
-            let text = extract_text_after_speaker(&line);
+            let speaker = u.main.speaker.as_str().to_string();
+            let mut words: Vec<String> = Vec::new();
+            walk_words(&u.main.content.content.0, None, &mut |w| match w {
+                WordItem::Word(x) => words.push(x.cleaned_text().to_string()),
+                WordItem::ReplacedWord(r) => words.push(r.word.cleaned_text().to_string()),
+                WordItem::Separator(_) => {}
+            });
+            let (start_ms, end_ms) = u
+                .main
+                .content
+                .bullet
+                .as_ref()
+                .map(|b| (b.timing.start_ms, b.timing.end_ms))
+                .unwrap_or((0, 0));
             UtteranceRow {
                 speaker,
-                text,
-                start_ms: 0,
-                end_ms: 0,
+                text: words.join(" "),
+                start_ms,
+                end_ms,
             }
         })
         .collect()
 }
 
-fn extract_text_after_speaker(line: &str) -> String {
-    // Line shape: `*SPK:\t<content>\n`. Strip header, terminator, and any
-    // trailing bullet so UtSeg sees pure text.
-    let body = match line.find('\t') {
-        Some(i) => &line[i + 1..],
-        None => line,
-    };
-    let body = body.trim_end_matches('\n');
-    // Strip trailing bullet `\u{15}..\u{15}`.
-    let no_bullet = if let Some(i) = body.find('\u{15}') {
-        body[..i].trim_end()
-    } else {
-        body
-    };
-    no_bullet
-        .trim_end_matches(|c: char| matches!(c, '.' | '!' | '?'))
-        .trim()
-        .to_string()
-}
-
-fn is_main_tier_line(line: &str) -> bool {
-    line.starts_with('*') && line.contains(':')
-}
-
-fn emit_split_lines(row: &UtteranceRow, out: &UtSegOutput, sink: &mut String) {
+/// Append the segmenter's sub-utterances for one row. Falls back to the
+/// original (single) utterance when the backend returns no spans.
+fn collect_split(row: &UtteranceRow, out: &UtSegOutput, sink: &mut Vec<NewUtterance>) {
     if out.utterances.is_empty() {
-        // No split — fall back to a single line preserving original text.
-        sink.push_str(&format!("*{}:\t{} .\n", row.speaker, row.text));
+        if !row.text.trim().is_empty() {
+            // No split: keep the blob as one utterance with a default period.
+            sink.push(NewUtterance {
+                speaker: row.speaker.clone(),
+                text: format!("{} .", row.text.trim()),
+                bullet: None,
+            });
+        }
         return;
     }
     for span in &out.utterances {
-        let text = sanitize_text(&span.text);
+        let text = span.text.trim();
         if text.is_empty() {
             continue;
         }
         let bullet = if span.start_ms == 0 && span.end_ms == 0 {
-            String::new()
+            None
         } else {
-            format!(" \u{15}{}_{}\u{15}", span.start_ms, span.end_ms)
+            Some((span.start_ms, span.end_ms))
         };
-        sink.push_str(&format!("*{}:\t{} .{}\n", row.speaker, text, bullet));
+        sink.push(NewUtterance {
+            speaker: row.speaker.clone(),
+            // The span text already carries the BERT-predicted terminator
+            // (`.`/`?`/`!`); pass it through verbatim for tree-sitter to parse.
+            text: text.to_string(),
+            bullet,
+        });
     }
 }
 
-fn sanitize_text(s: &str) -> String {
-    let cleaned: String = s
-        .chars()
-        .filter(|c| {
-            !matches!(
-                c,
-                '\t' | '\n' | '\r' | '*' | '%' | '@' | '<' | '>' | '[' | ']' | '/' | '\\'
-            )
+/// Rebuild a typed CHAT document from the re-segmented utterances via the
+/// official `build_chat` constructor (text mode parses each utterance's content
+/// through tree-sitter, so disfluency/retrace markers round-trip typed).
+fn build_chat_from_utterances(
+    source_id: &SourceId,
+    langs: &[String],
+    utts: &[NewUtterance],
+) -> BAResult<Chat> {
+    use talkbank_model::ErrorCollector;
+    use talkbank_transform::build_chat::{
+        ParticipantDesc, TranscriptDescription, UtteranceDesc, build_chat,
+    };
+
+    // Participants: unique speaker codes in first-appearance order.
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut codes: Vec<String> = Vec::new();
+    for u in utts {
+        if seen.insert(u.speaker.clone()) {
+            codes.push(u.speaker.clone());
+        }
+    }
+    if codes.is_empty() {
+        codes.push("PAR1".to_string());
+    }
+    let participants = codes
+        .iter()
+        .map(|code| ParticipantDesc {
+            id: code.clone(),
+            name: None,
+            role: "Participant".to_string(),
+            corpus: "batchalign".to_string(),
         })
         .collect();
-    cleaned
-        .trim()
-        .trim_end_matches(|c: char| matches!(c, '.' | '!' | '?' | ',' | ';' | ':'))
-        .trim_end()
-        .to_string()
+
+    let utterances = utts
+        .iter()
+        .map(|u| UtteranceDesc {
+            speaker: u.speaker.clone(),
+            words: None,
+            text: Some(u.text.clone()),
+            start_ms: u.bullet.map(|b| b.0),
+            end_ms: u.bullet.map(|b| b.1),
+            lang: None,
+        })
+        .collect();
+
+    let desc = TranscriptDescription {
+        langs: if langs.is_empty() {
+            vec!["eng".to_string()]
+        } else {
+            langs.to_vec()
+        },
+        participants,
+        media_name: None,
+        media_type: Some("audio".to_string()),
+        utterances,
+        write_wor: false,
+    };
+
+    let chat_file = build_chat(&desc).map_err(|e| BAError::Internal(format!("build_chat: {e}")))?;
+    let collector = ErrorCollector::new();
+    let validated = chat_file.validate_into(&collector, None);
+    Ok(Chat::from_validated_ast(validated, source_id.clone()))
 }
 
 #[cfg(test)]
@@ -227,16 +286,17 @@ mod tests {
             outputs: Mutex::new(vec![UtSegOutput {
                 source_id: sid.clone(),
                 utterances: vec![
+                    // Spans carry the BERT-predicted terminator, as in production.
                     UtteranceSpan {
                         start_ms: 0,
                         end_ms: 0,
-                        text: "hello there".into(),
+                        text: "hello there .".into(),
                         words: vec![],
                     },
                     UtteranceSpan {
                         start_ms: 0,
                         end_ms: 0,
-                        text: "general kenobi".into(),
+                        text: "general kenobi .".into(),
                         words: vec![],
                     },
                 ],
