@@ -1,35 +1,50 @@
 """StanzaBackend: Universal-Dependencies morphosyntax tagging.
 
-Per-language Stanza pipelines, lazily loaded. Mirrors the structure of
-BA2's morphosyntax handler at
-`batchalign2/batchalign/pipelines/morphosyntax/ud.py` (`parse_sentence`,
-HANDLERS dict, per-language `en/`, `fr/`, `ja/` subdirs) — but in this
-rewrite the per-language POS handlers move into the Rust-side
-runner where the AST is mutated. Here the backend's job is narrower:
-hand back UD-tagged morphology, no AST awareness.
+Faithful port of BA2's morphosyntax handler
+(`batchalign2/batchalign/pipelines/morphosyntax/ud.py`). The per-POS UD→CHAT
+handlers and the `%mor`/`%gra` assembler live in `ud/render.py` (copied
+line-for-line); this backend owns the Stanza pipeline and the per-utterance
+preprocessing that BA2's `morphoanalyze` did (deriving the terminator,
+cleaning the line, running Stanza with `tokenize_no_ssplit`, taking the first
+sentence, and the `~part|s verb` post-substitution).
 
-CRITICAL — retokenization behavior (`retokenize: bool`):
-  BA2 supports two modes:
-    - retokenize=False: Stanza processes raw utterance text as-is.
-    - retokenize=True: per-language BERT utterance-segmentation model
-      first carves the ASR blob into utterances; Stanza then runs per
-      utterance.
-  Reference: batchalign2/batchalign/pipelines/morphosyntax/ud.py
-  (around `parse_sentence` and the surrounding orchestrator). In the new
-  design, utterance segmentation is a separate task (`Task.UtSeg`), so
-  `retokenize` on the Morphosyntax backend is a *fallback* — if the
-  input already has utterance boundaries, we honor them; otherwise we
-  use Stanza's tokenizer to re-split.
+The Rust morphosyntax runner passes the backend's pre-rendered `mor`/`gra`
+strings straight through (`render_mor`/`render_gra` return `out.mor`/`out.gra`
+verbatim when present), so producing BA2-identical tier strings here is
+sufficient for `%mor`/`%gra` parity — no Rust changes needed for rendering.
 
-This project supports UD `%mor` syntax only (see CLAUDE.md). Legacy
-CLAN-mor `&PRES` markers are NOT emitted.
+Pipeline config mirrors BA2 (`ud.py:_build_nlp`):
+  - `tokenize_no_ssplit=True` — the whole utterance is one sentence.
+  - English MWT uses the `gum` model; a fixed exclusion list disables MWT for
+    languages where Stanza's MWT is unwanted (zh*, ja, ko, …).
+  - Japanese uses the `combined` tokenize/pos/lemma/depparse models.
+
+This project supports UD `%mor` syntax only (see CLAUDE.md). Legacy CLAN-mor
+`&PRES` markers are never emitted.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from batchalign.backends.base import Morphosyntax, BatchPolicy
+from batchalign.backends.morphosyntax.ud import render
+from batchalign.backends.morphosyntax.ud.lang import to_stanza
+
+# Languages for which Stanza's MWT splitter is disabled (BA2 ud.py:1034-1036).
+_MWT_EXCLUSION = frozenset(
+    {
+        "hr", "zh", "zh-hans", "zh-hant", "ja", "ko", "sl", "sr", "bg", "ru",
+        "et", "hu", "eu", "el", "he", "af", "ga", "da", "ro",
+    }
+)
+
+# Post-substitution BA2 applies to the rendered %mor (ud.py:826).
+_PART_S_VERB_RE = re.compile(r"~part\|s verb\|(\w+)-Ger-S")
+
+# CHAT-marker cleanup applied to the line before Stanza (BA2 ud.py:730).
+_CLEANUP_RE = re.compile(r"\+<|\+/|\(|\)|\+\^|\+//|\+\.\.\.|_|[#]")
 
 
 class StanzaBackend(Morphosyntax):
@@ -42,27 +57,47 @@ class StanzaBackend(Morphosyntax):
         batch_size: int = 64,
         batch_window_ms: int = 100,
         retokenize: bool = False,
-        processors: str = "tokenize,mwt,pos,lemma,depparse",
+        processors: str | None = None,
     ) -> None:
         import stanza  # type: ignore[import-not-found]
 
         self._stanza = stanza
-        self._lang = lang
+        # `lang` may arrive as ISO-639-3 (`eng`) or already Stanza-shaped
+        # (`en`); normalize for both the pipeline and the handler dispatch.
+        self._lang = to_stanza(lang)
         self._retokenize = retokenize
-        self._processors = processors
-        # Per-language Stanza pipeline. `tokenize_pretokenized=True` would
-        # disable Stanza's own splitter; we leave it as default so the
-        # `retokenize=True` path can lean on Stanza's tokenizer.
-        self._nlp = stanza.Pipeline(
-            lang,
-            processors=processors,
-            verbose=False,
-        )
+        self._nlp = self._build_pipeline(stanza)
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
+
+    def _build_pipeline(self, stanza: Any) -> Any:
+        """Construct the Stanza pipeline with BA2-matching configuration."""
+        lang = self._lang
+        config: dict[str, Any] = {
+            "processors": {
+                "tokenize": "default",
+                "pos": "default",
+                "lemma": "default",
+                "depparse": "default",
+            },
+            "tokenize_no_ssplit": True,
+            "verbose": False,
+        }
+
+        if lang == "zh":
+            lang = "zh-hans"
+        elif lang not in _MWT_EXCLUSION:
+            # MWT only when the model is available and not excluded.
+            config["processors"]["mwt"] = "gum" if lang == "en" else "default"
+
+        if lang == "ja":
+            for proc in ("tokenize", "pos", "lemma", "depparse"):
+                config["processors"][proc] = "combined"
+
+        self._lang = lang
+        return stanza.Pipeline(lang=lang, **config)
 
     @property
     def name(self) -> str:
-        # Embed stanza version so cache invalidates on stanza upgrades.
         version = getattr(self._stanza, "__version__", "unknown")
         retok = "retok" if self._retokenize else "noretok"
         return f"stanza:{self._lang}:{version}:{retok}"
@@ -84,12 +119,12 @@ class StanzaBackend(Morphosyntax):
                 raise NotImplementedError(
                     f"StanzaBackend does not handle input type: {type(item).__name__}"
                 )
-            # Per-utterance shape: build text either from `item.text` or by
-            # rejoining `item.tokens`. `item.retokenize` lets Stanza's own
-            # tokenizer resplit the input; otherwise we still process as one
-            # block but trust the upstream token boundaries when emitting.
             text = item.text or " ".join(item.tokens)
-            tokens, mor_line, gra_line = self._tag_utterance(text)
+            # The Rust runner strips the utterance terminator before building
+            # the token list, so it ships it separately. Pre-`terminator`
+            # builds (no field) default to a period.
+            ending = getattr(item, "terminator", "") or "."
+            tokens, mor_line, gra_line = self._tag_utterance(text, ending)
             outputs.append(
                 MorphosyntaxOutput(
                     source_id=item.source_id,
@@ -103,50 +138,45 @@ class StanzaBackend(Morphosyntax):
 
     # ----- internals -----------------------------------------------------
 
-    def _tag_utterance(
-        self, text: str
-    ) -> tuple[list["Any"], str, str]:
-        """Run Stanza on a single utterance.
+    def _tag_utterance(self, text: str, ending: str) -> tuple[list[Any], str, str]:
+        """Run Stanza on one utterance and render BA2-faithful tiers.
 
-        Returns a `(tokens, mor_line, gra_line)` triple where:
-        - `tokens` is a list of `MorphosyntaxToken` (one per Stanza word).
-        - `mor_line` / `gra_line` are pre-rendered tier strings so the Rust
-          runner can drop them in directly without re-rendering.
+        Returns `(tokens, mor_line, gra_line)`: `tokens` is a best-effort
+        list of `MorphosyntaxToken` (one per Stanza word); `mor_line` /
+        `gra_line` are the pre-rendered tier strings (no leading label) that
+        the Rust runner drops straight into the AST.
         """
         from batchalign._core.proto import MorphosyntaxToken
 
-        doc = self._nlp(text)
+        line_cut = render.clean_sentence(text)
+        line_cut = _CLEANUP_RE.sub("", line_cut).strip()
+        if not line_cut:
+            return [], "", ""
+
+        doc = self._nlp(line_cut.replace("(", "").replace(")", "").strip())
+        sents = getattr(doc, "sentences", [])
+        if not sents:
+            return [], "", ""
+
+        # BA2 processes only the first sentence (tokenize_no_ssplit makes the
+        # whole utterance one sentence).
+        sent = sents[0]
+        mor_line, gra_line = render.parse_sentence(sent, ending, [], self._lang)
+        mor_line = _PART_S_VERB_RE.sub(r"~aux|is verb|\1-Part-Pres-S", mor_line)
+
         tokens: list[MorphosyntaxToken] = []
-        mor_parts: list[str] = []
-        gra_parts: list[str] = []
-        for sent in doc.sentences:
-            for word in sent.words:
-                tokens.append(
-                    MorphosyntaxToken(
-                        text=getattr(word, "text", ""),
-                        lemma=getattr(word, "lemma", "") or getattr(word, "text", ""),
-                        upos=getattr(word, "upos", None)
-                        or getattr(word, "pos", "X"),
-                        features=self._split_feats(getattr(word, "feats", None)),
-                        head=getattr(word, "head", None),
-                        deprel=getattr(word, "deprel", None),
-                    )
+        for word in sent.words:
+            tokens.append(
+                MorphosyntaxToken(
+                    text=getattr(word, "text", ""),
+                    lemma=getattr(word, "lemma", "") or getattr(word, "text", ""),
+                    upos=getattr(word, "upos", None) or getattr(word, "pos", "X"),
+                    features=self._split_feats(getattr(word, "feats", None)),
+                    head=getattr(word, "head", None),
+                    deprel=getattr(word, "deprel", None),
                 )
-                mor_parts.append(self._format_mor(word))
-                gra_parts.append(self._format_gra(word))
-        # The CHAT grammar requires a terminator on `%mor:` (E305 otherwise).
-        # Append a trailing `.` so the tier round-trips through `Chat::parse`
-        # cleanly.
-        mor_line = " ".join(mor_parts)
-        if mor_line:
-            mor_line = mor_line + " ."
-        # `%gra:` is intentionally not emitted yet — the CHAT grammar's
-        # `%gra` tier rejects Stanza's `:` in deprels (`obl:agent`,
-        # `nsubj:pass`, etc.), and downstream tools that need dependency
-        # info read it off the typed AST anyway. We'll re-enable once a
-        # normalization layer that flattens `head:subtype` to a single
-        # allowed deprel lands.
-        return tokens, mor_line, ""
+            )
+        return tokens, mor_line, gra_line
 
     @staticmethod
     def _split_feats(feats: Any) -> list[str]:
@@ -154,64 +184,6 @@ class StanzaBackend(Morphosyntax):
         if not feats:
             return []
         return [kv.split("=", 1)[1] for kv in feats.split("|") if "=" in kv]
-
-    def _tag_utterances(self, utterances: list[str]) -> tuple[list[str], list[str]]:
-        """Run Stanza on each utterance string, returning (%mor, %gra) lines.
-
-        If `retokenize=True` and an utterance contains internal sentence
-        boundaries (period, `!`, `?`), Stanza's tokenizer will split it
-        and we concatenate per-sentence results. Without retokenize, the
-        whole utterance is forced into a single sentence by feeding it
-        as-is and concatenating Stanza-detected sentences anyway — the
-        difference is whether the caller relies on Stanza's sentence
-        splitter to fix segmentation errors.
-        """
-        mor_lines: list[str] = []
-        gra_lines: list[str] = []
-        for text in utterances:
-            doc = self._nlp(text)
-            mor_parts: list[str] = []
-            gra_parts: list[str] = []
-            for sent in doc.sentences:
-                for word in sent.words:
-                    mor_parts.append(self._format_mor(word))
-                    gra_parts.append(self._format_gra(word))
-            mor_lines.append(" ".join(mor_parts))
-            gra_lines.append(" ".join(gra_parts))
-        return mor_lines, gra_lines
-
-    @staticmethod
-    def _format_mor(word: Any) -> str:
-        """`POS|lemma[-Feat]*` in UD syntax (sentence-case features).
-
-        Stanza emits raw `Person=3|Number=Plur|...` style; the project's
-        `%mor:` grammar rejects bare digit features (`-3-` is invalid) so
-        we filter pure-numeric values out of the suffix. Real letter
-        features (`Past`, `Plur`, `Ind`, `Sing`, ...) come through unchanged.
-        """
-        upos = getattr(word, "upos", None) or getattr(word, "pos", "X")
-        lemma = getattr(word, "lemma", None) or getattr(word, "text", "")
-        feats = getattr(word, "feats", None)
-        if feats:
-            values: list[str] = []
-            for kv in feats.split("|"):
-                if "=" not in kv:
-                    continue
-                val = kv.split("=", 1)[1]
-                if val and not val.isdigit():
-                    values.append(val)
-            tail = "-" + "-".join(values) if values else ""
-        else:
-            tail = ""
-        return f"{upos}|{lemma}{tail}"
-
-    @staticmethod
-    def _format_gra(word: Any) -> str:
-        """`index|head|deprel` triple for the `%gra` tier."""
-        idx = getattr(word, "id", 0)
-        head = getattr(word, "head", 0)
-        deprel = getattr(word, "deprel", "ROOT")
-        return f"{idx}|{head}|{deprel}"
 
 
 __all__ = ["StanzaBackend"]
