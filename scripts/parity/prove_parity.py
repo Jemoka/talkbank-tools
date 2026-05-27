@@ -131,6 +131,15 @@ MATRIX: list[Cell] = [
         ba2=["--override-cache"],
         ba3=["--language", "zh"],
     ),
+    Cell(
+        command="morphotag",
+        engine="stanza",
+        language="codeswitch-en-es",
+        fixture="morphotag/codeswitch_en_es.cha",
+        kind="morphotag",
+        ba2=["--override-cache"],
+        ba3=["--language", "en,es"],
+    ),
     # ---- translate (Google free tier; deterministic given the same input) ----
     Cell(
         command="translate",
