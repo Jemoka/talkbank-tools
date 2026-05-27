@@ -140,6 +140,17 @@ MATRIX: list[Cell] = [
         ba2=["--override-cache"],
         ba3=["--language", "en,es"],
     ),
+    # ---- transcribe (rev: cloud ASR, deterministic; + CHATUtterance seg) ----
+    Cell(
+        command="transcribe",
+        engine="rev",
+        language="en",
+        fixture="transcribe/en.wav",
+        kind="segmentation",
+        # BA2's default ASR engine is rev; lang from --lang, 1 speaker.
+        ba2=["--lang", "eng", "-n", "1"],
+        ba3=["--engine", "rev", "--language", "en", "-n", "1"],
+    ),
     # ---- translate (Google free tier; deterministic given the same input) ----
     Cell(
         command="translate",
@@ -185,9 +196,19 @@ def extract_morphotag(cha: str) -> list[str]:
     return _tier_lines(cha, ("mor", "gra"))
 
 
+def _strip_bullet(line: str) -> str:
+    """Drop the alignment timing bullet from a main-tier line. BA2 emits a
+    trailing ` <start>_<end>` (or a `\\x15..\\x15` bullet); for transcribe the
+    important lines are speaker + segmentation + text, not the timing."""
+    line = re.sub(r"\x15[^\x15]*\x15", "", line)   # \x15-delimited bullet
+    line = re.sub(r"\s+\d+_\d+\s*$", "", line)     # plain " start_end"
+    return line
+
+
 def extract_segmentation(cha: str) -> list[str]:
-    """Speaker + per-utterance segmentation only (transcribe): the `*SPK:` lines."""
-    return [_norm(l) for l in cha.splitlines() if l.startswith("*")]
+    """Speaker + per-utterance segmentation + text (transcribe): the `*SPK:`
+    lines, with timing bullets stripped (those are alignment/cosmetic here)."""
+    return [_norm(_strip_bullet(l)) for l in cha.splitlines() if l.startswith("*")]
 
 
 def extract_wor(cha: str) -> list[str]:
