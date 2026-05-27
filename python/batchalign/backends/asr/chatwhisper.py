@@ -375,10 +375,12 @@ class ChatWhisperBackend(ASR):
         }
         if device is not None:
             pipe_kwargs["device"] = device
-        # The finetuned CHATWhisper-en repo ships no tokenizer vocab; BA2 loads
-        # the tokenizer from `base` (the upstream Whisper). Pass it explicitly
-        # so the pipeline doesn't try (and fail) to load one from `model`.
+        # The finetuned CHATWhisper-en repo ships no tokenizer vocab, and its
+        # feature extractor's mel-bin count can mismatch the v2-based model
+        # (→ garbage decode). BA2 takes both tokenizer + processor from `base`
+        # (the upstream Whisper), so pin both here.
         pipe_kwargs["tokenizer"] = base
+        pipe_kwargs["feature_extractor"] = base
         try:
             self._pipe = pipeline(
                 "automatic-speech-recognition", model=model,
@@ -423,45 +425,36 @@ class ChatWhisperBackend(ASR):
             gen_kwargs["task"] = "transcribe"
             if self._whisper_lang:
                 gen_kwargs["language"] = self._whisper_lang
+        # Segment-level timestamps (BA2 uses `return_timestamps=True`; the
+        # word-level mode breaks decoding for the finetuned CHATWhisper model).
+        # We only need the TEXT — the CHATUtterance UtSeg stage segments it and
+        # applies disfluency/retrace, exactly as BA2 pairs its BERT segmenter to
+        # the ASR output.
         result = self._pipe(
             {"array": wave, "sampling_rate": item.audio.sample_rate},
-            return_timestamps="word",
+            return_timestamps=True,
             generate_kwargs=gen_kwargs,
         )
 
-        # Flatten to (text, start_ms, end_ms), expanding number words, dropping
-        # empties and pseudo-tokens (BA2 process_generation).
-        words: list[tuple[str, int | None, int | None]] = []
-        for chunk in result.get("chunks", []):
-            txt = (chunk.get("text") or "").strip()
-            if not txt or re.match(r"<.*>", txt):
-                continue
-            ts = chunk.get("timestamp") or (None, None)
-            s = int(ts[0] * 1000) if ts[0] is not None else None
-            e = int(ts[1] * 1000) if ts[1] is not None else s
-            words.append((num2words_en(txt), s, e))
-
-        if not words:
+        text = (result.get("text") or "").strip()
+        if not text:
             return AsrOutput(source_id=item.source_id, segments=[])
 
-        # Emit ONE raw segment (the whole monologue). Utterance segmentation +
-        # disfluency/retrace cleanup is the CHATUtterance UtSeg stage's job (the
-        # transcribe recipe pairs it), exactly as BA2 applies its BERT segmenter
-        # to the ASR word stream. This unifies chatwhisper with the other ASR
-        # engines instead of segmenting internally without cleanup.
-        timed = [w for w in words if w[1] is not None]
-        start_ms = timed[0][1] if timed else 0
-        end_ms = timed[-1][2] if timed else start_ms
-        asr_words = [
-            AsrWord(text=t, start_ms=s or 0, end_ms=e or (s or 0), confidence=None)
-            for (t, s, e) in words
-        ]
+        chunks = result.get("chunks") or []
+        start_ms = 0
+        end_ms = 0
+        if chunks:
+            first_ts = chunks[0].get("timestamp") or (0.0, 0.0)
+            last_ts = chunks[-1].get("timestamp") or (0.0, 0.0)
+            start_ms = int((first_ts[0] or 0.0) * 1000)
+            end_ms = int((last_ts[1] or first_ts[0] or 0.0) * 1000)
+
         segment = AsrSegment(
             start_ms=start_ms,
             end_ms=end_ms,
-            text=" ".join(t for t, _, _ in words),
+            text=text,
             speaker=None,
-            words=asr_words,
+            words=[],
         )
         return AsrOutput(source_id=item.source_id, segments=[segment])
 
