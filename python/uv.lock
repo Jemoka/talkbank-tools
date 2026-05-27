@@ -526,8 +526,8 @@ all = [
     { name = "googletrans" },
     { name = "httpx" },
     { name = "librosa" },
-    { name = "onnxruntime", version = "1.24.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "onnxruntime", version = "1.25.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "nltk" },
+    { name = "onnxruntime" },
     { name = "openai" },
     { name = "opensmile" },
     { name = "praat-parselmouth" },
@@ -595,6 +595,7 @@ vllm = [
     { name = "openai" },
 ]
 whisper = [
+    { name = "nltk" },
     { name = "torch" },
     { name = "torchaudio" },
     { name = "transformers" },
@@ -650,6 +651,8 @@ requires-dist = [
     { name = "librosa", marker = "extra == 'vllm'", specifier = ">=0.10" },
     { name = "maturin", marker = "extra == 'dev'", specifier = "==1.7.4" },
     { name = "mypy", marker = "extra == 'dev'" },
+    { name = "nltk", marker = "extra == 'all'", specifier = ">=3.8" },
+    { name = "nltk", marker = "extra == 'whisper'", specifier = ">=3.8" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "onnxruntime", marker = "extra == 'all'", specifier = ">=1.16" },
     { name = "onnxruntime", marker = "extra == 'pyannote'", specifier = ">=1.16" },
@@ -3281,6 +3284,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/af/4c/fc2f9ed208a3801a319f59b5fea03cdc20cf3bd8af14be930d3a8de01224/nh3-0.3.5-cp38-abi3-win32.whl", hash = "sha256:559e4c73b689e9a7aa97ac9760b1bc488038d7c1a575aa4ab5a0e19ee9630c0f", size = 611445, upload-time = "2026-04-25T10:44:12.317Z" },
     { url = "https://files.pythonhosted.org/packages/db/1a/e4c9b5e2ae13e6092c9ec16d8ca30646cb01fcdea245f36c5b08fd21fbd5/nh3-0.3.5-cp38-abi3-win_amd64.whl", hash = "sha256:45e6a65dc88a300a2e3502cb9c8e6d1d6b831d6fba7470643333609c6aab1f30", size = 626502, upload-time = "2026-04-25T10:44:13.682Z" },
     { url = "https://files.pythonhosted.org/packages/80/7c/19cd0671d1ba2762fb388fc149697d20d0568ccfeef833b11280a619e526/nh3-0.3.5-cp38-abi3-win_arm64.whl", hash = "sha256:8f85285700a18e9f3fc5bff41fe573fa84f81542ef13b48a89f9fecca0474d3b", size = 611069, upload-time = "2026-04-25T10:44:14.934Z" },
+]
+
+[[package]]
+name = "nltk"
+version = "3.9.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "joblib" },
+    { name = "regex" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/74/a1/b3b4adf15585a5bc4c357adde150c01ebeeb642173ded4d871e89468767c/nltk-3.9.4.tar.gz", hash = "sha256:ed03bc098a40481310320808b2db712d95d13ca65b27372f8a403949c8b523d0", size = 2946864, upload-time = "2026-03-24T06:13:40.641Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9d/91/04e965f8e717ba0ab4bdca5c112deeab11c9e750d94c4d4602f050295d39/nltk-3.9.4-py3-none-any.whl", hash = "sha256:f2fa301c3a12718ce4a0e9305c5675299da5ad9e26068218b69d692fda84828f", size = 1552087, upload-time = "2026-03-24T06:13:38.47Z" },
 ]
 
 [[package]]

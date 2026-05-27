@@ -86,7 +86,7 @@ def register(app: typer.Typer) -> None:
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
-            asr_backend, rev_diarizes = _build_asr(ba, engine, model, language, vllm_url)
+            asr_backend, rev_diarizes = _build_asr(ba, engine, model, language, vllm_url, num_speakers)
             # Rev does its own diarization; for the Whisper family add Pyannote
             # when --diarize is requested.
             speaker_backend: Any = None
@@ -112,11 +112,11 @@ def register(app: typer.Typer) -> None:
         raise typer.Exit(code=ui.exit_code)
 
 
-def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vllm_url: str):
+def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vllm_url: str, num_speakers: int = 2):
     """Construct the ASR backend for `engine`. Returns (backend, rev_diarizes)."""
     m = model or _DEFAULT_MODEL.get(engine)
     if engine is AsrEngine.rev:
-        return ba.RevAI(language=language), True
+        return ba.RevAI(language=language, num_speakers=num_speakers), True
     if engine is AsrEngine.whisperx:
         return ba.WhisperXBackend(model=m, language=None if language == "auto" else language), False
     if engine is AsrEngine.whisper:

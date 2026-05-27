@@ -32,6 +32,7 @@ class RevAI(ASR, Speaker):
         api_key: str | None = None,
         *,
         language: str | None = None,
+        num_speakers: int = 2,
         poll_interval_s: float = 5.0,
         timeout_s: float = 3600.0,
     ) -> None:
@@ -44,6 +45,7 @@ class RevAI(ASR, Speaker):
             self._client = apiclient.RevAiAPIClient(key)
         self._poll = poll_interval_s
         self._timeout = timeout_s
+        self._num_speakers = num_speakers
         # Rev.AI language code (BA2 maps ISO-639-3 → -1, zho→cmn). `None`/"auto"
         # lets Rev pick its default (English).
         self._language = _rev_lang(language)
@@ -111,24 +113,41 @@ class RevAI(ASR, Speaker):
     # ----- HTTP submission ----------------------------------------------
 
     def _submit_and_wait(self, audio: Any) -> dict[str, Any]:
-        """Upload PCM-as-WAV, poll until ``transcribed``, return parsed JSON."""
+        """Upload PCM-as-WAV, poll until ``transcribed``, return parsed JSON.
+
+        Submit options mirror BA2's `RevEngine` (`pipelines/asr/rev.py`):
+        pass the resolved `language`, the expected `speakers_count`, and
+        `skip_postprocessing=True` for en/fr (where BA2 does its own
+        CHATUtterance segmentation rather than Rev's). These options change
+        Rev's returned transcript, so they must match for parity.
+        """
+        import os
+        import tempfile
         from rev_ai import JobStatus  # type: ignore[import-not-found]
 
         wav_bytes = _pcm_to_wav_bytes(audio)
-        submit_kwargs: dict[str, Any] = {}
+        # rev_ai 2.x `submit_job_local_file(filename=<path>, ...)` uploads a
+        # path, not a buffer — stage a temp WAV.
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp.write(wav_bytes)
+            tmp_path = tmp.name
+
+        submit_kwargs: dict[str, Any] = {
+            "metadata": "batchalign",
+            "speakers_count": self._num_speakers,
+            # BA2 skips Rev's own punctuation/segmentation postproc for the
+            # languages it re-segments itself (en/fr).
+            "skip_postprocessing": self._language in ("en", "fr"),
+        }
         if self._language:
             submit_kwargs["language"] = self._language
-        job = self._client.submit_job_local_file(
-            filename="audio.wav",
-            metadata="batchalign",
-            source_config=None,
-            content_type="audio/wav",
-            audio_data=io.BytesIO(wav_bytes),
-            **submit_kwargs,
-        ) if hasattr(self._client, "submit_job_local_file") else self._client.submit_job_local_file_buffer(
-            audio_data=io.BytesIO(wav_bytes),
-            filename="audio.wav",
-        )
+        try:
+            job = self._client.submit_job_local_file(tmp_path, **submit_kwargs)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
         deadline = time.monotonic() + self._timeout
         while True:
