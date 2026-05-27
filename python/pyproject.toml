@@ -58,9 +58,9 @@ dependencies = [
 # `batchalign[all]` is the kitchen sink for users who don't care.
 [project.optional-dependencies]
 # `nltk` powers the CHATUtterance BERT segmenter's sentence split (BA2 parity).
-whisper      = ["transformers>=4.38", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8"]
+whisper      = ["transformers>=4.57,<5", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8"]
 vllm         = ["openai>=1.0", "librosa>=0.10"]
-stanza       = ["stanza>=1.12", "transformers>=4.38"]
+stanza       = ["stanza>=1.12", "transformers>=4.57,<5"]
 pyannote     = ["pyannote.audio>=3.0", "onnxruntime>=1.16"]
 revai        = ["rev-ai"]
 cantonese    = ["pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "aliyun-python-sdk-core>=2.13", "funasr"]
@@ -82,7 +82,7 @@ api          = [
     "uvicorn[standard]>=0.30",
 ]
 all = [
-    "transformers>=4.38", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8",
+    "transformers>=4.57,<5", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8",
     "openai>=1.0", "librosa>=0.10",
     "stanza>=1.12",
     "pyannote.audio>=3.0", "onnxruntime>=1.16",
@@ -199,7 +199,7 @@ runtime = [
     "soundfile>=0.12",
     "stanza>=1.12",
     "tqdm>=4",
-    "transformers>=4.38",
+    "transformers>=4.57,<5",
     "typer>=0.12",
     # `batchalign.api` (the HTTP wrapper). Included so the Bazel-run
     # path can serve / test the API; mirrored as the `[api]` extra in
