@@ -211,12 +211,15 @@ class ChatWhisperBackend(ASR):
         batch_size: int = 1,
         batch_window_ms: int = 0,
     ) -> None:
-        import torch  # type: ignore[import-not-found]
+        import torch  # type: ignore[import-not-found]  # noqa: F401
         from transformers import (  # type: ignore[import-not-found]
             GenerationConfig,
             pipeline,
         )
 
+        from batchalign.backends.asr._torch_audio import disable_torchcodec
+
+        disable_torchcodec()
         model, base = _WHISPER_RESOLVE.get(lang, ("openai/whisper-large-v3", "openai/whisper-large-v3"))
         self._lang = lang
         self._model_id = model

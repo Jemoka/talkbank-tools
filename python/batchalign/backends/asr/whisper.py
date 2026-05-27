@@ -35,6 +35,9 @@ class WhisperBackend(ASR):
     ) -> None:
         from transformers import pipeline  # type: ignore[import-not-found]
 
+        from batchalign.backends.asr._torch_audio import disable_torchcodec
+
+        disable_torchcodec()
         kwargs: dict[str, Any] = {"chunk_length_s": chunk_length_s}
         if device is not None:
             kwargs["device"] = device
