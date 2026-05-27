@@ -62,8 +62,23 @@ set positional-arguments := true
 default:
     @just --list --justfile {{ justfile() }}
 
+# Regenerate the Python lockfiles from pyproject.toml IF pyproject changed.
+#
+# `uv.lock` and `requirements.lock.txt` are derived artifacts of
+# `python/pyproject.toml`; editing deps there must propagate to both before
+# any Bazel build, or the py_binary runs against a stale dependency set (e.g.
+# a newly-added `nltk` would be missing at runtime). This is mtime-guarded so
+# it's a no-op once the locks are current — regenerating `requirements.lock.txt`
+# bumps its mtime past pyproject's, so steady-state `cli`/`build` calls skip it.
+_synclock:
+    @if [ '{{ justfile_directory() }}/python/pyproject.toml' -nt '{{ justfile_directory() }}/python/requirements.lock.txt' ]; then \
+        echo "pyproject.toml changed → relocking (uv.lock + requirements.lock.txt)…"; \
+        (cd '{{ justfile_directory() }}/python' && uv lock) \
+        && bazel run //python:requirements; \
+    fi
+
 # Build every Batchalign Bazel target (Rust + py_binary + wheel).
-build profile="release":
+build profile="release": _synclock
     bazel build --config={{ if profile == "release" { "release" } else { "dev" } }} \
         //crates/batchalign/... //python/batchalign/...
 
@@ -80,7 +95,7 @@ test profile="release":
 # relative-path args (e.g. `../talkbank-alignment/foo`). `--run_under` is
 # prepended as a shell command, so cd-ing back to the user's invocation
 # directory restores the expected cwd semantics for path arguments.
-cli *args:
+cli *args: _synclock
     bazel run --run_under="cd '{{ invocation_directory() }}' && " \
         //python/batchalign -- "$@"
 
