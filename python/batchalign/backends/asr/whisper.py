@@ -27,6 +27,7 @@ class WhisperBackend(ASR):
         self,
         model: str = "openai/whisper-large-v3",
         *,
+        language: str | None = None,
         batch_size: int = 32,
         batch_window_ms: int = 50,
         device: str | None = None,
@@ -43,6 +44,10 @@ class WhisperBackend(ASR):
             **kwargs,
         )
         self._model = model
+        # Fallback language when the per-call input ships `Auto` (the runner
+        # always does); lets the CLI pin `--language`. `None`/"auto" means
+        # let Whisper auto-detect.
+        self._language = None if language in (None, "auto") else language
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
@@ -72,7 +77,9 @@ class WhisperBackend(ASR):
         from batchalign._core.proto import AsrSegment, AsrWord
 
         wave = np.frombuffer(item.audio.pcm_f32le, dtype=np.float32)
-        language = item.language.value if item.language.kind == "code" else None
+        language = (
+            item.language.value if item.language.kind == "code" else self._language
+        )
         gen_kwargs: dict[str, Any] = {}
         if language is not None:
             gen_kwargs["language"] = language

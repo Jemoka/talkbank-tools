@@ -31,6 +31,7 @@ class RevAI(ASR, Speaker):
         self,
         api_key: str | None = None,
         *,
+        language: str | None = None,
         poll_interval_s: float = 5.0,
         timeout_s: float = 3600.0,
     ) -> None:
@@ -43,6 +44,9 @@ class RevAI(ASR, Speaker):
             self._client = apiclient.RevAiAPIClient(key)
         self._poll = poll_interval_s
         self._timeout = timeout_s
+        # Rev.AI language code (BA2 maps ISO-639-3 → -1, zho→cmn). `None`/"auto"
+        # lets Rev pick its default (English).
+        self._language = _rev_lang(language)
         self._policy = BatchPolicy.one()
 
     @property
@@ -111,12 +115,16 @@ class RevAI(ASR, Speaker):
         from rev_ai import JobStatus  # type: ignore[import-not-found]
 
         wav_bytes = _pcm_to_wav_bytes(audio)
+        submit_kwargs: dict[str, Any] = {}
+        if self._language:
+            submit_kwargs["language"] = self._language
         job = self._client.submit_job_local_file(
             filename="audio.wav",
             metadata="batchalign",
             source_config=None,
             content_type="audio/wav",
             audio_data=io.BytesIO(wav_bytes),
+            **submit_kwargs,
         ) if hasattr(self._client, "submit_job_local_file") else self._client.submit_job_local_file_buffer(
             audio_data=io.BytesIO(wav_bytes),
             filename="audio.wav",
@@ -134,6 +142,31 @@ class RevAI(ASR, Speaker):
                 raise TimeoutError(f"Rev.AI job {job.id} did not finish in {self._timeout}s")
             time.sleep(self._poll)
         return self._client.get_transcript_json(job.id)
+
+
+def _rev_lang(code: str | None) -> str | None:
+    """Map a CHAT/ISO language code to Rev.AI's code (BA2's mapping).
+
+    `None`/"auto" → `None` (Rev defaults to English). ISO-639-3 is mapped to
+    -1 via pycountry; Mandarin (`zho`/`zh`) becomes `cmn`, which is what Rev
+    expects (BA2 `asr/rev.py`).
+    """
+    if not code or code == "auto":
+        return None
+    c = code.strip().lower()
+    if c in ("zho", "zh", "cmn", "zh-hans", "zh-hant"):
+        return "cmn"
+    if len(c) <= 2:
+        return c
+    try:
+        import pycountry  # type: ignore[import-not-found]
+
+        lang = pycountry.languages.get(alpha_3=c)
+        if lang is not None and getattr(lang, "alpha_2", None):
+            return lang.alpha_2
+    except Exception:
+        pass
+    return c
 
 
 # ---------------------------------------------------------------------------

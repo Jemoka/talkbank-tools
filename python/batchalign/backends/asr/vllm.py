@@ -21,6 +21,7 @@ class VllmAsrBackend(ASR):
         self,
         *,
         model: str = "openai/whisper-large-v3",
+        language: str | None = None,
         base_url: str = "http://localhost:8000/v1",
         api_key: str = "EMPTY",
         batch_size: int = 32,
@@ -30,6 +31,8 @@ class VllmAsrBackend(ASR):
 
         self._client = OpenAI(base_url=base_url, api_key=api_key)
         self._model = model
+        # Fallback language for when the runner ships `Auto`.
+        self._language = None if language in (None, "auto") else language
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
@@ -56,8 +59,13 @@ class VllmAsrBackend(ASR):
                 "response_format": "verbose_json",
                 "timestamp_granularities": ["word"],
             }
-            if item.language.kind == "code" and item.language.value:
-                kwargs["language"] = item.language.value
+            lang = (
+                item.language.value
+                if item.language.kind == "code" and item.language.value
+                else self._language
+            )
+            if lang:
+                kwargs["language"] = lang
             resp = self._client.audio.transcriptions.create(**kwargs)
             outputs.append(asr_from_openai(resp, item.source_id, AsrOutput, AsrSegment, AsrWord))
         return outputs

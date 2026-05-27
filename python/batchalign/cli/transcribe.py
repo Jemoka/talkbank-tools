@@ -1,14 +1,43 @@
-"""`transcribe` command — media files into CHAT transcripts."""
+"""`transcribe` command — media files into CHAT transcripts.
+
+Engine selection mirrors BA2's `transcribe` (which chose between Rev.AI and
+the Whisper family): pick the ASR engine with `--engine`. All BA2 engines are
+reachable — Rev.AI, WhisperX, HF Whisper, OpenAI Whisper, and a vLLM-served
+Whisper (preferred for local GPU/Metal boxes). Language is propagated to the
+chosen backend (the kernel ships `Auto`, so the backend's `language=` pin is
+what actually reaches the model).
+"""
 
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import typer
 
 from ._common import collect_media_inputs, write_outcomes
 from ._options import cli_options
 from .tui import Interface, Task
+
+
+class AsrEngine(str, Enum):
+    """ASR engine selection (BA2 parity set + vLLM)."""
+
+    rev = "rev"            # Rev.AI cloud (ASR + its own diarization)
+    whisperx = "whisperx"  # WhisperX (faster-whisper + alignment)
+    whisper = "whisper"    # HF transformers Whisper
+    openai = "openai"      # openai-whisper package
+    vllm = "vllm"          # vLLM-served Whisper via the OpenAI audio API
+
+
+# Sensible per-engine default models (BA2's defaults where they exist).
+_DEFAULT_MODEL = {
+    AsrEngine.whisperx: "large-v2",
+    AsrEngine.whisper: "openai/whisper-large-v3",
+    AsrEngine.openai: "turbo",
+    AsrEngine.vllm: "openai/whisper-large-v3",
+}
 
 
 def register(app: typer.Typer) -> None:
@@ -21,40 +50,45 @@ def register(app: typer.Typer) -> None:
             help="Folder to walk recursively for media files (single file also accepted).",
         ),
         out: Path | None = typer.Option(
-            None,
-            "--out",
-            "-o",
-            help="Optional output folder; if omitted, each `.cha` transcript is written next to its source media file.",
+            None, "--out", "-o",
+            help="Optional output folder; if omitted, each `.cha` transcript is written next to its source media.",
+        ),
+        engine: AsrEngine = typer.Option(
+            AsrEngine.whisperx, "--engine", case_sensitive=False,
+            help="ASR engine: rev | whisperx | whisper | openai | vllm.",
         ),
         language: str = typer.Option("auto", "--language", help="Language code or 'auto'."),
-        model: str = typer.Option("openai/whisper-large-v3", "--model", help="ASR model id."),
-        diarize: bool = typer.Option(False, "--diarize/--no-diarize", help="Run speaker diarization."),
+        model: str | None = typer.Option(None, "--model", help="ASR model id (engine-specific default if omitted)."),
+        diarize: bool = typer.Option(False, "--diarize/--no-diarize", help="Run speaker diarization (ignored for rev, which diarizes itself)."),
+        num_speakers: int = typer.Option(2, "--num-speakers", "-n", help="Expected speaker count (diarization hint)."),
+        vllm_url: str = typer.Option("http://localhost:8000/v1", "--vllm-url", help="Base URL for the vLLM OpenAI-compatible server (engine=vllm)."),
     ) -> None:
         """Transcribe media into CHAT (.cha) files.
 
-        Forced alignment is *not* part of `transcribe` — compose
-        `batchalign align` (or `ba.recipes.align(...)`) afterwards if you
-        want refined word-level timings.
+        Forced alignment is *not* part of `transcribe` — run `batchalign align`
+        afterwards for refined word-level timings.
         """
         import batchalign as ba
 
         opts = cli_options(ctx)
 
-        # Interface.open prints the header + spinner immediately. The
-        # backend constructors (which load ML models and can take many
-        # seconds) run INSIDE the `with` block so the user sees the
-        # "preparing pipeline…" indicator during that time.
         with Interface.open(
             command="transcribe",
-            params={"asr": model, "diarize": diarize, "lang": language},
+            params={"engine": engine.value, "asr": model or _DEFAULT_MODEL.get(engine, ""), "lang": language, "diarize": diarize},
             output=out,
             verbosity=opts.verbosity,
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
+            asr_backend, rev_diarizes = _build_asr(ba, engine, model, language, vllm_url)
+            # Rev does its own diarization; for the Whisper family add Pyannote
+            # when --diarize is requested.
+            speaker_backend: Any = None
+            if diarize and not rev_diarizes:
+                speaker_backend = ba.PyannoteBackend()
             pipeline = ba.recipes.transcribe(
-                asr_backend=ba.WhisperBackend(model=model),
-                speaker_backend=ba.PyannoteBackend() if diarize else None,
+                asr_backend=asr_backend,
+                speaker_backend=speaker_backend,
             )
             inputs, root = collect_media_inputs(folder)
             for inp in inputs:
@@ -63,3 +97,19 @@ def register(app: typer.Typer) -> None:
             write_outcomes(outcomes, root, out, output_suffix=".cha")
 
         raise typer.Exit(code=ui.exit_code)
+
+
+def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vllm_url: str):
+    """Construct the ASR backend for `engine`. Returns (backend, rev_diarizes)."""
+    m = model or _DEFAULT_MODEL.get(engine)
+    if engine is AsrEngine.rev:
+        return ba.RevAI(language=language), True
+    if engine is AsrEngine.whisperx:
+        return ba.WhisperXBackend(model=m, language=None if language == "auto" else language), False
+    if engine is AsrEngine.whisper:
+        return ba.WhisperBackend(model=m, language=language), False
+    if engine is AsrEngine.openai:
+        return ba.OpenAIWhisperBackend(model=m, language=language), False
+    if engine is AsrEngine.vllm:
+        return ba.VllmAsrBackend(model=m, language=language, base_url=vllm_url), False
+    raise typer.BadParameter(f"unknown engine: {engine}")

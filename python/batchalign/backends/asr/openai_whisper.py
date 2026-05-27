@@ -27,6 +27,7 @@ class OpenAIWhisperBackend(ASR):
         self,
         model: str = "turbo",
         *,
+        language: str | None = None,
         device: str | None = None,
         batch_size: int = 1,
         batch_window_ms: int = 0,
@@ -35,6 +36,8 @@ class OpenAIWhisperBackend(ASR):
 
         self._model = whisper.load_model(model, device=device)
         self._model_id = model
+        # Fallback language for when the runner ships `Auto` (it always does).
+        self._language = None if language in (None, "auto") else language
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
@@ -63,8 +66,13 @@ class OpenAIWhisperBackend(ASR):
                 tmp_path = tmp.name
             try:
                 kwargs: dict[str, Any] = {"word_timestamps": True}
-                if item.language.kind == "code" and item.language.value:
-                    kwargs["language"] = item.language.value
+                lang = (
+                    item.language.value
+                    if item.language.kind == "code" and item.language.value
+                    else self._language
+                )
+                if lang:
+                    kwargs["language"] = lang
                 result = self._model.transcribe(tmp_path, **kwargs)
             finally:
                 try:

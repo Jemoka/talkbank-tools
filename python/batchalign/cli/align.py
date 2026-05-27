@@ -1,14 +1,35 @@
-"""`align` command — forced alignment on existing CHAT files."""
+"""`align` command — forced alignment on existing CHAT files.
+
+Engine selection mirrors BA2's `align` (Wav2Vec2 for English, Whisper-family
+otherwise). Pick with `--engine`:
+
+* ``wav2vec`` — Wav2Vec2 + CTC Viterbi; the model is chosen per the file's
+  ``@Languages`` header (BA2's default FA path).
+* ``whisperx`` — WhisperX alignment models.
+
+The previous implementation wired ``WhisperBackend`` as the FA backend, but
+that class declares only ``ASR`` (not ``FA``), so the pipeline could never
+service ``Task.Fa``. The FA backends here declare ``FA`` correctly.
+"""
 
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import typer
 
 from ._common import collect_chat_inputs, write_outcomes
 from ._options import cli_options
 from .tui import Interface, Task
+
+
+class FaEngine(str, Enum):
+    """Forced-alignment engine selection."""
+
+    wav2vec = "wav2vec"
+    whisperx = "whisperx"
 
 
 def register(app: typer.Typer) -> None:
@@ -21,27 +42,38 @@ def register(app: typer.Typer) -> None:
             help="Folder to walk recursively for CHAT files (single file also accepted).",
         ),
         out: Path | None = typer.Option(
-            None,
-            "--out",
-            "-o",
+            None, "--out", "-o",
             help="Optional output folder; if omitted, each source file is overwritten in place.",
         ),
-        model: str = typer.Option("openai/whisper-large-v3", "--model"),
+        engine: FaEngine = typer.Option(
+            FaEngine.wav2vec, "--engine", case_sensitive=False,
+            help="Forced-alignment engine: wav2vec | whisperx.",
+        ),
+        model: str | None = typer.Option(
+            None, "--model",
+            help="FA model id (engine-specific default if omitted; wav2vec picks per the file language).",
+        ),
     ) -> None:
-        """Run forced alignment on existing CHAT files."""
+        """Run forced alignment on existing CHAT files (adds a `%wor` tier)."""
         import batchalign as ba
 
         opts = cli_options(ctx)
 
         with Interface.open(
             command="align",
-            params={"fa": model},
+            params={"engine": engine.value, "fa": model or "(auto)"},
             output=out,
             verbosity=opts.verbosity,
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
-            pipeline = ba.recipes.align(fa_backend=ba.WhisperBackend(model=model))
+            fa_backend: Any
+            if engine is FaEngine.wav2vec:
+                # Language (hence model) comes from each file's @Languages header.
+                fa_backend = ba.Wav2Vec2FaBackend(model=model)
+            else:
+                fa_backend = ba.WhisperXFaBackend(model=model or "large-v2")
+            pipeline = ba.recipes.align(fa_backend=fa_backend)
             inputs, root = collect_chat_inputs(folder)
             for inp in inputs:
                 ui.push(Task.from_input(inp))
