@@ -350,6 +350,10 @@ class ChatWhisperBackend(ASR):
         }
         if device is not None:
             pipe_kwargs["device"] = device
+        # The finetuned CHATWhisper-en repo ships no tokenizer vocab; BA2 loads
+        # the tokenizer from `base` (the upstream Whisper). Pass it explicitly
+        # so the pipeline doesn't try (and fail) to load one from `model`.
+        pipe_kwargs["tokenizer"] = base
         try:
             self._pipe = pipeline(
                 "automatic-speech-recognition", model=model,

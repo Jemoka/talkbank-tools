@@ -68,6 +68,9 @@ class Cell:
     kind: str                          # extractor key (see EXTRACTORS)
     ba2: list[str] = field(default_factory=list)
     ba3: list[str] = field(default_factory=list)
+    # BA2 global flags that go BEFORE the subcommand (e.g. --force-cpu,
+    # --workers); `execute.py <ba2_global> <command> <IN> <OUT> <ba2>`.
+    ba2_global: list[str] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -292,7 +295,7 @@ def run_ba2(cell: Cell, fixture: Path, work: Path) -> Path:
             shutil.copy(sib, in_dir / sib.name)
 
     proc = _run(
-        [str(BA2_PY), "execute.py", cell.command, str(in_dir), str(out_dir), *cell.ba2],
+        [str(BA2_PY), "execute.py", *cell.ba2_global, cell.command, str(in_dir), str(out_dir), *cell.ba2],
         cwd=BA2_DIR,
     )
     produced = sorted(out_dir.glob("*.cha"))
