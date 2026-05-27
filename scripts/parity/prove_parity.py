@@ -131,6 +131,16 @@ MATRIX: list[Cell] = [
         ba2=["--override-cache"],
         ba3=["--language", "zh"],
     ),
+    # ---- translate (Google free tier; deterministic given the same input) ----
+    Cell(
+        command="translate",
+        engine="google",
+        language="es-eng",
+        fixture="translate/es.cha",
+        kind="translate",
+        ba2=[],
+        ba3=["--target", "eng"],
+    ),
 ]
 
 

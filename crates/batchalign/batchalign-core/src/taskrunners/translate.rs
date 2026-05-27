@@ -79,6 +79,12 @@ fn utterance_texts(chat: &Chat) -> Vec<String> {
                 }
             }
         });
+        // BA2 feeds the terminator to the translator too (`i.strip(...)`
+        // includes it), so the translation carries sentence-final punctuation
+        // that the backend then spaces out (`apple .`). Append it here.
+        if let Some(term) = u.main.content.terminator.as_ref() {
+            parts.push(term.to_string());
+        }
         out.push(parts.join(" "));
     }
     out
