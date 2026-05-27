@@ -42,7 +42,7 @@ from batchalign.backends.fa import Wav2Vec2FaBackend, WhisperXFaBackend
 from batchalign.backends.morphosyntax import StanzaBackend
 from batchalign.backends.speaker import PyannoteBackend
 from batchalign.backends.translate import GoogleTranslateBackend, VllmTranslateBackend
-from batchalign.backends.utseg import CantoneseWordSegBackend
+from batchalign.backends.utseg import CantoneseWordSegBackend, CHATUtteranceBackend
 
 __all__ = [
     # Marker ABCs
@@ -81,4 +81,5 @@ __all__ = [
     "VllmTranslateBackend",
     # UtSeg
     "CantoneseWordSegBackend",
+    "CHATUtteranceBackend",
 ]

@@ -63,6 +63,11 @@ def register(app: typer.Typer) -> None:
         diarize: bool = typer.Option(False, "--diarize/--no-diarize", help="Run speaker diarization (ignored for rev, which diarizes itself)."),
         num_speakers: int = typer.Option(2, "--num-speakers", "-n", help="Expected speaker count (diarization hint)."),
         vllm_url: str = typer.Option("http://localhost:8000/v1", "--vllm-url", help="Base URL for the vLLM OpenAI-compatible server (engine=vllm)."),
+        segment: bool = typer.Option(
+            True, "--segment/--no-segment",
+            help="Run BA2's CHATUtterance BERT utterance segmentation after ASR "
+            "(ignored for chatwhisper, which segments internally).",
+        ),
     ) -> None:
         """Transcribe media into CHAT (.cha) files.
 
@@ -87,9 +92,16 @@ def register(app: typer.Typer) -> None:
             speaker_backend: Any = None
             if diarize and not rev_diarizes:
                 speaker_backend = ba.PyannoteBackend()
+            # BA2 pairing: ASR → CHATUtterance BERT segmentation. chatwhisper
+            # segments internally; others get the segmenter when a model exists
+            # for the language.
+            utseg_backend: Any = None
+            if segment and engine is not AsrEngine.chatwhisper:
+                utseg_backend = _build_utseg(ba, language)
             pipeline = ba.recipes.transcribe(
                 asr_backend=asr_backend,
                 speaker_backend=speaker_backend,
+                utseg_backend=utseg_backend,
             )
             inputs, root = collect_media_inputs(folder)
             for inp in inputs:
@@ -119,3 +131,23 @@ def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vll
     if engine is AsrEngine.vllm:
         return ba.VllmAsrBackend(model=m, language=language, base_url=vllm_url), False
     raise typer.BadParameter(f"unknown engine: {engine}")
+
+
+# CLI language → CHATUtterance resolve key (BA2 only ships en/zh/yue models).
+_UTSEG_LANG = {
+    "auto": "eng", "en": "eng", "eng": "eng",
+    "zh": "zho", "zho": "zho", "zh-hans": "zho", "cmn": "zho",
+    "yue": "yue",
+}
+
+
+def _build_utseg(ba: Any, language: str):
+    """Build the CHATUtterance segmenter for `language`, or None if BA2 ships
+    no utterance model for it (then ASR segments stand as utterances)."""
+    key = _UTSEG_LANG.get(language.lower())
+    if key is None:
+        return None
+    try:
+        return ba.CHATUtteranceBackend(lang=key)
+    except ValueError:
+        return None

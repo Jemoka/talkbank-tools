@@ -158,6 +158,10 @@ fn emit_split_lines(row: &UtteranceRow, out: &UtSegOutput, sink: &mut String) {
         return;
     }
     for span in &out.utterances {
+        // Preserve the terminator the segmenter chose (`.`/`?`/`!`) so
+        // questions/exclamations survive — matches BA2, whose utterance model
+        // predicts sentence-final punctuation. Default to `.`.
+        let terminator = terminator_of(&span.text);
         let text = sanitize_text(&span.text);
         if text.is_empty() {
             continue;
@@ -167,7 +171,18 @@ fn emit_split_lines(row: &UtteranceRow, out: &UtSegOutput, sink: &mut String) {
         } else {
             format!(" \u{15}{}_{}\u{15}", span.start_ms, span.end_ms)
         };
-        sink.push_str(&format!("*{}:\t{} .{}\n", row.speaker, text, bullet));
+        sink.push_str(&format!("*{}:\t{} {}{}\n", row.speaker, text, terminator, bullet));
+    }
+}
+
+/// The sentence-final terminator the segmenter chose, as a CHAT token.
+/// Reads the last non-space char; `?`/`!` pass through, everything else
+/// (including `.`) maps to `.`.
+fn terminator_of(s: &str) -> &'static str {
+    match s.trim_end().chars().last() {
+        Some('?') => "?",
+        Some('!') => "!",
+        _ => ".",
     }
 }
 

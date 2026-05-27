@@ -84,6 +84,7 @@ from batchalign.backends import (  # noqa: E402
     StanzaBackend,
     PyannoteBackend,
     CantoneseWordSegBackend,
+    CHATUtteranceBackend,
     GoogleTranslateBackend,
     VllmTranslateBackend,
 )
@@ -136,6 +137,7 @@ __all__ = [
     "StanzaBackend",
     "PyannoteBackend",
     "CantoneseWordSegBackend",
+    "CHATUtteranceBackend",
     "GoogleTranslateBackend",
     "VllmTranslateBackend",
     # submodules

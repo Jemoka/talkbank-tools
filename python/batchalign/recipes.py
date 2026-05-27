@@ -26,30 +26,35 @@ def transcribe(
     *,
     asr_backend: Any,
     speaker_backend: Any | None = None,
+    utseg_backend: Any | None = None,
     **opts: Any,
 ) -> Any:
     """ASR + utterance segmentation (+ optional speaker diarization).
 
-    Force-alignment is *not* wired here on purpose — that's a separate
-    `align(fa_backend=...)` recipe you compose after transcription if you
-    want refined word-level timings. The asr backend's language /
-    num_speakers pins go on its own constructor.
+    This is BA2's transcribe *pairing*: ASR, then a utterance-segmentation
+    stage. Pass `utseg_backend=CHATUtteranceBackend(...)` for BA2's BERT
+    segmenter (the parity path, applied uniformly to whichever ASR engine
+    produced the words). Pyannote, if given as `speaker_backend`, services
+    both Speaker and UtSeg, so it covers segmentation on its own.
+
+    Force-alignment is *not* wired here — compose `align(fa_backend=...)`
+    afterwards for refined word-level timings.
     """
     Task, Pipeline = _core()
     tasks = [Task.Asr]
     backends = [asr_backend]
     if speaker_backend is not None:
-        # Pyannote is the speaker backend, and it services BOTH Speaker and
-        # UtSeg (it carves the diarization into utterances). So UtSeg rides
-        # along with the speaker backend — no separate UtSeg backend exists.
         tasks.append(Task.Speaker)
         backends.append(speaker_backend)
+    if utseg_backend is not None:
+        # Explicit utterance segmenter (e.g. CHATUtterance) handles UtSeg.
         tasks.append(Task.UtSeg)
-    # Without a speaker backend there is nothing to serve UtSeg (BA3 has no
-    # general utterance segmenter), so we do NOT append UtSeg — appending a
-    # task with no backend aborts the pipeline. In that case the ASR segments
-    # stand as the utterances. BA2 segments these further with a trained BERT
-    # model; reproducing that needs the model (see scripts/parity/README.md).
+        backends.append(utseg_backend)
+    elif speaker_backend is not None:
+        # Pyannote services Speaker AND UtSeg — UtSeg rides along.
+        tasks.append(Task.UtSeg)
+    # With neither, there is nothing to serve UtSeg, so we omit it and the ASR
+    # segments stand as the utterances (no segmentation).
     return Pipeline(tasks=tasks, backends=backends, **opts)
 
 
