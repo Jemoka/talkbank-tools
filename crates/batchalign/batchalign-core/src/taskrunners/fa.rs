@@ -86,9 +86,20 @@ fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
             }
         });
         let speaker = Some(SpeakerLabel::new(u.main.speaker.as_str()));
+        // Pass the utterance's media bullet (`*SPK: … start_end`) as the FA
+        // window — BA2 aligns each utterance's words *within* its bullet time
+        // span. Without this the backend aligns against the whole file and
+        // produces nonsense timings.
+        let (start_ms, end_ms) = u
+            .main
+            .content
+            .bullet
+            .as_ref()
+            .map(|b| (b.timing.start_ms, b.timing.end_ms))
+            .unwrap_or((0, 0));
         out.push(AsrSegment {
-            start_ms: 0,
-            end_ms: 0,
+            start_ms,
+            end_ms,
             text: words
                 .iter()
                 .map(|w| w.text.clone())
