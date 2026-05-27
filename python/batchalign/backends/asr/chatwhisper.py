@@ -130,6 +130,28 @@ class BertUtteranceModel:
             return sent_tokenize(final_passage)
 
 
+def _whisper_language_name(lang: str) -> str | None:
+    """Whisper language NAME for a CHAT/ISO code (BA2 `WhisperEngine`).
+
+    BA2 passes the pycountry language name (`eng` → "English"); Yue maps to
+    "Cantonese" (but the Cantonese path drops language anyway). Returns None
+    when unknown so Whisper auto-detects.
+    """
+    c = lang.lower()
+    if c in ("yue", "zh-hant"):
+        return "Cantonese"
+    try:
+        import pycountry  # type: ignore[import-not-found]
+
+        alpha3 = c if len(c) == 3 else None
+        rec = pycountry.languages.get(alpha_3=alpha3) if alpha3 else pycountry.languages.get(alpha_2=c)
+        if rec is not None and getattr(rec, "name", None):
+            return rec.name
+    except Exception:
+        pass
+    return None
+
+
 class BertCantoneseUtteranceModel:
     """TalkBank Cantonese utterance segmenter — port of BA2.
 
@@ -329,6 +351,9 @@ class ChatWhisperBackend(ASR):
         self._lang = lang
         self._model_id = model
 
+        # BA2 forces the transcription language by NAME (pycountry: eng →
+        # "English"); without it Whisper auto-detects and can decode garbage.
+        self._whisper_lang = _whisper_language_name(lang)
         # BA2 decode config (infer_asr.py): discourage repetition, cache on.
         self._cantonese = lang == "yue"
         config = GenerationConfig.from_pretrained(base)
@@ -396,6 +421,8 @@ class ChatWhisperBackend(ASR):
         }
         if not self._cantonese:
             gen_kwargs["task"] = "transcribe"
+            if self._whisper_lang:
+                gen_kwargs["language"] = self._whisper_lang
         result = self._pipe(
             {"array": wave, "sampling_rate": item.audio.sample_rate},
             return_timestamps="word",
