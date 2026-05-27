@@ -62,9 +62,12 @@ def test_transcribe_default(fake_core):
     from batchalign import recipes
 
     pipe = recipes.transcribe(asr_backend="ASR-stub")
-    # Default: ASR + UtSeg. No Speaker, no FA (FA was removed — use the
-    # `align()` recipe to compose forced alignment after transcription).
-    assert _task_names(pipe) == ["Asr", "UtSeg"]
+    # ASR only. UtSeg is NOT appended without a speaker backend: BA3 has no
+    # standalone utterance segmenter, and the only UtSeg-capable backend
+    # (Pyannote) rides on the speaker stage. Appending UtSeg with nothing to
+    # serve it aborts the pipeline at runtime. (No FA either — FA composes via
+    # the `align()` recipe after transcription.)
+    assert _task_names(pipe) == ["Asr"]
     assert pipe.backends == ["ASR-stub"]
 
 

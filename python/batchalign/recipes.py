@@ -39,9 +39,17 @@ def transcribe(
     tasks = [Task.Asr]
     backends = [asr_backend]
     if speaker_backend is not None:
+        # Pyannote is the speaker backend, and it services BOTH Speaker and
+        # UtSeg (it carves the diarization into utterances). So UtSeg rides
+        # along with the speaker backend — no separate UtSeg backend exists.
         tasks.append(Task.Speaker)
         backends.append(speaker_backend)
-    tasks.append(Task.UtSeg)
+        tasks.append(Task.UtSeg)
+    # Without a speaker backend there is nothing to serve UtSeg (BA3 has no
+    # general utterance segmenter), so we do NOT append UtSeg — appending a
+    # task with no backend aborts the pipeline. In that case the ASR segments
+    # stand as the utterances. BA2 segments these further with a trained BERT
+    # model; reproducing that needs the model (see scripts/parity/README.md).
     return Pipeline(tasks=tasks, backends=backends, **opts)
 
 
