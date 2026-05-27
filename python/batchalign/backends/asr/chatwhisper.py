@@ -230,6 +230,9 @@ class ChatWhisperBackend(ASR):
         config.use_cache = True
         self._gen_config = config
 
+        # BA2 runs the pipeline in bfloat16 (infer_asr.py), falling back to
+        # float16 — the dtype affects greedy-decode output, so we match it for
+        # parity rather than using the float32 default.
         pipe_kwargs: dict[str, Any] = {
             "chunk_length_s": 25,
             "stride_length_s": 3,
@@ -237,7 +240,16 @@ class ChatWhisperBackend(ASR):
         }
         if device is not None:
             pipe_kwargs["device"] = device
-        self._pipe = pipeline("automatic-speech-recognition", model=model, **pipe_kwargs)
+        try:
+            self._pipe = pipeline(
+                "automatic-speech-recognition", model=model,
+                torch_dtype=torch.bfloat16, **pipe_kwargs,
+            )
+        except (TypeError, RuntimeError):
+            self._pipe = pipeline(
+                "automatic-speech-recognition", model=model,
+                torch_dtype=torch.float16, **pipe_kwargs,
+            )
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
