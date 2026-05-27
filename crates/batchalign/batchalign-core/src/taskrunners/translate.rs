@@ -13,6 +13,7 @@ use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
 use smol_str::SmolStr;
 use talkbank_model::Line;
+use talkbank_model::WriteChat;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 
 pub struct TranslateTaskRunner;
@@ -88,7 +89,14 @@ fn utterance_texts(chat: &Chat) -> Vec<String> {
                 }
             }
         });
-        out.push(parts.join(" "));
+        let mut text = parts.join(" ");
+        // Include the utterance terminator (BA2 feeds the full sentence to the
+        // translator, so it capitalizes + punctuates the output to match).
+        if let Some(term) = &u.main.content.terminator {
+            text.push(' ');
+            text.push_str(&term.to_chat_string());
+        }
+        out.push(text);
     }
     out
 }
