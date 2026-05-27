@@ -53,7 +53,9 @@ class RevAI(ASR, Speaker):
 
     @property
     def name(self) -> str:
-        return "revai:async-v2"
+        # v3: upload original media file (byte-identical to BA2) + BA2-matching
+        # submit options. Bump when submit behaviour changes (cache key).
+        return "revai:async-v3"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -83,7 +85,7 @@ class RevAI(ASR, Speaker):
         for item in batch:
             if item.source_id in responses:
                 continue
-            responses[item.source_id] = self._submit_and_wait(item.audio)
+            responses[item.source_id] = self._submit_and_wait(item.source_id, item.audio)
 
         outputs: list[Any] = []
         for item in batch:
@@ -112,42 +114,55 @@ class RevAI(ASR, Speaker):
 
     # ----- HTTP submission ----------------------------------------------
 
-    def _submit_and_wait(self, audio: Any) -> dict[str, Any]:
-        """Upload PCM-as-WAV, poll until ``transcribed``, return parsed JSON.
+    def _submit_and_wait(self, source_id: Any, audio: Any) -> dict[str, Any]:
+        """Upload the audio, poll until ``transcribed``, return parsed JSON.
 
-        Submit options mirror BA2's `RevEngine` (`pipelines/asr/rev.py`):
-        pass the resolved `language`, the expected `speakers_count`, and
-        `skip_postprocessing=True` for en/fr (where BA2 does its own
-        CHATUtterance segmentation rather than Rev's). These options change
-        Rev's returned transcript, so they must match for parity.
+        Uploads the ORIGINAL media file when `source_id` is a real path (Rev
+        gets byte-identical audio to what BA2 sends, so the transcript is the
+        same); otherwise stages a WAV from the decoded PCM. Re-encoding PCM
+        can perturb Rev's output on tone-sensitive audio (e.g. Mandarin), so
+        the original-file path is the parity path.
+
+        Submit options mirror BA2's `RevEngine`: pass `language`, and (only for
+        en/es, which Rev allows) `speakers_count` + `skip_postprocessing`
+        (True for en/fr, where BA2 re-segments with CHATUtterance).
         """
         import os
         import tempfile
+        from pathlib import Path
         from rev_ai import JobStatus  # type: ignore[import-not-found]
 
-        wav_bytes = _pcm_to_wav_bytes(audio)
-        # rev_ai 2.x `submit_job_local_file(filename=<path>, ...)` uploads a
-        # path, not a buffer — stage a temp WAV.
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            tmp.write(wav_bytes)
-            tmp_path = tmp.name
+        # Prefer the original media file (byte-identical to BA2's upload).
+        orig = str(source_id) if source_id is not None else ""
+        tmp_path = ""
+        if orig and Path(orig).is_file():
+            upload_path = orig
+        else:
+            wav_bytes = _pcm_to_wav_bytes(audio)
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp.write(wav_bytes)
+                tmp_path = tmp.name
+            upload_path = tmp_path
 
-        submit_kwargs: dict[str, Any] = {
-            "metadata": "batchalign",
-            "speakers_count": self._num_speakers,
-            # BA2 skips Rev's own punctuation/segmentation postproc for the
-            # languages it re-segments itself (en/fr).
-            "skip_postprocessing": self._language in ("en", "fr"),
-        }
+        # Mirror BA2's conditional submit: `speakers_count` (and
+        # `skip_postprocessing`) are only accepted by Rev for en/es/fr/pt, and
+        # BA2 only sets them when the language contains "en" or "es". For other
+        # languages (cmn, yue, …) it sends just `language`.
+        submit_kwargs: dict[str, Any] = {"metadata": "batchalign"}
         if self._language:
             submit_kwargs["language"] = self._language
+            if "en" in self._language or "es" in self._language:
+                submit_kwargs["speakers_count"] = self._num_speakers
+                # Skip Rev's own postproc only where BA2 re-segments (en/fr).
+                submit_kwargs["skip_postprocessing"] = self._language in ("en", "fr")
         try:
-            job = self._client.submit_job_local_file(tmp_path, **submit_kwargs)
+            job = self._client.submit_job_local_file(upload_path, **submit_kwargs)
         finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+            if tmp_path:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
         deadline = time.monotonic() + self._timeout
         while True:
