@@ -26,9 +26,9 @@ python scripts/parity/prove_parity.py --list
 |-----------|--------------------------------------------------|--------|
 | morphotag | en, en (?/!), en (contractions), es, ja, zh      | **byte-identical** `%mor` + `%gra` |
 | translate | es→eng (Google free tier)                        | **byte-identical** `%xtra` |
-| compare   | single `template.gold.cha` lookup (parity.md)    | structure matches; see note |
-| transcribe| rev / whisperx / whisper / openai / vllm wired   | engines selectable; see note |
-| align     | wav2vec / whisperx wired                         | engines selectable; see note |
+| transcribe| **rev**: en, zh, es                              | **byte-identical** speaker + utterance segmentation + text |
+| align     | **wav2vec (MMS_FA)**: en                         | **byte-identical** `%wor` + utterance bullets |
+| compare   | single `template.gold.cha` lookup (parity.md)    | structure matches; content note below |
 
 ### morphotag — exact
 
@@ -55,34 +55,34 @@ BA2 replaces the main line with the gold text, and its bag-of-words windowing
 leaks boundary words across utterance edges (`+he`/`-he`). BA3's aligner is
 cleaner; matching BA2's windowing quirk byte-for-byte is tracked but not done.
 
-### transcribe / align — engines wired; CHATWhisper backend implemented
+### transcribe — rev: exact; whisper-family: BA2-side blocked
 
 All BA2 ASR engines are selectable via `transcribe --engine`
-(`rev | whisperx | whisper | chatwhisper | openai | vllm`), with `--language`
-propagated to the backend; `align --engine {wav2vec,whisperx}`.
+(`rev | whisperx | whisper | chatwhisper | openai | vllm`), `--language`
+propagated. The BA2 *pairing* (ASR → CHATUtterance BERT segmentation →
+disfluency `&-uh` → retrace `[/]`) is implemented as the recipe's UtSeg stage,
+applied uniformly to every engine's word stream; non-BERT languages (es) use
+Rev's punctuation to sentence-split and keep commas. RevAI uploads the original
+media (byte-identical to BA2) so the transcript matches.
 
-The parity-critical piece — BA2's per-utterance segmentation — is implemented
-as **`ChatWhisperBackend`** (`backends/asr/chatwhisper.py`): it pairs the
-TalkBank `CHATWhisper-en` model with the `CHATUtterance-en` BERT segmenter
-(BA2's `WhisperEngine`), emitting one segment per utterance so the runner's
-utterances are BA2's utterances. The deterministic segmentation glue
-(`segment_words`) is unit-tested with a fake segmenter
-(`tests/test_chatwhisper_segment.py`).
+**rev is byte-identical to BA2** on en / zh / es. The **whisper-family engines
+(whisper / whisperx / openai / chatwhisper) cannot be verified here**: BA2's own
+local Whisper inference crashes in this environment ("process pool terminated
+abruptly" — a torch/transformers native crash in BA2's py3.11 venv, for both
+CHATWhisper-en and the Cantonese model), so there is no BA2 reference to diff
+against. BA3's ChatWhisperBackend (CHATWhisper-en + bfloat16 + the CHATUtterance
+pairing) is implemented and runs; it just can't be compared until BA2's whisper
+crash is fixed. **Cantonese** transcribe is blocked for the same reason (BA2
+uses Whisper for `yue`). A torchcodec import incompatibility in the Bazel
+hermetic env (transformers 5.x) is worked around in `backends/asr/_torch_audio.py`.
 
-**Runtime blocker (environment, not code).** Running any transformers-based
-ASR through `just batchalign::cli` currently fails with
-`RuntimeError: Could not load libtorchcodec`: the pinned `transformers 5.x`
-routes audio through `torchcodec`, and the Bazel-hermetic
-`torchcodec` / `torch 2.10` / FFmpeg combination is incompatible (it fails even
-with pre-decoded PCM input, so it's a transformers-import issue, not audio
-decode). Two unblock paths, both consistent with this machine (M2 Ultra):
+### align — wav2vec (MMS_FA): exact
 
-1. **vLLM** (preferred here): serve `CHATWhisper-en` via vLLM and run ASR over
-   the OpenAI audio API (`--engine vllm`), with the BERT segmenter — which
-   needs no audio — running locally. No `torchcodec`.
-2. **Pin `transformers` to BA2's 4.x**: 4.x decodes audio without `torchcodec`
-   AND matches BA2's ASR behaviour more closely (a `uv lock` change, not done
-   here to avoid disturbing the managed lockfile).
-
-ASR word-timestamp exactness is explicitly out of scope (cosmetic for the
-transcribe important lines); text + per-utterance segmentation is the target.
+`Wav2Vec2FaBackend` is a faithful port of BA2's `--wav2vec` aligner
+(torchaudio `MMS_FA` + `forced_align`/`merge_tokens`, 15 s chunking, char-DP
+word mapping, post-correction). `align --engine wav2vec` produces `%wor` word
+timings + the utterance media bullets byte-identical to BA2 (verified on the
+English clip; torchaudio 2.6 vs 2.11 did not perturb the alignment). The FA
+runner resolves a sibling audio file from the `.cha` and feeds each utterance's
+bullet span as the FA window. Standalone `.cha` inputs need utterance bullets
+(BA2 derives them with UTR; here they come from the transcribe step).
