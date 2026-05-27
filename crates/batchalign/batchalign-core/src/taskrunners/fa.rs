@@ -125,12 +125,18 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             )));
         };
         if !seg.words.is_empty() {
-            let blob = seg
+            let mut blob = seg
                 .words
                 .iter()
                 .map(|w| format!("{} \u{15}{}_{}\u{15}", w.text, w.start_ms, w.end_ms))
                 .collect::<Vec<_>>()
                 .join(" ");
+            // BA2's %wor carries the utterance terminator (un-bulleted) at the
+            // end, e.g. `… you 2288_2405 .`. Append it for parity.
+            if let Some(term) = u.main.content.terminator.as_ref() {
+                blob.push(' ');
+                blob.push_str(&term.to_string());
+            }
             let label = NonEmptyString::new("wor")
                 .ok_or_else(|| BAError::Internal("wor label empty".into()))?;
             let content = NonEmptyString::new(&blob)
