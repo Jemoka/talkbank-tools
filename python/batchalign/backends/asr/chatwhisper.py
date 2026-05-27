@@ -238,15 +238,11 @@ class ChatWhisperBackend(ASR):
         if device is not None:
             pipe_kwargs["device"] = device
         self._pipe = pipeline("automatic-speech-recognition", model=model, **pipe_kwargs)
-
-        utt_model = _UTTERANCE_RESOLVE.get(lang)
-        self._segmenter = BertUtteranceModel(utt_model) if utt_model else None
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
     def name(self) -> str:
-        seg = "seg" if self._segmenter else "noseg"
-        return f"chatwhisper:{self._model_id}:{seg}"
+        return f"chatwhisper:{self._model_id}"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -292,33 +288,26 @@ class ChatWhisperBackend(ASR):
         if not words:
             return AsrOutput(source_id=item.source_id, segments=[])
 
-        # Segment into utterances. Without a segmenter (non-English w/o a model)
-        # the whole stream is one segment.
-        if self._segmenter is not None:
-            grouped = segment_words(words, 0, self._segmenter)
-        else:
-            grouped = [(0, words, ".")]
-
-        segments: list[Any] = []
-        for _speaker, utt_words, delim in grouped:
-            timed = [w for w in utt_words if w[1] is not None]
-            start_ms = timed[0][1] if timed else 0
-            end_ms = timed[-1][2] if timed else start_ms
-            asr_words = [
-                AsrWord(text=t, start_ms=s or 0, end_ms=e or (s or 0), confidence=None)
-                for (t, s, e) in utt_words
-            ]
-            text = " ".join(t for t, _, _ in utt_words) + " " + delim
-            segments.append(
-                AsrSegment(
-                    start_ms=start_ms,
-                    end_ms=end_ms,
-                    text=text,
-                    speaker=None,
-                    words=asr_words,
-                )
-            )
-        return AsrOutput(source_id=item.source_id, segments=segments)
+        # Emit ONE raw segment (the whole monologue). Utterance segmentation +
+        # disfluency/retrace cleanup is the CHATUtterance UtSeg stage's job (the
+        # transcribe recipe pairs it), exactly as BA2 applies its BERT segmenter
+        # to the ASR word stream. This unifies chatwhisper with the other ASR
+        # engines instead of segmenting internally without cleanup.
+        timed = [w for w in words if w[1] is not None]
+        start_ms = timed[0][1] if timed else 0
+        end_ms = timed[-1][2] if timed else start_ms
+        asr_words = [
+            AsrWord(text=t, start_ms=s or 0, end_ms=e or (s or 0), confidence=None)
+            for (t, s, e) in words
+        ]
+        segment = AsrSegment(
+            start_ms=start_ms,
+            end_ms=end_ms,
+            text=" ".join(t for t, _, _ in words),
+            speaker=None,
+            words=asr_words,
+        )
+        return AsrOutput(source_id=item.source_id, segments=[segment])
 
 
 __all__ = ["ChatWhisperBackend", "BertUtteranceModel", "segment_words", "num2words_en"]

@@ -92,11 +92,11 @@ def register(app: typer.Typer) -> None:
             speaker_backend: Any = None
             if diarize and not rev_diarizes:
                 speaker_backend = ba.PyannoteBackend()
-            # BA2 pairing: ASR → CHATUtterance BERT segmentation. chatwhisper
-            # segments internally; others get the segmenter when a model exists
-            # for the language.
+            # BA2 pairing: ASR → CHATUtterance BERT segmentation + disfluency/
+            # retrace cleanup, applied uniformly to every ASR engine's word
+            # stream (rev, chatwhisper, …) when a segmenter model exists.
             utseg_backend: Any = None
-            if segment and engine is not AsrEngine.chatwhisper:
+            if segment:
                 utseg_backend = _build_utseg(ba, language)
             pipeline = ba.recipes.transcribe(
                 asr_backend=asr_backend,
