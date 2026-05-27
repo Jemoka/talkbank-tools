@@ -169,6 +169,18 @@ MATRIX: list[Cell] = [
         ba2=["--lang", "spa", "-n", "1"],
         ba3=["--engine", "rev", "--language", "es", "-n", "1"],
     ),
+    # ---- align (wav2vec MMS_FA; %wor word-level timings) ----
+    Cell(
+        command="align",
+        engine="wav2vec",
+        language="en",
+        fixture="align/en.cha",
+        kind="wor",
+        # BA2 align defaults to wav2vec + --wor (and runs UTR, which re-derives
+        # the same rev utterance times the fixture already carries).
+        ba2=[],
+        ba3=["--engine", "wav2vec"],
+    ),
     # ---- translate (Google free tier; deterministic given the same input) ----
     Cell(
         command="translate",

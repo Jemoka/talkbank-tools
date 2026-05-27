@@ -125,6 +125,13 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             )));
         };
         if !seg.words.is_empty() {
+            // BA2 updates the utterance media bullet to span the FA word
+            // timings (first timed word start → last timed word end).
+            use talkbank_model::model::content::Bullet;
+            let timed: Vec<&AsrWord> = seg.words.iter().filter(|w| w.end_ms > 0).collect();
+            if let (Some(first), Some(last)) = (timed.first(), timed.last()) {
+                u.main.content.bullet = Some(Bullet::new(first.start_ms, last.end_ms));
+            }
             let mut blob = seg
                 .words
                 .iter()
