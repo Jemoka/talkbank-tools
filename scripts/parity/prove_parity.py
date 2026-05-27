@@ -113,6 +113,24 @@ MATRIX: list[Cell] = [
         ba2=["--override-cache"],
         ba3=["--language", "es"],
     ),
+    Cell(
+        command="morphotag",
+        engine="stanza",
+        language="ja",
+        fixture="morphotag/ja.cha",
+        kind="morphotag",
+        ba2=["--override-cache"],
+        ba3=["--language", "ja"],
+    ),
+    Cell(
+        command="morphotag",
+        engine="stanza",
+        language="zh",
+        fixture="morphotag/zh.cha",
+        kind="morphotag",
+        ba2=["--override-cache"],
+        ba3=["--language", "zh"],
+    ),
 ]
 
 

@@ -64,12 +64,26 @@ from batchalign.backends import (  # noqa: E402
     Coref,
     OpenSmile,
     AVQI,
+    # ASR engines (BA2 parity: rev / whisper / whisperx / openai whisper,
+    # plus the Chinese/Cantonese cloud + local engines).
     WhisperBackend,
+    WhisperXBackend,
+    OpenAIWhisperBackend,
+    VllmAsrBackend,
+    RevAI,
+    AliyunAsrBackend,
+    FunAsrBackend,
+    FunAudioBackend,
+    QwenAsrBackend,
+    TencentAsrBackend,
+    # Forced alignment.
+    Wav2Vec2FaBackend,
+    WhisperXFaBackend,
+    # Morphosyntax / speaker / utterance-seg / translate.
     StanzaBackend,
     PyannoteBackend,
+    CantoneseWordSegBackend,
     GoogleTranslateBackend,
-    RevAI,
-    VllmAsrBackend,
     VllmTranslateBackend,
 )
 from batchalign import recipes  # noqa: E402
@@ -102,13 +116,25 @@ __all__ = [
     "Coref",
     "OpenSmile",
     "AVQI",
-    # concrete backends
+    # concrete backends — ASR
     "WhisperBackend",
+    "WhisperXBackend",
+    "OpenAIWhisperBackend",
+    "VllmAsrBackend",
+    "RevAI",
+    "AliyunAsrBackend",
+    "FunAsrBackend",
+    "FunAudioBackend",
+    "QwenAsrBackend",
+    "TencentAsrBackend",
+    # FA
+    "Wav2Vec2FaBackend",
+    "WhisperXFaBackend",
+    # morphosyntax / speaker / utseg / translate
     "StanzaBackend",
     "PyannoteBackend",
+    "CantoneseWordSegBackend",
     "GoogleTranslateBackend",
-    "RevAI",
-    "VllmAsrBackend",
     "VllmTranslateBackend",
     # submodules
     "recipes",
