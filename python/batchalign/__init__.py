@@ -67,6 +67,7 @@ from batchalign.backends import (  # noqa: E402
     # ASR engines (BA2 parity: rev / whisper / whisperx / openai whisper,
     # plus the Chinese/Cantonese cloud + local engines).
     WhisperBackend,
+    ChatWhisperBackend,
     WhisperXBackend,
     OpenAIWhisperBackend,
     VllmAsrBackend,
@@ -118,6 +119,7 @@ __all__ = [
     "AVQI",
     # concrete backends — ASR
     "WhisperBackend",
+    "ChatWhisperBackend",
     "WhisperXBackend",
     "OpenAIWhisperBackend",
     "VllmAsrBackend",

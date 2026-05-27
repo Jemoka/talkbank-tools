@@ -27,6 +27,7 @@ from batchalign.backends.base import (
 )
 from batchalign.backends.asr import (
     AliyunAsrBackend,
+    ChatWhisperBackend,
     FunAsrBackend,
     FunAudioBackend,
     OpenAIWhisperBackend,
@@ -58,6 +59,7 @@ __all__ = [
     "declared_tasks",
     # ASR
     "AliyunAsrBackend",
+    "ChatWhisperBackend",
     "FunAsrBackend",
     "FunAudioBackend",
     "OpenAIWhisperBackend",

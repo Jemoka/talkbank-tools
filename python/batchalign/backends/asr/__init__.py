@@ -7,6 +7,7 @@ Each submodule lazy-imports its ML dependencies inside ``__init__`` /
 from __future__ import annotations
 
 from batchalign.backends.asr.whisper import WhisperBackend
+from batchalign.backends.asr.chatwhisper import ChatWhisperBackend
 from batchalign.backends.asr.whisperx import WhisperXBackend
 from batchalign.backends.asr.rev import RevAI
 from batchalign.backends.asr.vllm import VllmAsrBackend
@@ -18,6 +19,7 @@ from batchalign.backends.asr.funasr import FunAsrBackend, FunAudioBackend
 
 __all__ = [
     "WhisperBackend",
+    "ChatWhisperBackend",
     "WhisperXBackend",
     "RevAI",
     "VllmAsrBackend",

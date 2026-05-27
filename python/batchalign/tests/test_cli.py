@@ -74,4 +74,6 @@ def test_compare_takes_single_folder_with_gold_template():
 def test_asr_engine_enum_members():
     from batchalign.cli.transcribe import AsrEngine
 
-    assert {e.value for e in AsrEngine} == {"rev", "whisperx", "whisper", "openai", "vllm"}
+    assert {e.value for e in AsrEngine} == {
+        "rev", "whisperx", "whisper", "chatwhisper", "openai", "vllm",
+    }

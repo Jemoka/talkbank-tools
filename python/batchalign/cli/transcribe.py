@@ -27,6 +27,7 @@ class AsrEngine(str, Enum):
     rev = "rev"            # Rev.AI cloud (ASR + its own diarization)
     whisperx = "whisperx"  # WhisperX (faster-whisper + alignment)
     whisper = "whisper"    # HF transformers Whisper
+    chatwhisper = "chatwhisper"  # TalkBank CHATWhisper + BERT utterance segmenter (BA2 default)
     openai = "openai"      # openai-whisper package
     vllm = "vllm"          # vLLM-served Whisper via the OpenAI audio API
 
@@ -108,6 +109,11 @@ def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vll
         return ba.WhisperXBackend(model=m, language=None if language == "auto" else language), False
     if engine is AsrEngine.whisper:
         return ba.WhisperBackend(model=m, language=language), False
+    if engine is AsrEngine.chatwhisper:
+        # CHATWhisper resolves its own model per language; it also performs
+        # BA2's BERT utterance segmentation internally (one segment per
+        # utterance), so it needs no separate UtSeg stage.
+        return ba.ChatWhisperBackend(lang="eng" if language in ("auto", "en") else language), False
     if engine is AsrEngine.openai:
         return ba.OpenAIWhisperBackend(model=m, language=language), False
     if engine is AsrEngine.vllm:
