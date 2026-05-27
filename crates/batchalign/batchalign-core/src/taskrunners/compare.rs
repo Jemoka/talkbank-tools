@@ -89,7 +89,11 @@ impl TaskRunner for CompareTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Compare(input)).await?;
         let output: CompareOutput = output_raw.try_into()?;
 
-        let annotated: Chat = Chat::parse(&output.annotated_main, main_source_id.clone())
+        // Lenient re-parse: `annotated_main` is text we generated, and it
+        // carries the morphotag `%gra` whose BA2-faithful ROOT assignment trips
+        // the `%gra` circular-dependency invariant (E724). We keep that tier
+        // verbatim for parity, so validation findings must be non-fatal here.
+        let annotated: Chat = Chat::parse_lenient(&output.annotated_main, main_source_id.clone())
             .map_err(|e| BAError::Worker(format!("compare: failed to re-parse annotated_main: {e}")))?;
         // Keep media reference if the upstream Paired carried one (won't
         // typically be the case for Compare, but harmless and consistent).

@@ -1,14 +1,20 @@
-"""`compare` command — compare a main transcript against a gold reference.
+"""`compare` command — compare each transcript against a gold template.
 
-Always tries to run morphosyntax (Stanza) on both transcripts before
-the alignment so the `%xsmor:` tier carries real POS tags rather than
-`?` placeholders (matches BA2's `compare` behaviour). The morphosyntax
-runner short-circuits per-utterance if a `%mor:` tier is already
-present, so pre-tagged input costs no inference.
+Gold lookup mirrors BA2 (`dispatch.py`), but lives in the SAME input folder
+(parity.md): for each `FILE.cha` the gold is, in order of precedence,
 
-If Stanza isn't installed we fall back to compare-only and emit one
-warning line via the Interface log; the rest of the pipeline still
-runs and `%xsrep:` is unaffected.
+  1. `FILE.gold.cha`     — a per-file gold beside the transcript, else
+  2. `template.gold.cha` — one shared template for everything in the folder.
+
+`*.gold.cha` files are themselves skipped as inputs. This replaces the old
+parallel-gold-folder pairing (one folder of templates mirroring the inputs),
+which parity.md calls out as the wrong structure.
+
+Always runs morphosyntax (Stanza) on both transcripts before the alignment so
+the `%xsmor:` tier carries real POS tags. The morphosyntax runner short-
+circuits per-utterance when a `%mor:` tier is already present, so pre-tagged
+input costs no inference. If Stanza isn't installed we fall back to
+compare-only and emit one warning line.
 """
 
 from __future__ import annotations
@@ -25,42 +31,67 @@ from .tui import Interface, Task
 
 _log = logging.getLogger("batchalign.cli.compare")
 
+GOLD_SUFFIX = ".gold.cha"
+TEMPLATE_GOLD = "template.gold.cha"
 
-def _pair_chat_folders(main: Path, gold: Path) -> tuple[list, Path]:
-    """Walk `main` recursively and pair each `.cha` file with the same
-    relative path under `gold`. Returns (inputs, main_root).
+
+def _find_gold(main: Path) -> Path | None:
+    """Resolve the gold transcript for `main` (BA2 precedence).
+
+    `FILE.gold.cha` beside the file wins; otherwise the folder-wide
+    `template.gold.cha`. Returns `None` if neither exists.
+    """
+    per_file = main.parent / (main.stem + GOLD_SUFFIX)
+    if per_file.is_file():
+        return per_file
+    template = main.parent / TEMPLATE_GOLD
+    if template.is_file():
+        return template
+    return None
+
+
+def _pair_folder_with_gold(folder: Path) -> tuple[list, Path]:
+    """Walk `folder` for `.cha` inputs and pair each with its gold template.
+
+    Returns `(paired_inputs, root)`. Skips any `*.gold.cha` (those are golds,
+    not inputs). Raises if an input has no gold.
     """
     from batchalign.inputs import paired_from_paths
 
-    main_root = _root_for(main)
-    gold_root = _root_for(gold)
+    root = _root_for(folder)
     inputs = []
-    for src in _walk(main, CHAT_EXTENSIONS):
-        rel = src.relative_to(main_root)
-        gold_path = gold_root / rel
-        if not gold_path.is_file():
+    for src in _walk(folder, CHAT_EXTENSIONS):
+        if src.name.endswith(GOLD_SUFFIX):
+            continue
+        gold = _find_gold(src)
+        if gold is None:
             raise typer.BadParameter(
-                f"no gold counterpart for {src}: expected {gold_path}",
+                f"no gold for {src}: expected a sibling {src.stem}{GOLD_SUFFIX} "
+                f"or a {TEMPLATE_GOLD} in {src.parent}"
             )
-        inputs.append(paired_from_paths(str(src), str(gold_path), source_id=str(src)))
-    return inputs, main_root
+        inputs.append(paired_from_paths(str(src), str(gold), source_id=str(src)))
+    if not inputs:
+        raise typer.BadParameter(
+            f"no transcripts to compare in {folder} (only gold files, or empty)"
+        )
+    return inputs, root
 
 
 def register(app: typer.Typer) -> None:
     @app.command()
     def compare(
         ctx: typer.Context,
-        main: Path = typer.Argument(
-            ..., exists=True, help="Main (candidate) folder or `.cha` file."
-        ),
-        gold: Path = typer.Argument(
-            ..., exists=True, help="Gold reference folder or `.cha` file (mirrors `main`'s structure)."
+        folder: Path = typer.Argument(
+            ...,
+            exists=True,
+            help="Folder of `.cha` transcripts to compare. The gold is a sibling "
+            "`FILE.gold.cha` or a shared `template.gold.cha` in the same folder.",
         ),
         out: Path | None = typer.Option(
             None,
             "--out",
             "-o",
-            help="Optional output folder; if omitted, each main file is overwritten in place.",
+            help="Optional output folder; if omitted, each transcript is overwritten in place.",
         ),
         language: str = typer.Option(
             "en",
@@ -69,11 +100,10 @@ def register(app: typer.Typer) -> None:
             help="Stanza language code for morphosyntax (e.g. 'en', 'es', 'zh').",
         ),
     ) -> None:
-        """Compare a main transcript against a gold reference.
+        """Compare each transcript in FOLDER against its gold template.
 
         Pipeline: `[Morphosyntax (Stanza), Compare]`. Output is a CHAT file
-        with `%xsrep:` / `%xsmor:` per utterance (BA2 format) plus a per-utt
-        `%xcmp:` accuracy line and a `@Comment: ba.compare.summary:` header.
+        with the compare tiers per utterance plus a `@Comment` summary header.
         """
         import batchalign as ba
 
@@ -87,17 +117,16 @@ def register(app: typer.Typer) -> None:
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
-            # Try to construct a Stanza backend. If the user hasn't
-            # installed `stanza` + its model deps, fall back to
-            # compare-only — `%xsmor:` will be all `?`, but `%xsrep:`
-            # is unaffected.
+            # Try to construct a Stanza backend. If the user hasn't installed
+            # `stanza`, fall back to compare-only — the compare tiers still
+            # populate from the parsed `%mor:` if present.
             try:
                 stanza = ba.StanzaBackend(lang=language)
                 pipeline = ba.recipes.compare(stanza_backend=stanza)
             except ImportError as exc:
                 _log.warning(
-                    "morphosyntax (Stanza) unavailable: %s — %%xsmor will be "
-                    "all '?'. install with: pip install 'batchalign[stanza]'",
+                    "morphosyntax (Stanza) unavailable: %s — compare POS tiers "
+                    "will be placeholders. install with: pip install 'batchalign[stanza]'",
                     exc,
                 )
                 from batchalign._core import CompareBackend  # type: ignore[attr-defined]
@@ -107,7 +136,7 @@ def register(app: typer.Typer) -> None:
                     backends=[CompareBackend()],
                 )
 
-            inputs, root = _pair_chat_folders(main, gold)
+            inputs, root = _pair_folder_with_gold(folder)
             for inp in inputs:
                 ui.push(Task.from_input(inp))
             outcomes = list(ui.run_pipeline(pipeline, inputs))
