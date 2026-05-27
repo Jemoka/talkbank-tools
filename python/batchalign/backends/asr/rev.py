@@ -53,9 +53,9 @@ class RevAI(ASR, Speaker):
 
     @property
     def name(self) -> str:
-        # v3: upload original media file (byte-identical to BA2) + BA2-matching
-        # submit options. Bump when submit behaviour changes (cache key).
-        return "revai:async-v3"
+        # v4: punct-split + retrace for non-BERT languages (es, …). Bump when
+        # submit/segmentation behaviour changes (cache key).
+        return "revai:async-v4"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -94,7 +94,7 @@ class RevAI(ASR, Speaker):
                 outputs.append(
                     AsrOutput(
                         source_id=item.source_id,
-                        segments=_segments_from_rev(resp, AsrSegment, AsrWord),
+                        segments=_segments_from_rev(resp, AsrSegment, AsrWord, self._language),
                     )
                 )
             elif isinstance(item, SpeakerInput):
@@ -208,41 +208,119 @@ def _rev_lang(code: str | None) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+_SENT_END = {".", "?", "!"}
+# Rev language codes that have a downstream CHATUtterance BERT segmenter
+# (en/zh/yue). For these, BA2 strips Rev's punctuation and segments with the
+# BERT model; everything else uses Rev's punctuation to sentence-split.
+_BERT_LANGS = {"en", "cmn", "yue"}
+
+
 def _segments_from_rev(
-    resp: dict[str, Any], AsrSegment: type, AsrWord: type
+    resp: dict[str, Any], AsrSegment: type, AsrWord: type, lang: str | None = None
 ) -> list[Any]:
     """Project a Rev.AI transcript JSON into a list of :class:`AsrSegment`.
 
     Rev's JSON is ``{"monologues": [{"speaker": int, "elements":
-    [{"type": "text", "value": "...", "ts": float, "end_ts": float,
-    "confidence": float}, ...]}, ...]}``.
+    [{"type": "text"|"punct", "value": "...", "ts": float, "end_ts": float},
+    ...]}, ...]}``.
+
+    Two modes, mirroring BA2's `process_generation`:
+
+    * **Punctuated** (Rev's own postproc kept — non en/fr): Rev returns commas
+      and sentence-final periods. We split each monologue into sentences at
+      `. ? !` (keeping commas inline), apply BA2's disfluency + retrace cleanup
+      per sentence, and emit ONE segment per sentence — BA2's `retokenize`.
+    * **Raw** (en/fr, `skip_postprocessing=True`): no Rev punctuation; emit the
+      whole monologue as one segment for the downstream CHATUtterance BERT
+      segmenter to carve.
     """
+    from batchalign.backends.utseg.cleanup import (
+        SUPPORT_SUFFIX,
+        clean_utterance,
+        load_cleanup,
+    )
+
+    suffix = SUPPORT_SUFFIX.get((lang or "").lower(), (lang or "").lower())
+    table = load_cleanup(suffix)
+
+    use_bert = (lang or "").lower() in _BERT_LANGS
+
     segments: list[Any] = []
     for mono in resp.get("monologues", []):
-        words: list[Any] = []
-        for el in mono.get("elements", []):
-            if el.get("type") != "text":
-                continue
-            words.append(
+        speaker = str(mono.get("speaker")) if mono.get("speaker") is not None else None
+        elements = mono.get("elements", [])
+        has_sentence_punct = any(
+            el.get("type") == "punct" and (el.get("value") or "").strip() in _SENT_END
+            for el in elements
+        )
+
+        # BERT-segmented languages (en/zh/yue) strip Rev punctuation and let the
+        # downstream CHATUtterance segmenter split; only punct-split when there
+        # is no BERT model AND Rev gave us sentence punctuation.
+        if use_bert or not has_sentence_punct:
+            # Raw monologue → one segment (BERT segmenter handles the rest).
+            words = [
                 AsrWord(
                     text=el.get("value", "").strip(),
                     start_ms=int((el.get("ts") or 0.0) * 1000),
                     end_ms=int((el.get("end_ts") or 0.0) * 1000),
                     confidence=el.get("confidence"),
                 )
+                for el in elements
+                if el.get("type") == "text" and el.get("value", "").strip()
+            ]
+            if not words:
+                continue
+            segments.append(
+                AsrSegment(
+                    start_ms=words[0].start_ms,
+                    end_ms=words[-1].end_ms,
+                    text=" ".join(w.text for w in words),
+                    speaker=speaker,
+                    words=words,
+                )
             )
-        if not words:
             continue
-        text = " ".join(w.text for w in words if w.text)
-        segments.append(
-            AsrSegment(
-                start_ms=words[0].start_ms,
-                end_ms=words[-1].end_ms,
-                text=text,
-                speaker=str(mono.get("speaker")) if mono.get("speaker") is not None else None,
-                words=words,
+
+        # Punctuated → split into sentences at . ? ! (commas stay inline).
+        sentence: list[Any] = []  # AsrWord, includes comma tokens
+
+        def _flush(sent: list[Any]) -> None:
+            toks = [w for w in sent if w.text]
+            if not toks:
+                return
+            raw = " ".join(w.text for w in toks)
+            cleaned = clean_utterance(raw, table, lang or "")
+            timed = [w for w in toks if w.text not in (",",)]
+            start = timed[0].start_ms if timed else toks[0].start_ms
+            end = timed[-1].end_ms if timed else toks[-1].end_ms
+            segments.append(
+                AsrSegment(
+                    start_ms=start, end_ms=end, text=cleaned, speaker=speaker,
+                    words=toks,
+                )
             )
-        )
+
+        for el in elements:
+            value = (el.get("value") or "").strip()
+            etype = el.get("type")
+            if etype == "punct":
+                if value in _SENT_END:
+                    _flush(sentence)
+                    sentence = []
+                elif value:  # comma etc. — keep inline
+                    sentence.append(AsrWord(text=value, start_ms=0, end_ms=0, confidence=None))
+                continue
+            if etype == "text" and value:
+                sentence.append(
+                    AsrWord(
+                        text=value,
+                        start_ms=int((el.get("ts") or 0.0) * 1000),
+                        end_ms=int((el.get("end_ts") or 0.0) * 1000),
+                        confidence=el.get("confidence"),
+                    )
+                )
+        _flush(sentence)
     return segments
 
 

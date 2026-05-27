@@ -187,14 +187,11 @@ fn terminator_of(s: &str) -> &'static str {
 }
 
 fn sanitize_text(s: &str) -> String {
+    // Keep CHAT content markers (`< > [ ] /`) so retrace (`[/]`, `<a b>`)
+    // added by the cleanup stage survives; strip only line-structural chars.
     let cleaned: String = s
         .chars()
-        .filter(|c| {
-            !matches!(
-                c,
-                '\t' | '\n' | '\r' | '*' | '%' | '@' | '<' | '>' | '[' | ']' | '/' | '\\'
-            )
-        })
+        .filter(|c| !matches!(c, '\t' | '\n' | '\r' | '*' | '%' | '@' | '\\'))
         .collect();
     cleaned
         .trim()

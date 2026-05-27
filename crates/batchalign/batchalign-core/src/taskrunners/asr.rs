@@ -180,14 +180,12 @@ fn resolve_lang_code(spec: &LanguageSpec) -> String {
 /// Strip characters that would re-tokenize as CHAT structural markers (so
 /// downstream parsing doesn't choke on raw ASR punctuation).
 fn sanitize_segment_text(s: &str) -> String {
+    // Strip only line-structural characters; keep CHAT content markers
+    // (`< > [ ] /`) so retrace (`[/]`, `<a b>`) and similar annotations the
+    // ASR cleanup adds survive the re-parse.
     let cleaned: String = s
         .chars()
-        .filter(|c| {
-            !matches!(
-                c,
-                '\t' | '\n' | '\r' | '*' | '%' | '@' | '<' | '>' | '[' | ']' | '/' | '\\'
-            )
-        })
+        .filter(|c| !matches!(c, '\t' | '\n' | '\r' | '*' | '%' | '@' | '\\'))
         .collect();
     let trimmed = cleaned.trim();
     // Drop a terminal . / ? / ! — we append our own ` .` punctuation.

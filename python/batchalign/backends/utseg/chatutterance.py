@@ -16,12 +16,14 @@ is the disk-light path to transcribe parity.
 
 from __future__ import annotations
 
-import functools
-import os
-import pathlib
 from typing import Any
 
 from batchalign.backends.base import UtSeg, BatchPolicy
+from batchalign.backends.utseg.cleanup import (
+    SUPPORT_SUFFIX,
+    clean_utterance,
+    load_cleanup,
+)
 
 # BA2 model resolution for the utterance segmenter (models/resolve.py).
 _UTTERANCE_RESOLVE = {
@@ -32,43 +34,6 @@ _UTTERANCE_RESOLVE = {
     "zh-hans": "talkbank/CHATUtterance-zh_CN",
     "yue": "PolyU-AngelChanLab/Cantonese-Utterance-Segmentation",
 }
-
-_ENDING_PUNCT = (".", "?", "!")
-
-# CHATUtterance language → BA2 support-file suffix (filled_pauses.<suffix>).
-_SUPPORT_SUFFIX = {"eng": "eng", "en": "eng", "zho": "zho", "zh": "zho"}
-
-
-@functools.lru_cache(maxsize=8)
-def _load_cleanup(suffix: str) -> dict[str, str]:
-    """Load BA2's `filled_pauses.<suffix>` + `replacements.<suffix>` into a
-    `{original_lower: main_line_form}` map. Filled pauses carry their `&-`
-    prefix in the main-line column (`uh` → `&-uh`); replacements map to their
-    main-line form (`cuz` → `(be)cause`). Empty if no support files ship."""
-    out: dict[str, str] = {}
-    base = pathlib.Path(__file__).parent / "support"
-    for name in (f"filled_pauses.{suffix}", f"replacements.{suffix}"):
-        path = base / name
-        if not path.is_file():
-            continue
-        for line in path.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split(" ")
-            if len(parts) >= 2:
-                out[parts[0].lower()] = parts[1]
-    return out
-
-
-def _apply_cleanup(sentence: str, table: dict[str, str]) -> str:
-    """Word-level disfluency / replacement substitution (BA2 `_mark_utterance`)."""
-    if not table:
-        return sentence
-    out_words = []
-    for word in sentence.split(" "):
-        out_words.append(table.get(word.lower(), word))
-    return " ".join(out_words)
 
 
 class CHATUtteranceBackend(UtSeg):
@@ -94,15 +59,14 @@ class CHATUtteranceBackend(UtSeg):
         self._segmenter = BertUtteranceModel(model)
         # Disfluency / replacement table for this language (BA2 pairs the
         # disfluency stage with utterance segmentation in the ASR pipeline).
-        self._cleanup = _load_cleanup(_SUPPORT_SUFFIX.get(lang, lang))
+        self._cleanup = load_cleanup(SUPPORT_SUFFIX.get(lang, lang))
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
     def name(self) -> str:
         # Bump the trailing tag when segmentation/cleanup behaviour changes so
-        # the result cache invalidates (`disfl1` = filled-pause/replacement
-        # marking added).
-        return f"chatutterance:{self._model_id}:disfl1"
+        # the result cache invalidates (`disfl2` = + retrace [/] marking).
+        return f"chatutterance:{self._model_id}:disfl2"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -126,8 +90,8 @@ class CHATUtteranceBackend(UtSeg):
                     sentence = sentence.strip()
                     if not sentence:
                         continue
-                    # Mark filled pauses / replacements (uh → &-uh) BA2-style.
-                    sentence = _apply_cleanup(sentence, self._cleanup)
+                    # BA2 pairing: disfluency (uh → &-uh) then retrace ([/]).
+                    sentence = clean_utterance(sentence, self._cleanup, self._lang)
                     # Keep the BERT-predicted terminator on the span text; the
                     # runner reads it off the trailing punctuation so questions
                     # / exclamations survive (BA2 parity).
