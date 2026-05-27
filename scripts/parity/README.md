@@ -55,12 +55,34 @@ BA2 replaces the main line with the gold text, and its bag-of-words windowing
 leaks boundary words across utterance edges (`+he`/`-he`). BA3's aligner is
 cleaner; matching BA2's windowing quirk byte-for-byte is tracked but not done.
 
-### transcribe / align — engines wired, segmentation parity is model-bound
+### transcribe / align — engines wired; CHATWhisper backend implemented
 
-All BA2 ASR engines (rev, whisperx, whisper, openai-whisper) plus a vLLM
-Whisper are selectable via `--engine`, and `--language` is propagated to the
-backend. **Byte-identical** transcribe output is not attainable from wiring
-alone: BA2 segments ASR output with a trained BERT utterance model and uses a
-custom CHATWhisper English model; reproducing BA2's per-utterance segmentation
-requires using those same models. The engine plumbing is in place; closing the
-segmentation gap means vendoring BA2's segmentation models.
+All BA2 ASR engines are selectable via `transcribe --engine`
+(`rev | whisperx | whisper | chatwhisper | openai | vllm`), with `--language`
+propagated to the backend; `align --engine {wav2vec,whisperx}`.
+
+The parity-critical piece — BA2's per-utterance segmentation — is implemented
+as **`ChatWhisperBackend`** (`backends/asr/chatwhisper.py`): it pairs the
+TalkBank `CHATWhisper-en` model with the `CHATUtterance-en` BERT segmenter
+(BA2's `WhisperEngine`), emitting one segment per utterance so the runner's
+utterances are BA2's utterances. The deterministic segmentation glue
+(`segment_words`) is unit-tested with a fake segmenter
+(`tests/test_chatwhisper_segment.py`).
+
+**Runtime blocker (environment, not code).** Running any transformers-based
+ASR through `just batchalign::cli` currently fails with
+`RuntimeError: Could not load libtorchcodec`: the pinned `transformers 5.x`
+routes audio through `torchcodec`, and the Bazel-hermetic
+`torchcodec` / `torch 2.10` / FFmpeg combination is incompatible (it fails even
+with pre-decoded PCM input, so it's a transformers-import issue, not audio
+decode). Two unblock paths, both consistent with this machine (M2 Ultra):
+
+1. **vLLM** (preferred here): serve `CHATWhisper-en` via vLLM and run ASR over
+   the OpenAI audio API (`--engine vllm`), with the BERT segmenter — which
+   needs no audio — running locally. No `torchcodec`.
+2. **Pin `transformers` to BA2's 4.x**: 4.x decodes audio without `torchcodec`
+   AND matches BA2's ASR behaviour more closely (a `uv lock` change, not done
+   here to avoid disturbing the managed lockfile).
+
+ASR word-timestamp exactness is explicitly out of scope (cosmetic for the
+transcribe important lines); text + per-utterance segmentation is the target.
