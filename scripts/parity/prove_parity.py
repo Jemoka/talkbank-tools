@@ -151,6 +151,15 @@ MATRIX: list[Cell] = [
         ba2=["--lang", "eng", "-n", "1"],
         ba3=["--engine", "rev", "--language", "en", "-n", "1"],
     ),
+    Cell(
+        command="transcribe",
+        engine="rev",
+        language="zh",
+        fixture="transcribe/zh.wav",
+        kind="segmentation",
+        ba2=["--lang", "zho", "-n", "1"],
+        ba3=["--engine", "rev", "--language", "zh", "-n", "1"],
+    ),
     # ---- translate (Google free tier; deterministic given the same input) ----
     Cell(
         command="translate",
