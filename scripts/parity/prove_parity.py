@@ -98,6 +98,15 @@ MATRIX: list[Cell] = [
     Cell(
         command="morphotag",
         engine="stanza",
+        language="en-contraction",
+        fixture="morphotag/en_contraction.cha",
+        kind="morphotag",
+        ba2=["--override-cache"],
+        ba3=["--language", "en"],
+    ),
+    Cell(
+        command="morphotag",
+        engine="stanza",
         language="es",
         fixture="morphotag/es.cha",
         kind="morphotag",

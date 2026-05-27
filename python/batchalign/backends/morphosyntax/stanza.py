@@ -31,6 +31,7 @@ from typing import Any
 from batchalign.backends.base import Morphosyntax, BatchPolicy
 from batchalign.backends.morphosyntax.ud import render
 from batchalign.backends.morphosyntax.ud.lang import to_stanza
+from batchalign.backends.morphosyntax.ud.tokenize import tokenizer_processor
 
 # Languages for which Stanza's MWT splitter is disabled (BA2 ud.py:1034-1036).
 _MWT_EXCLUSION = frozenset(
@@ -66,6 +67,10 @@ class StanzaBackend(Morphosyntax):
         # (`en`); normalize for both the pipeline and the handler dispatch.
         self._lang = to_stanza(lang)
         self._retokenize = retokenize
+        # The tokenize postprocessor (retokenize=False) needs the raw sentence
+        # currently being tagged so it can align Stanza's tokens to the
+        # upstream word split. We stash it here before each `nlp()` call.
+        self._current_sentence = ""
         self._nlp = self._build_pipeline(stanza)
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
@@ -94,6 +99,20 @@ class StanzaBackend(Morphosyntax):
                 config["processors"][proc] = "combined"
 
         self._lang = lang
+        # When NOT retokenizing, force Stanza's tokenizer to honor the
+        # upstream word split (BA2's `tokenize_postprocessor`). When
+        # retokenizing, Stanza is allowed to resplit, so no postprocessor.
+        if not self._retokenize:
+            langs = [lang]
+
+            def _postproc(sentences):
+                return [
+                    tokenizer_processor(sent, langs, self._current_sentence)
+                    for sent in sentences
+                ]
+
+            config["tokenize_postprocessor"] = _postproc
+
         return stanza.Pipeline(lang=lang, **config)
 
     @property
@@ -153,7 +172,14 @@ class StanzaBackend(Morphosyntax):
         if not line_cut:
             return [], "", ""
 
-        doc = self._nlp(line_cut.replace("(", "").replace(")", "").strip())
+        # BA2 spaces commas out before tokenizing so they tokenize as their own
+        # word (`cm|cm`). The runner drops main-tier separators, so this only
+        # fires for commas that survived into `text`.
+        line_cut = line_cut.replace(",", " ,").replace("  ", " ")
+
+        # The postprocessor aligns Stanza's tokens to this exact sentence.
+        self._current_sentence = line_cut.replace("(", "").replace(")", "").strip()
+        doc = self._nlp(self._current_sentence)
         sents = getattr(doc, "sentences", [])
         if not sents:
             return [], "", ""
