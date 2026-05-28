@@ -71,6 +71,12 @@ class Cell:
     # BA2 global flags that go BEFORE the subcommand (e.g. --force-cpu,
     # --workers); `execute.py <ba2_global> <command> <IN> <OUT> <ba2>`.
     ba2_global: list[str] = field(default_factory=list)
+    # When BA2 is itself broken for this combination (e.g. its CHATWhisper
+    # Cantonese path emits an empty transcript), there is no oracle to diff
+    # against. We then only require that BA3 produces a non-empty, diarized
+    # result — the parity bar the user set for such languages ("ignore that
+    # language specifically as long as utterances [are] diarized").
+    ba2_broken: bool = False
 
     @property
     def name(self) -> str:
@@ -184,6 +190,20 @@ MATRIX: list[Cell] = [
         ba2_global=["--force-cpu"],
         ba2=["--whisper", "--lang", "eng", "-n", "1"],
         ba3=["--engine", "chatwhisper", "--language", "en", "--force-cpu"],
+    ),
+    # Cantonese: chatwhisper resolves the alvanlii Cantonese model + the
+    # Cantonese-specific BERT utterance segmenter (BertCantoneseUtteranceModel).
+    # BA2's CHATWhisper Cantonese path is broken here (emits an empty
+    # transcript), so there is no oracle to diff — we only require that BA3
+    # produces diarized Cantonese utterances (verified: 媽媽我哋留個充電器 . / …).
+    Cell(
+        command="transcribe",
+        engine="chatwhisper",
+        language="yue",
+        fixture="transcribe/yue.wav",
+        kind="segmentation",
+        ba2_broken=True,
+        ba3=["--engine", "chatwhisper", "--language", "yue", "--force-cpu"],
     ),
     # ---- align (wav2vec MMS_FA; %wor word-level timings) ----
     Cell(
@@ -360,6 +380,23 @@ def check(cell: Cell, *, verbose: bool) -> Result:
     if not fixture.exists():
         return Result(cell, False, detail=f"missing fixture {fixture}")
     extractor = EXTRACTORS[cell.kind]
+
+    # BA2-broken combination (e.g. Cantonese CHATWhisper): no oracle to diff —
+    # only require that BA3 produces a non-empty, diarized result.
+    if cell.ba2_broken:
+        with tempfile.TemporaryDirectory(prefix="parity_") as tmp:
+            try:
+                ba3_cha = run_ba3(cell, fixture, Path(tmp))
+            except Exception as exc:  # noqa: BLE001
+                return Result(cell, False, detail=str(exc))
+            ba3_lines = extractor(ba3_cha.read_text())
+        passed = len(ba3_lines) > 0
+        detail = (
+            f"BA2 broken on this language; BA3 produced {len(ba3_lines)} "
+            f"diarized utterance(s)"
+        )
+        diff = "\n".join(ba3_lines) if (verbose or not passed) else ""
+        return Result(cell, passed, detail=detail, diff=diff)
 
     with tempfile.TemporaryDirectory(prefix="parity_") as tmp:
         work = Path(tmp)
