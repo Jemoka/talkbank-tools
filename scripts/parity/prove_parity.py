@@ -248,6 +248,43 @@ MATRIX: list[Cell] = [
         ba2=["--funaudio", "--lang", "yue"],
         ba3=["--engine", "funaudio", "--language", "yue", "--force-cpu"],
     ),
+    # paraformer-zh (BA2 FunAudioEngine, second model): the funasr Mandarin
+    # paraformer + VAD + ct-punc-c. BA2 quirk: even on paraformer-zh it always
+    # segments with `BertCantoneseUtteranceModel` (char-level / particle); BA3
+    # mirrors that via `cantonese_inference=True` in the funaudio UtSeg path.
+    Cell(
+        command="transcribe",
+        engine="paraformer",
+        language="zh",
+        fixture="transcribe/zh.wav",
+        kind="segmentation",
+        ba2_global=["--force-cpu"],
+        ba2=["--paraformer", "--lang", "zho"],
+        ba3=["--engine", "funaudio", "--model", "paraformer-zh", "--language", "zh", "--force-cpu"],
+    ),
+    # Tencent Cloud ASR: COS upload → async CreateRecTask with diarization →
+    # poll → ResultDetail words. Faithful port of BA2's `TencentEngine`:
+    # `16k_zh_large` for zh/yue/wuu/nan/hak, OpenCC s2hk + word_replacements
+    # for yue, and `" ".join(words)` as the segmenter input.
+    #
+    # NO BYTE-IDENTICAL ORACLE: Tencent's async ASR is non-deterministic
+    # across calls — the same audio bytes produce different `ResultDetail`
+    # groupings (some calls return per-utterance RDs; some merge a speaker
+    # turn into one long RD) and the SpeakerId cluster assignment varies.
+    # That means BA2-vs-BA2 calls wouldn't agree either, so we cannot diff
+    # BA2 against BA3. We use `ba2_broken=True` semantics (sanity-only) and
+    # verify BA3 produces a non-empty, diarized Cantonese transcript.
+    # `yue_long.wav` is yue.wav concatenated 2× so the COS upload exceeds the
+    # qcloud_cos 1 MB single-PUT threshold (BA2 errors on smaller files).
+    Cell(
+        command="transcribe",
+        engine="tencent",
+        language="yue",
+        fixture="transcribe/yue_long.wav",
+        kind="segmentation",
+        ba2_broken=True,
+        ba3=["--engine", "tencent", "--language", "yue"],
+    ),
     # ---- align (wav2vec MMS_FA; %wor word-level timings) ----
     Cell(
         command="align",

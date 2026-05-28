@@ -107,7 +107,7 @@ def register(app: typer.Typer) -> None:
             # stream (rev, chatwhisper, …) when a segmenter model exists.
             utseg_backend: Any = None
             if segment:
-                utseg_backend = _build_utseg(ba, language)
+                utseg_backend = _build_utseg(ba, language, engine)
             pipeline = ba.recipes.transcribe(
                 asr_backend=asr_backend,
                 speaker_backend=speaker_backend,
@@ -163,13 +163,19 @@ _UTSEG_LANG = {
 }
 
 
-def _build_utseg(ba: Any, language: str):
+def _build_utseg(ba: Any, language: str, engine: AsrEngine | None = None):
     """Build the CHATUtterance segmenter for `language`, or None if BA2 ships
-    no utterance model for it (then ASR segments stand as utterances)."""
+    no utterance model for it (then ASR segments stand as utterances).
+
+    BA2's FunAudioEngine always segments with `BertCantoneseUtteranceModel`
+    — even when the ASR model is `funasr/paraformer-zh` (Mandarin). Mirror
+    that quirk so paraformer-zh BA3 output is byte-identical to BA2's.
+    """
     key = _UTSEG_LANG.get(language.lower())
     if key is None:
         return None
     try:
-        return ba.CHATUtteranceBackend(lang=key)
+        cantonese = engine is AsrEngine.funaudio
+        return ba.CHATUtteranceBackend(lang=key, cantonese_inference=cantonese)
     except ValueError:
         return None

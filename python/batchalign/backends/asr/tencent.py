@@ -88,7 +88,8 @@ class TencentAsrBackend(ASR):
 
     @property
     def name(self) -> str:
-        return f"tencent:{self._lang_code}:async-v1"
+        # v2: segment text joined with " " for BA2 parity (segmenter input shape).
+        return f"tencent:{self._lang_code}:async-v2"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -137,6 +138,15 @@ class TencentAsrBackend(ASR):
                 Bucket=self._bucket, LocalFilePath=local_path, Key=key,
                 PartSize=1, MAXThread=10, EnableMD5=False,
             )
+            # `upload_file` returns the `complete_multipart_upload` response
+            # (with `Location`) for files > PartSize MB, but for smaller files
+            # falls back to a single `put_object` PUT whose response is only
+            # the HTTP headers — no `Location`. BA2's reference inputs all
+            # tripped multipart; ours include small clips. Build the public
+            # object URL directly so both paths work.
+            file_url = upload.get("Location") or (
+                f"https://{self._bucket}.cos.{self._region}.myqcloud.com/{key}"
+            )
 
             req = models.CreateRecTaskRequest()
             req.EngineModelType = (
@@ -145,7 +155,7 @@ class TencentAsrBackend(ASR):
             req.ResTextFormat = 1
             req.SpeakerDiarization = 1
             req.ChannelNum = 1
-            req.Url = upload["Location"]
+            req.Url = file_url
             req.SourceType = 0
             resp = self._client.CreateRecTask(req)
 
@@ -158,7 +168,7 @@ class TencentAsrBackend(ASR):
             if res.Data.Status in _FAILED_STATUS:
                 raise RuntimeError(f"Tencent job failed: {res.Data.ErrorMsg}")
 
-            self._cos.delete_object(Bucket=self._bucket, Key=upload["Key"])
+            self._cos.delete_object(Bucket=self._bucket, Key=key)
         finally:
             if tmp_path:
                 try:
@@ -184,7 +194,12 @@ class TencentAsrBackend(ASR):
                 )
             if not words:
                 continue
-            joiner = "" if self._lang == "yue" else " "
+            # BA2 parity: `process_generation` always passes the segmenter a
+            # space-joined string (`" ".join(values)`). Match that exactly so
+            # `BertCantoneseUtteranceModel`'s char-level tokenization sees the
+            # same input bytes as BA2 (without the spaces the model's
+            # punctuation predictions can drift and split mid-turn).
+            joiner = " "
             segments_out.append(
                 AsrSegment(
                     start_ms=words[0].start_ms,

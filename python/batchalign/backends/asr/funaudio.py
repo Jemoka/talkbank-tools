@@ -184,10 +184,12 @@ class FunAudioBackend(ASR):
                 for p in _CJK_PUNCT_DROP:
                     content = content.replace(p, "")
                 items = list(content)  # char-level for Cantonese
-                joiner = ""
             else:
                 items = large_string.split()
-                joiner = " "
+            # BA2 parity: `process_generation` always feeds the segmenter
+            # `" ".join(values)`, regardless of language. Mirror that — the
+            # Cantonese BERT's char-level tokenization is space-sensitive.
+            joiner = " "
 
             words: list[Any] = []
             for index, tok in enumerate(items):

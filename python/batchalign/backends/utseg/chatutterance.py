@@ -45,6 +45,7 @@ class CHATUtteranceBackend(UtSeg):
         lang: str = "eng",
         batch_size: int = 8,
         batch_window_ms: int = 50,
+        cantonese_inference: bool = False,
     ) -> None:
         from batchalign.backends.asr.chatwhisper import (
             BertCantoneseUtteranceModel,
@@ -59,8 +60,12 @@ class CHATUtteranceBackend(UtSeg):
             )
         self._lang = lang
         self._model_id = model
-        # Cantonese uses a distinct inference (particle-chunking) model.
-        if lang == "yue":
+        # Cantonese uses a distinct inference (particle-chunking, char-level).
+        # `cantonese_inference` forces it even for a non-yue model: BA2's
+        # FunAudioEngine always segments with BertCantoneseUtteranceModel
+        # (even paraformer-zh), so the funaudio path opts in to match.
+        self._cantonese = lang == "yue" or cantonese_inference
+        if self._cantonese:
             self._segmenter = BertCantoneseUtteranceModel(model)
         else:
             self._segmenter = BertUtteranceModel(model)
@@ -73,7 +78,8 @@ class CHATUtteranceBackend(UtSeg):
     def name(self) -> str:
         # Bump the trailing tag when segmentation/cleanup behaviour changes so
         # the result cache invalidates (`disfl2` = + retrace [/] marking).
-        return f"chatutterance:{self._model_id}:disfl2"
+        canto = ":canto" if self._cantonese and self._lang != "yue" else ""
+        return f"chatutterance:{self._model_id}:disfl2{canto}"
 
     @property
     def batch_policy(self) -> BatchPolicy:
