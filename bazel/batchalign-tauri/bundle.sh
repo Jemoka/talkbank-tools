@@ -43,23 +43,17 @@ fi
 # pyapp_build.sh which produces python/target/pyapp/bin/sidecar — the
 # stable, deterministic output path the bundler stages from.
 #
-# We invoke the launcher unconditionally so the bundle always picks up
-# the latest sidecar build; pyapp_build.sh's own cargo/maturin caches
-# make repeated invocations cheap when sources are unchanged.
-SIDECAR_LAUNCHER="${SIDECAR_PATH:-}"
-if [[ -z "$SIDECAR_LAUNCHER" ]]; then
+# SIDECAR_PATH (env, from $(rootpath //python/batchalign:sidecar)) is
+# a runfiles-relative path; resolve it to an absolute path inside the
+# runfiles tree via the shared helper.
+# shellcheck source=../python/runfiles_resolve.sh
+source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/runfiles_resolve.sh"
+
+if [[ -z "${SIDECAR_PATH:-}" ]]; then
     echo "SIDECAR_PATH env var not set (Bazel env= attribute missing?)" >&2
     exit 2
 fi
-if [[ ! -x "$SIDECAR_LAUNCHER" ]]; then
-    # Try resolving against the workspace root (rootpath gave a relative).
-    if [[ -x "$BUILD_WORKSPACE_DIRECTORY/$SIDECAR_LAUNCHER" ]]; then
-        SIDECAR_LAUNCHER="$BUILD_WORKSPACE_DIRECTORY/$SIDECAR_LAUNCHER"
-    else
-        echo "sidecar launcher not executable at $SIDECAR_LAUNCHER" >&2
-        exit 2
-    fi
-fi
+SIDECAR_LAUNCHER="$(runfiles_resolve "$SIDECAR_PATH")"
 
 echo "bundle.sh: building sidecar via $SIDECAR_LAUNCHER"
 "$SIDECAR_LAUNCHER"

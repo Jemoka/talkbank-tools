@@ -22,19 +22,18 @@ if [[ -z "$TRIPLE" ]]; then
     exit 2
 fi
 
-SIDECAR_LAUNCHER="${SIDECAR_PATH:-}"
-if [[ -z "$SIDECAR_LAUNCHER" ]]; then
+# Resolve the runfiles-relative SIDECAR_PATH (passed via
+# `env = { SIDECAR_PATH: $(rootpath //python/batchalign:sidecar) }` on
+# this sh_binary) to an absolute launcher path. See bundle.sh for the
+# same pattern + rationale.
+# shellcheck source=../python/runfiles_resolve.sh
+source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/runfiles_resolve.sh"
+
+if [[ -z "${SIDECAR_PATH:-}" ]]; then
     echo "SIDECAR_PATH env var not set (Bazel env= attribute missing?)" >&2
     exit 2
 fi
-if [[ ! -x "$SIDECAR_LAUNCHER" ]]; then
-    if [[ -x "$BUILD_WORKSPACE_DIRECTORY/$SIDECAR_LAUNCHER" ]]; then
-        SIDECAR_LAUNCHER="$BUILD_WORKSPACE_DIRECTORY/$SIDECAR_LAUNCHER"
-    else
-        echo "sidecar launcher not executable at $SIDECAR_LAUNCHER" >&2
-        exit 2
-    fi
-fi
+SIDECAR_LAUNCHER="$(runfiles_resolve "$SIDECAR_PATH")"
 
 echo "dev.sh: building sidecar via $SIDECAR_LAUNCHER"
 "$SIDECAR_LAUNCHER"
