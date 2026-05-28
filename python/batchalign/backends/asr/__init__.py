@@ -17,6 +17,7 @@ from batchalign.backends.asr.tencent import TencentAsrBackend
 from batchalign.backends.asr.aliyun import AliyunAsrBackend
 from batchalign.backends.asr.funasr import FunAsrBackend
 from batchalign.backends.asr.funaudio import FunAudioBackend
+from batchalign.backends.asr.qwen3_asr import Qwen3AsrBackend
 
 __all__ = [
     "WhisperBackend",
@@ -30,4 +31,5 @@ __all__ = [
     "AliyunAsrBackend",
     "FunAsrBackend",
     "FunAudioBackend",
+    "Qwen3AsrBackend",
 ]

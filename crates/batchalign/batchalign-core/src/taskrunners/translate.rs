@@ -56,11 +56,15 @@ impl TaskRunner for TranslateTaskRunner {
         let input = TranslateInput {
             source_id: chat.source_id().clone(),
             utterances,
-            // Source: read per-file from `@Languages:`. Target: the backend
-            // pins it at construction (`GoogleTranslateBackend(target="eng")`);
-            // the input field stays as the conventional default so the proto
-            // shape doesn't drift.
-            source: LanguageSpec::PerFile,
+            // Source: resolve `@Languages:` to a concrete code so the
+            // backend sees `LanguageSpec::Code("spa")` instead of a bare
+            // `PerFile` marker. NLLB / Tencent TMT / Aliyun MT pick the
+            // source-side tokenizer / API code from this. Target: the
+            // backend pins it at construction (e.g.
+            // `GoogleTranslateBackend(target="eng")`); the input field
+            // stays as the conventional default so the proto shape
+            // doesn't drift.
+            source: resolve_per_file_language(chat),
             target: SmolStr::new_static("eng"),
         };
 
@@ -74,6 +78,19 @@ impl TaskRunner for TranslateTaskRunner {
             Task::Translate,
         ));
         Ok(())
+    }
+}
+
+/// Read the chat's `@Languages:` header and emit a concrete `LanguageSpec`.
+/// Falls back to `PerFile` (a no-op marker) when the header is absent so
+/// the backend can do its own per-file resolution. Mirrors the
+/// `morphosyntax.rs::resolve_per_file_language` helper — kept local rather
+/// than shared because each task crate is meant to be reviewable on its own.
+fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
+    if let Some(code) = chat.primary_language() {
+        LanguageSpec::Code(SmolStr::new(code))
+    } else {
+        LanguageSpec::PerFile
     }
 }
 

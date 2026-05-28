@@ -14,10 +14,13 @@ from .tui import Interface, Task
 
 
 class TranslateEngine(str, Enum):
-    """Translation backend selection."""
+    """Translation backend selection (tbtbt-parity superset)."""
 
-    google = "google"
-    vllm = "vllm"
+    google = "google"        # Google Cloud Translate / googletrans free fallback
+    vllm = "vllm"            # OpenAI-compatible vLLM endpoint
+    nllb = "nllb"            # facebook/nllb-200-distilled-1.3B local model
+    tencent = "tencent"      # Tencent Cloud TMT (TextTranslate); does NOT support yue
+    aliyun = "aliyun"        # Aliyun MT General; supports yue first-class
 
 
 def register(app: typer.Typer) -> None:
@@ -58,8 +61,16 @@ def register(app: typer.Typer) -> None:
             backend: Any
             if engine is TranslateEngine.google:
                 backend = ba.GoogleTranslateBackend(target=target)
-            else:
+            elif engine is TranslateEngine.vllm:
                 backend = ba.VllmTranslateBackend(target=target)
+            elif engine is TranslateEngine.nllb:
+                backend = ba.NllbTranslateBackend(target=target)
+            elif engine is TranslateEngine.tencent:
+                backend = ba.TencentTmtBackend(target=target)
+            elif engine is TranslateEngine.aliyun:
+                backend = ba.AliyunTranslateBackend(target=target)
+            else:
+                raise typer.BadParameter(f"unknown engine: {engine}")
             pipeline = ba.recipes.translate(translate_backend=backend)
             inputs, root = collect_chat_inputs(folder)
             for inp in inputs:

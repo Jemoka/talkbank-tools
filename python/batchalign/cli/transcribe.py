@@ -32,6 +32,7 @@ class AsrEngine(str, Enum):
     vllm = "vllm"          # vLLM-served Whisper via the OpenAI audio API
     funaudio = "funaudio"  # FunASR SenseVoiceSmall / paraformer-zh (BA2 FunAudioEngine)
     tencent = "tencent"    # Tencent Cloud ASR (BA2 TencentEngine)
+    qwen3 = "qwen3"        # Qwen3-ASR (Alibaba open-weight; tbtbt parity)
 
 
 # Sensible per-engine default models (BA2's defaults where they exist).
@@ -41,6 +42,7 @@ _DEFAULT_MODEL = {
     AsrEngine.openai: "turbo",
     AsrEngine.vllm: "openai/whisper-large-v3",
     AsrEngine.funaudio: "FunAudioLLM/SenseVoiceSmall",
+    AsrEngine.qwen3: "Qwen/Qwen3-ASR-1.7B",
 }
 
 
@@ -152,6 +154,21 @@ def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vll
             "eng" if language in ("auto", "en") else language
         )
         return ba.TencentAsrBackend(lang=lang, num_speakers=num_speakers), True
+    if engine is AsrEngine.qwen3:
+        # Qwen3-ASR (Alibaba); single-speaker output (no diarization). tbtbt
+        # pins device default to CPU on Apple Silicon (MPS degraded on 1.7B);
+        # --force-cpu honors that explicitly.
+        lang = "yue" if language in ("auto", "yue", "zh-hant") else language
+        # ISO-639-1 → -3 for Mandarin and English (Qwen3-ASR labels are
+        # resolved from ISO-639-3 internally).
+        if lang in ("zh", "zh-hans", "cmn"):
+            lang = "zho"
+        elif lang == "en":
+            lang = "eng"
+        return ba.Qwen3AsrBackend(
+            lang=lang, model_id=m or "Qwen/Qwen3-ASR-1.7B",
+            device=device or "cpu",
+        ), False
     raise typer.BadParameter(f"unknown engine: {engine}")
 
 

@@ -32,6 +32,7 @@ from batchalign.backends.asr import (
     FunAudioBackend,
     OpenAIWhisperBackend,
     QwenAsrBackend,
+    Qwen3AsrBackend,
     RevAI,
     TencentAsrBackend,
     VllmAsrBackend,
@@ -41,7 +42,13 @@ from batchalign.backends.asr import (
 from batchalign.backends.fa import Wav2Vec2FaBackend, WhisperFaBackend, WhisperXFaBackend
 from batchalign.backends.morphosyntax import StanzaBackend
 from batchalign.backends.speaker import PyannoteBackend
-from batchalign.backends.translate import GoogleTranslateBackend, VllmTranslateBackend
+from batchalign.backends.translate import (
+    AliyunTranslateBackend,
+    GoogleTranslateBackend,
+    NllbTranslateBackend,
+    TencentTmtBackend,
+    VllmTranslateBackend,
+)
 from batchalign.backends.utseg import CantoneseWordSegBackend, CHATUtteranceBackend
 
 __all__ = [
@@ -64,6 +71,7 @@ __all__ = [
     "FunAudioBackend",
     "OpenAIWhisperBackend",
     "QwenAsrBackend",
+    "Qwen3AsrBackend",
     "RevAI",
     "TencentAsrBackend",
     "VllmAsrBackend",
@@ -78,7 +86,10 @@ __all__ = [
     # Speaker
     "PyannoteBackend",
     # Translate
+    "AliyunTranslateBackend",
     "GoogleTranslateBackend",
+    "NllbTranslateBackend",
+    "TencentTmtBackend",
     "VllmTranslateBackend",
     # UtSeg
     "CantoneseWordSegBackend",

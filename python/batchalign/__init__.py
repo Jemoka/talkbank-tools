@@ -76,6 +76,7 @@ from batchalign.backends import (  # noqa: E402
     FunAsrBackend,
     FunAudioBackend,
     QwenAsrBackend,
+    Qwen3AsrBackend,
     TencentAsrBackend,
     # Forced alignment.
     Wav2Vec2FaBackend,
@@ -88,6 +89,9 @@ from batchalign.backends import (  # noqa: E402
     CHATUtteranceBackend,
     GoogleTranslateBackend,
     VllmTranslateBackend,
+    NllbTranslateBackend,
+    TencentTmtBackend,
+    AliyunTranslateBackend,
 )
 from batchalign import recipes  # noqa: E402
 from batchalign import inputs  # noqa: E402
@@ -130,6 +134,7 @@ __all__ = [
     "FunAsrBackend",
     "FunAudioBackend",
     "QwenAsrBackend",
+    "Qwen3AsrBackend",
     "TencentAsrBackend",
     # FA
     "Wav2Vec2FaBackend",
@@ -142,6 +147,9 @@ __all__ = [
     "CHATUtteranceBackend",
     "GoogleTranslateBackend",
     "VllmTranslateBackend",
+    "NllbTranslateBackend",
+    "TencentTmtBackend",
+    "AliyunTranslateBackend",
     # submodules
     "recipes",
     "inputs",
