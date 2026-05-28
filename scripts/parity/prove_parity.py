@@ -49,6 +49,14 @@ FIXTURES = HERE / "fixtures"
 BA2_DIR = Path("/Users/houjun/Documents/Projects/batchalign2")
 BA2_PY = BA2_DIR / ".venv" / "bin" / "python"
 
+# tbtbt is a SECOND batchalign reference (a more advanced fork with
+# Qwen3-ASR, Tencent TMT, NLLB-1.3B, Aliyun MT). For engines BA2 doesn't
+# carry, we diff BA3 against tbtbt instead. Set `oracle="tbtbt"` on a Cell
+# to route it through `run_tbtbt`. See [[GOLD_PATH_BATCHALIGN.md]] for the
+# inline-build recipe (`uv run batchalign3 …`).
+TBTBT_DIR = Path("/Users/houjun/Documents/Projects/tbtbt")
+TBTBT_BIN = TBTBT_DIR / "target" / "debug" / "batchalign3"
+
 
 # --- the matrix ------------------------------------------------------------
 
@@ -84,6 +92,14 @@ class Cell:
     # normalized out. This proves the WORD alignment + segmentation are
     # identical (the port is faithful) while acknowledging the ms shift.
     env_limited: bool = False
+    # Which reference to diff BA3 against. Default `"ba2"` (the BA2 fork at
+    # /Users/houjun/Documents/Projects/batchalign2). `"tbtbt"` uses the
+    # /Users/houjun/Documents/Projects/tbtbt fork as the oracle — chosen for
+    # engines BA2 doesn't carry (Qwen3-ASR, NLLB, Tencent TMT, Aliyun MT).
+    oracle: str = "ba2"
+    # tbtbt-specific CLI args (`tbtbt` oracle only). The driver invokes
+    # `batchalign3 <command> <PATH> -o <OUT> <tbtbt>`.
+    tbtbt: list[str] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -323,6 +339,68 @@ MATRIX: list[Cell] = [
         ba2=[],
         ba3=["--target", "eng"],
     ),
+    # ---- translate (NLLB-1.3B local; sanity-only) ----
+    # tbtbt is the architectural reference; BA2 has no NLLB. Greedy decode
+    # on facebook/nllb-200-distilled-1.3B is bit-deterministic only when
+    # the underlying torch float ops match — and torch 2.11 (BA3 venv) vs
+    # 2.12 (tbtbt venv) drives sub-token lexical drift on close
+    # translations (same env-limited class as `whisper_fa`). Per the
+    # parity charter ("if it's largely correct it's fine"), we don't
+    # enforce byte-identical here; the cell verifies BA3 produces a
+    # non-empty `%xtra:` translation tier.
+    Cell(
+        command="translate",
+        engine="nllb",
+        language="es-eng",
+        fixture="translate/es.cha",
+        kind="translate",
+        ba2_broken=True,
+        ba3=["--engine", "nllb", "--target", "eng"],
+    ),
+    # ---- translate (Tencent TMT cloud; sanity-only) ----
+    # `[asr] engine.tencent.*` creds must be set. zh source — Tencent TMT
+    # does not support yue (route Cantonese through NLLB or Aliyun). The
+    # cloud TMT model is updated server-side and produces small word-level
+    # drift between calls; sanity-only check verifies BA3 produces a
+    # non-empty `%xtra:` translation.
+    Cell(
+        command="translate",
+        engine="tencent",
+        language="zh-eng",
+        fixture="translate/zh.cha",
+        kind="translate",
+        ba2_broken=True,
+        ba3=["--engine", "tencent", "--target", "eng"],
+    ),
+    # ---- translate (Aliyun MT cloud) — implementation only, no cell ----
+    # The Aliyun MT service (product code `alimt`) is **not** activated on
+    # the current cloud account, so the cell would hard-fail with
+    # `Auth check failed! ... product:[alimt] ... is not activated`.
+    # The backend (`batchalign.backends.translate.aliyun.AliyunTranslateBackend`)
+    # is tbtbt-parity wired; once `alimt` is activated in the Aliyun
+    # console, restore this cell (uncomment) to add yue→eng coverage:
+    #
+    #   Cell(
+    #       command="translate", engine="aliyun", language="yue-eng",
+    #       fixture="translate/yue.cha", kind="translate",
+    #       ba2_broken=True,
+    #       ba3=["--engine", "aliyun", "--target", "eng"],
+    #   ),
+    # ---- transcribe (Qwen3-ASR; sanity-only; Cantonese) ----
+    # Open-weight ASR LLM from Alibaba. Local model (~3.4 GB fp16); first
+    # run downloads from HuggingFace. tbtbt is the architectural
+    # reference. `--force-cpu` because MPS is reportedly degraded on the
+    # 1.7B model (tbtbt empirical eval 2026-05-26). Same torch-precision
+    # drift class as NLLB — sanity-only.
+    Cell(
+        command="transcribe",
+        engine="qwen3",
+        language="yue",
+        fixture="transcribe/yue.wav",
+        kind="segmentation",
+        ba2_broken=True,
+        ba3=["--engine", "qwen3", "--language", "yue", "--force-cpu"],
+    ),
 ]
 
 
@@ -435,6 +513,42 @@ def run_ba2(cell: Cell, fixture: Path, work: Path) -> Path:
     return produced[0]
 
 
+def run_tbtbt(cell: Cell, fixture: Path, work: Path) -> Path:
+    """Run tbtbt on `fixture`; return the produced `.cha` path.
+
+    tbtbt's CLI is `batchalign3 <command> <PATH> -o <OUT> [opts]` (one or
+    more inputs accepted; we pass a single file). Uses
+    `--no-tui --no-server --sequential` for deterministic batch behavior
+    and `--force-cpu` to avoid MPS-induced drift on Apple Silicon.
+    """
+    in_dir = work / "tbtbt_in"
+    out_dir = work / "tbtbt_out"
+    in_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dst = in_dir / fixture.name
+    shutil.copy(fixture, dst)
+    for sib in fixture.parent.glob(fixture.stem + ".*"):
+        if sib != fixture:
+            shutil.copy(sib, in_dir / sib.name)
+
+    cmd = [
+        str(TBTBT_BIN),
+        cell.command,
+        "--no-tui", "--no-server", "--sequential", "--force-cpu",
+        "-o", str(out_dir),
+        *cell.tbtbt,
+        str(dst),
+    ]
+    proc = _run(cmd, cwd=TBTBT_DIR)
+    produced = sorted(out_dir.glob("*.cha"))
+    if not produced:
+        raise RuntimeError(
+            f"tbtbt produced no .cha\nstdout:\n{proc.stdout[-2000:]}\n"
+            f"stderr:\n{proc.stderr[-2000:]}"
+        )
+    return produced[0]
+
+
 def run_ba3(cell: Cell, fixture: Path, work: Path) -> Path:
     """Run BA3 via `just batchalign::cli`; return the produced `.cha` path.
 
@@ -456,6 +570,16 @@ def run_ba3(cell: Cell, fixture: Path, work: Path) -> Path:
     if not out.exists():
         raise RuntimeError(
             f"BA3 produced no .cha\nstdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}"
+        )
+    if proc.returncode != 0:
+        # BA3 left the input .cha in place (since the input lives at
+        # `target` and the output overwrites it on success). A non-zero
+        # exit means the pipeline aborted mid-task — `out.exists()` alone
+        # is not a sufficient liveness signal. Surface the failure with
+        # the tail of stdout so the user sees the actual pipeline error.
+        raise RuntimeError(
+            f"BA3 exited {proc.returncode}\n"
+            f"stdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}"
         )
     return out
 
@@ -497,12 +621,15 @@ def check(cell: Cell, *, verbose: bool) -> Result:
     with tempfile.TemporaryDirectory(prefix="parity_") as tmp:
         work = Path(tmp)
         try:
-            ba2_cha = run_ba2(cell, fixture, work)
+            if cell.oracle == "tbtbt":
+                ref_cha = run_tbtbt(cell, fixture, work)
+            else:
+                ref_cha = run_ba2(cell, fixture, work)
             ba3_cha = run_ba3(cell, fixture, work)
         except Exception as exc:  # noqa: BLE001 - surface any engine failure
             return Result(cell, False, detail=str(exc))
 
-        ba2_lines = extractor(ba2_cha.read_text())
+        ba2_lines = extractor(ref_cha.read_text())
         ba3_lines = extractor(ba3_cha.read_text())
 
     # Environmentally-limited combinations (whisper_fa DTW): compare with the
@@ -513,16 +640,17 @@ def check(cell: Cell, *, verbose: bool) -> Result:
         ba3_lines = [_norm(_strip_bullet(l)) for l in ba3_lines]
 
     passed = ba2_lines == ba3_lines
+    ref_label = "TBTBT" if cell.oracle == "tbtbt" else "BA2"
     diff = ""
     if not passed or verbose:
         diff = "\n".join(
             difflib.unified_diff(
-                ba2_lines, ba3_lines, fromfile="BA2", tofile="BA3", lineterm=""
+                ba2_lines, ba3_lines, fromfile=ref_label, tofile="BA3", lineterm=""
             )
         )
-    detail = f"{len(ba2_lines)} important lines"
+    detail = f"{len(ba2_lines)} important lines (oracle={cell.oracle})"
     if cell.env_limited:
-        detail += " (word+segmentation parity; %wor ms differ by torch 2.6 vs 2.10 float precision)"
+        detail += " (env_limited)"
     return Result(cell, passed, detail=detail, diff=diff)
 
 

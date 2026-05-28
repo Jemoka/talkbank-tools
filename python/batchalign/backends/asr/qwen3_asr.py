@@ -23,16 +23,33 @@ from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
 
-# ISO-639-3 → Qwen3-ASR `language=` parameter label. tbtbt parity:
-# `batchalign/inference/languages/cantonese/_qwen_common.py::_QWEN_LANG_LABELS`.
-# Pinned in code rather than via pycountry because pycountry returns
-# "Yue Chinese" for `yue`, which Qwen silently treats as auto-detect.
-_QWEN_LANG_LABELS: dict[str, str] = {
-    "yue": "Cantonese",
-    "zho": "Chinese",
-    "cmn": "Chinese",
-    "eng": "English",
-}
+# ISO-639-3 → Qwen3-ASR `language=` parameter label. Qwen wants
+# English-language names ("English", "Cantonese", "Spanish", …); pycountry
+# already produces those from the ISO-639-3 code. Two adjustments are
+# applied after the lookup to cover known model-side mismatches:
+#
+# * "Yue Chinese" → "Cantonese" — pycountry's name is the linguistic
+#   classification; Qwen accepts the colloquial label and silently falls
+#   back to auto-detect on the academic form (tbtbt's docstring).
+# * any name containing "greek" → "Greek" — pycountry yields "Modern
+#   Greek (1453-)" for `ell`/`gre`, which Qwen doesn't recognize.
+#
+# This matches BA2's whisper.py and tbtbt's _qwen_common.py post-processing.
+def _resolve_qwen_language(lang: str) -> str:
+    import pycountry  # type: ignore[import-not-found]
+
+    rec = pycountry.languages.get(alpha_3=lang)
+    if rec is None:
+        raise ValueError(
+            f"Qwen3-ASR has no language label for ISO-639-3 {lang!r}: "
+            f"pycountry could not resolve the code"
+        )
+    name: str = rec.name
+    if name == "Yue Chinese":
+        name = "Cantonese"
+    if "greek" in name.lower():
+        name = "Greek"
+    return name
 
 
 class Qwen3AsrBackend(ASR):
@@ -43,6 +60,12 @@ class Qwen3AsrBackend(ASR):
         *,
         lang: str = "yue",
         model_id: str = "Qwen/Qwen3-ASR-1.7B",
+        # Word-level timing requires a separately-loaded Qwen3 forced
+        # aligner. The canonical companion checkpoint is
+        # `Qwen/Qwen3-ForcedAligner-0.6B` (see
+        # `qwen_asr/cli/demo.py:131`). Pass `forced_aligner=None` for
+        # text-only output (no `%wor:` tier feasible without it).
+        forced_aligner: str | None = "Qwen/Qwen3-ForcedAligner-0.6B",
         device: str = "cpu",
         max_inference_batch_size: int = 32,
         max_new_tokens: int = 4096,
@@ -56,13 +79,7 @@ class Qwen3AsrBackend(ASR):
         self._model_id = model_id
         self._device = device
 
-        label = _QWEN_LANG_LABELS.get(lang)
-        if label is None:
-            raise ValueError(
-                f"Qwen3-ASR has no language label for ISO-639-3 {lang!r}; "
-                f"known: {sorted(_QWEN_LANG_LABELS)}"
-            )
-        self._qwen_language = label
+        self._qwen_language = _resolve_qwen_language(lang)
 
         if device == "cuda":
             dtype = torch.bfloat16
@@ -79,8 +96,10 @@ class Qwen3AsrBackend(ASR):
         else:
             dtype = torch.float32
 
+        self._forced_aligner_id = forced_aligner
         self._model = Qwen3ASRModel.from_pretrained(
             self._model_id,
+            forced_aligner=forced_aligner,
             torch_dtype=dtype,
             device_map=device,
             max_inference_batch_size=max_inference_batch_size,
@@ -133,13 +152,20 @@ class Qwen3AsrBackend(ASR):
             local_path = tmp_path
 
         try:
+            # `return_time_stamps=True` requires `forced_aligner` at model
+            # init (we pass `Qwen/Qwen3-ForcedAligner-0.6B` by default).
+            # When the operator opts out of the FA model
+            # (`forced_aligner=None`), we still call transcribe but skip
+            # timestamps — word-level timing can come from a chained FA
+            # backend (`whisper_fa`, `wav2vec`) in a downstream task.
+            want_timestamps = self._forced_aligner_id is not None
             results = self._model.transcribe(
                 audio=local_path,
                 # tbtbt parity: pass the explicit label rather than relying on
                 # auto-detect — auto on a known-language input risks the model
                 # misclassifying short / low-energy segments.
                 language=self._qwen_language,
-                return_time_stamps=True,
+                return_time_stamps=want_timestamps,
             )
         finally:
             if tmp_path:
@@ -154,7 +180,9 @@ class Qwen3AsrBackend(ASR):
 
         words: list[Any] = []
         # Each "result" is a Qwen3-ASR utterance with `.text` and optionally
-        # `.time_stamps.items` (list of {.start_time,.end_time,.text}).
+        # `.time_stamps.items` (list of {.start_time,.end_time,.text}) when
+        # the FA aligner is loaded. Times are seconds (float) — `_qwen_common`
+        # / `qwen3_forced_aligner.ForcedAlignItem` shape.
         for raw in results:
             text = str(getattr(raw, "text", "") or "")
             ts_container = getattr(raw, "time_stamps", None)
