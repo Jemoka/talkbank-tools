@@ -25,6 +25,15 @@
 # Wheel artifact paths:
 #   per-platform: python/target/wheels/batchalign-<version>-cp312-cp312-<plat>.whl
 #
+# Standalone daemon binary:
+#   `just batchalign daemonapp` produces python/target/pyapp/bin/daemonapp,
+#   a self-contained executable bundling CPython + the wheel + the [api]
+#   extra via PyApp (https://ofek.dev/pyapp/). The binary IS the daemon —
+#   running it boots `batchalign3 daemon` directly. See
+#   `bazel/python/pyapp_build.sh` for the build mechanics + env-var
+#   contract; the pyapp version pin lives in pyproject.toml's
+#   [tool.batchalign.pinned_tools].
+#
 # Source of truth: python/pyproject.toml owns the wheel version, deps,
 # all optional-deps groups, classifiers, scripts.
 #
@@ -84,59 +93,42 @@ lint:
     bazel run //python/batchalign:lint
 
 # ---------------------------------------------------------------------------
-# Wheel builds. Each target invokes maturin with --target <triple> so the
-# wheel is tagged correctly. CI's matrix runs one cell per platform; locally,
-# only the host-matching target succeeds without a cross-compile sysroot
-# (use cibuildwheel / GitHub Actions for the full matrix).
+# Wheel build.
+#
+# `wheel` produces a `cp310-abi3-<host-platform>` wheel that installs on
+# any CPython >= 3.10 (stable ABI). Pure-Rust deps -- the wheel records
+# no dynamic library paths beyond the OS base libraries.
+#
+# Cross-platform builds are CI-only: `.github/workflows/publish-pypi.yml`
+# fans out to one native runner per platform. Do not try to cross-build
+# from your laptop -- there's no recipe for it, by design. If you need a
+# wheel for a platform you can't run natively, dispatch the CI workflow.
 # ---------------------------------------------------------------------------
 
-# Wheel for the host platform (no explicit target triple).
+# Wheel for the host platform.
 wheel:
-    MATURIN_PROFILE=release bazel run //python/batchalign:wheel
-
-# Apple Silicon (M1/M2/M3).
-wheel-macos-arm64:
-    MATURIN_PROFILE=release MATURIN_TARGET=aarch64-apple-darwin \
-        bazel run //python/batchalign:wheel
-
-# Intel macOS.
-wheel-macos-x86_64:
-    MATURIN_PROFILE=release MATURIN_TARGET=x86_64-apple-darwin \
-        bazel run //python/batchalign:wheel
-
-# Linux glibc x86_64 (manylinux retagging happens at release time via auditwheel).
-wheel-linux-x86_64:
-    MATURIN_PROFILE=release MATURIN_TARGET=x86_64-unknown-linux-gnu \
-        bazel run //python/batchalign:wheel
-
-# Linux ARM64.
-wheel-linux-aarch64:
-    MATURIN_PROFILE=release MATURIN_TARGET=aarch64-unknown-linux-gnu \
-        bazel run //python/batchalign:wheel
-
-# Windows x86_64.
-wheel-windows-x86_64:
-    MATURIN_PROFILE=release MATURIN_TARGET=x86_64-pc-windows-msvc \
-        bazel run //python/batchalign:wheel
-
-# Build every supported wheel on the host. Only the host-matching triple
-# succeeds without cross-compile sysroots installed; the rest are best
-# delegated to the CI matrix (`.github/workflows/wheels.yml`).
-multiwheel:
-    @echo "→ Building wheels for all supported platforms (host-only triples will succeed)…"
-    @echo "  Output: python/target/wheels/"
-    -just batchalign wheel-macos-arm64
-    -just batchalign wheel-macos-x86_64
-    -just batchalign wheel-linux-x86_64
-    -just batchalign wheel-linux-aarch64
-    -just batchalign wheel-windows-x86_64
-    @echo "→ Built wheels:"
-    @ls -lh python/target/wheels/ 2>/dev/null || echo "  (no wheels produced)"
+    bazel run -c opt //python/batchalign:wheel
 
 # Upload every wheel under python/target/wheels/ to PyPI via twine.
 # Requires PYPI_TOKEN in the environment (or ~/.pypirc credentials).
 publish:
     bazel run //python/batchalign:publish
+
+# Standalone production daemon binary via PyApp.
+#
+# Output: python/target/pyapp/bin/daemonapp. Self-contained — bundles
+# CPython at the pinned major.minor, the batchalign wheel, and the
+# [api] extra (fastapi/uvicorn/sse-starlette). Run it directly to boot
+# the HTTP daemon; no Python or batchalign install on the host.
+#
+# First build: ~minutes (cargo install pyapp + maturin build).
+# Rebuilds: only the maturin step reruns if Rust sources changed.
+#
+# Override via PYAPP_PROFILE={release|debug}, PYAPP_PYTHON_VERSION=...,
+# PYAPP_DISTRIBUTION_EMBED=0 (download Python on first run instead of
+# embedding it -- smaller binary, needs network at first launch).
+daemonapp:
+    bazel run -c opt //python/batchalign:daemonapp
 
 # Print the source-of-truth versions for human inspection.
 versions:

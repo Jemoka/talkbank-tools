@@ -15,7 +15,8 @@ use std::time::Duration;
 
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use talkbank_transform::{CorpusManifest, UnifiedCache};
+use talkbank_transform::{CorpusManifest};
+use talkbank_cache::{UnifiedCache};
 
 use crate::test_dashboard::app::{
     AppState, Args, DashboardEvent, WorkerLoopContext, home_dir_or_exit, restore_terminal,

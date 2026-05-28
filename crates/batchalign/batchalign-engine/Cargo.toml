@@ -45,7 +45,14 @@ blake3 = "1"
 smol_str = { version = "0.3", features = ["serde"] }
 tracing = "0.1"
 
-pyo3 = { version = "0.28", features = ["macros"] }
+# `abi3` + `abi3-py310` produces a wheel that uses Python's stable C API
+# only, so a single compiled `_core.so` runs on CPython 3.10, 3.11, 3.12,
+# 3.13 (and forward). Maturin auto-tags the resulting wheel as
+# `cp310-abi3-<platform>` which pip on any 3.10+ interpreter accepts.
+# The build-time interpreter pin (MODULE.bazel python.toolchain,
+# pyproject's [tool.batchalign.pinned_tools].python) stays at 3.12 --
+# abi3 only constrains the runtime floor, not the build machine.
+pyo3 = { version = "0.28", features = ["macros", "abi3", "abi3-py310"] }
 
 [build-dependencies]
 # Used by `build.rs` to walk the proto-schema inventory and emit

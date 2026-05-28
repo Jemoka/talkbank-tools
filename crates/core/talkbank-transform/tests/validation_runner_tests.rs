@@ -141,7 +141,7 @@ fn validate_directory_with_valid_files() {
     };
 
     let (events, _cancel) =
-        validate_directory_streaming::<talkbank_transform::CachePool>(dir, &config, None);
+        validate_directory_streaming::<talkbank_cache::CachePool>(dir, &config, None);
 
     let mut saw_started = false;
     let mut saw_finished = false;
@@ -183,7 +183,7 @@ fn validate_directory_with_invalid_file() {
     };
 
     let (events, _cancel) =
-        validate_directory_streaming::<talkbank_transform::CachePool>(dir, &config, None);
+        validate_directory_streaming::<talkbank_cache::CachePool>(dir, &config, None);
 
     let mut saw_errors = false;
     let mut saw_finished = false;
@@ -229,7 +229,7 @@ fn validate_directory_empty() {
     };
 
     let (events, _cancel) =
-        validate_directory_streaming::<talkbank_transform::CachePool>(dir, &config, None);
+        validate_directory_streaming::<talkbank_cache::CachePool>(dir, &config, None);
 
     let mut saw_started = false;
     let mut saw_finished = false;

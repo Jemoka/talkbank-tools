@@ -31,7 +31,7 @@
 //! - Root re-exports such as [`parse_and_validate`] and [`normalize_chat`] are
 //!   the common one-shot pipeline helpers.
 //! - [`json`] and [`xml`] own the format-conversion surfaces.
-//! - [`corpus`], [`unified_cache`], and [`validation_runner`] own discovery,
+//! - [`corpus`] and [`validation_runner`] own discovery,
 //!   caching, and directory-scale validation workflows.
 //!
 //! # Design Principles
@@ -85,8 +85,13 @@ pub mod xml;
 
 // Corpus-scale orchestration namespaces.
 pub mod corpus;
-pub mod unified_cache;
 pub mod validation_runner;
+// `unified_cache` moved to its own crate `talkbank-cache` so that products
+// that don't need a validation cache (batchalign-engine uses `redb`) don't
+// transitively pull `sqlx` and `libsqlite3-sys`. Consumers that need the
+// sqlite-backed implementation depend on `talkbank-cache` directly; they
+// continue to interact with it through the `ValidationCache` trait that
+// lives here in `validation_runner`.
 
 // Internal crate-root wiring for the convenience APIs below.
 mod pipeline;
@@ -113,7 +118,6 @@ pub use self::rendering::{
     render_error_with_miette, render_error_with_miette_with_named_source,
     render_error_with_miette_with_source, render_error_with_miette_with_source_colored,
 };
-pub use self::unified_cache::{CachePool, CacheStats, UnifiedCache};
 pub use self::validation_runner::{
     CacheMode, CacheOutcome, DirectoryMode, ErrorEvent, FileCompleteEvent, FileStatus, ParserKind,
     RoundtripEvent, ValidationCache, ValidationConfig, ValidationEvent, ValidationStats,

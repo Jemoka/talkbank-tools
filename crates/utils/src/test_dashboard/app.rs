@@ -13,7 +13,8 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use talkbank_transform::corpus::manifest::{ErrorDetail, FailureReason};
-use talkbank_transform::{CorpusManifest, UnifiedCache};
+use talkbank_transform::{CorpusManifest};
+use talkbank_cache::{UnifiedCache};
 
 use crate::test_dashboard::manifest::DashboardManifest;
 

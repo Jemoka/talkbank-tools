@@ -24,6 +24,7 @@ _INTRA_WORKSPACE_DEPS = [
     "//crates/core/talkbank-parser:talkbank_parser",
     "//crates/core/talkbank-parser-tests:talkbank_parser_tests",
     "//crates/core/talkbank-transform:talkbank_transform",
+    "//crates/core/talkbank-cache:talkbank_cache",
 ]
 
 rust_binary(

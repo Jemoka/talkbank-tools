@@ -50,17 +50,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { runner: macos-14,         platform: macos-arm64,    triple: aarch64-apple-darwin }
-          - { runner: macos-13,         platform: macos-x86_64,   triple: x86_64-apple-darwin }
-          - { runner: ubuntu-latest,    platform: linux-x86_64,   triple: x86_64-unknown-linux-gnu }
-          - { runner: ubuntu-24.04-arm, platform: linux-aarch64,  triple: aarch64-unknown-linux-gnu }
+          # Every cell is a NATIVE build. No MATURIN_TARGET; runner arch ==
+          # target arch.
+          - { runner: macos-14,         platform: macos-arm64 }
+          - { runner: macos-13,         platform: macos-x86_64 }
+          - { runner: ubuntu-latest,    platform: linux-x86_64 }
+          - { runner: ubuntu-24.04-arm, platform: linux-aarch64 }
           # windows-x86_64 deferred: multitool's uv.exe at archive root
           # resolves to "/uv.exe" under bash-on-Windows, which the
           # hermeticity guard's path absolutization can't handle. Add a
           # `file = "uv-windows/uv.exe"` subdir prefix in
           # multitool.lock.json (or use rules_multitool's path-mangling
           # workaround) before re-enabling.
-          # - { runner: windows-latest, platform: windows-x86_64, triple: x86_64-pc-windows-msvc }
+          # - { runner: windows-latest, platform: windows-x86_64 }
     steps:
       - uses: actions/checkout@v4
 
@@ -70,45 +72,48 @@ jobs:
           disk-cache: bazel-wheels-${{ matrix.platform }}
           repository-cache: true
 
-      # Match python/pyproject.toml [tool.batchalign.pinned_tools].rust.
-      - name: Pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.95.0"
-          targets: ${{ matrix.triple }}
-
-      # Match python/pyproject.toml [tool.batchalign.pinned_tools].uv.
-      - uses: astral-sh/setup-uv@v3
-        with:
-          version: "0.5.18"
-
-      - uses: extractions/setup-just@v2
-
       - name: Build wheel for ${{ matrix.platform }}
         env:
-          MATURIN_PROFILE: release
           MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
-        run: just batchalign wheel-${{ matrix.platform }}
+        run: bazel run -c opt //python/batchalign:wheel
 
-      - name: Smoke test the wheel installs + imports
+      # The wheel itself is `cp310-abi3` so it should install on any
+      # CPython >= 3.10. Exercise both ends of the supported range to
+      # prove the abi3 tag. `setup-python` is the only host tool we
+      # install for the smoke test -- the BUILD path above is fully
+      # Bazel-driven; this is just downstream verification.
+      - uses: actions/setup-python@v5
+        if: matrix.runner != 'windows-latest'
+        with:
+          python-version: |
+            3.10
+            3.12
+
+      - name: Smoke test wheel installs + imports on Python 3.10 + 3.12
         if: matrix.runner != 'windows-latest'
         shell: bash
         run: |
           set -e
-          # Create a fresh venv outside the source tree, install just the
-          # produced wheel, and verify the cdylib loads cleanly. This
-          # catches link-time issues that bazel-test alone misses.
-          # Pin the smoke-venv Python to 3.12 to match the wheel ABI tag.
-          # Without `--python 3.12`, uv picks whatever interpreter happens
-          # to be on the runner (e.g. Homebrew's python@3.14 on macos-14),
-          # producing
-          #   error: A path dependency is incompatible with the current
-          #   platform: batchalign-...-cp312-cp312-...whl
-          uv venv --python 3.12 /tmp/wheel-smoke
-          source /tmp/wheel-smoke/bin/activate
-          uv pip install python/target/wheels/batchalign-*.whl
-          python -c "import batchalign; from batchalign import _core; print('import ok:', _core)"
-          batchalign3 --help
+          WHEEL=$(ls python/target/wheels/batchalign-*.whl | head -1)
+          echo "wheel: $WHEEL"
+          # Filename sanity check — must be cp310-abi3, no cp312-cp312.
+          if [[ "$WHEEL" != *"cp310-abi3"* ]]; then
+            echo "::error::wheel tag is not cp310-abi3 — abi3 setup broke"
+            exit 1
+          fi
+          for py in python3.10 python3.12; do
+            echo "== smoke-test wheel on $($py --version) =="
+            $py -m venv "/tmp/wheel-smoke-$py"
+            "/tmp/wheel-smoke-$py/bin/pip" install --quiet "$WHEEL"
+            "/tmp/wheel-smoke-$py/bin/python" <<'PY'
+          import sys, batchalign
+          from batchalign import _core
+          print(f"python           {sys.version.split()[0]}")
+          print(f"batchalign       {batchalign.__file__}")
+          print(f"batchalign._core {_core.__file__}")
+          PY
+            "/tmp/wheel-smoke-$py/bin/batchalign3" --help > /dev/null
+          done
 
       - uses: actions/upload-artifact@v4
         with:

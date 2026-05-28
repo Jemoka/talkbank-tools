@@ -32,6 +32,7 @@ rust.toolchain(
     versions = ["1.95.0"],
 )
 use_repo(rust, "rust_toolchains")
+
 register_toolchains("@rust_toolchains//:all")
 
 # Hermetic protoc for crates that compile .proto at build time.
@@ -48,8 +49,8 @@ crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
 # semantics. Apply minimally; see `bazel/patches/BUILD.bazel`.
 crate.annotation(
     crate = "ferrous-opencc",
-    patches = ["//bazel/patches:ferrous-opencc-0.4.0.patch"],
     patch_args = ["-p1"],
+    patches = ["//bazel/patches:ferrous-opencc-0.4.0.patch"],
 )
 
 # PyO3 build-script handling. The default pyo3-build-config / pyo3-ffi
@@ -62,24 +63,33 @@ crate.annotation(
 # `-C link-arg=-undefined -C link-arg=dynamic_lookup` (set on the
 # `rust_shared_library` in batchalign-engine) handles the actual link.
 crate.annotation(
-    crate = "pyo3-build-config",
     build_script_data = ["@@//bazel/python:pyo3_config"],
     build_script_env = {
         "PYO3_CONFIG_FILE": "$(execpath @@//bazel/python:pyo3_config)",
     },
+    crate = "pyo3-build-config",
 )
 crate.annotation(
-    crate = "pyo3-ffi",
     build_script_data = ["@@//bazel/python:pyo3_config"],
     build_script_env = {
         "PYO3_CONFIG_FILE": "$(execpath @@//bazel/python:pyo3_config)",
     },
+    crate = "pyo3-ffi",
 )
-# Enable abi3 + abi3-py312 features on the pyo3 crate itself so its
-# macros emit Py_LIMITED_API guards matching what pyo3-ffi was built for.
+
+# Enable abi3 + abi3-py310 features on the pyo3 crate so its macros emit
+# Py_LIMITED_API guards. The resulting `_core.so` runs on CPython 3.10
+# through whatever future version still supports the stable ABI. Mirror
+# of the `abi3-py310` in crates/batchalign/batchalign-engine/Cargo.toml
+# (Bazel crate_universe doesn't read upstream features — annotations
+# override). Bump in lockstep with that Cargo.toml and the abi3 version
+# line in bazel/python/pyo3-config.txt.
 crate.annotation(
     crate = "pyo3",
-    crate_features = ["abi3", "abi3-py312"],
+    crate_features = [
+        "abi3",
+        "abi3-py310",
+    ],
 )
 
 # Feed hermetic protoc into every crate whose build script invokes it.
@@ -96,6 +106,7 @@ _PROTOC_DATA = [
     "@@protobuf~//:protoc",
     "@@protobuf~//:well_known_type_protos",
 ]
+
 _PROTOC_ENV = {
     "PROTOC": "$(execpath @@protobuf~//:protoc)",
     # PROTOC_INCLUDE must point at a directory whose layout has
@@ -104,7 +115,7 @@ _PROTOC_ENV = {
     # so we point PROTOC_INCLUDE at `external/protobuf~/src`. The
     # cargo_build_script_runner resolves this execroot-relative path
     # to an absolute path before invoking the build script.
-    "PROTOC_INCLUDE": "$${pwd}/external/protobuf~/src"
+    "PROTOC_INCLUDE": "$${pwd}/external/protobuf~/src",
     # "external/protobuf~/src",
 }
 
@@ -135,6 +146,7 @@ use_repo(crate, "crates")
 # cdylib + ABI-tagged rename + wheel packaging in Bazel buys nothing here.
 bazel_dep(name = "rules_python", version = "1.6.3")
 bazel_dep(name = "rules_uv", version = "0.59.0")
+
 # aspect_rules_py provides the bash-based py_binary launcher (no
 # system-python bootstrap) which fixes the
 # `/usr/bin/env: 'python3': Permission denied` failure under clean
@@ -149,15 +161,18 @@ bazel_dep(name = "aspect_rules_py", version = "1.11.5")
 # (asserted at script entry — see bazel/python/hermeticity_guard.sh).
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
-    python_version = "3.12",
     is_default = True,
+    python_version = "3.12",
 )
 
-# uv binary (rules_uv toolchain). pip_compile uses it to render
-# pyproject.toml → requirements.lock.txt at `bazel run //python:requirements`
-# time. The same uv is invoked by the maturin wheel build path.
-uv = use_extension("@rules_uv//uv:extensions.bzl", "uv")
-uv.toolchain(uv_version = "0.5.18")
+# uv binary. `pip_compile` from `@rules_uv//uv:pip.bzl` is loaded in
+# `python/BUILD.bazel`; rules_uv 0.59.0 does not export a module
+# extension at `@rules_uv//uv:extensions.bzl`, so we do not register a
+# `uv.toolchain(...)` here. The uv binary itself comes from
+# `@multitool//tools/uv` (see `multitool.lock.json`), invoked by the
+# maturin/pyapp shell-out scripts directly. The uv version pin lives
+# in `python/pyproject.toml [tool.batchalign.pinned_tools]` and is
+# enforced by `bazel/python/hermeticity_guard.sh`.
 
 # `@pypi//*` hub generated from python/requirements.lock.txt (which
 # `pip_compile` produces from pyproject.toml's `[project] dependencies`
@@ -182,6 +197,7 @@ bazel_dep(name = "aspect_rules_ts", version = "3.4.0")
 bazel_dep(name = "rules_nodejs", version = "6.7.4")
 
 node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node")
+
 # Vite v8 requires Node.js 20.19+. The pin must be a version that the
 # active rules_nodejs ships prebuilts for on every supported platform
 # (darwin arm64/amd64, linux arm64/amd64, windows amd64). rules_nodejs
@@ -209,15 +225,92 @@ use_repo(npm, "npm_vscode")
 bazel_dep(name = "rules_shell", version = "0.3.0")
 bazel_dep(name = "rules_pkg", version = "1.0.1")
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
+
 # Bazel 8 stops transitively re-exporting @platforms from other rules.
 # Targets that `select()` on @platforms//os or @platforms//cpu need an
 # explicit bazel_dep here.
 bazel_dep(name = "platforms", version = "1.0.0")
+
 # `copy_to_directory` is used wherever a Rust target needs an
 # in-sandbox manifest-dir layout that mirrors the source tree
 # (sqlx::migrate! and friends parse a string literal and require
 # `CARGO_MANIFEST_DIR/<literal>` to canonicalize at proc-macro time).
 bazel_dep(name = "aspect_bazel_lib", version = "2.9.3")
+
+# =============================================================================
+# C / C++ toolchain — hermetic LLVM via toolchains_llvm
+# =============================================================================
+# Why hermetic clang?
+#
+# Every maturin-driven Rust build (wheel, daemonapp) eventually shells out
+# to `cargo build` -> `cc-rs` -> the C compiler on PATH. On macOS that's
+# `/usr/bin/cc`, which is Apple's clang from /Library/Developer/
+# CommandLineTools. The host clang + host SDK are a versioned pair; a
+# mismatch breaks every `*-sys` crate. The macOS 26.x CommandLineTools
+# regression (clang 21 vs MacOSX.sdk's new `__kernel_ptr_semantics`
+# attribute macro) made this concrete -- libsqlite3-sys fails to compile
+# any time it's transitively pulled in, with no path to fix without
+# either installing Xcode.app or downgrading CLT.
+#
+# `toolchains_llvm` pins a specific LLVM release from llvm.org's prebuilt
+# tarballs; combined with cflag injection below, every cc invocation
+# Bazel orchestrates uses the pinned compiler. The maturin escape scripts
+# (`bazel/python/{maturin,pyapp}_build.sh`) read CC/CXX from runfiles and
+# export them to cargo, so even the shelled-out maturin path picks up the
+# hermetic compiler instead of host clang.
+#
+# SDK handling: on macOS the SDK still comes from xcrun (system). The
+# clang workaround for the `__kernel_ptr_semantics` regression lives in
+# the toolchain's default cflags (see :compiler_cflags below), NOT in
+# bash. If/when a hermetic SDK is needed (CI matrix, license-clean OSS
+# distribution, etc.), point `llvm.sysroot()` at a downloaded SDK
+# archive -- see https://github.com/bazel-contrib/toolchains_llvm#configuration.
+bazel_dep(name = "toolchains_llvm", version = "1.7.0")
+
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.toolchain(
+    # `__kernel_ptr_semantics` / `__kernel_data_semantics` are trailing
+    # attribute macros in <mach/arm/vm_types.h> that the SDK defines
+    # conditionally on clang-version detection. On CommandLineTools 26.x
+    # the detection path is broken and the macros end up undefined when
+    # third-party C code includes the header, causing "expected ';'
+    # after top level declarator" parse errors. Defining them to empty
+    # gives the same semantics older SDKs had (plain typedef without
+    # the kernel-only attribute) -- correct for any non-kernel consumer.
+    # See bazel/python/{maturin,pyapp}_build.sh for the cc-rs mirror;
+    # the two must agree.
+    extra_compile_flags = {
+        "darwin-aarch64": [
+            "-D__kernel_ptr_semantics=",
+            "-D__kernel_data_semantics=",
+        ],
+        "darwin-x86_64": [
+            "-D__kernel_ptr_semantics=",
+            "-D__kernel_data_semantics=",
+        ],
+    },
+    # Pinned to LLVM 17.0.6 -- the highest version `toolchains_llvm`
+    # 1.7.0 ships a prebuilt arm64-apple-darwin tarball for. Newer
+    # versions (18+, 20+, 21+) exist on llvm.org but aren't in this
+    # ruleset's distribution table for darwin-arm64. If we need a newer
+    # clang, bump `toolchains_llvm` to a release that lists it, or use
+    # `llvm.toolchain_root()` to point at a custom URL.
+    #
+    # Note: LLVM 17.0.6 alone does NOT make the wheel build hermetic
+    # against host-toolchain breakage -- the macOS SDK still comes from
+    # xcrun (system). On hosts with a broken CommandLineTools (e.g.
+    # macOS 26.x CLT 26.4, where clang 21 + the bundled SDK fail to
+    # compile their own headers), `*-sys` crate builds will still fail
+    # at the SDK header layer. The fix is either (a) install Xcode.app
+    # so xcrun returns the Xcode SDK instead of the CLT one, (b) wait
+    # for Apple to ship a fixed CLT, or (c) vendor a known-good SDK
+    # via http_archive + llvm.sysroot(). See CONTRIBUTING.md for the
+    # decision tree.
+    llvm_version = "17.0.6",
+)
+use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")
+
+register_toolchains("@llvm_toolchain//:all")
 
 # =============================================================================
 # Hermetic external binaries via rules_multitool

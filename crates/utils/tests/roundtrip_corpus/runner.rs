@@ -207,7 +207,7 @@ pub fn run_roundtrip_streaming(
     emit_artifacts: bool,
     check_alignment: bool,
     parser_kind: RoundtripParserKind,
-    cache: Option<std::sync::Arc<talkbank_transform::UnifiedCache>>,
+    cache: Option<std::sync::Arc<talkbank_cache::UnifiedCache>>,
 ) -> (
     crossbeam_channel::Receiver<super::types::RoundtripEvent>,
     crossbeam_channel::Sender<()>,
@@ -246,7 +246,7 @@ fn run_roundtrip_internal(
     emit_artifacts: bool,
     check_alignment: bool,
     parser_kind: RoundtripParserKind,
-    cache: Option<std::sync::Arc<talkbank_transform::UnifiedCache>>,
+    cache: Option<std::sync::Arc<talkbank_cache::UnifiedCache>>,
     event_tx: crossbeam_channel::Sender<super::types::RoundtripEvent>,
     cancel_rx: crossbeam_channel::Receiver<()>,
 ) {

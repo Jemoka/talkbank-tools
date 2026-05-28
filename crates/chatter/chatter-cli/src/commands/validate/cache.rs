@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use talkbank_transform::UnifiedCache;
+use talkbank_cache::UnifiedCache;
 
 use crate::commands::CacheRefreshMode;
 

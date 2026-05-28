@@ -143,7 +143,7 @@ fn run_tui_loop(
     files: Vec<PathBuf>,
     summary_label: &Path,
     config: &ValidationConfig,
-    cache: Option<Arc<talkbank_transform::CachePool>>,
+    cache: Option<Arc<talkbank_cache::CachePool>>,
     theme: crate::ui::Theme,
     suppress_set: &std::collections::HashSet<String>,
 ) -> ValidationStatsSnapshot {

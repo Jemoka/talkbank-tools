@@ -6,6 +6,7 @@ members = [
     "crates/core/talkbank-derive",
     "crates/core/talkbank-parser",
     "crates/core/talkbank-transform",
+    "crates/core/talkbank-cache",
     "crates/core/talkbank-parser-re2c",
     "crates/core/talkbank-parser-tests",
     "crates/utils",

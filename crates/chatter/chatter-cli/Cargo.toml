@@ -34,6 +34,7 @@ clan-core = { path = "../../clan/clan-core", version = "0.2.0" }
 talkbank-model = { path = "../../core/talkbank-model", version = "0.2.0" }
 talkbank-parser-tests = { path = "../../core/talkbank-parser-tests", version = "0.2.0" }
 talkbank-transform = { path = "../../core/talkbank-transform", version = "0.2.0" }
+talkbank-cache = { path = "../../core/talkbank-cache", version = "0.2.0" }
 talkbank-parser = { path = "../../core/talkbank-parser", version = "0.2.0" }
 thiserror = "^2.0.18" #unified
 tracing = "0.1"

@@ -37,5 +37,6 @@ sh_binary(
         "//crates/clan/send2clan-sys:send2clan_sys",
         "//crates/core/talkbank-model:talkbank_model",
         "//crates/core/talkbank-transform:talkbank_transform",
+        "//crates/core/talkbank-cache:talkbank_cache",
     ],
 )

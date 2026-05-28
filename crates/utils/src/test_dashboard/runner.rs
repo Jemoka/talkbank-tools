@@ -12,7 +12,8 @@ use std::time::Duration;
 use talkbank_model::model::{SemanticEq, WriteChat};
 use talkbank_parser::TreeSitterParser;
 use talkbank_transform::corpus::manifest::{ErrorDetail, FailureReason};
-use talkbank_transform::{UnifiedCache, parse_and_validate_with_parser};
+use talkbank_transform::{parse_and_validate_with_parser};
+use talkbank_cache::{UnifiedCache};
 
 use crate::test_dashboard::app::{
     DashboardEvent, FileProgressUpdate, FileTestOutcome, WorkerLoopContext,

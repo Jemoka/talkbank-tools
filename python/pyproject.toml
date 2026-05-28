@@ -11,7 +11,11 @@ version = "0.3.0"
 description = "TalkBank CHAT processing pipeline"
 readme = "batchalign/README.md"
 license = "BSD-3-Clause"
-requires-python = "==3.12.*"
+# Stable ABI (abi3) means a single cp310-abi3-<platform> wheel installs
+# on any CPython >= 3.10. The build interpreter still pins to 3.12
+# (see [tool.batchalign.pinned_tools].python + MODULE.bazel), but end
+# users on 3.10, 3.11, 3.12, 3.13+ can all `pip install batchalign`.
+requires-python = ">=3.10"
 authors = [
     { name = "Brian MacWhinney", email = "macw@cmu.edu" },
     { name = "Houjun Liu", email = "houjun@stanford.edu" },
@@ -62,6 +66,20 @@ cantonese    = ["pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "aliyun-py
 opensmile    = ["opensmile>=2.5"]
 avqi         = ["praat-parselmouth>=0.4.6"]
 translate    = ["googletrans"]
+# Thin FastAPI wrapper over `batchalign.recipes` (see batchalign/api.py).
+# Optional because most installations drive batchalign from Python or the
+# CLI; only deployments that want an HTTP face need this.
+api          = [
+    "fastapi>=0.110",
+    "sse-starlette>=2.1",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+    # `[standard]` pulls in uvloop, httptools, watchfiles, websockets —
+    # the production-grade event-loop / HTTP-parser stack. The bare
+    # uvicorn package falls back to pure-Python asyncio which is fine
+    # for dev but materially slower under load.
+    "uvicorn[standard]>=0.30",
+]
 all = [
     "transformers>=4.38", "torch>=2.0", "torchaudio>=2.0",
     "openai>=1.0", "librosa>=0.10",
@@ -72,6 +90,7 @@ all = [
     "opensmile>=2.5",
     "praat-parselmouth>=0.4.6",
     "googletrans",
+    "fastapi>=0.110", "sse-starlette>=2.1", "python-multipart>=0.0.9", "httpx>=0.27", "uvicorn[standard]>=0.30",
 ]
 dev = [
     "maturin==1.7.4",  # mirror [build-system].requires + pinned_tools
@@ -152,6 +171,12 @@ uv = "0.5.18"        # mirror MODULE.bazel uv.toolchain
 maturin = "1.7.4"    # used for `maturin develop` and `maturin build` —
                      # bump in lockstep with [build-system].requires
 rust = "1.95.0"      # mirror MODULE.bazel rust.toolchain(versions = [...])
+pyapp = "0.27.0"     # https://crates.io/crates/pyapp -- consumed by
+                     # `bazel/python/pyapp_build.sh` to produce
+                     # `//python/batchalign:daemonapp`. Bump in lockstep
+                     # with any PYAPP_* env-var contract changes in
+                     # pyapp_build.sh (the env-var schema evolves
+                     # between minor releases).
 
 [dependency-groups]
 # PEP 735 dependency groups. aspect_rules_py's `uv.project` extension
@@ -175,6 +200,18 @@ runtime = [
     "tqdm>=4",
     "transformers>=4.38",
     "typer>=0.12",
+    # `batchalign.api` (the HTTP wrapper). Included so the Bazel-run
+    # path can serve / test the API; mirrored as the `[api]` extra in
+    # [project.optional-dependencies] for wheel consumers.
+    "fastapi>=0.110",
+    "sse-starlette>=2.1",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+    # `[standard]` pulls in uvloop, httptools, watchfiles, websockets —
+    # the production-grade event-loop / HTTP-parser stack. The bare
+    # uvicorn package falls back to pure-Python asyncio which is fine
+    # for dev but materially slower under load.
+    "uvicorn[standard]>=0.30",
 ]
 dev = [
     "pytest>=9.0.3",

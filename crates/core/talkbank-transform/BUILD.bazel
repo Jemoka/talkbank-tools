@@ -6,15 +6,17 @@ Bazel-hostile bits:
   - The library reads `data/*.json` (compounds, num2lang, ordinal-year
     fixtures) via `include_str!`. Those files are wired as
     `compile_data` so the embed succeeds inside the sandbox.
-  - `sqlx::migrate!("./migrations")` is a proc macro that canonicalizes
-    and reads `./migrations/*.sql` at compile time. The directory must
-    be present in the sandbox, so `migrations/**/*` is wired into
-    `compile_data` on both the library and unit-test targets.
   - Tests read `resources/fixtures/*.cha` via `include_str!` from the
     repo root; that's outside this crate. The unit-test target carries a
     `compile_data` glob that pulls them in.
   - `quick-xml`, `csv`, `jsonschema` are all hermetic external deps via
     crate_universe — nothing exotic.
+
+sqlx and the migrations directory used to live here. They moved to
+//crates/core/talkbank-cache so that products that don't need the
+validation cache (batchalign) don't transitively pull libsqlite3-sys.
+The `ValidationCache` trait still lives here in `validation_runner`;
+talkbank-cache implements it.
 """
 
 load("@crates//:defs.bzl", "aliases", "all_crate_deps")
@@ -28,7 +30,6 @@ rust_library(
     aliases = aliases(),
     compile_data = glob([
         "data/**/*",
-        "migrations/**/*",
     ]) + [
         # JSON Schema for ChatFile AST; src/json.rs embeds it.
         "//schemas/chat-file:chat-file.schema.json",
@@ -48,10 +49,13 @@ rust_test(
     aliases = aliases(normal_dev = True, proc_macro_dev = True),
     compile_data = glob([
         "data/**/*",
-        "migrations/**/*",
     ]) + [
         "//resources/fixtures:all_files",
     ],
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
-    deps = all_crate_deps(normal_dev = True),
+    deps = all_crate_deps(normal_dev = True) + [
+        # tests/cache_tests.rs + tests/validation_runner_tests.rs use the
+        # sqlx-backed cache impl that moved into //crates/core/talkbank-cache.
+        "//crates/core/talkbank-cache:talkbank_cache",
+    ],
 )

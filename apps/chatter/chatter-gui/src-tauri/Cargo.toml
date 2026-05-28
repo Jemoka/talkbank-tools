@@ -28,6 +28,7 @@ ansi-to-html = "0.2"
 
 # Workspace crates (relative paths to sibling crates)
 talkbank-transform = { path = "../../../../crates/core/talkbank-transform", version = "0.2.0" }
+talkbank-cache = { path = "../../../../crates/core/talkbank-cache", version = "0.2.0" }
 talkbank-model = { path = "../../../../crates/core/talkbank-model", version = "0.2.0" }
 send2clan-sys = { path = "../../../../crates/clan/send2clan-sys", version = "0.2.0" }
 

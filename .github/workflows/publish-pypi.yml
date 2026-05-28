@@ -2,12 +2,27 @@ name: publish · pypi (batchalign)
 
 # Multi-platform wheel matrix + trusted-publisher upload to PyPI.
 #
+# Each matrix cell runs on a native runner for its target, so every wheel
+# is a host build (no cross-compile). The wheel is `cp310-abi3-<plat>`,
+# meaning a single artifact per platform installs on any CPython >= 3.10.
+#
 # Per-cell flow:
-#   bazel + setup-rust + setup-uv → pins asserted by hermeticity_guard
-#   → `just batchalign wheel-<platform>` → maturin → wheel artifact
+#   setup-bazel → `bazel run //python/batchalign:wheel` → upload artifact.
+#
+# Everything else (uv, maturin, rust, clang) is pulled hermetically by
+# Bazel from MODULE.bazel / multitool.lock.json / pyproject.toml's
+# [tool.batchalign.pinned_tools]. We do not pre-install rust/uv/etc on
+# the runner; the hermeticity guard inside the sh_binary asserts pins.
+#
+# (One residual leak: maturin's cargo discovery still uses `cargo` from
+# PATH inside the Bazel sandbox. On GitHub-hosted runners, `cargo`
+# comes pre-installed via the rustup toolchain shim. Plugging this is
+# a separate refactor — `bazel/python/maturin_build.sh` would need to
+# pass `CARGO=$(rootpath @rust_toolchains//:cargo_alias)` so the
+# bazel-managed cargo is used instead of host.)
 #
 # manylinux retagging happens via auditwheel inside the Linux cells
-# (maturin's build invokes it when MATURIN_USE_AUDITWHEEL is set).
+# (maturin invokes it when MATURIN_USE_AUDITWHEEL is set).
 #
 # Dry-run: leave `publish` unchecked → builds for every supported platform
 # and uploads as workflow artifacts only.
@@ -49,12 +64,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # platform = justfile recipe suffix; triple = Rust target triple
-          - { runner: macos-14,      platform: macos-arm64,   triple: aarch64-apple-darwin }
-          - { runner: macos-13,      platform: macos-x86_64,  triple: x86_64-apple-darwin }
-          - { runner: ubuntu-latest, platform: linux-x86_64,  triple: x86_64-unknown-linux-gnu }
-          - { runner: ubuntu-24.04-arm, platform: linux-aarch64, triple: aarch64-unknown-linux-gnu }
-          - { runner: windows-latest, platform: windows-x86_64, triple: x86_64-pc-windows-msvc }
+          # Every cell is a NATIVE build -- runner arch == target arch.
+          # No MATURIN_TARGET, no cross-compile sysroot. Maturin tags the
+          # wheel with the runner's platform automatically.
+          - { runner: macos-14,         platform: macos-arm64 }
+          - { runner: macos-13,         platform: macos-x86_64 }
+          - { runner: ubuntu-latest,    platform: linux-x86_64 }
+          - { runner: ubuntu-24.04-arm, platform: linux-aarch64 }
+          - { runner: windows-latest,   platform: windows-x86_64 }
     steps:
       - uses: actions/checkout@v4
 
@@ -64,33 +81,13 @@ jobs:
           disk-cache: publish-pypi-${{ matrix.platform }}
           repository-cache: true
 
-      # Pinned to match python/pyproject.toml [tool.batchalign.pinned_tools].rust.
-      # The hermeticity guard will fail the build if rustc reports a different
-      # version, so the pin is asserted as well as set.
-      - name: Install pinned Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.95.0"
-          targets: ${{ matrix.triple }}
-
-      # Same pin discipline: setup-uv version must equal the pin in
-      # pyproject.toml [tool.batchalign.pinned_tools].uv; mismatch fails fast.
-      - uses: astral-sh/setup-uv@v3
-        with:
-          version: "0.5.18"
-
-      # justfile recipe runner. extras `wheel-<platform>` invoke
-      # `bazel run //python/batchalign:wheel` with MATURIN_TARGET=<triple>.
-      - uses: extractions/setup-just@v2
-
       - name: Build wheel for ${{ matrix.platform }}
         env:
-          MATURIN_PROFILE: release
           # `MATURIN_USE_AUDITWHEEL=1` triggers manylinux retagging on Linux;
           # no-op on macOS/Windows. Linux cells produce manylinux_2_28-tagged
           # wheels that work across modern glibc distributions.
           MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
-        run: just batchalign wheel-${{ matrix.platform }}
+        run: bazel run -c opt //python/batchalign:wheel
 
       - uses: actions/upload-artifact@v4
         with:

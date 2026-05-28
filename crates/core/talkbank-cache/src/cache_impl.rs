@@ -20,7 +20,7 @@ use super::cache_utils;
 use super::error::CacheError;
 use super::types::CacheStats;
 use super::{maintenance_ops, roundtrip_ops, validation_ops};
-use crate::validation_runner::{CacheOutcome, ValidationCache};
+use talkbank_transform::{CacheOutcome, ValidationCache};
 
 /// Connection pool backed by sqlx `SqlitePool` with an embedded tokio runtime.
 ///

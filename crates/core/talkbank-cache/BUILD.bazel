@@ -1,0 +1,40 @@
+"""talkbank-cache — SQLite-backed validation/roundtrip cache (chatter).
+
+Carved out of talkbank-transform so that products without a validation
+cache (notably batchalign-engine, which uses redb) don't transitively
+pull `sqlx` + `libsqlite3-sys` into their wheel build. The
+`ValidationCache` trait still lives in talkbank-transform; this crate
+implements it.
+
+Bazel-hostile bits:
+  - `sqlx::migrate!("./migrations")` is a proc macro that canonicalizes
+    and reads `./migrations/*.sql` at compile time. The directory must
+    be present in the sandbox, so `migrations/**/*` is wired into
+    `compile_data` on both the library and unit-test targets.
+"""
+
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "talkbank_cache",
+    srcs = glob(["src/**/*.rs"]),
+    aliases = aliases(),
+    compile_data = glob(["migrations/**/*"]),
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True) + [
+        "//crates/core/talkbank-transform:talkbank_transform",
+    ],
+)
+
+rust_test(
+    name = "talkbank_cache_unit_test",
+    crate = ":talkbank_cache",
+    aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    compile_data = glob(["migrations/**/*"]),
+    proc_macro_deps = all_crate_deps(proc_macro_dev = True),
+    deps = all_crate_deps(normal_dev = True),
+)

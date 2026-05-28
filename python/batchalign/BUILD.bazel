@@ -87,8 +87,23 @@ py_test(
 # ---------------------------------------------------------------------------
 # Maturin-driven wheel + publish (release path only).
 # ---------------------------------------------------------------------------
+# Hermetic C toolchain injected into both maturin escape paths. The
+# toolchains_llvm-managed clang + ar + ranlib are passed as runfiles
+# rootpaths; the shell scripts resolve them via $RUNFILES_DIR and export
+# CC/CXX/AR/RANLIB before invoking maturin. cc-rs inside cargo then
+# picks up the pinned compiler instead of /usr/bin/cc, which decouples
+# every `*-sys` crate build from the host CommandLineTools state. See
+# MODULE.bazel's `toolchains_llvm` block for the cflag injection that
+# papers over the macOS 26.x SDK `__kernel_ptr_semantics` regression.
+_LLVM_TOOLS = [
+    "@llvm_toolchain_llvm//:bin/clang",
+    "@llvm_toolchain_llvm//:bin/llvm-ar",
+    "@llvm_toolchain_llvm//:bin/llvm-ranlib",
+]
+
 _WHEEL_DATA = [
     "//bazel/python:hermeticity_guard.sh",
+    "//bazel/python:runfiles_resolve.sh",
     "//crates/batchalign/batchalign-engine:_core",
     "//crates/batchalign/batchalign-core:batchalign_core",
     "//crates/core/talkbank-model:talkbank_model",
@@ -99,14 +114,49 @@ _WHEEL_DATA = [
     # `maturin_build.sh` before maturin packages — wheels MUST ship a
     # current copy.
     "//python/batchalign/_core:_proto_generated_py",
-]
+] + _LLVM_TOOLS
 
+# `$(COMPILATION_MODE)` is a Bazel make-variable that expands to `opt`,
+# `dbg`, or `fastbuild` based on `-c <mode>` at run time. The shell
+# scripts translate that into maturin's `--release` / dev profile, so
+# users never need PYAPP_PROFILE / MATURIN_PROFILE env vars -- `bazel run
+# -c opt //...` is the only knob.
 sh_binary(
     name = "wheel",
     srcs = ["//bazel/python:maturin_build.sh"],
     args = [
         "$(rootpath @multitool//tools/uv)",
         "$(rootpath //python/batchalign/_core:_proto_generated_py)",
+        "$(COMPILATION_MODE)",
+        "$(rootpath @llvm_toolchain_llvm//:bin/clang)",
+        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-ar)",
+        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-ranlib)",
+    ],
+    data = ["@multitool//tools/uv"] + _WHEEL_DATA,
+)
+
+# Standalone production-daemon binary built via PyApp.
+#
+# `bazel run //python/batchalign:daemonapp` produces a self-contained
+# executable at `python/target/pyapp/bin/daemonapp` that bundles
+# CPython + the batchalign wheel + the `[api]` extra. The binary IS
+# the daemon — running it boots `batchalign3 daemon` directly without
+# the user typing the subcommand.
+#
+# Follows the same shell-out pattern as :wheel — the build needs the
+# host cargo + maturin and cannot live inside Bazel's hermetic sandbox.
+# Hermeticity is policed by `hermeticity_guard.sh` (uv/maturin/python/
+# rustc pins) + the explicit pyapp version pin in pyproject.toml.
+sh_binary(
+    name = "daemonapp",
+    srcs = ["//bazel/python:pyapp_build.sh"],
+    args = [
+        "$(rootpath @multitool//tools/uv)",
+        "$(rootpath //python/batchalign/_core:_proto_generated_py)",
+        "$(COMPILATION_MODE)",
+        "$(rootpath @llvm_toolchain_llvm//:bin/clang)",
+        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-ar)",
+        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-ranlib)",
     ],
     data = ["@multitool//tools/uv"] + _WHEEL_DATA,
 )

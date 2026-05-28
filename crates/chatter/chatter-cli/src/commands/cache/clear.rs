@@ -7,7 +7,7 @@
 //! be removed.
 
 use std::path::PathBuf;
-use talkbank_transform::UnifiedCache;
+use talkbank_cache::UnifiedCache;
 
 /// Clear validation cache entries for a more reproducible `talkbank validate` run.
 ///

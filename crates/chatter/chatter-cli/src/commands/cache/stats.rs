@@ -5,7 +5,7 @@
 //! useful in CI dashboards or monitoring scripts that track cache freshness.
 
 use serde::{Deserialize, Serialize};
-use talkbank_transform::UnifiedCache;
+use talkbank_cache::UnifiedCache;
 
 /// Serializable cache statistics in the format emitted by `talkbank cache stats --json`.
 ///

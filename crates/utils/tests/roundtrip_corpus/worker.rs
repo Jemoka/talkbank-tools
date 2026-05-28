@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use talkbank_parser::TreeSitterParser;
-use talkbank_transform::UnifiedCache;
+use talkbank_cache::UnifiedCache;
 
 use super::runner::{RoundtripParser, RoundtripParserKind, test_roundtrip_file_with_parser};
 use super::types::{FailureReason, FileStatus, RoundtripEvent};

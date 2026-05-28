@@ -5,8 +5,9 @@
 
 use std::io::Write as _;
 use std::path::Path;
-use talkbank_transform::unified_cache::CacheError;
-use talkbank_transform::{CacheOutcome, CachePool, ValidationCache};
+use talkbank_cache::CacheError;
+use talkbank_transform::{CacheOutcome, ValidationCache};
+use talkbank_cache::{CachePool};
 
 /// Create a temp file with the given content, returning its path.
 /// The `dir` must outlive the test to keep the file on disk.

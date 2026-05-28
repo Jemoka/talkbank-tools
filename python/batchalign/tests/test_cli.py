@@ -18,6 +18,7 @@ SUBCOMMANDS = [
     "compare",
     "opensmile",
     "avqi",
+    "daemon",
 ]
 
 

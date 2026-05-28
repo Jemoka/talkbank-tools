@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError, bounded, unbounded};
 use talkbank_model::{ErrorCollector, ParseValidateOptions, Severity};
-use talkbank_transform::UnifiedCache;
+use talkbank_cache::UnifiedCache;
 use talkbank_transform::parse_and_validate_streaming;
 use talkbank_transform::validation_runner::{
     ErrorEvent, FileCompleteEvent, FileStatus, ValidationConfig, ValidationEvent,
