@@ -22,7 +22,7 @@ import typer
 
 from . import _logging
 from ._options import CLIOptions, cli_options
-from . import align, avqi, compare, coref, daemon, morphotag, opensmile, transcribe, translate, utseg
+from . import align, compare, morphotag, transcribe, translate, utseg
 
 app = typer.Typer(
     name="batchalign3",
@@ -82,10 +82,9 @@ _COMMAND_MODULES = [
     translate,
     utseg,
     compare,
-    coref,
-    opensmile,
-    avqi,
-    daemon,
+    # coref,
+    # opensmile,
+    # avqi,
 ]
 
 for _mod in _COMMAND_MODULES:
