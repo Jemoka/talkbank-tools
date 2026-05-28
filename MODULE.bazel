@@ -148,22 +148,34 @@ use_repo(crate, "crates")
 # Static PYAPP_* env vars mirror what pyapp_install.sh was setting
 # manually before. Update both call sites in lockstep if changing.
 # =============================================================================
-# TODO(hermeticity): replace pyapp_install.sh's `cargo install pyapp`
-# escape with a Bazel-native build via rules_rust's crate_universe.
-# Attempted with crate.spec/from_specs/annotation but the
-# `repositories = […]` filter on annotations only matches from_cargo
-# names (not from_specs ones), so the pyapp annotation leaks into the
-# main `crates` repo and fails with "Unused annotations". Real options:
-#   (a) add pyapp as a workspace dependency in some Cargo.toml so
-#       `from_cargo` picks it up and the annotation filter works
-#       normally;
-#   (b) wait for rules_rust to make repositories filter cover
-#       from_specs;
-#   (c) use the experimental `isolate = True` (currently disabled by
-#       Bazel flag) to put pyapp in its own extension call.
-# All three are mechanical lifts that change the workspace skeleton in
-# ways outside this PR's scope. Tracked in memory as part of
-# bazel-reactive-builds.md.
+# TODO(hermeticity): replace pyapp_install.sh's cargo-install escape
+# with a rules_rust-native build. Tried two paths in feat/baapp; both
+# blocked on specific cargo/rules_rust limitations:
+#
+# Path 1: crate.from_specs(name = "pyapp_crates") + crate.annotation
+#         with repositories = ["pyapp_crates"]. Blocked because
+#         annotation's `repositories = […]` filter only matches
+#         from_cargo names (not from_specs ones); rules_rust 0.70.0
+#         doesn't extend the filter to from_specs.
+#
+# Path 2: add `crates/_bindeps/Cargo.toml` with `[dependencies]
+#         pyapp = "=0.27.0"` so from_cargo picks it up. Blocked
+#         because cargo silently ignores binary-only crate deps:
+#         `warning: ... ignoring invalid dependency pyapp which is
+#         missing a lib target`. cargo_metadata then never sees pyapp,
+#         and crate_universe's "Unused annotations" fires because
+#         there's no package to attach to. Cargo's `bindeps` feature
+#         (artifact-dependencies) is the canonical fix and would let
+#         the existing pyapp annotation work — but it requires a
+#         nightly Cargo, i.e. registering a nightly @rust_host_tools
+#         alongside the stable toolchain just for crate_universe
+#         resolution. That's a workspace-skeleton change outside
+#         this PR's scope.
+#
+# Both paths are well-understood and documented in
+# bazel-reactive-builds.md. Remaining escape: pyapp_install.sh runs
+# `cargo install pyapp` via Bazel-provided cargo (rules_rust toolchain
+# on PATH); fetches one crate from crates.io. Scoped to one script.
 
 # =============================================================================
 # Python — rules_uv (deps) → rules_python (py_*) → rules_rust (cdylib via

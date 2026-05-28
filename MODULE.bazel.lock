@@ -1233,7 +1233,7 @@
         "bzlTransitiveDigest": "rJXwXDDNTltVsz9zFcAjGBkq3HRqRibwDSbXpUiIhXE=",
         "usagesDigest": "P5jLolLuqkLDalRZHIsX9Sdw3BfyIqICyJwHVLQj0zM=",
         "recordedFileInputs": {
-          "@@//Cargo.lock": "26fab7b47c1889ebaa779447f096bb812ff6d689494452b01f02acab7df2b73a",
+          "@@//Cargo.lock": "51bc8d4200203565bcaaf5f5e50839d85188df4be91c2a9eeed16e9d6a9e26fe",
           "@@//Cargo.toml": "a315a75793d28e209456e388f30de4af262aad16a22001967ce982720521f9e0",
           "@@//apps/batchalign/batchalign-gui/src-tauri/Cargo.toml": "a90e294ba6aa7aa26034a07623195e832699523b403accb57b5ef8534b86ac84",
           "@@//apps/chatter/chatter-gui/src-tauri/Cargo.toml": "828bd3b29da46619541a414e06344ba034face8da13de6b0427627e2603352b0",
