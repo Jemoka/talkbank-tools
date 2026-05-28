@@ -13,17 +13,7 @@
 # Difference from bundle.sh: ends with `cargo tauri dev` instead of
 # `cargo tauri build`. Hot reload, no bundle output.
 
-# --- begin runfiles.bash initialization v3 ---
-# Bazel's canonical Bash runfiles library; see bundle.sh for the same.
-set -uo pipefail; set +e; f=bazel_tools/tools/bash/runfiles/runfiles.bash
-# shellcheck disable=SC1090
-source "${RUNFILES_DIR:-/dev/null}/$f" 2>/dev/null || \
-  source "$(grep -sm1 "^$f " "${RUNFILES_MANIFEST_FILE:-/dev/null}" | cut -f2- -d' ')" 2>/dev/null || \
-  source "$0.runfiles/$f" 2>/dev/null || \
-  source "$(grep -sm1 "^$f " "$0.runfiles_manifest" | cut -f2- -d' ')" 2>/dev/null || \
-  { echo>&2 "ERROR: cannot find $f"; exit 1; }; f=; set -e
-# --- end runfiles.bash initialization v3 ---
-set -o pipefail
+set -euo pipefail
 
 cd "$BUILD_WORKSPACE_DIRECTORY/apps/batchalign/batchalign-gui"
 
@@ -33,15 +23,12 @@ if [[ -z "$TRIPLE" ]]; then
     exit 2
 fi
 
-# Resolve //python/batchalign:sidecar's launcher via Bazel's canonical
-# runfiles helper. See bundle.sh for the same pattern + rationale.
-SIDECAR_LAUNCHER="$(rlocation _main/python/batchalign/sidecar)"
-if [[ -z "$SIDECAR_LAUNCHER" || ! -x "$SIDECAR_LAUNCHER" ]]; then
-    echo "dev.sh: rlocation could not resolve _main/python/batchalign/sidecar" >&2
-    exit 2
-fi
-echo "dev.sh: building sidecar via $SIDECAR_LAUNCHER"
-"$SIDECAR_LAUNCHER"
+# Build the sidecar via `bazel run`. See bundle.sh for the rationale —
+# sh_binary's `args` are passed by bazel run, not baked into the
+# launcher, so we delegate to bazel for the build step.
+BAZEL="${BAZEL_REAL:-bazel}"
+echo "dev.sh: building sidecar via $BAZEL run //python/batchalign:sidecar"
+"$BAZEL" run //python/batchalign:sidecar
 
 SIDECAR_BINARY="$BUILD_WORKSPACE_DIRECTORY/python/target/pyapp/bin/sidecar"
 if [[ ! -x "$SIDECAR_BINARY" ]]; then

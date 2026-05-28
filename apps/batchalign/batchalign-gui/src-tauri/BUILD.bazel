@@ -26,12 +26,12 @@ package(default_visibility = ["//visibility:public"])
 # gui::{build,dev}` a single-shot contract: build, stage, and run with
 # no "build it first" prerequisites.
 
-# Both targets resolve //python/batchalign:sidecar via Bazel's canonical
-# `rlocation` helper (runfiles.bash boilerplate, sourced at the top of
-# each wrapper script). The `@bazel_tools//tools/bash/runfiles` dep
-# stages runfiles.bash into the runfiles tree; the script's
-# `data = ["//python/batchalign:sidecar"]` ensures the sidecar launcher
-# is also in there, addressable as `_main/python/batchalign/sidecar`.
+# Both targets delegate the sidecar build to `bazel run //python/
+# batchalign:sidecar` from inside the wrapper script. The data dep
+# keeps the dependency graph honest — `bazel build` on these targets
+# transitively builds the sidecar's analysis-time prereqs, and any
+# breakage there is caught early without needing to actually invoke
+# pyapp_build.sh.
 sh_binary(
     name = "bundle",
     srcs = ["//bazel/batchalign-tauri:bundle.sh"],
@@ -39,7 +39,6 @@ sh_binary(
         "//apps/batchalign/batchalign-gui:frontend_sources",
         "//python/batchalign:sidecar",
     ],
-    deps = ["@bazel_tools//tools/bash/runfiles"],
 )
 
 sh_binary(
@@ -49,5 +48,4 @@ sh_binary(
         "//apps/batchalign/batchalign-gui:frontend_sources",
         "//python/batchalign:sidecar",
     ],
-    deps = ["@bazel_tools//tools/bash/runfiles"],
 )

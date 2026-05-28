@@ -21,21 +21,7 @@
 # SIDECAR_PATH is set by the Bazel sh_binary rule via env = {} so we
 # don't have to hunt for it in runfiles ourselves.
 
-# --- begin runfiles.bash initialization v3 ---
-# Bazel's canonical Bash runfiles library. Provides `rlocation <path>`
-# which resolves any runfiles input (declared via `data` on this
-# sh_binary) regardless of whether Bazel set RUNFILES_DIR, a manifest
-# file, or neither. Copy-pasted verbatim from the upstream boilerplate;
-# see https://github.com/bazelbuild/bazel/blob/master/tools/bash/runfiles/runfiles.bash
-set -uo pipefail; set +e; f=bazel_tools/tools/bash/runfiles/runfiles.bash
-# shellcheck disable=SC1090
-source "${RUNFILES_DIR:-/dev/null}/$f" 2>/dev/null || \
-  source "$(grep -sm1 "^$f " "${RUNFILES_MANIFEST_FILE:-/dev/null}" | cut -f2- -d' ')" 2>/dev/null || \
-  source "$0.runfiles/$f" 2>/dev/null || \
-  source "$(grep -sm1 "^$f " "$0.runfiles_manifest" | cut -f2- -d' ')" 2>/dev/null || \
-  { echo>&2 "ERROR: cannot find $f"; exit 1; }; f=; set -e
-# --- end runfiles.bash initialization v3 ---
-set -o pipefail
+set -euo pipefail
 
 cd "$BUILD_WORKSPACE_DIRECTORY/apps/batchalign/batchalign-gui"
 
@@ -48,23 +34,23 @@ if [[ -z "$TRIPLE" ]]; then
     exit 2
 fi
 
-# Build the sidecar daemon binary via its sh_binary launcher.
+# Build the sidecar daemon binary by `bazel run`ing its target.
 #
-# //python/batchalign:sidecar is a `sh_binary` (escape-path build —
-# pyapp_build.sh needs the host cargo + a writable target dir, which
-# can't live in the Bazel sandbox; see bazel/python/pyapp_build.sh).
-# Bazel materializes the launcher script into our runfiles tree because
-# we list it as `data` on this sh_binary. Resolve its path via the
-# canonical `rlocation` helper from runfiles.bash and execute it —
-# pyapp_build.sh produces python/target/pyapp/bin/sidecar (escape
-# path), which we then stage.
-SIDECAR_LAUNCHER="$(rlocation _main/python/batchalign/sidecar)"
-if [[ -z "$SIDECAR_LAUNCHER" || ! -x "$SIDECAR_LAUNCHER" ]]; then
-    echo "bundle.sh: rlocation could not resolve _main/python/batchalign/sidecar" >&2
-    exit 2
-fi
-echo "bundle.sh: building sidecar via $SIDECAR_LAUNCHER"
-"$SIDECAR_LAUNCHER"
+# We can't just execute //python/batchalign:sidecar's launcher directly:
+# sh_binary's `args` (the $(rootpath ...) bindings pyapp_build.sh reads
+# at $1..$6) are passed by `bazel run`, not baked into the launcher
+# script. So we invoke bazel here, which:
+#   - re-uses the same server (instant) if nothing changed in the dep
+#     graph
+#   - re-builds incrementally otherwise
+#
+# pyapp_build.sh is itself an escape-path build (host cargo + maturin
+# can't live in Bazel's sandbox; see bazel/python/pyapp_build.sh). Its
+# output lands at python/target/pyapp/bin/sidecar; we stage it from
+# there below.
+BAZEL="${BAZEL_REAL:-bazel}"
+echo "bundle.sh: building sidecar via $BAZEL run //python/batchalign:sidecar"
+"$BAZEL" run //python/batchalign:sidecar
 
 SIDECAR_BINARY="$BUILD_WORKSPACE_DIRECTORY/python/target/pyapp/bin/sidecar"
 if [[ ! -x "$SIDECAR_BINARY" ]]; then
