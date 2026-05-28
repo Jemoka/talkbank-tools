@@ -9,4 +9,7 @@ before bundling. The bundle script handles that staging.
 
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["bundle.sh"])
+exports_files([
+    "bundle.sh",
+    "dev.sh",
+])

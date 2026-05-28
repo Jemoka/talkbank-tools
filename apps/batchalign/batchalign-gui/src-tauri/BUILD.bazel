@@ -18,9 +18,29 @@ load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 package(default_visibility = ["//visibility:public"])
 
+# Both `bundle` and `dev` declare //python/batchalign:sidecar as data.
+# Bazel materializes the sidecar's sh_binary launcher into our runfiles
+# tree; the wrapper scripts then execute that launcher (escape-path
+# build via pyapp_build.sh) before staging the produced sidecar binary
+# under src-tauri/binaries/. This gives `bazel run` / `just batchalign::
+# gui::{build,dev}` a single-shot contract: build, stage, and run with
+# no "build it first" prerequisites.
+
 sh_binary(
     name = "bundle",
     srcs = ["//bazel/batchalign-tauri:bundle.sh"],
+    data = [
+        "//apps/batchalign/batchalign-gui:frontend_sources",
+        "//python/batchalign:sidecar",
+    ],
+    env = {
+        "SIDECAR_PATH": "$(rootpath //python/batchalign:sidecar)",
+    },
+)
+
+sh_binary(
+    name = "dev",
+    srcs = ["//bazel/batchalign-tauri:dev.sh"],
     data = [
         "//apps/batchalign/batchalign-gui:frontend_sources",
         "//python/batchalign:sidecar",

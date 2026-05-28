@@ -33,21 +33,41 @@ if [[ -z "$TRIPLE" ]]; then
     exit 2
 fi
 
-# Resolve SIDECAR_PATH against the workspace dir so the Bazel rootpath
-# expansion (relative path) works.
-SIDECAR_SRC="${SIDECAR_PATH:-}"
-if [[ -z "$SIDECAR_SRC" ]]; then
+# Build the sidecar daemon binary via its sh_binary launcher.
+#
+# //python/batchalign:sidecar is a `sh_binary` (escape-path build —
+# pyapp_build.sh needs the host cargo + a writable target dir, which
+# can't live in the Bazel sandbox; see bazel/python/pyapp_build.sh).
+# Bazel materializes the launcher script into our runfiles tree because
+# we list it as `data` on this sh_binary. Executing the launcher runs
+# pyapp_build.sh which produces python/target/pyapp/bin/sidecar — the
+# stable, deterministic output path the bundler stages from.
+#
+# We invoke the launcher unconditionally so the bundle always picks up
+# the latest sidecar build; pyapp_build.sh's own cargo/maturin caches
+# make repeated invocations cheap when sources are unchanged.
+SIDECAR_LAUNCHER="${SIDECAR_PATH:-}"
+if [[ -z "$SIDECAR_LAUNCHER" ]]; then
     echo "SIDECAR_PATH env var not set (Bazel env= attribute missing?)" >&2
     exit 2
 fi
-if [[ ! -f "$SIDECAR_SRC" ]]; then
-    # rootpath gave us workspace-relative; try resolving from cwd.
-    if [[ -f "$BUILD_WORKSPACE_DIRECTORY/$SIDECAR_SRC" ]]; then
-        SIDECAR_SRC="$BUILD_WORKSPACE_DIRECTORY/$SIDECAR_SRC"
+if [[ ! -x "$SIDECAR_LAUNCHER" ]]; then
+    # Try resolving against the workspace root (rootpath gave a relative).
+    if [[ -x "$BUILD_WORKSPACE_DIRECTORY/$SIDECAR_LAUNCHER" ]]; then
+        SIDECAR_LAUNCHER="$BUILD_WORKSPACE_DIRECTORY/$SIDECAR_LAUNCHER"
     else
-        echo "sidecar binary not found at $SIDECAR_SRC" >&2
+        echo "sidecar launcher not executable at $SIDECAR_LAUNCHER" >&2
         exit 2
     fi
+fi
+
+echo "bundle.sh: building sidecar via $SIDECAR_LAUNCHER"
+"$SIDECAR_LAUNCHER"
+
+SIDECAR_BINARY="$BUILD_WORKSPACE_DIRECTORY/python/target/pyapp/bin/sidecar"
+if [[ ! -x "$SIDECAR_BINARY" ]]; then
+    echo "sidecar launcher ran but did not produce $SIDECAR_BINARY" >&2
+    exit 2
 fi
 
 mkdir -p src-tauri/binaries
@@ -55,7 +75,7 @@ TARGET="src-tauri/binaries/sidecar-${TRIPLE}"
 case "$TRIPLE" in
     *windows*) TARGET="${TARGET}.exe" ;;
 esac
-cp -f "$SIDECAR_SRC" "$TARGET"
+cp -f "$SIDECAR_BINARY" "$TARGET"
 chmod +x "$TARGET"
 
 case "${TAURI_PROFILE:-${BAZEL_COMPILATION_MODE:-opt}}" in
