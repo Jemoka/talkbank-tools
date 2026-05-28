@@ -28,8 +28,9 @@ from .tui import Interface, Task
 class FaEngine(str, Enum):
     """Forced-alignment engine selection."""
 
-    wav2vec = "wav2vec"
-    whisperx = "whisperx"
+    wav2vec = "wav2vec"        # torchaudio MMS_FA (BA2 --wav2vec)
+    whisper_fa = "whisper_fa"  # Whisper cross-attention DTW (BA2 --whisper_fa)
+    whisperx = "whisperx"      # WhisperX (no BA2 oracle on this box)
 
 
 def register(app: typer.Typer) -> None:
@@ -53,6 +54,11 @@ def register(app: typer.Typer) -> None:
             None, "--model",
             help="FA model id (engine-specific default if omitted; wav2vec picks per the file language).",
         ),
+        force_cpu: bool = typer.Option(
+            False, "--force-cpu",
+            help="Run the FA model on CPU (BA2's --force-cpu). Needed for whisper_fa "
+            "on Apple MPS, where Whisper's bfloat16 attention kernel is unsupported.",
+        ),
     ) -> None:
         """Run forced alignment on existing CHAT files (adds a `%wor` tier)."""
         import batchalign as ba
@@ -67,10 +73,14 @@ def register(app: typer.Typer) -> None:
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
+            device = "cpu" if force_cpu else None
             fa_backend: Any
             if engine is FaEngine.wav2vec:
                 # Language (hence model) comes from each file's @Languages header.
-                fa_backend = ba.Wav2Vec2FaBackend(model=model)
+                fa_backend = ba.Wav2Vec2FaBackend(model=model, device=device)
+            elif engine is FaEngine.whisper_fa:
+                # Whisper cross-attention DTW aligner (BA2 --whisper_fa).
+                fa_backend = ba.WhisperFaBackend(model=model, device=device)
             else:
                 fa_backend = ba.WhisperXFaBackend(model=model or "large-v2")
             pipeline = ba.recipes.align(fa_backend=fa_backend)

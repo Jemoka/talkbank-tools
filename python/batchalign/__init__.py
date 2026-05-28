@@ -79,6 +79,7 @@ from batchalign.backends import (  # noqa: E402
     TencentAsrBackend,
     # Forced alignment.
     Wav2Vec2FaBackend,
+    WhisperFaBackend,
     WhisperXFaBackend,
     # Morphosyntax / speaker / utterance-seg / translate.
     StanzaBackend,
@@ -132,6 +133,7 @@ __all__ = [
     "TencentAsrBackend",
     # FA
     "Wav2Vec2FaBackend",
+    "WhisperFaBackend",
     "WhisperXFaBackend",
     # morphosyntax / speaker / utseg / translate
     "StanzaBackend",

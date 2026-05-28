@@ -162,8 +162,14 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
                 .words
                 .iter()
                 .map(|w| {
-                    Word::simple(w.text.as_str())
-                        .with_inline_bullet(Bullet::new(w.start_ms, w.end_ms))
+                    let word = Word::simple(w.text.as_str());
+                    // An untimed word (FA found no span) renders as a bare word
+                    // with no bullet — matching BA2, which omits the timing.
+                    if w.start_ms == 0 && w.end_ms == 0 {
+                        word
+                    } else {
+                        word.with_inline_bullet(Bullet::new(w.start_ms, w.end_ms))
+                    }
                 })
                 .collect();
             // Carry the utterance's own terminator onto `%wor` (BA2 parity);
