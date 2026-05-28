@@ -1,0 +1,5 @@
+# The sidecar binary is staged here at bundle/dev time by
+# bazel/batchalign-tauri/bundle.sh and just batchalign::gui::dev. The
+# stubs are not part of the source tree.
+*
+!.gitignore

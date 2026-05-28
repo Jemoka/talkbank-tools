@@ -77,10 +77,13 @@ _synclock:
         && bazel run //python:requirements; \
     fi
 
-# Build every Batchalign Bazel target (Rust + py_binary + wheel).
+# Build every Batchalign Bazel target (Rust + py_binary + wheel + GUI sources).
+# Note: the GUI bundle (`:bundle`) is reserved for `just batchalign gui` —
+# `bazel build //apps/batchalign/...` only builds the frontend filegroup
+# (sh_binary's `data` graph is materialized at `bazel run` time).
 build profile="release": _synclock
     bazel build --config={{ if profile == "release" { "release" } else { "dev" } }} \
-        //crates/batchalign/... //python/batchalign/...
+        //crates/batchalign/... //python/batchalign/... //apps/batchalign/...
 
 # Run every Batchalign Bazel test target. Includes
 # //python:uv_lock_check which fails if pyproject.toml drifted from
@@ -146,6 +149,16 @@ publish:
 # embedding it -- smaller binary, needs network at first launch).
 sidecar:
     bazel run -c opt //python/batchalign:sidecar
+
+# Desktop GUI submodule.
+#
+#   just batchalign::gui::build [profile]   bundle .app/.msi/.AppImage (cargo tauri build via Bazel)
+#   just batchalign::gui::dev               cargo tauri dev (hot reload, no Bazel)
+#   just batchalign::gui::gen-openapi       regenerate openapi.gen.ts + capabilities.snapshot.json
+#
+# All three live in `just/batchalign-gui.just`. Discovery:
+#   just --list batchalign::gui
+mod gui "batchalign-gui.just"
 
 # Print the source-of-truth versions for human inspection.
 versions:

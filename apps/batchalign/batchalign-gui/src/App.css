@@ -1,0 +1,251 @@
+/* =========================================================================
+   Batchalign — desktop app brand sheet
+   Ported verbatim from /tmp/batchalign-design/batchalign/project/brand.css.
+   Outfit body, Kanit italic small-caps for the wordmark, Roboto Mono for
+   paths/numbers. Terracotta/brown/slate palette (from balite globals.css).
+   ========================================================================= */
+
+@import url('https://fonts.bunny.net/css?family=outfit:300,400,500,600,700');
+@import url('https://fonts.bunny.net/css?family=kanit:700,700i');
+@import url('https://fonts.bunny.net/css?family=roboto-mono:400,500,600,700');
+
+:root {
+  /* ---- Batchalign palette (from balite globals.css) ---- */
+  --orange:     #DD5E42;   /* terracotta — accent, errors, "started" badge */
+  --brown:      #AD8C34;   /* mustard brown — accent, "started" badge */
+  --yellow:     #E8DAB2;   /* pale mustard — soft highlight */
+  --dark-blue:  #4F6D7A;   /* slate — primary text, brand accent */
+  --light-blue: #92B9C8;   /* powder slate — secondary accent, focus */
+  --green:      #638A2E;   /* olive — success, "done" badge */
+
+  /* ---- Neutrals (jemoka-flavored paper) ---- */
+  --bg:           #FAFAFA;
+  --bg-sunken:    #F2F2F0;
+  --bg-tinted:    #EFECE4;
+  --surface:      #FFFFFF;
+  --fg:           #1A1A1A;
+  --fg-muted:     #7B7B78;
+  --fg-meta:      #A5A39C;
+
+  --gray-1:       #E8E6DE;
+  --gray-2:       #D6D3C8;
+  --gray-3:       #9E9B91;
+
+  /* ---- Type stack ---- */
+  --font-sans:    'Outfit', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Kanit', 'Outfit', sans-serif;
+  --font-mono:    'Roboto Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  /* ---- Type scale ---- */
+  --fs-xxs:  10px;
+  --fs-xs:   11px;
+  --fs-sm:   12px;
+  --fs-md:   13px;
+  --fs-base: 14px;
+  --fs-lg:   16px;
+  --fs-xl:   20px;
+  --fs-xxl:  28px;
+
+  /* ---- Spacing ---- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+
+  /* ---- Radii — jemoka discipline (2px workhorse) ---- */
+  --r-1: 2px;
+  --r-2: 4px;
+  --r-pill: 999px;
+
+  /* ---- Borders ---- */
+  --hairline: 1px solid var(--gray-1);
+  --rule:     1px solid var(--gray-2);
+  --strong:   1px solid #1A1A1A;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+}
+body {
+  font-family: var(--font-sans);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+#root {
+  width: 100%;
+  height: 100vh;
+}
+
+.ba-app {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  color: var(--fg);
+  background: var(--bg);
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.ba-app *,
+.ba-app *::before,
+.ba-app *::after { box-sizing: border-box; }
+
+.ba-mono { font-family: var(--font-mono); }
+.ba-num  { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.ba-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xxs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+
+.ba-wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-style: italic;
+  font-variant: small-caps;
+  color: var(--dark-blue);
+  font-size: var(--fs-lg);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  user-select: none;
+}
+.ba-wordmark .mark { color: inherit; }
+
+.ba-btn {
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: var(--r-1);
+  border: var(--rule);
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.ba-btn:hover { background: var(--bg-sunken); }
+.ba-btn--primary {
+  background: var(--dark-blue);
+  border-color: var(--dark-blue);
+  color: #fff;
+}
+.ba-btn--primary:hover { background: #3f5a66; border-color: #3f5a66; }
+.ba-btn--accent {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+}
+.ba-btn--accent:hover { background: #c95138; border-color: #c95138; }
+.ba-btn--ghost { background: transparent; border-color: transparent; }
+.ba-btn--ghost:hover { background: var(--bg-sunken); }
+.ba-btn--sm { padding: 3px 8px; font-size: var(--fs-sm); }
+
+.ba-input,
+.ba-select {
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  padding: 5px 8px;
+  background: var(--surface);
+  border: var(--rule);
+  border-radius: var(--r-1);
+  color: var(--fg);
+  line-height: 1.3;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+}
+.ba-input:focus,
+.ba-select:focus { border-color: var(--dark-blue); }
+.ba-input::placeholder { color: var(--gray-3); }
+.ba-input--mono { font-family: var(--font-mono); font-size: var(--fs-sm); }
+
+.ba-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: var(--r-1);
+  color: #fff;
+  letter-spacing: 0.01em;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+.ba-badge--pending { background: var(--dark-blue); }
+.ba-badge--running { background: var(--brown); }
+.ba-badge--done    { background: var(--green); }
+.ba-badge--fail    { background: var(--orange); }
+.ba-badge--queued  { background: var(--gray-3); }
+
+.ba-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  padding: 2px 8px;
+  background: var(--bg-tinted);
+  color: var(--fg);
+  border: var(--hairline);
+  border-radius: var(--r-1);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+.ba-tag--active {
+  background: var(--dark-blue);
+  color: #fff;
+  border-color: var(--dark-blue);
+}
+
+.ba-rule { height: 1px; background: var(--gray-1); width: 100%; }
+.ba-vrule { width: 1px; background: var(--gray-1); align-self: stretch; }
+
+.ba-card {
+  background: var(--surface);
+  border: var(--rule);
+  border-radius: var(--r-1);
+}
+
+.ba-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+  background: var(--surface);
+}
+.ba-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--bg-tinted);
+  color: var(--fg-muted);
+  border-bottom: 1px solid var(--gray-2);
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+.ba-table td {
+  border-bottom: var(--hairline);
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+.ba-table tr:hover td { background: var(--bg-sunken); }
+
+.ba-scroll { overflow: auto; }
+.ba-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.ba-scroll::-webkit-scrollbar-thumb { background: var(--gray-2); border-radius: 2px; }
+.ba-scroll::-webkit-scrollbar-track { background: transparent; }

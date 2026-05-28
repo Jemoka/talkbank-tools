@@ -1,0 +1,31 @@
+"""batchalign-gui src-tauri — Tauri v2 desktop app (Path A wrapper).
+
+Same boundary as chatter-gui:
+  - Bazel: lists the Bazel-built sidecar and the intra-workspace Rust
+    crates this app depends on (none currently, since the GUI talks to
+    the daemon over HTTP rather than linking the engine), and stages
+    the sidecar binary with the right target-triple suffix.
+  - Cargo: `cargo tauri build` resolves Cargo.toml deps and drives the
+    full end-to-end bundle (Vite SPA → cargo rustc → platform bundler).
+
+The sidecar daemon (//python/batchalign:sidecar) is the key new input.
+The `env = { SIDECAR_PATH: ... }` attribute passes the runfile path of
+that target into bundle.sh, which stages it under src-tauri/binaries/
+before invoking cargo tauri build.
+"""
+
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+sh_binary(
+    name = "bundle",
+    srcs = ["//bazel/batchalign-tauri:bundle.sh"],
+    data = [
+        "//apps/batchalign/batchalign-gui:frontend_sources",
+        "//python/batchalign:sidecar",
+    ],
+    env = {
+        "SIDECAR_PATH": "$(rootpath //python/batchalign:sidecar)",
+    },
+)

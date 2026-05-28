@@ -26,6 +26,7 @@ members = [
     "crates/xtask",
     # Tauri desktop shells (tiered by product)
     "apps/chatter/chatter-gui/src-tauri",
+    "apps/batchalign/batchalign-gui/src-tauri",
 ]
 exclude = [
     "fuzz",  # cargo-fuzz uses its own nightly toolchain with sanitizer flags

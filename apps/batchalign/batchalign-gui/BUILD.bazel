@@ -1,0 +1,54 @@
+"""Bazel filegroup for the Batchalign desktop GUI frontend.
+
+The Tauri bundle target (`src-tauri:bundle`) depends on this filegroup so
+the wrapper script (bazel/batchalign-tauri/bundle.sh) sees the frontend
+sources staged in its runfiles before invoking `cargo tauri build`.
+
+The actual build (Vite + cargo + Tauri bundler) escapes the Bazel sandbox
+— see bazel/batchalign-tauri/bundle.sh and apps/chatter/chatter-gui/
+CLAUDE.md for the same pattern's rationale.
+"""
+
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "frontend_sources",
+    srcs = glob(
+        [
+            "package.json",
+            "package-lock.json",
+            "vite.config.ts",
+            "tsconfig.json",
+            "index.html",
+            "src/**/*.ts",
+            "src/**/*.tsx",
+            "src/**/*.css",
+            "src/**/*.json",
+        ],
+        allow_empty = True,
+    ),
+)
+
+# Regenerate src/protocol/openapi.gen.ts + capabilities.snapshot.json
+# from the live daemon's `app.openapi()` and `GET /capabilities`. The
+# script shells out to `openapi-typescript` (installed via the GUI's
+# package.json) and writes to the source tree.
+sh_binary(
+    name = "openapi_gen",
+    srcs = ["openapi_gen.sh"],
+    data = ["//scripts:gen_openapi.py"],
+)
+
+# Freshness gate. CI runs this to catch drift between the committed
+# openapi.gen.ts / capabilities.snapshot.json and what the daemon would
+# emit *right now*. Same pattern as `generated-check` in the symbol
+# registry — runs the generator with --check, fails on diff.
+sh_test(
+    name = "openapi_freshness",
+    srcs = ["openapi_gen.sh"],
+    args = ["--check"],
+    data = ["//scripts:gen_openapi.py"],
+)

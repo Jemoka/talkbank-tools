@@ -1,0 +1,12 @@
+"""Shared scripts directory.
+
+Each script that needs to be a Bazel data dep gets an `exports_files`
+entry here. We don't model every shell helper — only the ones consumed
+by Bazel rules.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "gen_openapi.py",
+])

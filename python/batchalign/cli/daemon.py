@@ -30,8 +30,42 @@ sticky-session load balancer keyed on ``job_id``.
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 import typer
+
+
+def _make_port_announcing_server(uvicorn_module: Any) -> type:
+    """Return a `uvicorn.Server` subclass that prints the bound port.
+
+    Built lazily so this module imports without uvicorn installed (uvicorn
+    is in the `[api]` extra, not the core deps). On startup, after the
+    underlying TCP socket is bound, prints a single line of the form::
+
+        DAEMON_PORT=<int>
+
+    to stdout (flushed). This is the GUI's contract — when launched with
+    ``--port 0`` (let uvicorn pick a free port), the desktop sidecar
+    spawner reads this line to discover the chosen port. Works identically
+    for fixed ports (the line still appears with the configured value).
+    """
+
+    class _PortAnnouncingServer(uvicorn_module.Server):  # type: ignore[misc, name-defined]
+        """uvicorn.Server that announces its bound port on startup."""
+
+        async def startup(self, sockets: list[Any] | None = None) -> None:
+            await super().startup(sockets=sockets)
+            # `self.servers` is populated by the parent startup(); each
+            # server holds the asyncio Server with its bound sockets. We
+            # read the first bound port — single-process daemon binds one.
+            try:
+                bound_port = self.servers[0].sockets[0].getsockname()[1]
+            except (AttributeError, IndexError, OSError):
+                # Defensive: never let port introspection break startup.
+                return
+            print(f"DAEMON_PORT={bound_port}", flush=True)
+
+    return _PortAnnouncingServer
 
 
 def run_pyapp_entry() -> None:
@@ -126,6 +160,15 @@ def register(app: typer.Typer) -> None:
         if dev:
             # Development path: reload, single worker, app loaded via
             # import-string so the reloader can re-import on change.
+            # The dev reloader supervises a child process so we can't
+            # easily hook the port announce here; dev users always know
+            # their port (it's fixed and `--dev` rejects --port 0 below).
+            if port == 0:
+                raise typer.BadParameter(
+                    "--port 0 is incompatible with --dev (the reload "
+                    "supervisor cannot forward the child's bound port). "
+                    "Pick a fixed port for development."
+                )
             uvicorn.run(
                 "batchalign.api:app",
                 host=host,
@@ -170,7 +213,12 @@ def register(app: typer.Typer) -> None:
             http="auto",
             interface="asgi3",
         )
-        server = uvicorn.Server(config)
+        # Use the port-announcing subclass so callers (the desktop GUI's
+        # sidecar spawner; humans wanting the actually-bound port) can
+        # discover the port via a single line on stdout. Especially
+        # important with --port 0 (uvicorn picks a free port at random).
+        server_cls = _make_port_announcing_server(uvicorn)
+        server = server_cls(config)
         try:
             server.run()
         except KeyboardInterrupt:  # pragma: no cover

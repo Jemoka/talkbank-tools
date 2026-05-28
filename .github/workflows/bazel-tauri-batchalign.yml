@@ -1,0 +1,138 @@
+name: bazel · tauri-batchalign
+
+# Per-platform bundle for the Batchalign desktop GUI
+# (apps/batchalign/batchalign-gui).
+#
+# Each matrix runner:
+#   1. Sets up Bazel + Rust + Node.
+#   2. Builds the sidecar daemon (//python/batchalign:sidecar).
+#   3. Installs platform-specific Tauri prerequisites.
+#   4. Runs `bazel run //apps/batchalign/batchalign-gui/src-tauri:bundle`,
+#      which shells to `cargo tauri build`. The sidecar is staged with
+#      the target-triple suffix by bazel/batchalign-tauri/bundle.sh
+#      before Tauri's bundler runs, so each artifact ships its native
+#      daemon binary.
+#   5. Uploads the resulting .app/.dmg/.msi/.AppImage as a workflow
+#      artifact.
+#
+# Bundles are unsigned. Code-signing / notarization is a follow-up; the
+# secrets named below are placeholders for when that lands.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/batchalign/batchalign-gui/**"
+      - "bazel/batchalign-tauri/**"
+      - "python/batchalign/**"
+      - "crates/batchalign/**"
+      - "scripts/gen_openapi.py"
+      - ".github/workflows/bazel-tauri-batchalign.yml"
+  pull_request:
+    paths:
+      - "apps/batchalign/batchalign-gui/**"
+      - "bazel/batchalign-tauri/**"
+      - "python/batchalign/**"
+      - "crates/batchalign/**"
+      - "scripts/gen_openapi.py"
+      - ".github/workflows/bazel-tauri-batchalign.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: bazel-tauri-batchalign-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Cheap host-platform smoke that runs on every PR. The full matrix
+  # (next job) only triggers on `main` / dispatch so PR CI stays fast.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-smoke
+          repository-cache: true
+
+      - name: bazel build frontend filegroup
+        run: bazel build --config=ci //apps/batchalign/batchalign-gui:frontend_sources
+
+      - name: openapi freshness (capabilities.snapshot.json + openapi.gen.ts)
+        run: bazel test --config=ci //apps/batchalign/batchalign-gui:openapi_freshness
+
+  bundle:
+    if: github.event_name != 'pull_request'
+    name: bundle (${{ matrix.runner.target }})
+    runs-on: ${{ matrix.runner.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - { os: macos-14,       target: aarch64-apple-darwin }
+          - { os: macos-13,       target: x86_64-apple-darwin }
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-${{ matrix.runner.target }}
+          repository-cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.runner.target }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Tauri v2 frontend deps (Linux only — macOS/Windows ship them).
+      - name: install linux tauri prereqs
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            patchelf
+
+      - name: install cargo-tauri
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: npm install (frontend)
+        working-directory: apps/batchalign/batchalign-gui
+        run: npm install
+
+      # Build the sidecar daemon binary (//python/batchalign:sidecar via
+      # PyApp). bundle.sh consumes its $(rootpath) and stages it under
+      # src-tauri/binaries/sidecar-<triple> before invoking cargo tauri
+      # build.
+      - name: build sidecar
+        run: bazel build --config=ci //python/batchalign:sidecar
+
+      - name: bundle Batchalign desktop
+        env:
+          TAURI_PROFILE: release
+        run: bazel run --config=ci //apps/batchalign/batchalign-gui/src-tauri:bundle -- --target ${{ matrix.runner.target }}
+
+      - name: upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: batchalign-${{ matrix.runner.target }}
+          path: |
+            apps/batchalign/batchalign-gui/src-tauri/target/${{ matrix.runner.target }}/release/bundle/**/*
+          if-no-files-found: error
+          retention-days: 14
+
+  # TODO: signing / notarization
+  # When org-level Apple Developer + Windows EV certs are in place, add
+  # APPLE_CERTIFICATE / APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID secrets
+  # and wire `tauri-action`'s signing inputs into the matrix above. The
+  # current artifacts are unsigned — fine for internal QA, not for
+  # external release distribution.
