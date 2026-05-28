@@ -132,6 +132,40 @@ crate.from_cargo(
 use_repo(crate, "crates")
 
 # =============================================================================
+# pyapp — built natively via Bazel from crates.io source.
+#
+# This replaces the `cargo install pyapp` shell-out the previous
+# pyapp_install.sh script used. With pyapp pinned via crate_universe
+# and built as a Bazel-tracked target, there's no network access at
+# action time and no host-cargo escape — the binary is produced by
+# rules_rust like every other Rust target in this workspace.
+#
+# PYAPP_PROJECT_PATH is passed at compile time via build_script_env.
+# The $(execpath …) expansion resolves to the Bazel-tracked wheel
+# produced by //python/batchalign:wheel_file, so pyapp's build.rs
+# embeds OUR wheel — not a pypi fetch.
+#
+# Static PYAPP_* env vars mirror what pyapp_install.sh was setting
+# manually before. Update both call sites in lockstep if changing.
+# =============================================================================
+# TODO(hermeticity): replace pyapp_install.sh's `cargo install pyapp`
+# escape with a Bazel-native build via rules_rust's crate_universe.
+# Attempted with crate.spec/from_specs/annotation but the
+# `repositories = […]` filter on annotations only matches from_cargo
+# names (not from_specs ones), so the pyapp annotation leaks into the
+# main `crates` repo and fails with "Unused annotations". Real options:
+#   (a) add pyapp as a workspace dependency in some Cargo.toml so
+#       `from_cargo` picks it up and the annotation filter works
+#       normally;
+#   (b) wait for rules_rust to make repositories filter cover
+#       from_specs;
+#   (c) use the experimental `isolate = True` (currently disabled by
+#       Bazel flag) to put pyapp in its own extension call.
+# All three are mechanical lifts that change the workspace skeleton in
+# ways outside this PR's scope. Tracked in memory as part of
+# bazel-reactive-builds.md.
+
+# =============================================================================
 # Python — rules_uv (deps) → rules_python (py_*) → rules_rust (cdylib via
 # maturin) → wheel ready to ship.
 # =============================================================================
