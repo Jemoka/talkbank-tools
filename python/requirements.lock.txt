@@ -683,9 +683,16 @@ contourpy==1.3.3 \
     --hash=sha256:fd914713266421b7536de2bfa8181aa8c699432b6763a0ea64195ebe28bff6a9 \
     --hash=sha256:fde6c716d51c04b1c25d0b90364d0be954624a0ee9d60e23e850e8d48353d07a
     # via matplotlib
+cos-python-sdk-v5==1.9.43 \
+    --hash=sha256:2623db720d9d1aac01faf5ad5a422008a4a0475a852c8413a56b0a8415f647aa \
+    --hash=sha256:59c15ddb4aee612b7c830e16d3d810b5b57465f374309b046df82fce126a08e7 \
+    --hash=sha256:ff661561686356f4cff02af03a63eca27607edef2edd233f9cdcd1ca2125357b
+    # via batchalign (python/pyproject.toml)
 crcmod==1.7 \
     --hash=sha256:dc7051a0db5f2bd48665a990d3ec1cc305a466a77358ca4492826f41f283601e
-    # via oss2
+    # via
+    #   cos-python-sdk-v5
+    #   oss2
 cryptography==48.0.0 \
     --hash=sha256:0890f502ddf7d9c6426129c3f49f5c0a39278ed7cd6322c8755ffca6ee675a13 \
     --hash=sha256:0c558d2cdffd8f4bbb30fc7134c74d2ca9a476f830bb053074498fbc86f41ed6 \
@@ -2583,6 +2590,34 @@ openai==2.37.0 \
 openai-whisper==20250625 \
     --hash=sha256:37a91a3921809d9f44748ffc73c0a55c9f366c85a3ef5c2ae0cc09540432eb96
     # via batchalign (python/pyproject.toml)
+opencc==1.3.1 \
+    --hash=sha256:0239b00a451d5047bee626a5fefecc3b1a58af819244bf6350de74cdd7d2a303 \
+    --hash=sha256:145e699ea379f83e1231d8e55a6be82e58b84c90f52e8b112cd3aadbfd5de771 \
+    --hash=sha256:2555e509078e15657beeee5ac99b08f519ed5f189cdeafe03cb82ebb4d205e9c \
+    --hash=sha256:268055c0545d419f5ee071c40cef72773fd87fd2db3f3b147112794ed73e5168 \
+    --hash=sha256:278314fb5283d3ab2bef3c9c055efb864801d1c6f2578db79bd021bebb40f095 \
+    --hash=sha256:27e55422b46b651701a4d794fb05f3f4e04a4688f11f22117c370911811a204c \
+    --hash=sha256:33a8cd6c80406cb3cc9d1c75abd22a902b6740131fe3596ad5a8b9e9233a6780 \
+    --hash=sha256:40e06253283b9bebc6c1d33e7a9bb9a648994eb15e7228407b674b29a9fcb737 \
+    --hash=sha256:49ffa6d5a0a92ffbd62f86e531d51125649736c131a38b77359ce92f65ec1041 \
+    --hash=sha256:54e896ec35e1af6401bf08a22a8703417a21dcf58decea3091bee0224a03d30f \
+    --hash=sha256:5dafcae42a53b731a829afd92a0f87e07947234eab409ec8337caea8d7fbb686 \
+    --hash=sha256:61da7ee02fed5792953d55fd1c003cb9e352027944e01cf0c5ec716fb1da83ca \
+    --hash=sha256:6892ee3f8fcc5992f0e9f90dbf177c8da566620f83c3f2040257293f16141b33 \
+    --hash=sha256:6cf414badb03e7f8a913d332a2c6884bd87bbbd18482da9820cdbd7dacfc14e1 \
+    --hash=sha256:70103865e2232d8e20a09ccbe4fcdf3b2d414a274e0ea7628e1bafbc7095e1da \
+    --hash=sha256:71662897f7fb24b73c587e5dad8fbdffa7ac0e5792d7195b3f10eac52a3ae2c8 \
+    --hash=sha256:81ab666577bf6f0a2b07e2cbdab31d7d3e8d088d27e8395ad1b3e06eca766e55 \
+    --hash=sha256:9380bfb33a2ef17e9e00c08e78e583373636f2bf686dad75d74046a61ccb1700 \
+    --hash=sha256:93d819c3030611ee34ef864ca1c8cc7a808ec7f5d17fb2180c486a797e913aae \
+    --hash=sha256:9c7ba9e30b59bc1158caffdb467896ad3311bce18d198faf086993bb2bac6fbf \
+    --hash=sha256:a80d20bfe04cfbdfa8b51281a4a1158357fd29fb0f33ecb3e600e4fda3093d9a \
+    --hash=sha256:aae898734d6f93b01c5c005ea2d15fac1be2dafd81c7a51fd0afca7eac1824d2 \
+    --hash=sha256:ba1a3f5780070cbb4350697e289a323366d8b43c4441b741523e67c1759b08ac \
+    --hash=sha256:ca227c09f1f785b17bdc7146533d3fe8ade1a6afe9ce3486c7f63197f1bec5dc \
+    --hash=sha256:e1470ad743486ed4b22de7f6d67327828e8251202985f0381d642f5835c5ff1b \
+    --hash=sha256:e5dd5b504163eebba6aae3a3c39a643b11b7ec2a3447c28d9287793806d2911e
+    # via batchalign (python/pyproject.toml)
 opensmile==2.6.0 \
     --hash=sha256:03d2faae9f3a7a9a7d8ababfe32e290454b1dce3dc5179de38c0be29a27465b5 \
     --hash=sha256:4377d53cc678c119015b7771df00d88a835d9fec946982efc23717b54cf5320d \
@@ -3262,7 +3297,9 @@ pycryptodome==3.23.0 \
     --hash=sha256:dea827b4d55ee390dc89b2afe5927d4308a8b538ae91d9c6f7a5090f397af1aa \
     --hash=sha256:e3f2d0aaf8080bda0587d58fc9fe4766e012441e2eed4269a77de6aea981c8be \
     --hash=sha256:eb8f24adb74984aa0e5d07a2368ad95276cf38051fe2dc6605cbcf482e04f2a7
-    # via oss2
+    # via
+    #   cos-python-sdk-v5
+    #   oss2
 pydantic==2.13.4 \
     --hash=sha256:45a282cde31d808236fd7ea9d919b128653c8b38b393d1c4ab335c62924d9aba \
     --hash=sha256:c40756b57adaa8b1efeeced5c196f3f3b7c435f90e84ea7f443901bec8099ef6
@@ -3716,6 +3753,7 @@ requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
     --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
     # via
+    #   cos-python-sdk-v5
     #   funasr
     #   huggingface-hub
     #   modelscope
@@ -3984,6 +4022,7 @@ six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
     # via
+    #   cos-python-sdk-v5
     #   oss2
     #   python-dateutil
     #   rev-ai
@@ -4725,6 +4764,10 @@ wheel==0.47.0 \
     --hash=sha256:212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced \
     --hash=sha256:cc72bd1009ba0cf63922e28f94d9d83b920aa2bb28f798a31d0691b02fa3c9b3
     # via batchalign (python/pyproject.toml)
+xmltodict==1.0.4 \
+    --hash=sha256:6d94c9f834dd9e44514162799d344d815a3a4faec913717a9ecbfa5be1bb8e61 \
+    --hash=sha256:a4a00d300b0e1c59fc2bfccb53d7b2e88c32f200df138a0dd2229f842497026a
+    # via cos-python-sdk-v5
 yarl==1.23.0 \
     --hash=sha256:03214408cfa590df47728b84c679ae4ef00be2428e11630277be0727eba2d7cc \
     --hash=sha256:041b1a4cefacf65840b4e295c6985f334ba83c30607441ae3cf206a0eed1a2e4 \

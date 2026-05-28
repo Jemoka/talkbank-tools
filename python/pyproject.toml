@@ -63,7 +63,7 @@ vllm         = ["openai>=1.0", "librosa>=0.10"]
 stanza       = ["stanza>=1.12", "transformers>=4.57,<5"]
 pyannote     = ["pyannote.audio>=3.0", "onnxruntime>=1.16"]
 revai        = ["rev-ai"]
-cantonese    = ["pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "aliyun-python-sdk-core>=2.13", "funasr"]
+cantonese    = ["pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "aliyun-python-sdk-core>=2.13", "funasr", "opencc", "cos-python-sdk-v5"]
 opensmile    = ["opensmile>=2.5"]
 avqi         = ["praat-parselmouth>=0.4.6"]
 translate    = ["googletrans"]
@@ -88,7 +88,7 @@ all = [
     "stanza>=1.12",
     "pyannote.audio>=3.0", "onnxruntime>=1.16",
     "rev-ai",
-    "pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "aliyun-python-sdk-core>=2.13", "funasr",
+    "pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "aliyun-python-sdk-core>=2.13", "funasr", "opencc", "cos-python-sdk-v5",
     "opensmile>=2.5",
     "praat-parselmouth>=0.4.6",
     "googletrans",

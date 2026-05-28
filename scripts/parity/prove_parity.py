@@ -236,6 +236,18 @@ MATRIX: list[Cell] = [
         ba2_broken=True,
         ba3=["--engine", "chatwhisper", "--language", "yue", "--force-cpu"],
     ),
+    # FunAudio (BA2 FunAudioEngine): FunASR SenseVoiceSmall on Cantonese +
+    # OpenCC s2hk + Cantonese word fixups + the Cantonese BERT segmenter.
+    Cell(
+        command="transcribe",
+        engine="funaudio",
+        language="yue",
+        fixture="transcribe/yue.wav",
+        kind="segmentation",
+        ba2_global=["--force-cpu"],
+        ba2=["--funaudio", "--lang", "yue"],
+        ba3=["--engine", "funaudio", "--language", "yue", "--force-cpu"],
+    ),
     # ---- align (wav2vec MMS_FA; %wor word-level timings) ----
     Cell(
         command="align",

@@ -15,7 +15,8 @@ from batchalign.backends.asr.openai_whisper import OpenAIWhisperBackend
 from batchalign.backends.asr.qwen import QwenAsrBackend
 from batchalign.backends.asr.tencent import TencentAsrBackend
 from batchalign.backends.asr.aliyun import AliyunAsrBackend
-from batchalign.backends.asr.funasr import FunAsrBackend, FunAudioBackend
+from batchalign.backends.asr.funasr import FunAsrBackend
+from batchalign.backends.asr.funaudio import FunAudioBackend
 
 __all__ = [
     "WhisperBackend",

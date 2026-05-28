@@ -30,6 +30,8 @@ class AsrEngine(str, Enum):
     chatwhisper = "chatwhisper"  # TalkBank CHATWhisper + BERT utterance segmenter (BA2 default)
     openai = "openai"      # openai-whisper package
     vllm = "vllm"          # vLLM-served Whisper via the OpenAI audio API
+    funaudio = "funaudio"  # FunASR SenseVoiceSmall / paraformer-zh (BA2 FunAudioEngine)
+    tencent = "tencent"    # Tencent Cloud ASR (BA2 TencentEngine)
 
 
 # Sensible per-engine default models (BA2's defaults where they exist).
@@ -38,6 +40,7 @@ _DEFAULT_MODEL = {
     AsrEngine.whisper: "openai/whisper-large-v3",
     AsrEngine.openai: "turbo",
     AsrEngine.vllm: "openai/whisper-large-v3",
+    AsrEngine.funaudio: "FunAudioLLM/SenseVoiceSmall",
 }
 
 
@@ -136,6 +139,19 @@ def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vll
         return ba.OpenAIWhisperBackend(model=m, language=language, device=device), False
     if engine is AsrEngine.vllm:
         return ba.VllmAsrBackend(model=m, language=language, base_url=vllm_url), False
+    if engine is AsrEngine.funaudio:
+        # FunASR SenseVoiceSmall (yue) / paraformer-zh; emits raw ASR text, the
+        # CHATUtterance UtSeg pairing segments (Cantonese BERT for yue).
+        lang = "yue" if language in ("auto", "yue", "zh-hant") else language
+        return ba.FunAudioBackend(
+            model=m or "FunAudioLLM/SenseVoiceSmall", lang=lang, device=device
+        ), False
+    if engine is AsrEngine.tencent:
+        # Tencent Cloud does its own diarization; the UtSeg pairing still applies.
+        lang = "yue" if language in ("yue", "zh-hant") else (
+            "eng" if language in ("auto", "en") else language
+        )
+        return ba.TencentAsrBackend(lang=lang, num_speakers=num_speakers), True
     raise typer.BadParameter(f"unknown engine: {engine}")
 
 

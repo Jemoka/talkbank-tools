@@ -75,8 +75,4 @@ class FunAsrBackend(ASR):
         return outputs
 
 
-# Back-compat alias for original BA2-shape import.
-FunAudioBackend = FunAsrBackend
-
-
-__all__ = ["FunAsrBackend", "FunAudioBackend"]
+__all__ = ["FunAsrBackend"]
