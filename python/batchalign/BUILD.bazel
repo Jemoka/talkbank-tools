@@ -218,10 +218,26 @@ genrule(
         "@rules_rust//rust/toolchain:current_rustc_files",
     ] + _LLVM_TOOLS,
     cmd = " ".join([
-        # PYAPP_RUST_BIN_DIRS: space-separated execpaths of cargo + rustc
-        # from rules_rust's host-platform-selecting filegroups. The
-        # wrapper extracts dirname(cargo) and prepends to PATH so the
-        # inner maturin/cargo invocations use Bazel's rust toolchain.
+        # Hermeticity status (what this genrule does NOT touch host
+        # state for):
+        #   uv         → @multitool//tools/uv                  ✓
+        #   rustc/cargo→ @rules_rust//rust/toolchain (PATH-injected)  ✓
+        #   maturin    → uv run, version pinned in pyproject.toml  ✓
+        #   python     → uv-managed venv, version pinned             ✓
+        #   clang (lin/win) → @llvm_toolchain_llvm              ✓
+        #   clang (macOS)   → xcrun (host Xcode) — see              ✗
+        #                     bazel/python/pyapp_build.sh L70-100.
+        #                     Hermetic LLVM 17.0.6 can't parse Xcode
+        #                     26.x SDK headers (__kernel_ptr_semantics
+        #                     etc.). Apple ships SDK + clang as a
+        #                     matched pair; we'd need a hermetic macOS
+        #                     SDK to close this gap. macOS users still
+        #                     need Xcode CLI Tools installed.
+        #
+        # PYAPP_RUST_BIN_DIRS: space-separated execpaths of cargo +
+        # rustc from rules_rust's host-platform-selecting filegroups.
+        # The wrapper extracts dirname(cargo) and prepends to PATH so
+        # the inner maturin/cargo invocations use Bazel's rust toolchain.
         "PYAPP_RUST_BIN_DIRS='$(execpaths @rules_rust//rust/toolchain:current_cargo_files) $(execpaths @rules_rust//rust/toolchain:current_rustc_files)'",
         "$(execpath //bazel/python:pyapp_genrule.sh)",
         "$@",
