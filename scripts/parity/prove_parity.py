@@ -172,6 +172,19 @@ MATRIX: list[Cell] = [
         ba2=["--lang", "spa", "-n", "1"],
         ba3=["--engine", "rev", "--language", "es", "-n", "1"],
     ),
+    # ---- transcribe (chatwhisper = BA2 `--whisper`: TalkBank CHATWhisper +
+    #      CHATUtterance BERT segmenter). CPU-forced: Whisper's bf16 attention
+    #      kernel is unsupported on Apple MPS. ----
+    Cell(
+        command="transcribe",
+        engine="chatwhisper",
+        language="en",
+        fixture="transcribe/en.wav",
+        kind="segmentation",
+        ba2_global=["--force-cpu"],
+        ba2=["--whisper", "--lang", "eng", "-n", "1"],
+        ba3=["--engine", "chatwhisper", "--language", "en", "--force-cpu"],
+    ),
     # ---- align (wav2vec MMS_FA; %wor word-level timings) ----
     Cell(
         command="align",

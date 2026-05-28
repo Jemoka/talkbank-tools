@@ -172,11 +172,18 @@ fn collect_split(row: &UtteranceRow, out: &UtSegOutput, sink: &mut Vec<NewUttera
         } else {
             Some((span.start_ms, span.end_ms))
         };
+        // The span text usually carries the BERT-predicted terminator
+        // (`.`/`?`/`!`). When the model leaves the final fragment unterminated,
+        // default to a period — BA2 terminates every utterance (and a CHAT main
+        // tier requires a terminator).
+        let text = if text.ends_with(['.', '?', '!']) {
+            text.to_string()
+        } else {
+            format!("{text} .")
+        };
         sink.push(NewUtterance {
             speaker: row.speaker.clone(),
-            // The span text already carries the BERT-predicted terminator
-            // (`.`/`?`/`!`); pass it through verbatim for tree-sitter to parse.
-            text: text.to_string(),
+            text,
             bullet,
         });
     }

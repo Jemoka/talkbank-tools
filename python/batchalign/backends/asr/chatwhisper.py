@@ -130,16 +130,36 @@ class BertUtteranceModel:
             return sent_tokenize(final_passage)
 
 
+# ISO-639 (-1/-3) → Whisper language NAME, for the languages we actually pin.
+# BA2 derives these from pycountry; we hardcode the common set so the language
+# is ALWAYS forced even when pycountry is absent (without a forced language the
+# finetuned CHATWhisper model auto-detects and decodes garbage).
+_WHISPER_LANG_NAME = {
+    "eng": "English", "en": "English",
+    "spa": "Spanish", "es": "Spanish",
+    "zho": "Chinese", "zh": "Chinese", "zh-hans": "Chinese", "cmn": "Chinese",
+    "yue": "Cantonese", "zh-hant": "Cantonese",
+    "jpn": "Japanese", "ja": "Japanese",
+    "fra": "French", "fr": "French",
+    "deu": "German", "de": "German",
+    "ita": "Italian", "it": "Italian",
+    "por": "Portuguese", "pt": "Portuguese",
+    "nld": "Dutch", "nl": "Dutch",
+    "kor": "Korean", "ko": "Korean",
+}
+
+
 def _whisper_language_name(lang: str) -> str | None:
     """Whisper language NAME for a CHAT/ISO code (BA2 `WhisperEngine`).
 
-    BA2 passes the pycountry language name (`eng` → "English"); Yue maps to
-    "Cantonese" (but the Cantonese path drops language anyway). Returns None
-    when unknown so Whisper auto-detects.
+    Uses a static map for the common languages (so the language is forced even
+    without pycountry — unforced, the English-finetuned model decodes garbage),
+    falling back to pycountry for anything else. Returns None when unknown so
+    Whisper auto-detects.
     """
     c = lang.lower()
-    if c in ("yue", "zh-hant"):
-        return "Cantonese"
+    if c in _WHISPER_LANG_NAME:
+        return _WHISPER_LANG_NAME[c]
     try:
         import pycountry  # type: ignore[import-not-found]
 
@@ -341,6 +361,7 @@ class ChatWhisperBackend(ASR):
         import torch  # type: ignore[import-not-found]  # noqa: F401
         from transformers import (  # type: ignore[import-not-found]
             GenerationConfig,
+            WhisperTokenizer,
             pipeline,
         )
 
@@ -365,22 +386,21 @@ class ChatWhisperBackend(ASR):
             config.alignment_heads = _CANTONESE_ALIGNMENT_HEADS
         self._gen_config = config
 
-        # BA2 runs the pipeline in bfloat16 (infer_asr.py), falling back to
-        # float16 — the dtype affects greedy-decode output, so we match it for
-        # parity rather than using the float32 default.
+        # Mirror BA2's WhisperASRModel pipeline construction exactly
+        # (`models/whisper/infer_asr.py`): segment-level `return_timestamps=True`
+        # (NOT word-level — word timestamps hang/garble on the finetuned
+        # CHATWhisper model), the upstream `base` *tokenizer only* (the finetuned
+        # repo ships no tokenizer vocab), and NO feature-extractor override (the
+        # model's own extractor is correct; overriding it produced garbage).
+        # bfloat16 with a float16 fallback — the dtype affects greedy decode.
         pipe_kwargs: dict[str, Any] = {
+            "tokenizer": WhisperTokenizer.from_pretrained(base),
             "chunk_length_s": 25,
             "stride_length_s": 3,
-            "return_timestamps": "word",
+            "return_timestamps": True,
         }
         if device is not None:
             pipe_kwargs["device"] = device
-        # The finetuned CHATWhisper-en repo ships no tokenizer vocab, and its
-        # feature extractor's mel-bin count can mismatch the v2-based model
-        # (→ garbage decode). BA2 takes both tokenizer + processor from `base`
-        # (the upstream Whisper), so pin both here.
-        pipe_kwargs["tokenizer"] = base
-        pipe_kwargs["feature_extractor"] = base
         try:
             self._pipe = pipeline(
                 "automatic-speech-recognition", model=model,
@@ -395,7 +415,10 @@ class ChatWhisperBackend(ASR):
 
     @property
     def name(self) -> str:
-        return f"chatwhisper:{self._model_id}"
+        # Bump the tag when decode config changes (cache key). v3: mirror BA2
+        # exactly — base WhisperTokenizer object, NO feature-extractor override,
+        # segment-level return_timestamps=True (word-level hung/garbled).
+        return f"chatwhisper:{self._model_id}:v5"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -415,7 +438,7 @@ class ChatWhisperBackend(ASR):
         import numpy as np  # type: ignore[import-not-found]
         from batchalign._core.proto import AsrSegment, AsrWord
 
-        wave = np.frombuffer(item.audio.pcm_f32le, dtype=np.float32)
+        wave = np.frombuffer(item.audio.pcm_f32le, dtype=np.float32).copy()
         # BA2's Cantonese branch omits task/language in generate_kwargs.
         gen_kwargs: dict[str, Any] = {
             "generation_config": self._gen_config,
@@ -437,6 +460,15 @@ class ChatWhisperBackend(ASR):
         )
 
         text = (result.get("text") or "").strip()
+        # BA2's `process_generation` drops word-attached punctuation from the
+        # raw Whisper output (its `%mor`-free ASR blob carries no commas or
+        # mid-sentence periods); the CHATUtterance BERT stage re-segments and
+        # re-punctuates. Strip it here so the blob parses as a single CHAT
+        # utterance before UtSeg splits it (a `.` mid-text would be an illegal
+        # second terminator).
+        for _p in (".", ",", "?", "!", ";", ":", '"', "„", "“", "”", "‡", "«", "»"):
+            text = text.replace(_p, " ")
+        text = " ".join(text.split())
         if not text:
             return AsrOutput(source_id=item.source_id, segments=[])
 
