@@ -282,7 +282,7 @@ def num2words_en(word: str) -> str:
                 out.append(num2words_en(p))
             except NotImplementedError:
                 return word
-        return " ".join(out)
+        return "-".join(out)
     if not word.isdigit():
         return word
     try:

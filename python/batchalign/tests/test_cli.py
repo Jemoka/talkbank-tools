@@ -13,12 +13,8 @@ SUBCOMMANDS = [
     "align",
     "morphotag",
     "translate",
-    "coref",
     "utseg",
     "compare",
-    "opensmile",
-    "avqi",
-    "daemon",
 ]
 
 
@@ -76,4 +72,5 @@ def test_asr_engine_enum_members():
 
     assert {e.value for e in AsrEngine} == {
         "rev", "whisperx", "whisper", "chatwhisper", "openai", "vllm",
+        "funaudio", "tencent", "qwen3",
     }
