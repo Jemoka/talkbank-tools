@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# `cargo tauri dev` with the sidecar daemon built + staged via Bazel.
+# `cargo tauri dev` with the sidecar daemon built via Bazel.
 #
-# Mirrors bundle.sh's contract:
-#   - SIDECAR_PATH (env, from $(rootpath //python/batchalign:sidecar))
-#     is the sh_binary launcher for the sidecar target.
-#   - We execute the launcher (escape-path: produces
-#     python/target/pyapp/bin/sidecar), then stage that binary under
-#     src-tauri/binaries/sidecar-<triple> so tauri.conf.json's
-#     `bundle.externalBin = ["binaries/sidecar"]` resolves at compile
-#     time.
+# Mechanism (same as bundle.sh except the final command):
+#   1. Delegate the sidecar build to `bazel run //python/batchalign:
+#      sidecar` — the exact same target `just batchalign sidecar`
+#      uses. Bazel handles incrementality; pyapp_build.sh writes the
+#      binary to python/target/pyapp/bin/sidecar (escape path because
+#      maturin + cargo can't run in Bazel's sandbox).
+#   2. Stage that binary at src-tauri/binaries/sidecar-<triple> so
+#      Tauri's `bundle.externalBin: ["binaries/sidecar"]` resolves at
+#      compile time.
+#   3. cargo tauri dev (hot reload).
 #
-# Difference from bundle.sh: ends with `cargo tauri dev` instead of
-# `cargo tauri build`. Hot reload, no bundle output.
+# First-build cost: ~5-10 min (cargo install pyapp + maturin build).
+# Subsequent runs are sub-minute when nothing in the daemon dep tree
+# changed (bazel/cargo/maturin caches all kick in).
 
 set -euo pipefail
 
