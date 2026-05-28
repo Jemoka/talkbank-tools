@@ -77,9 +77,12 @@ class CHATUtteranceBackend(UtSeg):
     @property
     def name(self) -> str:
         # Bump the trailing tag when segmentation/cleanup behaviour changes so
-        # the result cache invalidates (`disfl2` = + retrace [/] marking).
+        # the result cache invalidates. Tags so far:
+        #   * `disfl2` — + retrace [/] marking
+        #   * `tsdist` — + utterance-level timestamp distribution from the
+        #     parent AsrSegment's [start_ms, end_ms] across the split spans
         canto = ":canto" if self._cantonese and self._lang != "yue" else ""
-        return f"chatutterance:{self._model_id}:disfl2{canto}"
+        return f"chatutterance:{self._model_id}:disfl2:tsdist{canto}"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -99,18 +102,59 @@ class CHATUtteranceBackend(UtSeg):
                 text = (seg.text or "").strip()
                 if not text:
                     continue
+                # Step 1: collect cleaned sentences (BERT segmenter + BA2
+                # disfluency [`uh → &-uh`] + retrace [`[/]`] marking).
+                sentences: list[str] = []
                 for sentence in self._segmenter(text):
                     sentence = sentence.strip()
                     if not sentence:
                         continue
-                    # BA2 pairing: disfluency (uh → &-uh) then retrace ([/]).
-                    sentence = clean_utterance(sentence, self._cleanup, self._lang)
-                    # Keep the BERT-predicted terminator on the span text; the
-                    # runner reads it off the trailing punctuation so questions
-                    # / exclamations survive (BA2 parity).
-                    spans.append(
-                        UtteranceSpan(start_ms=0, end_ms=0, text=sentence, words=[])
+                    sentences.append(
+                        clean_utterance(sentence, self._cleanup, self._lang)
                     )
+                if not sentences:
+                    continue
+                # Step 2: distribute the PARENT utterance's [start_ms, end_ms]
+                # proportionally across the segmented sentences by character
+                # count. This gives every split sub-utterance a usable bullet,
+                # so transcripts produced from segments with timing (FunAudio,
+                # Tencent, Qwen3-ASR + FA, …) carry utterance-level
+                # timestamps end-to-end. Word-level timings would require
+                # mapping per-word bullets through the segmenter; that's a
+                # follow-up — utterance-level is the user-stated bar.
+                #
+                # When the parent has no timing (`end_ms == 0`), emit
+                # zero-timed spans (no bullet downstream) so we don't
+                # fabricate bullets out of nothing.
+                if seg.end_ms > seg.start_ms:
+                    parent_start = seg.start_ms
+                    parent_dur = seg.end_ms - seg.start_ms
+                    total_chars = sum(len(s) for s in sentences) or 1
+                    cur = parent_start
+                    n = len(sentences)
+                    for i, sent in enumerate(sentences):
+                        if i == n - 1:
+                            # Last span absorbs rounding so the final
+                            # end_ms exactly matches the parent's end_ms.
+                            end = seg.end_ms
+                        else:
+                            sent_chars = len(sent)
+                            end = cur + round(
+                                sent_chars / total_chars * parent_dur
+                            )
+                        spans.append(
+                            UtteranceSpan(
+                                start_ms=cur, end_ms=end, text=sent, words=[]
+                            )
+                        )
+                        cur = end
+                else:
+                    for sent in sentences:
+                        spans.append(
+                            UtteranceSpan(
+                                start_ms=0, end_ms=0, text=sent, words=[]
+                            )
+                        )
             outputs.append(UtSegOutput(source_id=item.source_id, utterances=spans))
         return outputs
 
