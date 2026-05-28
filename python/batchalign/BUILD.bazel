@@ -140,6 +140,42 @@ sh_binary(
     data = ["@multitool//tools/uv"] + _WHEEL_DATA,
 )
 
+# Bazel-tracked wheel artifact. Same maturin shell-out as :wheel (which
+# is the allowed-and-necessary escape — maturin is the sole reader of
+# pyproject.toml's multi-platform tagging matrix), but the output is a
+# real file that downstream Bazel targets can depend on via
+# $(execpath …) / rlocation. Used by :sidecar_bin so the sidecar
+# pipeline doesn't re-run maturin a second time.
+genrule(
+    name = "wheel_file",
+    outs = ["batchalign.whl"],
+    srcs = _WHEEL_DATA + glob(
+        ["**/*.py"],
+        exclude = ["tests/**", "_core/_proto_generated.py"],
+    ),
+    tools = [
+        "//bazel/python:maturin_build.sh",
+        "//bazel/python:maturin_genrule.sh",
+        "//bazel/python:hermeticity_guard.sh",
+        "//bazel/python:runfiles_resolve.sh",
+        "@multitool//tools/uv",
+        "@rules_rust//rust/toolchain:current_cargo_files",
+        "@rules_rust//rust/toolchain:current_rustc_files",
+    ] + _LLVM_TOOLS,
+    cmd = " ".join([
+        "PYAPP_RUST_BIN_DIRS='$(execpaths @rules_rust//rust/toolchain:current_cargo_files) $(execpaths @rules_rust//rust/toolchain:current_rustc_files)'",
+        "$(execpath //bazel/python:maturin_genrule.sh)",
+        "$@",
+        "$(execpath @multitool//tools/uv)",
+        "$(execpath //python/batchalign/_core:_proto_generated_py)",
+        "$(COMPILATION_MODE)",
+        "$(execpath @llvm_toolchain_llvm//:bin/clang)",
+        "$(execpath @llvm_toolchain_llvm//:bin/llvm-ar)",
+        "$(execpath @llvm_toolchain_llvm//:bin/llvm-ranlib)",
+    ]),
+    local = True,
+)
+
 # Standalone production-daemon sidecar binary built via PyApp.
 #
 # `bazel run //python/batchalign:sidecar` produces a self-contained
@@ -190,63 +226,34 @@ sh_binary(
 genrule(
     name = "sidecar_bin",
     outs = ["sidecar.bin"],
-    # Mirror _WHEEL_DATA (covers the Rust workspace crates + proto module
-    # + pyproject.toml) plus all batchalign Python sources. Any change
-    # under these triggers a rebuild via Bazel's normal incremental
-    # tracking. The actual maturin / cargo caches survive between
-    # rebuilds because they're under python/target/ in the workspace
-    # (an escape path the genrule's cmd writes to via the wrapper).
-    srcs = _WHEEL_DATA + glob(
-        ["**/*.py"],
-        exclude = ["tests/**", "_core/_proto_generated.py"],
-    ),
+    # Consume the Bazel-tracked wheel directly. NO maturin re-run here;
+    # the only remaining shell-out in this genrule's action is the
+    # `cargo install pyapp` step, scoped to fetching + compiling pyapp's
+    # source from crates.io.
+    #
+    # Escape budget for this target:
+    #   1. cargo install pyapp — fetches from crates.io. Follow-up:
+    #      replace with `crate.spec(package = "pyapp", artifact = "bin")`
+    #      + rules_rust crate_universe bindep so pyapp is built from
+    #      pinned source like every other Rust dep. Tracked in
+    #      bazel-reactive-builds.md memory.
+    #
+    # All other tools are Bazel-managed: cargo + rustc via rules_rust,
+    # clang on linux/win via @llvm_toolchain_llvm. macOS still needs
+    # Xcode CLI Tools for clang+SDK; see macos-xcode-hermeticity-gap.md.
+    srcs = [":wheel_file"],
     tools = [
-        "//bazel/python:pyapp_build.sh",
+        "//bazel/python:pyapp_install.sh",
         "//bazel/python:pyapp_genrule.sh",
-        "//bazel/python:hermeticity_guard.sh",
-        "//bazel/python:runfiles_resolve.sh",
-        "@multitool//tools/uv",
-        # Hermetic cargo + rustc via rules_rust's host-platform-
-        # selecting current_* filegroups. pyapp_genrule.sh prepends
-        # their dir to PATH so the inner pyapp_build.sh's `cargo
-        # install pyapp` and `uv run maturin build` (maturin shells to
-        # cargo) use Bazel's toolchain — NOT whatever the host happens
-        # to have installed. The rustc version pin in pyproject.toml
-        # [tool.batchalign.pinned_tools] must match MODULE.bazel
-        # rust.toolchain(versions = [...]).
         "@rules_rust//rust/toolchain:current_cargo_files",
         "@rules_rust//rust/toolchain:current_rustc_files",
-    ] + _LLVM_TOOLS,
+    ],
     cmd = " ".join([
-        # Hermeticity status (what this genrule does NOT touch host
-        # state for):
-        #   uv         → @multitool//tools/uv                  ✓
-        #   rustc/cargo→ @rules_rust//rust/toolchain (PATH-injected)  ✓
-        #   maturin    → uv run, version pinned in pyproject.toml  ✓
-        #   python     → uv-managed venv, version pinned             ✓
-        #   clang (lin/win) → @llvm_toolchain_llvm              ✓
-        #   clang (macOS)   → xcrun (host Xcode) — see              ✗
-        #                     bazel/python/pyapp_build.sh L70-100.
-        #                     Hermetic LLVM 17.0.6 can't parse Xcode
-        #                     26.x SDK headers (__kernel_ptr_semantics
-        #                     etc.). Apple ships SDK + clang as a
-        #                     matched pair; we'd need a hermetic macOS
-        #                     SDK to close this gap. macOS users still
-        #                     need Xcode CLI Tools installed.
-        #
-        # PYAPP_RUST_BIN_DIRS: space-separated execpaths of cargo +
-        # rustc from rules_rust's host-platform-selecting filegroups.
-        # The wrapper extracts dirname(cargo) and prepends to PATH so
-        # the inner maturin/cargo invocations use Bazel's rust toolchain.
         "PYAPP_RUST_BIN_DIRS='$(execpaths @rules_rust//rust/toolchain:current_cargo_files) $(execpaths @rules_rust//rust/toolchain:current_rustc_files)'",
         "$(execpath //bazel/python:pyapp_genrule.sh)",
         "$@",
-        "$(execpath @multitool//tools/uv)",
-        "$(execpath //python/batchalign/_core:_proto_generated_py)",
+        "$(execpath :wheel_file)",
         "$(COMPILATION_MODE)",
-        "$(execpath @llvm_toolchain_llvm//:bin/clang)",
-        "$(execpath @llvm_toolchain_llvm//:bin/llvm-ar)",
-        "$(execpath @llvm_toolchain_llvm//:bin/llvm-ranlib)",
     ]),
     local = True,
 )
