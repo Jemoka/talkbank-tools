@@ -191,6 +191,18 @@ MATRIX: list[Cell] = [
         ba2=["--whisper", "--lang", "eng", "-n", "1"],
         ba3=["--engine", "chatwhisper", "--language", "en", "--force-cpu"],
     ),
+    # openai engine (BA2 `--whisper_oai`): the original openai-whisper package's
+    # `turbo` model + the same CHATUtterance BERT segmenter.
+    Cell(
+        command="transcribe",
+        engine="openai",
+        language="en",
+        fixture="transcribe/en.wav",
+        kind="segmentation",
+        ba2_global=["--force-cpu"],
+        ba2=["--whisper_oai", "--lang", "eng", "-n", "1"],
+        ba3=["--engine", "openai", "--language", "en", "--force-cpu"],
+    ),
     # Cantonese: chatwhisper resolves the alvanlii Cantonese model + the
     # Cantonese-specific BERT utterance segmenter (BertCantoneseUtteranceModel).
     # BA2's CHATWhisper Cantonese path is broken here (emits an empty

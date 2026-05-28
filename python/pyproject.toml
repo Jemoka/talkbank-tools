@@ -58,7 +58,7 @@ dependencies = [
 # `batchalign[all]` is the kitchen sink for users who don't care.
 [project.optional-dependencies]
 # `nltk` powers the CHATUtterance BERT segmenter's sentence split (BA2 parity).
-whisper      = ["transformers>=4.57,<5", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8"]
+whisper      = ["transformers>=4.57,<5", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8", "openai-whisper", "pycountry", "num2words"]
 vllm         = ["openai>=1.0", "librosa>=0.10"]
 stanza       = ["stanza>=1.12", "transformers>=4.57,<5"]
 pyannote     = ["pyannote.audio>=3.0", "onnxruntime>=1.16"]
@@ -83,6 +83,7 @@ api          = [
 ]
 all = [
     "transformers>=4.57,<5", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8",
+    "openai-whisper", "pycountry", "num2words",
     "openai>=1.0", "librosa>=0.10",
     "stanza>=1.12",
     "pyannote.audio>=3.0", "onnxruntime>=1.16",
@@ -201,18 +202,10 @@ runtime = [
     "tqdm>=4",
     "transformers>=4.57,<5",
     "typer>=0.12",
-    # `batchalign.api` (the HTTP wrapper). Included so the Bazel-run
-    # path can serve / test the API; mirrored as the `[api]` extra in
-    # [project.optional-dependencies] for wheel consumers.
-    "fastapi>=0.110",
-    "sse-starlette>=2.1",
-    "python-multipart>=0.0.9",
-    "httpx>=0.27",
-    # `[standard]` pulls in uvloop, httptools, watchfiles, websockets —
-    # the production-grade event-loop / HTTP-parser stack. The bare
-    # uvicorn package falls back to pure-Python asyncio which is fine
-    # for dev but materially slower under load.
-    "uvicorn[standard]>=0.30",
+    # `openai-whisper` provides the `whisper` package for the openai ASR engine
+    # (BA2's `whisper_oai`). `pycountry` mirrors BA2's language-name resolution.
+    "openai-whisper",
+    "pycountry",
 ]
 dev = [
     "pytest>=9.0.3",

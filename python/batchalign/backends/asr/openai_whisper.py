@@ -42,7 +42,8 @@ class OpenAIWhisperBackend(ASR):
 
     @property
     def name(self) -> str:
-        return f"openai-whisper:{self._model_id}"
+        # v2: one AsrSegment per Whisper segment (was a single joined blob).
+        return f"openai-whisper:{self._model_id}:v2"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -80,26 +81,27 @@ class OpenAIWhisperBackend(ASR):
                 except OSError:
                     pass
 
+            # BA2's OAIWhisperEngine builds ONE turn per Whisper segment
+            # (`for i in res["segments"]: turns.append(...)`), so each Whisper
+            # segment becomes its own utterance before the CHATUtterance BERT
+            # stage. Mirror that: one AsrSegment per Whisper segment, with
+            # word-attached punctuation stripped (process_generation drops it)
+            # so each parses as one CHAT utterance.
             segments_out: list[Any] = []
             for seg in result.get("segments", []):
-                words = [
-                    AsrWord(
-                        text=(w.get("word") or "").strip(),
-                        start_ms=int((w.get("start") or 0.0) * 1000),
-                        end_ms=int((w.get("end") or 0.0) * 1000),
-                        confidence=None,
-                    )
-                    for w in seg.get("words", [])
-                ]
-                if not words:
+                text = (seg.get("text") or "").strip()
+                for _p in (".", ",", "?", "!", ";", ":", '"', "„", "“", "”", "‡", "«", "»"):
+                    text = text.replace(_p, " ")
+                text = " ".join(text.split())
+                if not text:
                     continue
                 segments_out.append(
                     AsrSegment(
-                        start_ms=words[0].start_ms,
-                        end_ms=words[-1].end_ms,
-                        text=(seg.get("text") or "").strip(),
+                        start_ms=int((seg.get("start") or 0.0) * 1000),
+                        end_ms=int((seg.get("end") or 0.0) * 1000),
+                        text=text,
                         speaker=None,
-                        words=words,
+                        words=[],
                     )
                 )
             outputs.append(AsrOutput(source_id=item.source_id, segments=segments_out))
