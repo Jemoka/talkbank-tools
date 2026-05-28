@@ -149,6 +149,18 @@ MATRIX: list[Cell] = [
         ba2=["--override-cache"],
         ba3=["--language", "en,es"],
     ),
+    # --retokenize on Japanese. BA2's --retokenize path emits no %mor here
+    # (broken), so there is no oracle — we require BA3 to support it and
+    # produce typed %mor/%gra (verified: pron|私-Int-S1 adp|は noun|犬 …).
+    Cell(
+        command="morphotag",
+        engine="stanza",
+        language="ja-retokenize",
+        fixture="morphotag/ja.cha",
+        kind="morphotag",
+        ba2_broken=True,
+        ba3=["--language", "ja", "--retokenize"],
+    ),
     # ---- transcribe (rev: cloud ASR, deterministic; + CHATUtterance seg) ----
     Cell(
         command="transcribe",
@@ -404,8 +416,8 @@ def check(cell: Cell, *, verbose: bool) -> Result:
             ba3_lines = extractor(ba3_cha.read_text())
         passed = len(ba3_lines) > 0
         detail = (
-            f"BA2 broken on this language; BA3 produced {len(ba3_lines)} "
-            f"diarized utterance(s)"
+            f"BA2 broken on this combination; BA3 produced "
+            f"{len(ba3_lines)} important line(s)"
         )
         diff = "\n".join(ba3_lines) if (verbose or not passed) else ""
         return Result(cell, passed, detail=detail, diff=diff)
