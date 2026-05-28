@@ -22,6 +22,23 @@
 # don't have to hunt for it in runfiles ourselves.
 
 set -euo pipefail
+
+# Pin RUNFILES_DIR before sourcing runfiles_resolve.sh. Bazel materializes
+# the runfiles tree for our sh_binary but doesn't reliably export
+# RUNFILES_DIR — and the helper's fallback `${BASH_SOURCE[0]}.runfiles`
+# computes against the SOURCED helper, not us. Walk up from $0 to find
+# the nearest *.runfiles directory.
+if [[ -z "${RUNFILES_DIR:-}" ]]; then
+    _self_dir="$(cd "$(dirname "$0")" && pwd -P)"
+    _cand="$_self_dir"
+    while [[ "$_cand" != "/" ]]; do
+        if [[ "${_cand##*/}" == *.runfiles ]]; then RUNFILES_DIR="$_cand"; break; fi
+        if [[ -d "${_cand}.runfiles" ]]; then RUNFILES_DIR="${_cand}.runfiles"; break; fi
+        _cand="$(dirname "$_cand")"
+    done
+fi
+export RUNFILES_DIR
+
 cd "$BUILD_WORKSPACE_DIRECTORY/apps/batchalign/batchalign-gui"
 
 # Detect target triple. `rustc -vV` emits `host: <triple>` on a line of

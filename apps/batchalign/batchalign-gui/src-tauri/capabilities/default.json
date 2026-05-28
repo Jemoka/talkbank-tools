@@ -10,6 +10,15 @@
     "opener:default",
     "opener:allow-reveal-item-in-dir",
     "fs:default",
-    "shell:allow-execute"
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "binaries/sidecar",
+          "sidecar": true,
+          "args": true
+        }
+      ]
+    }
   ]
 }

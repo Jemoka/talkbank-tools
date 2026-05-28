@@ -14,6 +14,21 @@
 # `cargo tauri build`. Hot reload, no bundle output.
 
 set -euo pipefail
+
+# Pin RUNFILES_DIR before sourcing runfiles_resolve.sh. See bundle.sh for
+# the same logic + rationale (Bazel materializes runfiles but doesn't
+# reliably export RUNFILES_DIR before invoking the srcs file).
+if [[ -z "${RUNFILES_DIR:-}" ]]; then
+    _self_dir="$(cd "$(dirname "$0")" && pwd -P)"
+    _cand="$_self_dir"
+    while [[ "$_cand" != "/" ]]; do
+        if [[ "${_cand##*/}" == *.runfiles ]]; then RUNFILES_DIR="$_cand"; break; fi
+        if [[ -d "${_cand}.runfiles" ]]; then RUNFILES_DIR="${_cand}.runfiles"; break; fi
+        _cand="$(dirname "$_cand")"
+    done
+fi
+export RUNFILES_DIR
+
 cd "$BUILD_WORKSPACE_DIRECTORY/apps/batchalign/batchalign-gui"
 
 TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
