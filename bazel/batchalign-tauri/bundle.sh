@@ -21,23 +21,21 @@
 # SIDECAR_PATH is set by the Bazel sh_binary rule via env = {} so we
 # don't have to hunt for it in runfiles ourselves.
 
-set -euo pipefail
-
-# Pin RUNFILES_DIR before sourcing runfiles_resolve.sh. Bazel materializes
-# the runfiles tree for our sh_binary but doesn't reliably export
-# RUNFILES_DIR — and the helper's fallback `${BASH_SOURCE[0]}.runfiles`
-# computes against the SOURCED helper, not us. Walk up from $0 to find
-# the nearest *.runfiles directory.
-if [[ -z "${RUNFILES_DIR:-}" ]]; then
-    _self_dir="$(cd "$(dirname "$0")" && pwd -P)"
-    _cand="$_self_dir"
-    while [[ "$_cand" != "/" ]]; do
-        if [[ "${_cand##*/}" == *.runfiles ]]; then RUNFILES_DIR="$_cand"; break; fi
-        if [[ -d "${_cand}.runfiles" ]]; then RUNFILES_DIR="${_cand}.runfiles"; break; fi
-        _cand="$(dirname "$_cand")"
-    done
-fi
-export RUNFILES_DIR
+# --- begin runfiles.bash initialization v3 ---
+# Bazel's canonical Bash runfiles library. Provides `rlocation <path>`
+# which resolves any runfiles input (declared via `data` on this
+# sh_binary) regardless of whether Bazel set RUNFILES_DIR, a manifest
+# file, or neither. Copy-pasted verbatim from the upstream boilerplate;
+# see https://github.com/bazelbuild/bazel/blob/master/tools/bash/runfiles/runfiles.bash
+set -uo pipefail; set +e; f=bazel_tools/tools/bash/runfiles/runfiles.bash
+# shellcheck disable=SC1090
+source "${RUNFILES_DIR:-/dev/null}/$f" 2>/dev/null || \
+  source "$(grep -sm1 "^$f " "${RUNFILES_MANIFEST_FILE:-/dev/null}" | cut -f2- -d' ')" 2>/dev/null || \
+  source "$0.runfiles/$f" 2>/dev/null || \
+  source "$(grep -sm1 "^$f " "$0.runfiles_manifest" | cut -f2- -d' ')" 2>/dev/null || \
+  { echo>&2 "ERROR: cannot find $f"; exit 1; }; f=; set -e
+# --- end runfiles.bash initialization v3 ---
+set -o pipefail
 
 cd "$BUILD_WORKSPACE_DIRECTORY/apps/batchalign/batchalign-gui"
 
@@ -56,22 +54,15 @@ fi
 # pyapp_build.sh needs the host cargo + a writable target dir, which
 # can't live in the Bazel sandbox; see bazel/python/pyapp_build.sh).
 # Bazel materializes the launcher script into our runfiles tree because
-# we list it as `data` on this sh_binary. Executing the launcher runs
-# pyapp_build.sh which produces python/target/pyapp/bin/sidecar — the
-# stable, deterministic output path the bundler stages from.
-#
-# SIDECAR_PATH (env, from $(rootpath //python/batchalign:sidecar)) is
-# a runfiles-relative path; resolve it to an absolute path inside the
-# runfiles tree via the shared helper.
-# shellcheck source=../python/runfiles_resolve.sh
-source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/runfiles_resolve.sh"
-
-if [[ -z "${SIDECAR_PATH:-}" ]]; then
-    echo "SIDECAR_PATH env var not set (Bazel env= attribute missing?)" >&2
+# we list it as `data` on this sh_binary. Resolve its path via the
+# canonical `rlocation` helper from runfiles.bash and execute it —
+# pyapp_build.sh produces python/target/pyapp/bin/sidecar (escape
+# path), which we then stage.
+SIDECAR_LAUNCHER="$(rlocation _main/python/batchalign/sidecar)"
+if [[ -z "$SIDECAR_LAUNCHER" || ! -x "$SIDECAR_LAUNCHER" ]]; then
+    echo "bundle.sh: rlocation could not resolve _main/python/batchalign/sidecar" >&2
     exit 2
 fi
-SIDECAR_LAUNCHER="$(runfiles_resolve "$SIDECAR_PATH")"
-
 echo "bundle.sh: building sidecar via $SIDECAR_LAUNCHER"
 "$SIDECAR_LAUNCHER"
 

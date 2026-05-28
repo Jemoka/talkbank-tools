@@ -13,21 +13,17 @@
 # Difference from bundle.sh: ends with `cargo tauri dev` instead of
 # `cargo tauri build`. Hot reload, no bundle output.
 
-set -euo pipefail
-
-# Pin RUNFILES_DIR before sourcing runfiles_resolve.sh. See bundle.sh for
-# the same logic + rationale (Bazel materializes runfiles but doesn't
-# reliably export RUNFILES_DIR before invoking the srcs file).
-if [[ -z "${RUNFILES_DIR:-}" ]]; then
-    _self_dir="$(cd "$(dirname "$0")" && pwd -P)"
-    _cand="$_self_dir"
-    while [[ "$_cand" != "/" ]]; do
-        if [[ "${_cand##*/}" == *.runfiles ]]; then RUNFILES_DIR="$_cand"; break; fi
-        if [[ -d "${_cand}.runfiles" ]]; then RUNFILES_DIR="${_cand}.runfiles"; break; fi
-        _cand="$(dirname "$_cand")"
-    done
-fi
-export RUNFILES_DIR
+# --- begin runfiles.bash initialization v3 ---
+# Bazel's canonical Bash runfiles library; see bundle.sh for the same.
+set -uo pipefail; set +e; f=bazel_tools/tools/bash/runfiles/runfiles.bash
+# shellcheck disable=SC1090
+source "${RUNFILES_DIR:-/dev/null}/$f" 2>/dev/null || \
+  source "$(grep -sm1 "^$f " "${RUNFILES_MANIFEST_FILE:-/dev/null}" | cut -f2- -d' ')" 2>/dev/null || \
+  source "$0.runfiles/$f" 2>/dev/null || \
+  source "$(grep -sm1 "^$f " "$0.runfiles_manifest" | cut -f2- -d' ')" 2>/dev/null || \
+  { echo>&2 "ERROR: cannot find $f"; exit 1; }; f=; set -e
+# --- end runfiles.bash initialization v3 ---
+set -o pipefail
 
 cd "$BUILD_WORKSPACE_DIRECTORY/apps/batchalign/batchalign-gui"
 
@@ -37,19 +33,13 @@ if [[ -z "$TRIPLE" ]]; then
     exit 2
 fi
 
-# Resolve the runfiles-relative SIDECAR_PATH (passed via
-# `env = { SIDECAR_PATH: $(rootpath //python/batchalign:sidecar) }` on
-# this sh_binary) to an absolute launcher path. See bundle.sh for the
-# same pattern + rationale.
-# shellcheck source=../python/runfiles_resolve.sh
-source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/runfiles_resolve.sh"
-
-if [[ -z "${SIDECAR_PATH:-}" ]]; then
-    echo "SIDECAR_PATH env var not set (Bazel env= attribute missing?)" >&2
+# Resolve //python/batchalign:sidecar's launcher via Bazel's canonical
+# runfiles helper. See bundle.sh for the same pattern + rationale.
+SIDECAR_LAUNCHER="$(rlocation _main/python/batchalign/sidecar)"
+if [[ -z "$SIDECAR_LAUNCHER" || ! -x "$SIDECAR_LAUNCHER" ]]; then
+    echo "dev.sh: rlocation could not resolve _main/python/batchalign/sidecar" >&2
     exit 2
 fi
-SIDECAR_LAUNCHER="$(runfiles_resolve "$SIDECAR_PATH")"
-
 echo "dev.sh: building sidecar via $SIDECAR_LAUNCHER"
 "$SIDECAR_LAUNCHER"
 
