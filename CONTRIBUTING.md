@@ -1,6 +1,6 @@
 # Contributing to talkbank-tools
 
-**Last updated:** 2026-05-28 10:28 PDT
+**Last updated:** 2026-05-28 11:41 PDT
 
 Welcome. This repo is a polyglot monorepo orchestrated by **Bazel**. It
 ships two end-user products:
@@ -96,7 +96,7 @@ below.
 **Why full Xcode and not CLT?** Bazel-native builds work fine with
 either, because `rules_rust` wraps `cargo_build_script` in a
 hermetic-cc shell that papers over a lot of SDK quirks. The
-maturin escape path (wheel, daemonapp) uses host cargo directly and
+maturin escape path (wheel, sidecar) uses host cargo directly and
 sees the raw SDK headers; with CLT 26.x those don't parse. We don't
 vendor an SDK as a workaround because Apple's EULA prohibits
 redistribution.
@@ -340,7 +340,7 @@ invocation can't tolerate outside Bazel's sandboxed `cargo_build_script`).
 The Bazel-native build path goes through `rules_rust`'s
 `cargo_build_script`, which wires the full hermetic cc toolchain and
 *can* compile the bundled sqlite — but the maturin escape path
-(`just batchalign wheel` / `daemonapp`) uses host cargo and would
+(`just batchalign wheel` / `sidecar`) uses host cargo and would
 choke. Linking system sqlite makes both paths consistent.
 
 The maturin shell scripts auto-set `SQLITE3_LIB_DIR` /
@@ -352,7 +352,7 @@ graph regenerates.
 
 ### Troubleshooting: macOS SDK / `libsqlite3-sys` build errors
 
-If `just batchalign wheel` / `just batchalign daemonapp` on macOS
+If `just batchalign wheel` / `just batchalign sidecar` on macOS
 prints any of these errors, the host setup didn't follow the
 [Getting started](#macos) macOS section. The errors fall into two
 buckets:
@@ -430,7 +430,7 @@ Apple's EULA prohibits SDK redistribution.
 
 #### Profile selection: Bazel-driven, no env-var rituals
 
-`just batchalign wheel` / `daemonapp` / `wheel-<platform>` recipes pass
+`just batchalign wheel` / `sidecar` / `wheel-<platform>` recipes pass
 `-c opt` to `bazel run`, and the `sh_binary` `args` include the
 `$(COMPILATION_MODE)` make-variable. The shell scripts translate that to
 maturin's `--release` / dev profile. **Do not** prepend

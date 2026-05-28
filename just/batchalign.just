@@ -25,8 +25,8 @@
 # Wheel artifact paths:
 #   per-platform: python/target/wheels/batchalign-<version>-cp312-cp312-<plat>.whl
 #
-# Standalone daemon binary:
-#   `just batchalign daemonapp` produces python/target/pyapp/bin/daemonapp,
+# Standalone daemon sidecar binary:
+#   `just batchalign sidecar` produces python/target/pyapp/bin/sidecar,
 #   a self-contained executable bundling CPython + the wheel + the [api]
 #   extra via PyApp (https://ofek.dev/pyapp/). The binary IS the daemon —
 #   running it boots `batchalign3 daemon` directly. See
@@ -129,12 +129,14 @@ wheel:
 publish:
     bazel run //python/batchalign:publish
 
-# Standalone production daemon binary via PyApp.
+# Standalone production daemon sidecar binary via PyApp.
 #
-# Output: python/target/pyapp/bin/daemonapp. Self-contained — bundles
+# Output: python/target/pyapp/bin/sidecar. Self-contained — bundles
 # CPython at the pinned major.minor, the batchalign wheel, and the
 # [api] extra (fastapi/uvicorn/sse-starlette). Run it directly to boot
-# the HTTP daemon; no Python or batchalign install on the host.
+# the HTTP daemon; no Python or batchalign install on the host. Named
+# "sidecar" because that's its deployment role (companion service next
+# to the main CLI/wheel install, not a separate top-level app).
 #
 # First build: ~minutes (cargo install pyapp + maturin build).
 # Rebuilds: only the maturin step reruns if Rust sources changed.
@@ -142,8 +144,8 @@ publish:
 # Override via PYAPP_PROFILE={release|debug}, PYAPP_PYTHON_VERSION=...,
 # PYAPP_DISTRIBUTION_EMBED=0 (download Python on first run instead of
 # embedding it -- smaller binary, needs network at first launch).
-daemonapp:
-    bazel run -c opt //python/batchalign:daemonapp
+sidecar:
+    bazel run -c opt //python/batchalign:sidecar
 
 # Print the source-of-truth versions for human inspection.
 versions:

@@ -164,7 +164,7 @@ maturin = "1.7.4"    # used for `maturin develop` and `maturin build` —
 rust = "1.95.0"      # mirror MODULE.bazel rust.toolchain(versions = [...])
 pyapp = "0.27.0"     # https://crates.io/crates/pyapp -- consumed by
                      # `bazel/python/pyapp_build.sh` to produce
-                     # `//python/batchalign:daemonapp`. Bump in lockstep
+                     # `//python/batchalign:sidecar`. Bump in lockstep
                      # with any PYAPP_* env-var contract changes in
                      # pyapp_build.sh (the env-var schema evolves
                      # between minor releases).

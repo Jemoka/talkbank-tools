@@ -35,17 +35,17 @@ import typer
 
 
 def run_pyapp_entry() -> None:
-    """PyApp entry point for the ``daemonapp`` standalone binary.
+    """PyApp entry point for the ``sidecar`` standalone binary.
 
-    The ``//python/batchalign:daemonapp`` Bazel target bundles batchalign
+    The ``//python/batchalign:sidecar`` Bazel target bundles batchalign
     + a Python runtime into a single executable via
     `PyApp <https://ofek.dev/pyapp/>`__. PyApp invokes whatever callable
     ``PYAPP_EXEC_SPEC`` names; this function is that callable.
 
     Behavior: prepend ``daemon`` to the argv the bundled binary received,
     then hand off to the regular Typer app. The shipped binary IS the
-    daemon — users do not type ``daemonapp daemon ...``, just
-    ``daemonapp --port 8765``.
+    daemon — users do not type ``sidecar daemon ...``, just
+    ``sidecar --port 8765``.
     """
     from batchalign.cli import app
 

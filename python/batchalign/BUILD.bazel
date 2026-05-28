@@ -140,20 +140,22 @@ sh_binary(
     data = ["@multitool//tools/uv"] + _WHEEL_DATA,
 )
 
-# Standalone production-daemon binary built via PyApp.
+# Standalone production-daemon sidecar binary built via PyApp.
 #
-# `bazel run //python/batchalign:daemonapp` produces a self-contained
-# executable at `python/target/pyapp/bin/daemonapp` that bundles
+# `bazel run //python/batchalign:sidecar` produces a self-contained
+# executable at `python/target/pyapp/bin/sidecar` that bundles
 # CPython + the batchalign wheel + the `[api]` extra. The binary IS
 # the daemon — running it boots `batchalign3 daemon` directly without
-# the user typing the subcommand.
+# the user typing the subcommand. Named "sidecar" because that's the
+# role it plays in a deployment (companion service next to the main
+# CLI / wheel install, not a separate top-level app).
 #
 # Follows the same shell-out pattern as :wheel — the build needs the
 # host cargo + maturin and cannot live inside Bazel's hermetic sandbox.
 # Hermeticity is policed by `hermeticity_guard.sh` (uv/maturin/python/
 # rustc pins) + the explicit pyapp version pin in pyproject.toml.
 sh_binary(
-    name = "daemonapp",
+    name = "sidecar",
     srcs = ["//bazel/python:pyapp_build.sh"],
     args = [
         "$(rootpath @multitool//tools/uv)",

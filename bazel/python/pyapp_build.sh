@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the standalone `daemonapp` binary via PyApp.
+# Build the standalone `sidecar` binary via PyApp.
 #
 # PyApp (https://ofek.dev/pyapp/) is a tiny Rust runtime that bootstraps
 # a Python application from a wheel. The pattern is:
@@ -243,13 +243,14 @@ cargo install pyapp \
     --root "$out_dir" \
     "${cargo_flag[@]+"${cargo_flag[@]}"}"
 
-# cargo places the binary at <root>/bin/pyapp; rename to daemonapp so
-# the produced artifact reflects its purpose.
-final="$out_dir/bin/daemonapp"
+# cargo places the binary at <root>/bin/pyapp; rename to sidecar so
+# the produced artifact reflects its deployment role (the batchalign
+# HTTP daemon sidecar that ships alongside the main wheel/CLI).
+final="$out_dir/bin/sidecar"
 mv "$out_dir/bin/pyapp" "$final"
 
 echo "pyapp_build.sh: produced $final"
 ls -lh "$final"
 
 # Print the path on the last line so callers / CI scripts can capture it.
-echo "DAEMONAPP_PATH=$final"
+echo "SIDECAR_PATH=$final"

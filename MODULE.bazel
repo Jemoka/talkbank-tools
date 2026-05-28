@@ -242,7 +242,7 @@ bazel_dep(name = "aspect_bazel_lib", version = "2.9.3")
 # =============================================================================
 # Why hermetic clang?
 #
-# Every maturin-driven Rust build (wheel, daemonapp) eventually shells out
+# Every maturin-driven Rust build (wheel, sidecar) eventually shells out
 # to `cargo build` -> `cc-rs` -> the C compiler on PATH. On macOS that's
 # `/usr/bin/cc`, which is Apple's clang from /Library/Developer/
 # CommandLineTools. The host clang + host SDK are a versioned pair; a
