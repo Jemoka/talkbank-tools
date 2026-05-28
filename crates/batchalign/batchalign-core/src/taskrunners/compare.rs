@@ -75,7 +75,14 @@ impl TaskRunner for CompareTaskRunner {
             }
         };
 
-        let (main_chat, gold_chat) = paired.into_parts();
+        let (mut main_chat, mut gold_chat) = paired.into_parts();
+        // BA2's compare output carries %mor/%xsrep/%xsmor but NOT %gra. Drop
+        // %gra before the round-trip: the morphosyntax %gra reproduces BA2's
+        // ROOT-head quirk (head → last chunk), which is circular and trips
+        // E724 when the annotated text is re-parsed. The compare itself only
+        // needs %mor (POS), so this matches BA2 and keeps the document valid.
+        strip_gra_tiers(&mut main_chat);
+        strip_gra_tiers(&mut gold_chat);
         let main_text = main_chat.to_chat();
         let gold_text = gold_chat.to_chat();
         let main_source_id = main_chat.source_id().clone();
@@ -117,6 +124,20 @@ impl TaskRunner for CompareTaskRunner {
             Task::Compare,
         ));
         Ok(())
+    }
+}
+
+/// Strip `%gra` dependent tiers from a CHAT in place (see the call site: BA2's
+/// compare emits no `%gra`, and the morphosyntax ROOT-head quirk makes it
+/// circular, so re-parsing the annotated text would trip E724).
+fn strip_gra_tiers(chat: &mut crate::base::Chat) {
+    use talkbank_model::Line;
+    use talkbank_model::model::DependentTier;
+    for line in chat.ast_mut().lines.0.iter_mut() {
+        if let Line::Utterance(u) = line {
+            u.dependent_tiers
+                .retain(|t| !matches!(t, DependentTier::Gra(_)));
+        }
     }
 }
 
