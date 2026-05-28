@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
-# `cargo tauri dev` with the sidecar daemon built via Bazel.
+# `cargo tauri dev` with the sidecar daemon supplied by Bazel.
 #
-# Mechanism (same as bundle.sh except the final command):
-#   1. Delegate the sidecar build to `bazel run //python/batchalign:
-#      sidecar` — the exact same target `just batchalign sidecar`
-#      uses. Bazel handles incrementality; pyapp_build.sh writes the
-#      binary to python/target/pyapp/bin/sidecar (escape path because
-#      maturin + cargo can't run in Bazel's sandbox).
-#   2. Stage that binary at src-tauri/binaries/sidecar-<triple> so
-#      Tauri's `bundle.externalBin: ["binaries/sidecar"]` resolves at
-#      compile time.
-#   3. cargo tauri dev (hot reload).
-#
-# First-build cost: ~5-10 min (cargo install pyapp + maturin build).
-# Subsequent runs are sub-minute when nothing in the daemon dep tree
-# changed (bazel/cargo/maturin caches all kick in).
+# Mirrors bundle.sh's contract: resolve //python/batchalign:sidecar_bin
+# via rlocation, stage it under src-tauri/binaries/sidecar-<triple>,
+# then hand off to cargo tauri dev. Hot reload, no bundler.
 
-set -euo pipefail
+# --- begin runfiles.bash initialization v3 ---
+set -uo pipefail; set +e; f=bazel_tools/tools/bash/runfiles/runfiles.bash
+# shellcheck disable=SC1090
+source "${RUNFILES_DIR:-/dev/null}/$f" 2>/dev/null || \
+  source "$(grep -sm1 "^$f " "${RUNFILES_MANIFEST_FILE:-/dev/null}" | cut -f2- -d' ')" 2>/dev/null || \
+  source "$0.runfiles/$f" 2>/dev/null || \
+  source "$(grep -sm1 "^$f " "$0.runfiles_manifest" | cut -f2- -d' ')" 2>/dev/null || \
+  { echo>&2 "ERROR: cannot find $f"; exit 1; }; f=; set -e
+# --- end runfiles.bash initialization v3 ---
+set -o pipefail
 
 cd "$BUILD_WORKSPACE_DIRECTORY/apps/batchalign/batchalign-gui"
 
@@ -26,16 +24,9 @@ if [[ -z "$TRIPLE" ]]; then
     exit 2
 fi
 
-# Build the sidecar via `bazel run`. See bundle.sh for the rationale —
-# sh_binary's `args` are passed by bazel run, not baked into the
-# launcher, so we delegate to bazel for the build step.
-BAZEL="${BAZEL_REAL:-bazel}"
-echo "dev.sh: building sidecar via $BAZEL run //python/batchalign:sidecar"
-"$BAZEL" run //python/batchalign:sidecar
-
-SIDECAR_BINARY="$BUILD_WORKSPACE_DIRECTORY/python/target/pyapp/bin/sidecar"
-if [[ ! -x "$SIDECAR_BINARY" ]]; then
-    echo "sidecar launcher ran but did not produce $SIDECAR_BINARY" >&2
+SIDECAR_BIN="$(rlocation _main/python/batchalign/sidecar.bin)"
+if [[ -z "$SIDECAR_BIN" || ! -x "$SIDECAR_BIN" ]]; then
+    echo "dev.sh: rlocation could not resolve _main/python/batchalign/sidecar.bin" >&2
     exit 2
 fi
 
@@ -44,11 +35,9 @@ TARGET="src-tauri/binaries/sidecar-${TRIPLE}"
 case "$TRIPLE" in
     *windows*) TARGET="${TARGET}.exe" ;;
 esac
-cp -f "$SIDECAR_BINARY" "$TARGET"
+cp -f "$SIDECAR_BIN" "$TARGET"
 chmod +x "$TARGET"
 
-# Frontend deps. cargo tauri dev expects `npm run dev` to start Vite
-# (see tauri.conf.json's `beforeDevCommand`); npm needs node_modules.
 if [[ ! -d node_modules ]]; then
     echo "dev.sh: node_modules missing → npm install"
     npm install

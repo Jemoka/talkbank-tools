@@ -16,6 +16,7 @@ package(default_visibility = ["//python:__subpackages__"])
 exports_files([
     "maturin_build.sh",
     "pyapp_build.sh",
+    "pyapp_genrule.sh",
     "pytest.sh",
     "lint.sh",
     "twine_upload.sh",

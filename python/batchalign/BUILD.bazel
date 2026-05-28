@@ -168,6 +168,73 @@ sh_binary(
     data = ["@multitool//tools/uv"] + _WHEEL_DATA,
 )
 
+# Bazel-tracked sidecar binary, produced by the same pyapp_build.sh
+# the :sidecar sh_binary runs. Downstream Bazel consumers (e.g. the
+# Tauri-bundled desktop GUI at //apps/batchalign/batchalign-gui/) get a
+# proper file artifact addressable via $(rootpath ...) / rlocation
+# instead of having to invoke an sh_binary or escape-path-hunt for the
+# output.
+#
+# `local = True` is required: pyapp_build.sh shells out to host cargo
+# + maturin (sole reader of pyproject.toml's multi-platform tagging
+# matrix), neither of which lives in Bazel's hermetic sandbox.
+# pyapp_genrule.sh wraps the script for the genrule context: it
+# self-locates the workspace via realpath-of-BASH_SOURCE walk-up so
+# BUILD_WORKSPACE_DIRECTORY is available, runs the build, and copies
+# the produced binary into $@.
+#
+# `srcs` is intentionally broad — any wheel-input change should
+# trigger a rebuild. The actual cargo + maturin caches under python/
+# target/ survive across rebuilds (they're escape-path), so the cold
+# cost is only paid once per dep change.
+genrule(
+    name = "sidecar_bin",
+    outs = ["sidecar.bin"],
+    # Mirror _WHEEL_DATA (covers the Rust workspace crates + proto module
+    # + pyproject.toml) plus all batchalign Python sources. Any change
+    # under these triggers a rebuild via Bazel's normal incremental
+    # tracking. The actual maturin / cargo caches survive between
+    # rebuilds because they're under python/target/ in the workspace
+    # (an escape path the genrule's cmd writes to via the wrapper).
+    srcs = _WHEEL_DATA + glob(
+        ["**/*.py"],
+        exclude = ["tests/**", "_core/_proto_generated.py"],
+    ),
+    tools = [
+        "//bazel/python:pyapp_build.sh",
+        "//bazel/python:pyapp_genrule.sh",
+        "//bazel/python:hermeticity_guard.sh",
+        "//bazel/python:runfiles_resolve.sh",
+        "@multitool//tools/uv",
+        # Hermetic cargo + rustc via rules_rust's host-platform-
+        # selecting current_* filegroups. pyapp_genrule.sh prepends
+        # their dir to PATH so the inner pyapp_build.sh's `cargo
+        # install pyapp` and `uv run maturin build` (maturin shells to
+        # cargo) use Bazel's toolchain — NOT whatever the host happens
+        # to have installed. The rustc version pin in pyproject.toml
+        # [tool.batchalign.pinned_tools] must match MODULE.bazel
+        # rust.toolchain(versions = [...]).
+        "@rules_rust//rust/toolchain:current_cargo_files",
+        "@rules_rust//rust/toolchain:current_rustc_files",
+    ] + _LLVM_TOOLS,
+    cmd = " ".join([
+        # PYAPP_RUST_BIN_DIRS: space-separated execpaths of cargo + rustc
+        # from rules_rust's host-platform-selecting filegroups. The
+        # wrapper extracts dirname(cargo) and prepends to PATH so the
+        # inner maturin/cargo invocations use Bazel's rust toolchain.
+        "PYAPP_RUST_BIN_DIRS='$(execpaths @rules_rust//rust/toolchain:current_cargo_files) $(execpaths @rules_rust//rust/toolchain:current_rustc_files)'",
+        "$(execpath //bazel/python:pyapp_genrule.sh)",
+        "$@",
+        "$(execpath @multitool//tools/uv)",
+        "$(execpath //python/batchalign/_core:_proto_generated_py)",
+        "$(COMPILATION_MODE)",
+        "$(execpath @llvm_toolchain_llvm//:bin/clang)",
+        "$(execpath @llvm_toolchain_llvm//:bin/llvm-ar)",
+        "$(execpath @llvm_toolchain_llvm//:bin/llvm-ranlib)",
+    ]),
+    local = True,
+)
+
 sh_binary(
     name = "publish",
     srcs = ["//bazel/python:twine_upload.sh"],
