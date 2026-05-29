@@ -26,6 +26,19 @@ use crate::state::{AppState, DaemonHandle};
 
 const SIDECAR: &str = "sidecar";
 
+/// Stamped at compile time by build.rs from the BATCHALIGN_BUILD_HASH
+/// env var, which the wrapper scripts (bazel/batchalign-tauri/{dev,
+/// bundle}.sh) populate from bazel/stamp.sh. Format mirrors stamp.sh:
+/// `<git-sha>[-dirty]`. When this differs from the marker file inside
+/// the PyApp install dir, the install was populated by a different
+/// build and we wipe it.
+const BUILD_HASH: &str = env!("BATCHALIGN_BUILD_HASH");
+
+/// Marker file dropped inside each PyApp install dir on successful
+/// boot, containing the embedded `BUILD_HASH`. The next launch reads
+/// it and decides whether the install is from this build.
+const PYAPP_BUILD_MARKER: &str = ".batchalign-build-hash";
+
 /// Spawn the sidecar daemon at most once. The first caller to flip the
 /// `daemon_spawning` latch wins; concurrent callers (e.g. setup() and
 /// bridge.ts both racing on cold start) return immediately. If the
@@ -56,6 +69,23 @@ pub fn spawn(app: AppHandle) {
 }
 
 async fn start(app: &AppHandle) -> Result<(), DaemonError> {
+    // PyApp's cache key is derived from the wheel filename + Python
+    // version; it does NOT include PYAPP_PROJECT_FEATURES. Bumping the
+    // bundled extras (api → api,all) silently reuses the old install
+    // at ~/Library/Application Support/pyapp/batchalign/<hash>/<ver>/
+    // and the daemon then crashes with `ModuleNotFoundError: stanza`
+    // on the first non-trivial recipe run.
+    //
+    // Self-heal: the Tauri binary is stamped at build time with
+    // BATCHALIGN_BUILD_HASH (see bazel/stamp.sh + build.rs). We drop
+    // a marker file inside the PyApp install dir on every successful
+    // boot. If on next boot the marker is missing or differs from the
+    // currently-embedded hash, the install is from a stale build and
+    // we wipe it — PyApp then repopulates with the current features.
+    if let Err(e) = invalidate_stale_pyapp_install(BUILD_HASH) {
+        eprintln!("[daemon  setup] pyapp cache check failed: {e}");
+    }
+
     // Build the sidecar command. `Command::new_sidecar` resolves to the
     // platform-suffixed binary that the Tauri bundler placed in the
     // app resources (e.g. `binaries/sidecar-aarch64-apple-darwin`).
@@ -93,6 +123,13 @@ async fn start(app: &AppHandle) -> Result<(), DaemonError> {
     // Read the daemon's stdout until "DAEMON_PORT=<n>" appears or it dies.
     let port = wait_for_port(&mut rx).await?;
     let (shutdown_tx, _shutdown_rx) = watch::channel(false);
+
+    // PyApp finished unpacking + installing extras by the time it
+    // bound a port — tag the install with our build hash so the next
+    // launch knows this install is current and skips the wipe.
+    if let Err(e) = write_pyapp_build_marker(BUILD_HASH) {
+        eprintln!("[daemon  setup] failed to write pyapp build marker: {e}");
+    }
 
     // Store the handle BEFORE emitting daemon-ready so any frontend code
     // that immediately calls `daemon_port` (or fetches capabilities) sees
@@ -264,6 +301,93 @@ fn push_tail(tail: &mut Vec<String>, text: &str) {
         let drain_to = tail.len() - MAX_LINES;
         tail.drain(0..drain_to);
     }
+}
+
+/// Path to the PyApp install root: `<data_dir>/pyapp/batchalign`. Each
+/// (project-hash, version) pair lives in a subdir below this.
+fn pyapp_project_dir() -> Option<std::path::PathBuf> {
+    dirs::data_dir().map(|d| d.join("pyapp").join("batchalign"))
+}
+
+/// Walk every existing PyApp install for the batchalign project and
+/// wipe any whose `.batchalign-build-hash` marker is missing or
+/// doesn't match `expected`. PyApp will re-pip-install the wheel + the
+/// configured extras on next launch.
+///
+/// Called before the sidecar spawns. Returning `Ok(())` with no wipe
+/// is the happy path — the install is from this build, no work needed.
+fn invalidate_stale_pyapp_install(expected: &str) -> std::io::Result<()> {
+    let Some(root) = pyapp_project_dir() else {
+        return Ok(());
+    };
+    if !root.is_dir() {
+        return Ok(());
+    }
+    let mut wiped_any = false;
+    for hash_entry in std::fs::read_dir(&root)? {
+        let hash_path = hash_entry?.path();
+        if !hash_path.is_dir() {
+            continue;
+        }
+        // Each `<hash>/` directory holds a `<version>/` directory per
+        // wheel version PyApp has unpacked. Check the marker inside
+        // each version dir.
+        for ver_entry in std::fs::read_dir(&hash_path)? {
+            let ver_path = ver_entry?.path();
+            if !ver_path.is_dir() {
+                continue;
+            }
+            let marker = ver_path.join(PYAPP_BUILD_MARKER);
+            let stale = match std::fs::read_to_string(&marker) {
+                Ok(content) => content.trim() != expected,
+                Err(_) => true, // missing marker → unknown provenance
+            };
+            if stale {
+                eprintln!(
+                    "[daemon  setup] wiping stale pyapp install {} (expected {expected})",
+                    ver_path.display(),
+                );
+                std::fs::remove_dir_all(&ver_path)?;
+                wiped_any = true;
+            }
+        }
+        // If the version dir went away leave the hash dir alone —
+        // PyApp recreates the version dir under the same hash on
+        // re-install, no need to churn the parent.
+    }
+    if wiped_any {
+        eprintln!("[daemon  setup] pyapp re-install will run on next sidecar boot");
+    }
+    Ok(())
+}
+
+/// Drop the build-hash marker inside the PyApp install dir that
+/// matches our currently-running sidecar's wheel version. Called
+/// after the sidecar successfully announces its port — at that point
+/// we know the install is good and can be safely tagged with this
+/// build's hash so future launches don't wipe it.
+fn write_pyapp_build_marker(expected: &str) -> std::io::Result<()> {
+    let Some(root) = pyapp_project_dir() else {
+        return Ok(());
+    };
+    if !root.is_dir() {
+        return Ok(());
+    }
+    for hash_entry in std::fs::read_dir(&root)? {
+        let hash_path = hash_entry?.path();
+        if !hash_path.is_dir() {
+            continue;
+        }
+        for ver_entry in std::fs::read_dir(&hash_path)? {
+            let ver_path = ver_entry?.path();
+            if !ver_path.is_dir() {
+                continue;
+            }
+            let marker = ver_path.join(PYAPP_BUILD_MARKER);
+            std::fs::write(&marker, expected)?;
+        }
+    }
+    Ok(())
 }
 
 async fn drain_child(

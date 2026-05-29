@@ -64,6 +64,17 @@ case "${TAURI_PROFILE:-${BAZEL_COMPILATION_MODE:-opt}}" in
         ;;
 esac
 
+# Stamp the build with the repo's BUILD_HASH so the Tauri shell can
+# invalidate the PyApp install cache when this binary differs from the
+# one that populated the cache. See dev.sh for the full rationale —
+# both wrapper scripts mirror this stamp so dev and release builds
+# behave identically with respect to cache invalidation.
+BATCHALIGN_BUILD_HASH="$(
+    "$BUILD_WORKSPACE_DIRECTORY/bazel/stamp.sh" \
+        | awk '/^BUILD_HASH/ {print $2; exit}'
+)"
+export BATCHALIGN_BUILD_HASH
+
 # `"${arr[@]+"${arr[@]}"}"` is the bash-set-u-safe way to splat a
 # possibly-empty array — naked `"${arr[@]}"` trips `unbound variable`
 # under bash 3.2 (macOS default) when the array has zero elements.

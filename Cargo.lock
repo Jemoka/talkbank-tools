@@ -484,6 +484,7 @@ name = "batchalign-gui"
 version = "0.1.0"
 dependencies = [
  "arc-swap",
+ "dirs 5.0.1",
  "eventsource-stream",
  "futures-util",
  "reqwest 0.12.28",

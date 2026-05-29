@@ -53,4 +53,17 @@ if [[ ! -d node_modules ]]; then
     npm install
 fi
 
+# Stamp the build with the repo's BUILD_HASH so the Tauri shell can
+# invalidate the PyApp install cache when this binary's build differs
+# from the one that populated the cache (PyApp doesn't include feature
+# flags in its own cache key). bazel/stamp.sh prints
+#   BUILD_HASH <git-sha>[-dirty]
+# We forward just the value via the BATCHALIGN_BUILD_HASH env var,
+# which build.rs propagates into the binary as a rustc-env.
+BATCHALIGN_BUILD_HASH="$(
+    "$BUILD_WORKSPACE_DIRECTORY/bazel/stamp.sh" \
+        | awk '/^BUILD_HASH/ {print $2; exit}'
+)"
+export BATCHALIGN_BUILD_HASH
+
 exec cargo tauri dev "$@"
