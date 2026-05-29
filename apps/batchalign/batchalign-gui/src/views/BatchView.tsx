@@ -1,8 +1,17 @@
-// The working layout. Left = config (FilesBlock + PipelineBlock).
-// Right = JobsHeader + FileTable. CLI preview pinned to the bottom.
+// The working layout (variant-a from the design canvas).
+//
+// Left pane (480px fixed): scrolling config column with FILES + PIPELINE
+// blocks, followed by a sticky footer holding the batch summary and
+// the "start batch" CTA. The footer never scrolls — the start action
+// must stay reachable regardless of how tall the pipeline panel grows.
+//
+// Right pane (flexible): JobsHeader on top, scrolling FileTable below.
+//
+// CLI preview pinned to the very bottom across both panes.
 
 import FilesBlock from "../components/FilesBlock";
 import PipelineBlock from "../components/PipelineBlock";
+import BatchActionFooter from "../components/BatchActionFooter";
 import JobsHeader from "../components/JobsHeader";
 import FileTable from "../components/FileTable";
 import CommandPreview from "../components/CommandPreview";
@@ -32,6 +41,7 @@ export default function BatchView() {
             <FilesBlock />
             <PipelineBlock />
           </div>
+          <BatchActionFooter />
         </div>
         <div
           style={{

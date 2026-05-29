@@ -30,6 +30,57 @@ pub async fn daemon_port(state: State<'_, AppState>) -> Result<Option<u16>, Stri
     Ok(state.daemon_port())
 }
 
+/// Generic HTTP relay to the loopback daemon. Routed through Rust
+/// rather than the webview's `fetch` because macOS WebKit blocks
+/// cross-scheme requests from the `tauri://localhost` origin to
+/// `http://127.0.0.1:<port>` with a generic `TypeError: Load failed`
+/// (App Transport Security + the WKWebView fetch implementation
+/// don't honour the loopback exception that Safari proper does).
+/// reqwest from Rust has no such restriction.
+///
+/// Body is a free-form `serde_json::Value` so any recipe / capabilities
+/// shape passes through unchanged. Errors are stringified for the
+/// frontend so the existing `request()` wrapper in `api.ts` keeps the
+/// same Error contract.
+#[tauri::command]
+pub async fn daemon_request(
+    state: State<'_, AppState>,
+    method: String,
+    path: String,
+    body: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let port = state
+        .daemon_port()
+        .ok_or_else(|| "daemon not ready".to_string())?;
+    let url = format!("http://127.0.0.1:{port}{path}");
+    let client = reqwest::Client::new();
+    let req = match method.as_str() {
+        "GET" => client.get(&url),
+        "POST" => client.post(&url),
+        "PUT" => client.put(&url),
+        "DELETE" => client.delete(&url),
+        other => return Err(format!("unsupported method {other}")),
+    };
+    let req = if let Some(b) = body {
+        req.json(&b)
+    } else {
+        req
+    };
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("{method} {path} → {status}: {text}"));
+    }
+    // The daemon may return an empty body for DELETE. Treat empty as
+    // `null` so the frontend doesn't choke on JSON.parse("").
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    if bytes.is_empty() {
+        return Ok(serde_json::Value::Null);
+    }
+    serde_json::from_slice(&bytes).map_err(|e| format!("invalid JSON from daemon: {e}"))
+}
+
 #[derive(Debug, Serialize)]
 pub struct FolderFile {
     pub source_id: String,

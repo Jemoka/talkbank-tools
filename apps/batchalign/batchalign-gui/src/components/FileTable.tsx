@@ -20,20 +20,6 @@ function fmtSize(bytes: number): string {
   return `${v.toFixed(v >= 100 ? 0 : 1)} ${units[u]}`;
 }
 
-function fmtDuration(ms: number | null): string {
-  if (ms == null) return "—";
-  const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (h > 0) {
-    return `${h}:${m.toString().padStart(2, "0")}:${sec
-      .toString()
-      .padStart(2, "0")}`;
-  }
-  return `${m}:${sec.toString().padStart(2, "0")}`;
-}
-
 export default function FileTable() {
   const { activeBatchId, batches, dispatch } = useStore();
   const batch = activeBatchId ? batches[activeBatchId] : null;
@@ -45,19 +31,21 @@ export default function FileTable() {
       <colgroup>
         <col style={{ width: 22 }} />
         <col />
-        <col style={{ width: 70 }} />
+        <col style={{ width: 56 }} />
         <col style={{ width: 60 }} />
         <col style={{ width: "38%" }} />
         <col style={{ width: 86 }} />
+        <col style={{ width: 70 }} />
       </colgroup>
       <thead>
         <tr>
           <th></th>
           <th>file</th>
+          <th>lang</th>
           <th>size</th>
-          <th>duration</th>
           <th>pipeline</th>
           <th>status</th>
+          <th style={{ textAlign: "right" }}>eta</th>
         </tr>
       </thead>
       <tbody>
@@ -123,14 +111,14 @@ export default function FileTable() {
                   </div>
                 </td>
                 <td
-                  className="ba-num"
+                  className="ba-mono"
                   style={{
                     color: "var(--fg-muted)",
                     fontSize: "var(--fs-sm)",
                     borderBottom: isOpen ? "1px solid transparent" : undefined,
                   }}
                 >
-                  {fmtSize(file.sizeBytes)}
+                  {(batch.config.transcribe?.lang as string) || "—"}
                 </td>
                 <td
                   className="ba-num"
@@ -140,7 +128,7 @@ export default function FileTable() {
                     borderBottom: isOpen ? "1px solid transparent" : undefined,
                   }}
                 >
-                  {fmtDuration(file.durationMs)}
+                  {fmtSize(file.sizeBytes)}
                 </td>
                 <td
                   style={{
@@ -156,11 +144,23 @@ export default function FileTable() {
                 >
                   <StatusBadge state={file.status} />
                 </td>
+                <td
+                  className="ba-num"
+                  style={{
+                    color: "var(--fg-muted)",
+                    fontSize: "var(--fs-sm)",
+                    textAlign: "right",
+                    borderBottom: isOpen ? "1px solid transparent" : undefined,
+                  }}
+                >
+                  {/* TODO: surface daemon ETA from progress events. */}
+                  —
+                </td>
               </tr>
               {isOpen && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     style={{
                       padding: 0,
                       background: "var(--bg-sunken)",

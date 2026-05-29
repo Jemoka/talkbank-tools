@@ -39,6 +39,29 @@
       }
       case "list_folder_files":
         return { files: window.__E2E_FILES__ };
+      case "daemon_request": {
+        // In the browser test harness we run on http://localhost:1421
+        // and CAN reach 127.0.0.1:<daemon_port> via window.fetch (no
+        // WebKit ATS restriction). So the e2e routes daemon_request
+        // through fetch instead of through Rust — same wire format.
+        const method = (args && args.method) || "GET";
+        const path = (args && args.path) || "/";
+        const body = args && args.body;
+        const url = `http://127.0.0.1:${port()}${path}`;
+        const init = { method };
+        if (body !== null && body !== undefined) {
+          init.headers = { "content-type": "application/json" };
+          init.body = JSON.stringify(body);
+        }
+        const resp = await fetch(url, init);
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => "");
+          throw new Error(`${method} ${path} → ${resp.status}: ${text}`);
+        }
+        if (resp.status === 204) return null;
+        const text = await resp.text();
+        return text ? JSON.parse(text) : null;
+      }
       case "reveal_in_file_manager":
         return null;
       case "start_batch_pump": {

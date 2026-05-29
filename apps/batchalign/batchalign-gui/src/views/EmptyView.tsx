@@ -42,6 +42,7 @@ function Silhouette() {
       >
         <SilhouetteBlock label="1 · files" rows={3} />
         <SilhouetteBlock label="2 · pipeline" rows={5} />
+        <SilhouetteBlock label="3 · execution" rows={1} short />
       </div>
       <div
         style={{
@@ -70,19 +71,21 @@ function Silhouette() {
           <colgroup>
             <col style={{ width: 22 }} />
             <col />
-            <col style={{ width: 70 }} />
-            <col style={{ width: 60 }} />
+            <col style={{ width: 56 }} />
+            <col style={{ width: 48 }} />
             <col style={{ width: "38%" }} />
             <col style={{ width: 86 }} />
+            <col style={{ width: 70 }} />
           </colgroup>
           <thead>
             <tr>
               <th></th>
               <th>file</th>
+              <th>lang</th>
               <th>size</th>
-              <th>duration</th>
               <th>pipeline</th>
               <th>status</th>
+              <th style={{ textAlign: "right" }}>eta</th>
             </tr>
           </thead>
           <tbody>
@@ -93,7 +96,7 @@ function Silhouette() {
                   <Bar w={180 + (i % 3) * 30} />
                 </td>
                 <td>
-                  <Bar w={36} />
+                  <Bar w={20} />
                 </td>
                 <td>
                   <Bar w={36} />
@@ -104,6 +107,9 @@ function Silhouette() {
                 <td>
                   <Bar w={56} h={14} />
                 </td>
+                <td style={{ textAlign: "right" }}>
+                  <Bar w={36} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -113,7 +119,15 @@ function Silhouette() {
   );
 }
 
-function SilhouetteBlock({ label, rows }: { label: string; rows: number }) {
+function SilhouetteBlock({
+  label,
+  rows,
+  short = false,
+}: {
+  label: string;
+  rows: number;
+  short?: boolean;
+}) {
   return (
     <div style={{ borderBottom: "var(--hairline)" }}>
       <div
@@ -144,7 +158,7 @@ function SilhouetteBlock({ label, rows }: { label: string; rows: number }) {
             }}
           >
             <Bar w={90} />
-            <Bar w="90%" />
+            <Bar w={short ? "40%" : "90%"} />
           </div>
         ))}
       </div>

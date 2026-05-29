@@ -1,19 +1,23 @@
 // HTTP client for the local daemon sidecar.
 //
+// Routes every request through the Rust-side `daemon_request` command
+// rather than the webview's native `fetch`. macOS WebKit (the Tauri
+// webview) blocks fetches from the `tauri://localhost` origin to
+// `http://127.0.0.1:<port>` with a generic `TypeError: Load failed`;
+// the Rust relay sidesteps the WebKit network stack entirely.
+//
 // Until `just batchalign gen-openapi` produces `protocol/openapi.gen.ts`,
-// this client uses hand-rolled fetch wrappers. After codegen lands, the
+// this client uses hand-rolled wrappers. After codegen lands, the
 // `client` export will be replaced with an `openapi-fetch` instance
-// parameterized on `paths` from the generated module:
-//
-//   import createClient from "openapi-fetch";
-//   import type { paths } from "./protocol/openapi.gen";
-//   export const client = createClient<paths>({ baseUrl });
-//
-// The shape below is what the daemon's FastAPI app exposes today
-// (python/batchalign/api.py); see the plan §4.5 for the full contract.
+// parameterized on `paths` from the generated module — pointed at a
+// custom `fetch` shim that delegates to `daemon_request`.
 
+import { invoke } from "@tauri-apps/api/core";
 import type { CapabilitiesJson } from "./store";
 
+// Kept for legacy callers; the Rust relay learns the port from
+// AppState, so the JS side no longer needs it. Still exported so
+// existing imports (bridge.ts) compile.
 let baseUrl: string | null = null;
 
 export function setBaseUrl(url: string) {
@@ -30,18 +34,11 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const url = `${getBaseUrl()}${path}`;
-  const init: RequestInit = { method };
-  if (body !== undefined) {
-    init.headers = { "content-type": "application/json" };
-    init.body = JSON.stringify(body);
-  }
-  const resp = await fetch(url, init);
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    throw new Error(`${method} ${path} → ${resp.status}: ${text}`);
-  }
-  return (await resp.json()) as T;
+  return (await invoke("daemon_request", {
+    method,
+    path,
+    body: body ?? null,
+  })) as T;
 }
 
 export interface HealthJson {
