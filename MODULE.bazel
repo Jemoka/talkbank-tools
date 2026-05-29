@@ -140,7 +140,7 @@ use_repo(crate, "crates")
 # that don't touch the sidecar never trigger the fetch — no manual
 # `git submodule update --init` required.
 #
-# The compile itself happens in the sidecar_bin genrule (with
+# The compile itself happens in the sidecar genrule (with
 # local = True): it invokes Bazel-provided cargo (from rules_rust's
 # host toolchain) against this source with `cargo install --path
 # $(execpath @pyapp_src//:srcs_root)` — no crates.io network access,

@@ -144,7 +144,7 @@ sh_binary(
 # is the allowed-and-necessary escape — maturin is the sole reader of
 # pyproject.toml's multi-platform tagging matrix), but the output is a
 # real file that downstream Bazel targets can depend on via
-# $(execpath …) / rlocation. Used by :sidecar_bin so the sidecar
+# $(execpath …) / rlocation. Used by :sidecar so the sidecar
 # pipeline doesn't re-run maturin a second time.
 genrule(
     name = "wheel_file",
