@@ -6,13 +6,14 @@ import { useStore } from "./store";
 import { bootBridge } from "./bridge";
 import BAWindow from "./components/BAWindow";
 import BAHeader from "./components/BAHeader";
+import DaemonBootOverlay from "./components/DaemonBootOverlay";
 import TabBar from "./components/TabBar";
 import EmptyView from "./views/EmptyView";
 import BatchView from "./views/BatchView";
 import SettingsView from "./views/SettingsView";
 
 export default function App() {
-  const { tabOrder, daemon, showSettings, dispatch } = useStore();
+  const { tabOrder, daemon, capabilities, showSettings, dispatch } = useStore();
 
   useEffect(() => {
     let cleanup: (() => void) | null = null;
@@ -28,6 +29,11 @@ export default function App() {
   }, []);
 
   const isEmpty = tabOrder.length === 0 && !showSettings;
+  // The app is interactive once the daemon is ready AND we've loaded
+  // /capabilities — between DAEMON_READY and CAPABILITIES_LOADED the
+  // recipe panels would render with stale defaults instead of the
+  // daemon's live backend list, so we keep the overlay up across both.
+  const interactive = daemon.ready && capabilities != null;
 
   return (
     <BAWindow>
@@ -64,6 +70,7 @@ export default function App() {
       ) : (
         <BatchView />
       )}
+      {!interactive && <DaemonBootOverlay />}
     </BAWindow>
   );
 }

@@ -115,12 +115,21 @@ test("Batchalign GUI end-to-end (real daemon)", async ({ page }) => {
   await page.goto("http://localhost:1421/");
 
   // --- 1. Cold-launch: daemon spawn + capabilities ----------------
-  // The "starting daemon…" subtitle should clear once /capabilities lands.
+  // While booting, the DaemonBootOverlay covers the app and captures
+  // pointer events. In this test the daemon is already up (spawned
+  // in beforeAll), so the overlay clears almost immediately — we
+  // assert on the ready state directly rather than trying to catch
+  // the overlay mid-flight.
   await expect(page.locator("text=open folder…")).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("text=warming up the engine")).toBeHidden({
+    timeout: 15_000,
+  });
 
   // /capabilities should populate the React store. We can't peek inside
   // zustand from outside without a hook, so verify indirectly: the dev
   // toolbar/header drops the "starting daemon…" subtitle when ready.
+  // (Also implicitly covered by the overlay's `warming up` text being
+  // hidden — both gate on daemon.ready && capabilities != null.)
   await expect(page.locator("text=starting daemon…")).toBeHidden({
     timeout: 15_000,
   });
@@ -179,6 +188,82 @@ test("Batchalign GUI end-to-end (real daemon)", async ({ page }) => {
 
   // Screenshot the final state for visual review.
   await page.screenshot({ path: "e2e-final.png", fullPage: true });
+});
+
+test("DaemonBootOverlay blocks interaction during boot", async ({ page }) => {
+  test.setTimeout(30_000);
+
+  // Inject a stub variant that NEVER fires daemon-ready, so the overlay
+  // is visible the entire run. Same shape as the main stubs but with
+  // `ensure_daemon` returning the port without emitting the event.
+  await page.addInitScript({
+    content: `
+      window.__E2E_DAEMON_PORT__ = 1;
+      window.__E2E_FOLDER__ = '/tmp/never-opened';
+      window.__E2E_FILES__ = [];
+      (function() {
+        const listeners = new Map();
+        const callbacks = new Map();
+        let nextCallbackId = 0;
+        window.__TAURI_INTERNALS__ = {
+          invoke: async (cmd, args) => {
+            switch (cmd) {
+              case 'plugin:event|listen': {
+                const id = (args && args.handler) || 0;
+                const evt = (args && args.event) || '';
+                const cb = callbacks.get(id);
+                if (cb) {
+                  const list = listeners.get(evt) || [];
+                  list.push((payload) => cb({ event: evt, payload, id }));
+                  listeners.set(evt, list);
+                }
+                return id;
+              }
+              case 'plugin:event|unlisten': return null;
+              case 'ensure_daemon':
+              case 'daemon_port':
+                // Deliberately do NOT emit daemon-ready — keep the
+                // overlay visible.
+                return 1;
+              default: return null;
+            }
+          },
+          transformCallback: (cb) => {
+            const id = ++nextCallbackId;
+            callbacks.set(id, cb);
+            return id;
+          },
+          metadata: { plugins: {} },
+        };
+        window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+          unregisterListener: () => {},
+        };
+      })();
+    `,
+  });
+
+  await page.goto("http://localhost:1421/");
+
+  // The overlay should be visible and stay visible.
+  await expect(page.locator("text=warming up the engine")).toBeVisible({
+    timeout: 5_000,
+  });
+  await page.screenshot({ path: "e2e-boot-overlay.png", fullPage: true });
+
+  // The overlay must capture pointer events so the underlying
+  // EmptyView CTA is unreachable. Use elementFromPoint at the center
+  // of the viewport — where the dropzone "open folder…" button sits —
+  // and assert the topmost element is the overlay (or one of its
+  // descendants), not anything inside EmptyView.
+  const topmost = await page.evaluate(() => {
+    const w = window.innerWidth / 2;
+    const h = window.innerHeight / 2;
+    const el = document.elementFromPoint(w, h);
+    if (!el) return { tag: "(none)", insideOverlay: false };
+    const overlay = el.closest('[role="dialog"][aria-busy="true"]');
+    return { tag: el.tagName, insideOverlay: overlay != null };
+  });
+  expect(topmost.insideOverlay).toBe(true);
 });
 
 /// Inline-load the plain-JS stubs file and return its content so we
