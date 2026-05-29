@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"Default capability for the Batchalign main window.","local":true,"windows":["main"],"permissions":["core:default","dialog:default","dialog:allow-open","opener:default","opener:allow-reveal-item-in-dir","fs:default",{"identifier":"shell:allow-execute","allow":[{"args":true,"name":"binaries/sidecar","sidecar":true}]}]}}

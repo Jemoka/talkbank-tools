@@ -93,3 +93,10 @@ apps/batchalign/batchalign-gui/test-results/
 apps/batchalign/batchalign-gui/playwright-report/
 apps/batchalign/batchalign-gui/e2e-final.png
 apps/batchalign/batchalign-gui/e2e-*.png
+
+# Tauri-generated rollups (capabilities.json + acl-manifests.json +
+# {desktop,macOS,windows}-schema.json). tauri-build regenerates these
+# from src-tauri/capabilities/*.toml + the plugin deps on every cargo
+# build, so checking them in just creates merge-conflict churn.
+apps/batchalign/batchalign-gui/src-tauri/gen/
+apps/chatter/chatter-gui/src-tauri/gen/
