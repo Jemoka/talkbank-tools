@@ -64,4 +64,7 @@ case "${TAURI_PROFILE:-${BAZEL_COMPILATION_MODE:-opt}}" in
         ;;
 esac
 
-exec cargo tauri build "${profile_flag[@]}" "$@"
+# `"${arr[@]+"${arr[@]}"}"` is the bash-set-u-safe way to splat a
+# possibly-empty array — naked `"${arr[@]}"` trips `unbound variable`
+# under bash 3.2 (macOS default) when the array has zero elements.
+exec cargo tauri build "${profile_flag[@]+"${profile_flag[@]}"}" "$@"
