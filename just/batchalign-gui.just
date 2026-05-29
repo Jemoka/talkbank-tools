@@ -24,11 +24,11 @@ default:
 # Resulting .app/.msi/.AppImage ships the daemon embedded.
 build profile="release" *args="":
     TAURI_PROFILE={{ if profile == "release" { "release" } else { "debug" } }} \
-        bazel run //apps/batchalign/batchalign-gui/src-tauri:bundle -- "$@"
+        bazel run //apps/batchalign/batchalign-gui/src-tauri:bundle -- {{ args }}
 
 # `cargo tauri dev` (hot reload) with the sidecar built + staged by Bazel.
 dev *args="":
-    bazel run //apps/batchalign/batchalign-gui/src-tauri:dev -- "$@"
+    bazel run //apps/batchalign/batchalign-gui/src-tauri:dev -- {{ args }}
 
 # Regenerate the OpenAPI-derived TypeScript types + capabilities snapshot
 # consumed by the GUI. Pulls the daemon's app.openapi() + GET /capabilities
