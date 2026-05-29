@@ -1,6 +1,6 @@
 # Contributing to talkbank-tools
 
-**Last updated:** 2026-05-28 11:41 PDT
+**Last updated:** 2026-05-29 03:29 PDT
 
 Welcome. This repo is a polyglot monorepo orchestrated by **Bazel**. It
 ships two end-user products:
@@ -47,9 +47,16 @@ match what's actually live before any host-tool shell-out.
 
 ### Host prerequisites
 
-What you *do* install on the host: a Bazel launcher, the `just` task
-runner, git, and an OS-specific C toolchain + system sqlite (some
-`*-sys` Rust crates link, not compile, against system libraries).
+The base toolchain (sidecar, wheel, CLI) needs only a Bazel launcher,
+the `just` task runner, git, and an OS-specific C toolchain + system
+sqlite — some `*-sys` Rust crates link, not compile, against system
+libraries. **The desktop GUI** (`just batchalign::gui::*`) needs
+additional UI runtime libraries on Linux; see
+[GUI-only host prerequisites](#gui-only-host-prerequisites) below.
+
+Bazel-managed dependencies (cargo / rustc / cargo-tauri / pyapp / node
+/ python / maturin / uv / llvm) are NOT host installs — Bazel fetches
+them on first build.
 
 #### macOS
 
@@ -153,6 +160,65 @@ $env:SQLITE3_INCLUDE_DIR = "$(vcpkg list --x-install-root .\vcpkg_installed)\x64
 
 WSL2 (Ubuntu) is the easier path if you don't have a hard Windows
 requirement -- the Linux instructions above work as-is.
+
+### GUI-only host prerequisites
+
+The desktop GUI (`just batchalign::gui::dev`, `just batchalign::gui::build`,
+and the Chatter desktop app under `apps/chatter/chatter-gui/`) embeds
+the system's WebView via Tauri. WebView bindings require native UI
+libraries that aren't vendorable through Bazel — they're shared libs
+the OS expects to find at link/run time.
+
+These are **not** required for `just batchalign sidecar`,
+`just batchalign cli`, `just batchalign wheel`, `just batchalign test`,
+or `just batchalign build`. Skip this section unless you're touching
+the GUI.
+
+**The base toolchain provides cargo-tauri itself** via
+`//bazel/tauri:cargo_tauri` (Bazel-built from a SHA-pinned crates.io
+tarball, PATH-injected by the bundle/dev wrapper). You do **not** need
+to `cargo install tauri-cli`. The deps below are for Tauri's runtime
+linkage only.
+
+#### macOS (GUI)
+
+WebKit ships with macOS via WebKit.framework. Xcode CLI Tools (already
+required by the base toolchain) cover everything. **No extra installs.**
+
+#### Linux (GUI, Debian/Ubuntu)
+
+```bash
+sudo apt-get install -y \
+    libwebkit2gtk-4.1-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev \
+    libssl-dev \
+    patchelf
+
+# node is also required for the frontend (Vite + npm install). Bazel's
+# rules_nodejs ships a hermetic node for build steps, but `cargo tauri
+# dev`'s reload loop currently shells out to host `npm`. Install one:
+sudo apt-get install -y nodejs npm
+# or use nvm / fnm if you want a specific version
+```
+
+#### Linux (GUI, Fedora/RHEL)
+
+```bash
+sudo dnf install -y \
+    webkit2gtk4.1-devel \
+    libappindicator-gtk3-devel \
+    librsvg2-devel \
+    openssl-devel \
+    patchelf \
+    nodejs npm
+```
+
+#### Windows (GUI)
+
+WebView2 ships with Windows 11 and on Windows 10 via the Edge runtime.
+No extra installs beyond the base toolchain. Install Node.js separately
+if you want `npm` for the dev-server loop.
 
 ### Verify your setup
 

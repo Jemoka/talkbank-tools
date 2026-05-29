@@ -1234,7 +1234,7 @@
         "usagesDigest": "fzoD85ohlrLfrBossaF3gXDv2aXtiI0seDhtdRFEWzs=",
         "recordedFileInputs": {
           "@@//Cargo.lock": "c6dc3e0210e66867328b9872176838b0e4f0c0e29b82d6457b009a0503b8bf8b",
-          "@@//Cargo.toml": "942c303b8c7e1b79bfa900e6ea6a95906529cfb6fc8d03c816f24d0e7fbf063a",
+          "@@//Cargo.toml": "0f2a091a24515e1ffb0664baf69373569321ab2aebde71388a84d4be493bfe15",
           "@@//apps/batchalign/batchalign-gui/src-tauri/Cargo.toml": "a90e294ba6aa7aa26034a07623195e832699523b403accb57b5ef8534b86ac84",
           "@@//apps/chatter/chatter-gui/src-tauri/Cargo.toml": "828bd3b29da46619541a414e06344ba034face8da13de6b0427627e2603352b0",
           "@@//crates/batchalign/batchalign-core/Cargo.toml": "5ab8e8524306dad6adc8977367a669f5f3a0765c4be785e9e26790a95af10d37",
