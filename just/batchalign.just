@@ -8,10 +8,8 @@
 # Batchalign-specific:
 #   pytest *args      run py_test (pytest under Bazel)
 #   lint              mypy (+ ruff if present)
-#   wheel             host-platform wheel
-#   wheel-<platform>  per-platform wheel (5 platforms)
-#   multiwheel        all platforms (host triples succeed locally; CI fans out)
-#   publish           twine upload python/target/wheels/*.whl
+#   wheel             host-platform wheel into python/target/wheels/
+#   sidecar           self-contained daemon binary via PyApp
 #
 # Profile is `release` (default) or `debug`. Maps to:
 #   - Bazel: --config=release | --config=dev
@@ -21,8 +19,13 @@
 #   uv, maturin, python, rustc — pins live in `python/pyproject.toml`
 #   under [tool.batchalign.pinned_tools]. Update there + MODULE.bazel.
 #
-# Wheel artifact paths:
-#   per-platform: python/target/wheels/batchalign-<version>-cp312-cp312-<plat>.whl
+# Wheel artifact path:
+#   python/target/wheels/batchalign-<version>-cp312-cp312-<host-plat>.whl
+#
+# Cross-platform wheel builds are CI-only via
+# `.github/workflows/publish-pypi.yml` (5-runner matrix, OIDC trusted
+# publishing). There is no local cross-build recipe and no local
+# publish recipe — both invite the wrong mental model.
 #
 # Standalone daemon sidecar binary:
 #   `just batchalign sidecar` produces python/target/pyapp/bin/sidecar,
@@ -44,8 +47,8 @@
 #   transparently as a dep:
 #     - `build`/`test` reach it via `//python/batchalign:batchalign_lib`
 #       (which depends on `//python/batchalign/_core:proto`)
-#     - `wheel`/`multiwheel` stage it into the source tree just before
-#       `maturin build` packages (see `bazel/python/maturin_build.sh`)
+#     - `wheel` stages it into the source tree just before maturin
+#       packages (see `bazel/python/maturin_build.sh`)
 #     - Pure `cd python && uv run maturin develop` (no Bazel) gets it
 #       via `crates/batchalign/batchalign-engine/build.rs`, which walks
 #       the in-process `inventory::iter::<ProtoSchemaEntry>` and shells
@@ -53,6 +56,12 @@
 #   Adding a new wire type means: define the struct, call
 #   `register_proto_schema!(NewThing)` next to it in the proto module —
 #   nothing else.
+#
+# Dep-file reactivity is automatic via `tools/bazel` (the Bazelisk
+# wrapper at the workspace root). Editing pyproject.toml regenerates
+# uv.lock + requirements.lock.txt on the next Bazel invocation; editing
+# Cargo.toml triggers crate_universe to re-resolve. No just recipe
+# wraps this — the wrapper makes it transparent.
 
 set shell := ["bash", "-c"]
 set positional-arguments := true
@@ -61,35 +70,18 @@ set positional-arguments := true
 default:
     @just --list --justfile {{ justfile() }}
 
-# Regenerate the Python lockfiles from pyproject.toml IF pyproject changed.
-#
-# `uv.lock` and `requirements.lock.txt` are derived artifacts of
-# `python/pyproject.toml`; editing deps there must propagate to both before
-# any Bazel build, or the py_binary runs against a stale dependency set (e.g.
-# a newly-added `nltk` would be missing at runtime). This is mtime-guarded so
-# it's a no-op once the locks are current — regenerating `requirements.lock.txt`
-# bumps its mtime past pyproject's, so steady-state `cli`/`build` calls skip it.
-_synclock:
-    @if [ '{{ justfile_directory() }}/python/pyproject.toml' -nt '{{ justfile_directory() }}/python/requirements.lock.txt' ]; then \
-        echo "pyproject.toml changed → refreshing lockfiles (uv.lock + requirements.lock.txt)…"; \
-        (cd '{{ justfile_directory() }}/python' && uv lock) \
-        && bazel run //python:requirements; \
-    fi
-
 # Build every Batchalign Bazel target (Rust + py_binary + wheel + GUI sources).
 # Note: the GUI bundle (`:bundle`) is reserved for `just batchalign gui` —
 # `bazel build //apps/batchalign/...` only builds the frontend filegroup
 # (sh_binary's `data` graph is materialized at `bazel run` time).
-build profile="release": _synclock
+build profile="release":
     bazel build --config={{ if profile == "release" { "release" } else { "dev" } }} \
         //crates/batchalign/... //python/batchalign/... //apps/batchalign/...
 
-# Run every Batchalign Bazel test target. Includes
-# //python:uv_lock_check which fails if pyproject.toml drifted from
-# uv.lock (`cd python && uv lock` to fix).
+# Run every Batchalign Bazel test target.
 test profile="release":
     bazel test --config={{ if profile == "release" { "release" } else { "dev" } }} \
-        //crates/batchalign/... //python/batchalign/... //python:uv_lock_check
+        //crates/batchalign/... //python/batchalign/...
 
 # Run the Python `batchalign3` CLI via py_binary.
 #
@@ -97,7 +89,7 @@ test profile="release":
 # relative-path args (e.g. `../talkbank-alignment/foo`). `--run_under` is
 # prepended as a shell command, so cd-ing back to the user's invocation
 # directory restores the expected cwd semantics for path arguments.
-cli *args: _synclock
+cli *args:
     bazel run --run_under="cd '{{ invocation_directory() }}' && " \
         //python/batchalign -- "$@"
 
@@ -132,11 +124,6 @@ lint:
 wheel:
     bazel run -c opt //python/batchalign:wheel
 
-# Upload every wheel under python/target/wheels/ to PyPI via twine.
-# Requires PYPI_TOKEN in the environment (or ~/.pypirc credentials).
-publish:
-    bazel run //python/batchalign:publish
-
 # Standalone production daemon sidecar binary via PyApp.
 #
 # Output: bazel-bin/python/batchalign/sidecar. Self-contained —
@@ -160,7 +147,7 @@ sidecar:
 #
 #   just batchalign::gui::build [profile]   bundle .app/.msi/.AppImage (cargo tauri build via Bazel)
 #   just batchalign::gui::dev               cargo tauri dev (hot reload, no Bazel)
-#   just batchalign::gui::gen-openapi       regenerate openapi.gen.ts + capabilities.snapshot.json
+#   just batchalign::gui::openapi           regenerate openapi.gen.ts + capabilities.snapshot.json
 #
 # All three live in `just/batchalign-gui.just`. Discovery:
 #   just --list batchalign::gui

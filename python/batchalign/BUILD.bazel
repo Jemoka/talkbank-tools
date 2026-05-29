@@ -15,13 +15,17 @@ multi-platform tagging matrix + optional-deps groups):
 
     bazel run //python/batchalign:wheel       # build + install under
                                               # python/target/wheels/<tag>.whl
-    bazel run //python/batchalign:publish     # twine upload
 
 The wheel command is one target end-to-end: it triggers the maturin
 build (cached as `:_wheel_artifact`, also depended on by `:sidecar`)
 and copies the result into `python/target/wheels/<tag>.whl` with the
 PyPI-tagged basename. No multi-step incantations; no separate `bazel
 build` + `cp` recipe for contributors or CI to memorize.
+
+PyPI uploads are CI-only via trusted publishing
+(`.github/workflows/publish-pypi.yml`). There is no local-publish
+target — local twine uploads invite the wrong mental model and bypass
+the OIDC + branch-protection guarantees that the CI flow provides.
 
 `pyproject.toml` is the single source of truth for the wheel
 (version, runtime deps, all `[project.optional-dependencies]`
@@ -292,17 +296,6 @@ genrule(
         "$(COMPILATION_MODE)",
     ]),
     local = True,
-)
-
-sh_binary(
-    name = "publish",
-    srcs = ["//bazel/python:twine_upload.sh"],
-    args = ["$(rootpath @multitool//tools/uv)"],
-    data = [
-        "@multitool//tools/uv",
-        "//bazel/python:hermeticity_guard.sh",
-        "//python:pyproject.toml",
-    ],
 )
 
 # Lint kept as a shell-out because mypy/ruff configs sit in the uv-managed

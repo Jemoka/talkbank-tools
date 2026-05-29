@@ -3,9 +3,13 @@
 Dev / test / CLI are pure Bazel via py_binary/py_test against the
 natively-built `.so`. The scripts here handle the maturin-owned wheel
 build (sole reader of pyproject.toml's multi-platform tagging matrix)
-and friends — twine publish, lint. Every script invokes
-`hermeticity_guard.sh` first to assert uv/maturin/python/rustc versions
-match the pins in `python/pyproject.toml [tool.batchalign.pinned_tools]`.
+and lint. Every script invokes `hermeticity_guard.sh` first to assert
+uv/maturin/python/rustc versions match the pins in
+`python/pyproject.toml [tool.batchalign.pinned_tools]`.
+
+PyPI uploads live exclusively in CI
+(`.github/workflows/publish-pypi.yml`, trusted publishing via OIDC);
+no local twine wrapper ships from here.
 """
 
 load("@aspect_rules_py//py:defs.bzl", "py_binary")
@@ -21,7 +25,6 @@ exports_files([
     "pyapp_install.sh",
     "pytest.sh",
     "lint.sh",
-    "twine_upload.sh",
     "hermeticity_guard.sh",
     "runfiles_resolve.sh",
     "pyo3-config.txt",

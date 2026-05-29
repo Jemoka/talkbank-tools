@@ -7,7 +7,7 @@
 # venv dependent), which doesn't fit cleanly into a Bazel py_binary
 # until we wire up `aspect_rules_py` for this corner. The script
 # lives in `scripts/` (Bazel-stable home) and the GUI's BUILD.bazel
-# exposes the user-facing `:openapi_gen` and `:openapi_freshness` names
+# exposes the user-facing `:openapi` and `:openapi_freshness` names
 # that point at it through this shim.
 set -euo pipefail
 

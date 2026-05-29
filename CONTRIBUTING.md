@@ -401,24 +401,20 @@ crate_universe re-resolves on the next Bazel invocation.
 ### Release a wheel
 
 `python/pyproject.toml [project].version` is the source of truth for
-the wheel version. Bump it and build a wheel on each platform — the
-lockfile refresh is implicit:
+the wheel version. The host-platform wheel is the only thing you build
+locally:
 
 ```bash
 just batchalign wheel                                        # host-platform wheel (auto-regen if needed)
-just batchalign wheel-macos-arm64                            # cross-tag (host triple only)
-just batchalign wheel-macos-x86_64
-just batchalign wheel-linux-x86_64
-just batchalign wheel-linux-aarch64
-just batchalign wheel-windows-x86_64
-just batchalign multiwheel                                   # all of the above
-just batchalign publish                                      # twine upload python/target/wheels/*.whl
 ```
 
-Wheel artifacts land at `python/target/wheels/`. Multi-platform builds
-that require cross-compile sysroots succeed locally only for the host
-triple; the others are handled by the `.github/workflows/publish-pypi.yml`
-CI matrix (5 runners, one per platform, OIDC trusted-publisher to PyPI).
+The artifact lands at `python/target/wheels/batchalign-<version>-cp312-cp312-<host-plat>.whl`.
+
+Cross-platform wheels and PyPI uploads are CI-only — there is no local
+cross-build recipe and no local publish recipe. The
+`.github/workflows/publish-pypi.yml` matrix fans out to one native
+runner per platform (macOS arm/x86, Linux x86/arm, Windows x86), then
+uploads via PyPI's OIDC trusted-publisher flow.
 
 To cut a real release:
 
@@ -767,7 +763,6 @@ bazel run //apps/chatter/chatter-gui/src-tauri:bundle     # cargo tauri build wr
 ```bash
 bazel run //python/batchalign                             # `batchalign3` CLI (py_binary)
 bazel run //python/batchalign:wheel                       # maturin build → python/target/wheels/
-bazel run //python/batchalign:publish                     # twine upload
 bazel run //python/batchalign:lint                        # mypy (+ ruff)
 bazel test //python/batchalign:pytest                     # pytest via py_test
 bazel run //python:requirements                           # regenerate requirements.lock.txt
@@ -877,15 +872,17 @@ to open the PR — `git status` will surface them after the next build.
 
 ### "I want a release wheel"
 
+Local development only ever produces a host-platform wheel:
+
 ```bash
-just batchalign multiwheel                                # builds every supported platform
+just batchalign wheel
 ls python/target/wheels/
-just batchalign publish                                   # twine upload
 ```
 
-In practice the CI matrix (`publish-pypi.yml`) is the canonical wheel
-builder — it fans out to one runner per `(platform, arch)` cell so
-every triple gets a native build.
+For a real release, dispatch `publish-pypi.yml` from the Actions UI —
+it fans out to one runner per `(platform, arch)` cell, produces every
+native triple's wheel, and uploads via PyPI's OIDC trusted-publisher
+flow. There is no local publish path.
 
 ---
 

@@ -95,7 +95,6 @@ dev = [
     "pytest>=7",
     "pytest-xdist",
     "mypy",
-    "twine>=5",        # used by `just batchalign publish`
     # Proto codegen toolchain. Pulled in via the Bazel
     # `//python/batchalign/_core:_proto_generated` genrule. Never invoked
     # by hand — Bazel rebuilds `_proto_generated.py` whenever the Rust

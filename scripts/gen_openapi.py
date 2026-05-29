@@ -15,7 +15,7 @@ captures that surface in two artifacts the desktop GUI consumes:
      with the live response on startup.
 
 Usage:
-  just batchalign gen-openapi              # run via Bazel
+  just batchalign::gui openapi             # run via Bazel
   python scripts/gen_openapi.py            # direct invocation (dev)
 
 Exits non-zero if the generated artifacts would change without
@@ -71,7 +71,7 @@ def generate(
         if existing_ts.strip() != ts.strip() or existing_snap != expected_snap:
             print(
                 "openapi.gen.ts or capabilities.snapshot.json drifted from the "
-                "daemon's live surface. Run `just batchalign gen-openapi` to "
+                "daemon's live surface. Run `just batchalign::gui openapi` to "
                 "regenerate and commit the result.",
                 file=sys.stderr,
             )
@@ -160,7 +160,7 @@ def _placeholder_header(_oa: Path) -> str:
     return (
         "// THIS FILE IS GENERATED — DO NOT EDIT BY HAND.\n"
         "// `openapi-typescript` was not available at generation time.\n"
-        "// Run `just batchalign gen-openapi` once the GUI's `npm install`\n"
+        "// Run `just batchalign::gui openapi` once the GUI's `npm install`\n"
         "// has completed so this file gets proper types.\n"
         "export type paths = Record<string, never>;\n"
         "export type components = Record<string, never>;\n"
@@ -186,7 +186,7 @@ def _strip_volatile_header(ts: str) -> str:
     return (
         "// THIS FILE IS GENERATED — DO NOT EDIT BY HAND.\n"
         "// Source: batchalign.api app.openapi().\n"
-        "// Regenerate with: just batchalign gen-openapi\n"
+        "// Regenerate with: just batchalign::gui openapi\n"
         + "".join(out)
     )
 

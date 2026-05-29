@@ -37,7 +37,7 @@ filegroup(
 # script shells out to `openapi-typescript` (installed via the GUI's
 # package.json) and writes to the source tree.
 sh_binary(
-    name = "openapi_gen",
+    name = "openapi",
     srcs = ["openapi_gen.sh"],
     data = ["//scripts:gen_openapi.py"],
 )

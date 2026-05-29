@@ -6,7 +6,7 @@
 # Three recipes — all single-shot, no prerequisites:
 #   build [profile]   bundle .app/.msi/.AppImage (cargo tauri build, Bazel)
 #   dev               cargo tauri dev — hot-reload (Bazel)
-#   gen-openapi       regenerate openapi.gen.ts + capabilities.snapshot.json
+#   openapi           regenerate openapi.gen.ts + capabilities.snapshot.json
 #
 # Both `build` and `dev` declare //python/batchalign:sidecar (a Bazel-
 # data dep, so the daemon binary is materialized + staged into
@@ -36,8 +36,8 @@ dev *args="":
 #   apps/batchalign/batchalign-gui/src/protocol/openapi.gen.ts
 #   apps/batchalign/batchalign-gui/src/protocol/capabilities.snapshot.json
 # Run after any change to a recipe signature or backend kwargs.
-gen-openapi:
-    bazel run //apps/batchalign/batchalign-gui:openapi_gen
+openapi:
+    bazel run //apps/batchalign/batchalign-gui:openapi
 
 # End-to-end Playwright test. Drives the Vite-served React frontend
 # inside Chromium against the real Bazel-built PyApp sidecar daemon.
