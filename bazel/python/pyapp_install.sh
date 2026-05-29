@@ -94,6 +94,37 @@ cp -R "$PYAPP_SRC_DIR/." "$build_src/"
 chmod -R u+w "$build_src"
 PYAPP_SRC_DIR="$build_src"
 
+# PyApp's build.rs parses the wheel filename per PEP 427
+# (`{name}-{version}(-{build})?-{python}-{abi}-{platform}.whl`). The
+# Bazel genrule output is a fixed `batchalign.whl` — Bazel doesn't
+# permit dynamic output names — so we reconstruct the proper PEP-427
+# filename here from the wheel's own `.dist-info/` metadata and stage
+# a renamed copy. PyApp reads the contents identically; only the on-
+# disk filename matters to its filename parser.
+wheel_stage="$BUILD_WORKSPACE_DIRECTORY/python/target/pyapp-wheel"
+rm -rf "$wheel_stage"
+mkdir -p "$wheel_stage"
+distinfo="$(unzip -l "$WHEEL" \
+    | awk '{print $NF}' \
+    | grep -oE '^[^/]+\.dist-info' \
+    | head -1)"
+if [[ -z "$distinfo" ]]; then
+    echo "pyapp_install.sh: wheel has no .dist-info/ entry: $WHEEL" >&2
+    exit 2
+fi
+name_version="${distinfo%.dist-info}"  # e.g. "batchalign-0.3.0"
+tag="$(unzip -p "$WHEEL" "$distinfo/WHEEL" \
+    | awk -F': ' '/^Tag:/ {print $2; exit}' \
+    | tr -d '\r\n')"
+if [[ -z "$tag" ]]; then
+    echo "pyapp_install.sh: wheel has no Tag: in $distinfo/WHEEL" >&2
+    exit 2
+fi
+real_wheel="$wheel_stage/${name_version}-${tag}.whl"
+cp -f "$WHEEL" "$real_wheel"
+echo "pyapp_install.sh: staged wheel = $real_wheel"
+WHEEL="$real_wheel"
+
 export PYAPP_PROJECT_PATH="$WHEEL"
 export PYAPP_EXEC_SPEC="batchalign.cli.daemon:run_pyapp_entry"
 export PYAPP_PYTHON_VERSION="3.12"
