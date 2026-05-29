@@ -150,7 +150,6 @@ publish:
 # Incremental rebuilds: sub-second when nothing changed.
 sidecar:
     bazel build -c opt //python/batchalign:sidecar
-    @echo "produced: $(bazel info bazel-bin)/python/batchalign/sidecar"
 
 # Desktop GUI submodule.
 #
