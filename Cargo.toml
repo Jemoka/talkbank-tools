@@ -35,11 +35,14 @@ members = [
 # command. Bazel pulls them lazily, only on the path that needs them.
 exclude = [
     "fuzz",  # cargo-fuzz uses its own nightly toolchain with sanitizer flags
-    # Writable working copy of @pyapp_src made by pyapp_install.sh at
-    # sidecar-build time. Lives inside the workspace tree so cargo's
-    # incremental build cache (under target/) survives across runs,
-    # but is NOT a workspace member.
+    # Writable working copies of vendored-binary crate sources made
+    # by their genrules at build time (//python/batchalign:sidecar
+    # via pyapp_install.sh, //bazel/tauri:cargo_tauri via
+    # tauri_install.sh). Each lives inside the workspace tree so
+    # cargo's incremental build cache (under target/) survives
+    # across runs, but they are NOT workspace members.
     "python/target/pyapp-src",
+    "python/target/tauri-cli-src",
 ]
 
 [workspace.package]

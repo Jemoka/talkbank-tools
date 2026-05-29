@@ -38,6 +38,10 @@ sh_binary(
     data = [
         "//apps/batchalign/batchalign-gui:frontend_sources",
         "//python/batchalign:sidecar",
+        # Bazel-built cargo-tauri (no host `cargo install tauri-cli`
+        # required). The wrapper rlocation-resolves it and prepends
+        # its dir to PATH so the inner `cargo tauri build` finds it.
+        "//bazel/tauri:cargo_tauri",
     ],
     deps = ["@bazel_tools//tools/bash/runfiles"],
 )
@@ -48,6 +52,7 @@ sh_binary(
     data = [
         "//apps/batchalign/batchalign-gui:frontend_sources",
         "//python/batchalign:sidecar",
+        "//bazel/tauri:cargo_tauri",
     ],
     deps = ["@bazel_tools//tools/bash/runfiles"],
 )

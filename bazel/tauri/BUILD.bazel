@@ -1,0 +1,43 @@
+"""Bazel-built cargo-tauri binary.
+
+Replaces the `cargo install tauri-cli` host install that the desktop
+GUI bundle/dev path used to require. tauri_cli_src is fetched lazily
+via http_archive in MODULE.bazel; this genrule compiles it through
+Bazel-provided cargo and produces the `cargo-tauri` binary at
+bazel-bin/bazel/tauri/cargo-tauri.
+
+Consumers (bazel/batchalign-tauri/{bundle,dev}.sh) declare this as a
+`data` dep on their sh_binary, resolve via rlocation, and prepend its
+parent dir to PATH so the inner `cargo tauri build|dev` invocation
+finds it without any host install.
+
+Same `local = True` constraint as :sidecar — `cargo install --path`
+needs cargo's persistent build cache, which sandboxed actions can't
+supply.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["tauri_install.sh"])
+
+genrule(
+    name = "cargo_tauri",
+    outs = ["cargo-tauri"],
+    srcs = [
+        "@tauri_cli_src//:srcs",
+        "@tauri_cli_src//:Cargo.toml",
+    ],
+    tools = [
+        ":tauri_install.sh",
+        "@rules_rust//rust/toolchain:current_cargo_files",
+        "@rules_rust//rust/toolchain:current_rustc_files",
+    ],
+    cmd = " ".join([
+        "PYAPP_RUST_BIN_DIRS='$(execpaths @rules_rust//rust/toolchain:current_cargo_files) $(execpaths @rules_rust//rust/toolchain:current_rustc_files)'",
+        "$(execpath :tauri_install.sh)",
+        "$@",
+        "$(execpath @tauri_cli_src//:Cargo.toml)",
+        "$(COMPILATION_MODE)",
+    ]),
+    local = True,
+)

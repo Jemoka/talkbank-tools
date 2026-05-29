@@ -102,8 +102,9 @@ jobs:
             libssl-dev \
             patchelf
 
-      - name: install cargo-tauri
-        run: cargo install tauri-cli --version "^2" --locked
+      # cargo-tauri comes from //bazel/tauri:cargo_tauri (Bazel-built
+      # from a SHA-pinned crates.io tarball, PATH-injected by the
+      # bundle wrapper). No host install required.
 
       - name: npm install (frontend)
         working-directory: apps/batchalign/batchalign-gui

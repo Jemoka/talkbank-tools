@@ -181,6 +181,38 @@ exports_files(["Cargo.toml"])
 """,
 )
 
+# tauri-cli source — Bazel-fetched http_archive from crates.io,
+# pinned by SHA. The `cargo-tauri` binary it produces is required by
+# the GUI bundle/dev path (`cargo tauri build|dev`); installing it on
+# the host (`cargo install tauri-cli`) would break the "bazel + just
+# only" contract. Built by the Bazel-managed cargo install + staged
+# onto PATH by bazel/batchalign-tauri/{bundle,dev}.sh.
+http_archive = use_repo_rule(
+    "@bazel_tools//tools/build_defs/repo:http.bzl",
+    "http_archive",
+)
+http_archive(
+    name = "tauri_cli_src",
+    urls = ["https://static.crates.io/crates/tauri-cli/tauri-cli-2.11.2.crate"],
+    sha256 = "2da40a7a42eae3f74eb4783e78378e0d8ce84ac8258e1c123443755609cd3277",
+    strip_prefix = "tauri-cli-2.11.2",
+    type = "tar.gz",  # .crate files are gzipped tarballs
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = glob(
+        ["**"],
+        allow_empty = False,
+        exclude = ["**/BUILD.bazel", "**/BUILD"],
+    ),
+)
+
+exports_files(["Cargo.toml"])
+""",
+)
+
 # =============================================================================
 # Python — rules_uv (deps) → rules_python (py_*) → rules_rust (cdylib via
 # maturin) → wheel ready to ship.

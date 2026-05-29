@@ -18,6 +18,16 @@ set -o pipefail
 
 cd "$BUILD_WORKSPACE_DIRECTORY/apps/batchalign/batchalign-gui"
 
+# PATH-prepend the Bazel-built cargo-tauri so the inner
+# `cargo tauri dev` invocation never needs a host install.
+CARGO_TAURI="$(rlocation _main/bazel/tauri/cargo-tauri)"
+if [[ -z "$CARGO_TAURI" || ! -x "$CARGO_TAURI" ]]; then
+    echo "dev.sh: rlocation could not resolve _main/bazel/tauri/cargo-tauri" >&2
+    exit 2
+fi
+PATH="$(cd "$(dirname "$CARGO_TAURI")" && pwd):$PATH"
+export PATH
+
 TRIPLE="$(rustc -vV | awk '/^host:/ {print $2}')"
 if [[ -z "$TRIPLE" ]]; then
     echo "could not detect rustc host triple" >&2
