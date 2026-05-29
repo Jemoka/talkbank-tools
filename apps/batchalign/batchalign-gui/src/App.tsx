@@ -33,7 +33,13 @@ export default function App() {
     <BAWindow>
       {!showSettings && <TabBar />}
       <BAHeader
-        sub={daemon.ready ? null : daemon.error ? "daemon error" : "starting daemon…"}
+        sub={
+          daemon.ready
+            ? null
+            : daemon.error
+              ? `daemon error: ${daemon.error}`
+              : "starting daemon…"
+        }
         right={
           <div style={{ display: "flex", gap: 8 }}>
             <button

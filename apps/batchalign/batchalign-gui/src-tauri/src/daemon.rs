@@ -119,7 +119,12 @@ async fn start(app: &AppHandle) -> Result<(), DaemonError> {
 async fn wait_for_port(
     rx: &mut tauri::async_runtime::Receiver<CommandEvent>,
 ) -> Result<u16, DaemonError> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    // Cold-start budget: PyApp unpacks CPython + pip-installs the
+    // wheel on first launch, which can take 20–25s on a quiet machine
+    // and considerably longer if the api extra needs to compile any
+    // C extensions. 60s gives us headroom without hiding a real hang.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let mut tail: Vec<String> = Vec::new();
     while std::time::Instant::now() < deadline {
         let evt = match tokio::time::timeout(
             std::time::Duration::from_millis(500),
@@ -128,32 +133,68 @@ async fn wait_for_port(
         .await
         {
             Ok(Some(evt)) => evt,
-            Ok(None) => return Err(DaemonError::EarlyExit("stdout closed".into())),
+            Ok(None) => {
+                return Err(DaemonError::EarlyExit(format!(
+                    "stdout closed before announcing port. last output:\n{}",
+                    tail.join("\n"),
+                )));
+            }
             Err(_) => continue, // poll again
         };
         match evt {
             CommandEvent::Stdout(line) => {
-                let text = String::from_utf8_lossy(&line);
-                if let Some(rest) = text.trim().strip_prefix("DAEMON_PORT=") {
+                let text = String::from_utf8_lossy(&line).into_owned();
+                let trimmed = text.trim();
+                eprintln!("[daemon stdout] {trimmed}");
+                push_tail(&mut tail, &text);
+                if let Some(rest) = trimmed.strip_prefix("DAEMON_PORT=") {
                     if let Ok(port) = rest.parse::<u16>() {
                         return Ok(port);
                     }
                 }
             }
-            CommandEvent::Stderr(_) => { /* fine; daemon logs to stderr */ }
+            CommandEvent::Stderr(line) => {
+                let text = String::from_utf8_lossy(&line).into_owned();
+                eprintln!("[daemon stderr] {}", text.trim_end());
+                push_tail(&mut tail, &text);
+            }
             CommandEvent::Error(e) => {
-                return Err(DaemonError::EarlyExit(e));
+                eprintln!("[daemon  error] {e}");
+                return Err(DaemonError::EarlyExit(format!(
+                    "{e}. last output:\n{}",
+                    tail.join("\n"),
+                )));
             }
             CommandEvent::Terminated(payload) => {
+                eprintln!(
+                    "[daemon   exit] code={:?} signal={:?}",
+                    payload.code, payload.signal,
+                );
                 return Err(DaemonError::EarlyExit(format!(
-                    "daemon exited (code={:?}) before announcing port",
+                    "daemon exited (code={:?}) before announcing port. last output:\n{}",
                     payload.code,
+                    tail.join("\n"),
                 )));
             }
             _ => {}
         }
     }
     Err(DaemonError::PortTimeout)
+}
+
+/// Bounded ring of recent daemon log lines. Capped so the GUI doesn't
+/// pin tens of MB of stdout in the daemon-failed reason string.
+fn push_tail(tail: &mut Vec<String>, text: &str) {
+    const MAX_LINES: usize = 40;
+    let trimmed = text.trim_end();
+    if trimmed.is_empty() {
+        return;
+    }
+    tail.push(trimmed.to_owned());
+    if tail.len() > MAX_LINES {
+        let drain_to = tail.len() - MAX_LINES;
+        tail.drain(0..drain_to);
+    }
 }
 
 async fn drain_child(
@@ -163,7 +204,18 @@ async fn drain_child(
 ) {
     while let Some(evt) = rx.recv().await {
         match evt {
-            CommandEvent::Stdout(_) | CommandEvent::Stderr(_) => {}
+            CommandEvent::Stdout(line) => {
+                eprintln!(
+                    "[daemon stdout] {}",
+                    String::from_utf8_lossy(&line).trim_end(),
+                );
+            }
+            CommandEvent::Stderr(line) => {
+                eprintln!(
+                    "[daemon stderr] {}",
+                    String::from_utf8_lossy(&line).trim_end(),
+                );
+            }
             CommandEvent::Terminated(payload) => {
                 let _ = app.emit(
                     events::DAEMON_FAILED,
@@ -180,6 +232,7 @@ async fn drain_child(
                 break;
             }
             CommandEvent::Error(e) => {
+                eprintln!("[daemon  error] {e}");
                 let _ = app.emit(
                     events::DAEMON_FAILED,
                     DaemonFailedPayload { reason: e },
