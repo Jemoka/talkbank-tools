@@ -134,21 +134,23 @@ publish:
 
 # Standalone production daemon sidecar binary via PyApp.
 #
-# Output: python/target/pyapp/bin/sidecar. Self-contained — bundles
-# CPython at the pinned major.minor, the batchalign wheel, and the
-# [api] extra (fastapi/uvicorn/sse-starlette). Run it directly to boot
-# the HTTP daemon; no Python or batchalign install on the host. Named
-# "sidecar" because that's its deployment role (companion service next
-# to the main CLI/wheel install, not a separate top-level app).
+# Output: bazel-bin/python/batchalign/sidecar. Self-contained —
+# bundles CPython at the pinned major.minor, the batchalign wheel,
+# and the [api] extra (fastapi/uvicorn/sse-starlette). Run it
+# directly to boot the HTTP daemon; no Python or batchalign install
+# on the host. Named "sidecar" because that's its deployment role
+# (companion service next to the main CLI/wheel install, not a
+# separate top-level app).
 #
-# First build: ~minutes (cargo install pyapp + maturin build).
-# Rebuilds: only the maturin step reruns if Rust sources changed.
+# All tools are Bazel-managed — pyapp source via @pyapp_src
+# (git_repository, pinned by SHA); cargo + rustc via rules_rust's
+# toolchain. Users only need `bazel` and `just` installed.
 #
-# Override via PYAPP_PROFILE={release|debug}, PYAPP_PYTHON_VERSION=...,
-# PYAPP_DISTRIBUTION_EMBED=0 (download Python on first run instead of
-# embedding it -- smaller binary, needs network at first launch).
+# First build: ~few minutes (cargo build of pyapp + maturin wheel).
+# Incremental rebuilds: sub-second when nothing changed.
 sidecar:
-    bazel run -c opt //python/batchalign:sidecar
+    bazel build -c opt //python/batchalign:sidecar
+    @echo "produced: $(bazel info bazel-bin)/python/batchalign/sidecar"
 
 # Desktop GUI submodule.
 #

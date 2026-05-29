@@ -2,12 +2,11 @@
 # Build the Batchalign desktop app (Tauri v2) end-to-end via `cargo tauri build`.
 #
 # Bazel hands us the sidecar daemon binary as a real file output —
-# //python/batchalign:sidecar_bin is a genrule producing a tracked
-# artifact via pyapp_build.sh (escape-path execution for the
-# maturin + cargo bits, but Bazel still tracks the output for
-# incremental rebuilds). We resolve its path via rlocation, stage it
-# under src-tauri/binaries/sidecar-<triple> for Tauri's externalBin
-# contract, then shell out to `cargo tauri build`.
+# //python/batchalign:sidecar is a genrule that vendors pyapp via
+# git_repository, embeds the Bazel-tracked wheel, and produces a
+# tracked binary. We resolve its path via rlocation, stage it under
+# src-tauri/binaries/sidecar-<triple> for Tauri's externalBin contract,
+# then shell out to `cargo tauri build`.
 
 # --- begin runfiles.bash initialization v3 ---
 # Bazel's canonical Bash runfiles library; provides `rlocation`. See
@@ -30,9 +29,9 @@ if [[ -z "$TRIPLE" ]]; then
     exit 2
 fi
 
-SIDECAR_BIN="$(rlocation _main/python/batchalign/sidecar.bin)"
+SIDECAR_BIN="$(rlocation _main/python/batchalign/sidecar)"
 if [[ -z "$SIDECAR_BIN" || ! -x "$SIDECAR_BIN" ]]; then
-    echo "bundle.sh: rlocation could not resolve _main/python/batchalign/sidecar.bin" >&2
+    echo "bundle.sh: rlocation could not resolve _main/python/batchalign/sidecar" >&2
     exit 2
 fi
 

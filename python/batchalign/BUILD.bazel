@@ -178,54 +178,30 @@ genrule(
 
 # Standalone production-daemon sidecar binary built via PyApp.
 #
-# `bazel run //python/batchalign:sidecar` produces a self-contained
-# executable at `python/target/pyapp/bin/sidecar` that bundles
+# `bazel build //python/batchalign:sidecar` produces a self-contained
+# executable at `bazel-bin/python/batchalign/sidecar` that bundles
 # CPython + the batchalign wheel + the `[api]` extra. The binary IS
 # the daemon — running it boots `batchalign3 daemon` directly without
 # the user typing the subcommand. Named "sidecar" because that's the
 # role it plays in a deployment (companion service next to the main
 # CLI / wheel install, not a separate top-level app).
 #
-# Follows the same shell-out pattern as :wheel — the build needs the
-# host cargo + maturin and cannot live inside Bazel's hermetic sandbox.
-# Hermeticity is policed by `hermeticity_guard.sh` (uv/maturin/python/
-# rustc pins) + the explicit pyapp version pin in pyproject.toml.
-sh_binary(
-    name = "sidecar",
-    srcs = ["//bazel/python:pyapp_build.sh"],
-    args = [
-        "$(rootpath @multitool//tools/uv)",
-        "$(rootpath //python/batchalign/_core:_proto_generated_py)",
-        "$(COMPILATION_MODE)",
-        "$(rootpath @llvm_toolchain_llvm//:bin/clang)",
-        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-ar)",
-        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-ranlib)",
-    ],
-    data = ["@multitool//tools/uv"] + _WHEEL_DATA,
-)
-
-# Bazel-tracked sidecar binary, produced by the same pyapp_build.sh
-# the :sidecar sh_binary runs. Downstream Bazel consumers (e.g. the
-# Tauri-bundled desktop GUI at //apps/batchalign/batchalign-gui/) get a
-# proper file artifact addressable via $(rootpath ...) / rlocation
-# instead of having to invoke an sh_binary or escape-path-hunt for the
-# output.
+# Architecture (all Bazel-managed, no host tool requirements beyond
+# bazel + just):
+#   - Wheel input from `:wheel_file` genrule (Bazel-tracked .whl).
+#   - pyapp source from `@pyapp_src` (Bazel `git_repository`, pinned
+#     by SHA in MODULE.bazel; fetched lazily on first build).
+#   - cargo + rustc from `@rules_rust//rust/toolchain` (PATH-injected
+#     by `pyapp_install.sh` so the inner `cargo install` never sees
+#     host cargo).
 #
-# `local = True` is required: pyapp_build.sh shells out to host cargo
-# + maturin (sole reader of pyproject.toml's multi-platform tagging
-# matrix), neither of which lives in Bazel's hermetic sandbox.
-# pyapp_genrule.sh wraps the script for the genrule context: it
-# self-locates the workspace via realpath-of-BASH_SOURCE walk-up so
-# BUILD_WORKSPACE_DIRECTORY is available, runs the build, and copies
-# the produced binary into $@.
-#
-# `srcs` is intentionally broad — any wheel-input change should
-# trigger a rebuild. The actual cargo + maturin caches under python/
-# target/ survive across rebuilds (they're escape-path), so the cold
-# cost is only paid once per dep change.
+# `local = True` is required: pyapp's build.rs writes into its source
+# dir at compile time (an upstream design choice — see
+# bazel/python/pyapp_install.sh for the writable-copy workaround).
+# All other hermeticity holds.
 genrule(
-    name = "sidecar_bin",
-    outs = ["sidecar.bin"],
+    name = "sidecar",
+    outs = ["sidecar"],
     srcs = [
         ":wheel_file",
         # pyapp source is fetched lazily via git_repository in

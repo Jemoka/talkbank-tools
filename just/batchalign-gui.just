@@ -8,7 +8,7 @@
 #   dev               cargo tauri dev — hot-reload (Bazel)
 #   gen-openapi       regenerate openapi.gen.ts + capabilities.snapshot.json
 #
-# Both `build` and `dev` declare //python/batchalign:sidecar as a Bazel
+# Both `build` and `dev` declare //python/batchalign:sidecar (a Bazel-
 # data dep, so the daemon binary is materialized + staged into
 # src-tauri/binaries/sidecar-<triple> by the wrapper script before the
 # Tauri bundler / tauri-build sees it. No "build the sidecar first"

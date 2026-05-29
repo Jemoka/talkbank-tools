@@ -109,8 +109,9 @@ jobs:
         working-directory: apps/batchalign/batchalign-gui
         run: npm install
 
-      # Build the sidecar daemon binary (//python/batchalign:sidecar via
-      # PyApp). bundle.sh consumes its $(rootpath) and stages it under
+      # Pre-build the sidecar daemon binary. The genrule at
+      # //python/batchalign:sidecar produces a Bazel-tracked output that
+      # bundle.sh resolves via rlocation + stages under
       # src-tauri/binaries/sidecar-<triple> before invoking cargo tauri
       # build.
       - name: build sidecar

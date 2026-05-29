@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build pyapp from local source via Bazel-provided cargo.
 #
-# Run as the cmd of //python/batchalign:sidecar_bin (a genrule with
+# Run as the cmd of //python/batchalign:sidecar (a genrule with
 # `local = True`). Bazel hands us the Bazel-tracked wheel + the
 # Bazel-fetched pyapp source as $(execpath …) args, plus PATH-injects
 # rules_rust's cargo via PYAPP_RUST_BIN_DIRS. We invoke `cargo install

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # `cargo tauri dev` with the sidecar daemon supplied by Bazel.
 #
-# Mirrors bundle.sh's contract: resolve //python/batchalign:sidecar_bin
+# Mirrors bundle.sh's contract: resolve //python/batchalign:sidecar
 # via rlocation, stage it under src-tauri/binaries/sidecar-<triple>,
 # then hand off to cargo tauri dev. Hot reload, no bundler.
 
@@ -24,9 +24,9 @@ if [[ -z "$TRIPLE" ]]; then
     exit 2
 fi
 
-SIDECAR_BIN="$(rlocation _main/python/batchalign/sidecar.bin)"
+SIDECAR_BIN="$(rlocation _main/python/batchalign/sidecar)"
 if [[ -z "$SIDECAR_BIN" || ! -x "$SIDECAR_BIN" ]]; then
-    echo "dev.sh: rlocation could not resolve _main/python/batchalign/sidecar.bin" >&2
+    echo "dev.sh: rlocation could not resolve _main/python/batchalign/sidecar" >&2
     exit 2
 fi
 

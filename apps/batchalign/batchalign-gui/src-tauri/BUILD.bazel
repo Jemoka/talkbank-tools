@@ -26,17 +26,18 @@ package(default_visibility = ["//visibility:public"])
 # gui::{build,dev}` a single-shot contract: build, stage, and run with
 # no "build it first" prerequisites.
 
-# Both targets consume //python/batchalign:sidecar_bin — a real Bazel-
-# tracked file output produced by the genrule wrapping pyapp_build.sh.
-# That gives us proper incrementality (Bazel rebuilds only when the
-# wheel inputs change) and a stable rlocation-resolvable path for the
-# wrapper scripts to stage from. No nested bazel runs.
+# Both targets consume //python/batchalign:sidecar — a real Bazel-
+# tracked file output produced by a genrule that vendors pyapp, embeds
+# the wheel from //python/batchalign:wheel_file, and emits the
+# finished binary at bazel-bin/python/batchalign/sidecar. The wrapper
+# scripts rlocation-resolve it and stage under src-tauri/binaries/
+# before invoking cargo tauri.
 sh_binary(
     name = "bundle",
     srcs = ["//bazel/batchalign-tauri:bundle.sh"],
     data = [
         "//apps/batchalign/batchalign-gui:frontend_sources",
-        "//python/batchalign:sidecar_bin",
+        "//python/batchalign:sidecar",
     ],
     deps = ["@bazel_tools//tools/bash/runfiles"],
 )
@@ -46,7 +47,7 @@ sh_binary(
     srcs = ["//bazel/batchalign-tauri:dev.sh"],
     data = [
         "//apps/batchalign/batchalign-gui:frontend_sources",
-        "//python/batchalign:sidecar_bin",
+        "//python/batchalign:sidecar",
     ],
     deps = ["@bazel_tools//tools/bash/runfiles"],
 )

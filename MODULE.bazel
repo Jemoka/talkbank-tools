@@ -136,7 +136,7 @@ use_repo(crate, "crates")
 
 # pyapp source — Bazel fetches it lazily via git_repository (only
 # materialized when a downstream target actually consumes @pyapp_src,
-# e.g. //python/batchalign:sidecar_bin). Contributors building paths
+# e.g. //python/batchalign:sidecar). Contributors building paths
 # that don't touch the sidecar never trigger the fetch — no manual
 # `git submodule update --init` required.
 #
