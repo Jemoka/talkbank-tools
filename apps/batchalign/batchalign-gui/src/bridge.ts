@@ -75,13 +75,24 @@ export async function bootBridge(): Promise<() => void> {
   // Ask the Rust side to spawn the daemon now that listeners are armed.
   // If the daemon was already spawned by the setup() hook, this is a
   // no-op (the Rust command checks state.daemon.handle.load()).
+  //
+  // `ensure_daemon` polls for up to 5s and then returns Err with the
+  // sentinel "daemon still starting; listen for `daemon-ready`". That
+  // is NOT a failure — PyApp cold-starts routinely take 15–25s on a
+  // fresh install, so the daemon may simply not have announced its
+  // port yet. We swallow that specific sentinel and rely on the
+  // `daemon-ready` / `daemon-failed` listeners (armed above) for the
+  // authoritative resolution. Any other error IS a real failure.
   try {
     await invoke("ensure_daemon");
   } catch (err) {
-    dispatch({
-      type: "DAEMON_FAILED",
-      reason: `ensure_daemon invoke failed: ${err}`,
-    });
+    const msg = String(err);
+    if (!msg.includes("daemon still starting")) {
+      dispatch({
+        type: "DAEMON_FAILED",
+        reason: `ensure_daemon invoke failed: ${err}`,
+      });
+    }
   }
 
   return cleanup;

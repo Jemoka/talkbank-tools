@@ -147,16 +147,25 @@ async fn wait_for_port(
                 let trimmed = text.trim();
                 eprintln!("[daemon stdout] {trimmed}");
                 push_tail(&mut tail, &text);
-                if let Some(rest) = trimmed.strip_prefix("DAEMON_PORT=") {
-                    if let Ok(port) = rest.parse::<u16>() {
-                        return Ok(port);
-                    }
+                if let Some(port) = parse_port(trimmed) {
+                    return Ok(port);
                 }
             }
             CommandEvent::Stderr(line) => {
                 let text = String::from_utf8_lossy(&line).into_owned();
-                eprintln!("[daemon stderr] {}", text.trim_end());
+                let trimmed = text.trim_end();
+                eprintln!("[daemon stderr] {trimmed}");
                 push_tail(&mut tail, &text);
+                // Fallback: newer uvicorn versions moved `Server.servers`,
+                // breaking `_PortAnnouncingServer.startup`'s stdout
+                // announcement (the override swallows AttributeError and
+                // silently returns). Recognize uvicorn's stable startup
+                // log line "Uvicorn running on http://127.0.0.1:<port>"
+                // as a secondary port announcement.
+                if let Some(port) = parse_port(trimmed) {
+                    eprintln!("[daemon  match] port={port} via uvicorn log");
+                    return Ok(port);
+                }
             }
             CommandEvent::Error(e) => {
                 eprintln!("[daemon  error] {e}");
@@ -180,6 +189,66 @@ async fn wait_for_port(
         }
     }
     Err(DaemonError::PortTimeout)
+}
+
+/// Recognize a port announcement from one daemon log line. Two forms:
+///   - `DAEMON_PORT=<n>`               — the Python-side explicit signal
+///   - `Uvicorn running on http(s)://<host>:<n>` — uvicorn's own startup log
+/// The uvicorn fallback exists because newer uvicorn versions moved
+/// `Server.servers`, breaking `_PortAnnouncingServer.startup`'s introspection
+/// — it silently fails and never prints DAEMON_PORT, leaving the GUI stuck
+/// at "starting daemon…". The uvicorn log itself is the stable contract.
+fn parse_port(line: &str) -> Option<u16> {
+    if let Some(rest) = line.strip_prefix("DAEMON_PORT=") {
+        return rest.trim().parse().ok();
+    }
+    // Find " http://" or " https://" then the colon, then the port. uvicorn's
+    // INFO logs prepend "INFO:" so we substring-search rather than expect a
+    // line start.
+    let scheme = ["http://", "https://"].into_iter().find_map(|s| {
+        line.find(s).map(|i| i + s.len())
+    })?;
+    let rest = &line[scheme..];
+    let colon = rest.find(':')?;
+    let after_colon = &rest[colon + 1..];
+    // Port runs until the first non-digit (space, comma, '/', etc.)
+    let end = after_colon
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(after_colon.len());
+    if end == 0 {
+        return None;
+    }
+    after_colon[..end].parse().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_port;
+
+    #[test]
+    fn parse_port_explicit() {
+        assert_eq!(parse_port("DAEMON_PORT=52064"), Some(52064));
+        assert_eq!(parse_port("DAEMON_PORT=  52064 "), Some(52064));
+        assert_eq!(parse_port("DAEMON_PORT=not-a-number"), None);
+    }
+
+    #[test]
+    fn parse_port_uvicorn_log() {
+        assert_eq!(
+            parse_port("INFO:     Uvicorn running on http://127.0.0.1:52064 (Press CTRL+C to quit)"),
+            Some(52064),
+        );
+        assert_eq!(
+            parse_port("Uvicorn running on https://localhost:8000/"),
+            Some(8000),
+        );
+    }
+
+    #[test]
+    fn parse_port_unrelated() {
+        assert_eq!(parse_port("INFO:     Application startup complete."), None);
+        assert_eq!(parse_port(""), None);
+    }
 }
 
 /// Bounded ring of recent daemon log lines. Capped so the GUI doesn't
