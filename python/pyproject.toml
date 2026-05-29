@@ -69,6 +69,12 @@ avqi         = ["praat-parselmouth>=0.4.6"]
 translate    = ["googletrans"]
 qwen3        = ["qwen-asr", "transformers>=4.57,<5", "torch>=2.0"]
 nllb         = ["transformers>=4.57,<5", "torch>=2.0", "sentencepiece"]
+# HTTP daemon (`batchalign3 daemon`, the PyApp-bundled sidecar). The
+# desktop GUI's Tauri shell spawns this binary as a sidecar. `[standard]`
+# pulls uvloop + httptools for higher throughput than the pure-Python
+# asyncio loop, `sse-starlette` powers `/jobs/{id}/events` per-job
+# Server-Sent Events.
+api          = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "sse-starlette>=2.0", "python-multipart>=0.0.9"]
 all = [
     "transformers>=4.57,<5", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8",
     "openai-whisper", "pycountry", "num2words",
@@ -82,6 +88,7 @@ all = [
     "googletrans",
     "qwen-asr",
     "sentencepiece",
+    "fastapi>=0.110", "uvicorn[standard]>=0.27", "sse-starlette>=2.0", "python-multipart>=0.0.9",
 ]
 dev = [
     "maturin==1.7.4",  # mirror [build-system].requires + pinned_tools

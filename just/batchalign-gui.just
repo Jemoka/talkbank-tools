@@ -38,3 +38,12 @@ dev *args="":
 # Run after any change to a recipe signature or backend kwargs.
 gen-openapi:
     bazel run //apps/batchalign/batchalign-gui:openapi_gen
+
+# End-to-end Playwright test. Drives the Vite-served React frontend
+# inside Chromium against the real Bazel-built PyApp sidecar daemon.
+# Tauri host APIs (invoke / listen / dialog.open) are stubbed; the
+# stubs forward to the real daemon for HTTP routes so the e2e exercises
+# the same wire format the production Tauri shell uses.
+e2e:
+    bazel build //python/batchalign:sidecar
+    cd {{ justfile_directory() }}/apps/batchalign/batchalign-gui && npx playwright test e2e/gui.spec.ts --reporter=list

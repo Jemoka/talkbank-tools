@@ -507,6 +507,23 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# CORS for browser-based clients. The desktop GUI's webview runs at a
+# `tauri://`/`null` origin (which the daemon already accepts because
+# fetch from the webview is same-process), but the Playwright e2e
+# harness loads the same SPA at `http://localhost:1421` and would
+# otherwise be blocked by the browser. Allowing any localhost origin
+# (and the file:// scheme used by some packaged webviews) keeps the
+# attack surface narrow — the daemon already binds 127.0.0.1 only.
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|tauri://.*|null)$",
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/health")
 def health() -> dict[str, Any]:

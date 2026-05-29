@@ -11,6 +11,7 @@
 //! On any failure during startup we emit `daemon-failed` instead with a
 //! reason string the GUI surfaces to the user.
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager};
@@ -25,11 +26,26 @@ use crate::state::{AppState, DaemonHandle};
 
 const SIDECAR: &str = "sidecar";
 
+/// Spawn the sidecar daemon at most once. The first caller to flip the
+/// `daemon_spawning` latch wins; concurrent callers (e.g. setup() and
+/// bridge.ts both racing on cold start) return immediately. If the
+/// spawn fails the latch is reset so a retry can occur.
 pub fn spawn(app: AppHandle) {
+    let state = app.state::<AppState>();
+    if state
+        .daemon_spawning
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return;
+    }
     tauri::async_runtime::spawn(async move {
         match start(&app).await {
             Ok(_) => {}
             Err(e) => {
+                app.state::<AppState>()
+                    .daemon_spawning
+                    .store(false, Ordering::Release);
                 let _ = app.emit(
                     events::DAEMON_FAILED,
                     DaemonFailedPayload { reason: e.to_string() },
@@ -43,12 +59,24 @@ async fn start(app: &AppHandle) -> Result<(), DaemonError> {
     // Build the sidecar command. `Command::new_sidecar` resolves to the
     // platform-suffixed binary that the Tauri bundler placed in the
     // app resources (e.g. `binaries/sidecar-aarch64-apple-darwin`).
+    // The PyApp-bundled sidecar IS the daemon — `run_pyapp_entry`
+    // prepends "daemon" to argv internally (see
+    // python/batchalign/cli/daemon.py:run_pyapp_entry). Passing "daemon"
+    // here would duplicate the subcommand and Typer rejects it with
+    // "Got unexpected extra argument(s) (daemon)".
     let cmd: Command = app
         .shell()
         .sidecar(SIDECAR)
         .map_err(|e| DaemonError::Spawn(e.to_string()))?
+        // Trust local filesystem paths in `InputSpec`. The daemon's
+        // `_paths_allowed()` (python/batchalign/api.py:235) requires
+        // BATCHALIGN_API_ALLOW_PATHS=1 to honor `path` inputs. Because
+        // the GUI's process boundary IS the user's machine — files
+        // come from a Tauri folder picker, not arbitrary network
+        // clients — there is no remote-trust concern; enabling paths
+        // is the whole point of the desktop integration.
+        .env("BATCHALIGN_API_ALLOW_PATHS", "1")
         .args([
-            "daemon",
             "--port",
             "0",
             "--host",
@@ -163,18 +191,20 @@ async fn drain_child(
 }
 
 /// Idempotent ensure-daemon: if the sidecar is already running, return
-/// its port; otherwise kick off a new spawn. Used by the frontend's
-/// `bridge.ts` to make the boot order race-free.
+/// its port. If a spawn is already in flight (lib.rs's setup() always
+/// fires one), wait for it. Only kick off a new spawn when no prior
+/// attempt has been made — `spawn()`'s compare_exchange would no-op
+/// the duplicate anyway, but checking here lets us return early without
+/// the 5-second poll.
 pub async fn ensure(app: AppHandle) -> Result<u16, String> {
     let state = app.state::<AppState>();
     if let Some(port) = state.daemon_port() {
         return Ok(port);
     }
-    // No handle yet — kick off a spawn. Caller then waits for the
-    // `daemon-ready` event (already listening before the invoke).
     spawn(app.clone());
     // Best-effort: poll for up to a few seconds to surface the port
-    // synchronously if it lands fast.
+    // synchronously if it lands fast. Past the deadline the frontend
+    // can still observe completion via the `daemon-ready` event.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     while std::time::Instant::now() < deadline {
         if let Some(port) = state.daemon_port() {

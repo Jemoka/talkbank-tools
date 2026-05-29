@@ -4,10 +4,70 @@
 
 import { useStore } from "../store";
 import { invoke } from "@tauri-apps/api/core";
+import { submitRecipe } from "../api";
 import BlockHeader from "./BlockHeader";
 import FieldRow from "./FieldRow";
 import PathInput from "./PathInput";
 import Toggle from "./Toggle";
+
+/// Pick the per-recipe BackendSpec the daemon expects given a verb's
+/// stored config blob. Each verb's Pydantic request model declares one
+/// or more `*_backend: BackendSpec` kwargs (see python/batchalign/api.py
+/// `_build_recipe_request_model`); we map our verb-config UI onto those
+/// kwarg names here. Returns the body kwargs dict (without `inputs`).
+function buildRecipeKwargs(
+  verb: string,
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  switch (verb) {
+    case "transcribe": {
+      const engine = (config.engine as string) || "WhisperXBackend";
+      const lang = (config.lang as string) || "eng";
+      const speakers = (config.speakers as number) ?? 2;
+      const diarize = (config.diarize as boolean) ?? true;
+      const out: Record<string, unknown> = {
+        asr_backend: { kind: engine, kwargs: { lang } },
+      };
+      if (diarize) {
+        out.speaker_backend = {
+          kind: "PyannoteBackend",
+          kwargs: { num_speakers: speakers },
+        };
+      }
+      return out;
+    }
+    case "align":
+      return {
+        fa_backend: {
+          kind: (config.engine as string) || "WhisperXFaBackend",
+          kwargs: {},
+        },
+      };
+    case "morphotag":
+      return {
+        stanza_backend: {
+          kind: "StanzaBackend",
+          kwargs: { lang: (config.lang as string) || "eng" },
+        },
+      };
+    case "translate":
+      return {
+        translate_backend: {
+          kind: (config.engine as string) || "GoogleTranslateBackend",
+          kwargs: { target: (config.target as string) || "eng" },
+        },
+      };
+    case "compare":
+      return {
+        stanza_backend: {
+          kind: "StanzaBackend",
+          kwargs: { lang: (config.lang as string) || "eng" },
+        },
+      };
+    default:
+      return {};
+  }
+}
 
 export default function FilesBlock() {
   const { activeBatchId, batches, dispatch } = useStore();
@@ -15,22 +75,39 @@ export default function FilesBlock() {
   if (!batch) return null;
 
   const onStart = async () => {
+    const firstVerb = batch.pipeline[0];
+    if (!firstVerb) {
+      console.error("start_batch: empty pipeline");
+      return;
+    }
+    const kwargs = buildRecipeKwargs(firstVerb, batch.config[firstVerb]);
+    const inputs = batch.fileOrder.map((id) => ({
+      kind: "media" as const,
+      path: `${batch.folderPath}/${batch.files[id].filename}`,
+    }));
     try {
-      const job = (await invoke("start_batch", { batchId: batch.id })) as {
-        job_id: string;
-      };
+      const job = await submitRecipe(firstVerb, { ...kwargs, inputs });
       dispatch({
         type: "BATCH_STARTED",
         batchId: batch.id,
         jobId: job.job_id,
         files: batch.fileOrder.map((id) => batch.files[id]),
       });
+      // Kick the Rust shell to relay this job's SSE stream as
+      // `progress-v2` events on a per-batch channel.
+      await invoke("start_batch_pump", {
+        batchId: batch.id,
+        jobId: job.job_id,
+      });
     } catch (err) {
-      // Surface the error via batch state (failed). Keeps the bridge
-      // contract — no toasts, only store mutations.
       console.error("start_batch failed", err);
+      dispatch({
+        type: "DAEMON_FAILED",
+        reason: `start ${firstVerb}: ${err}`,
+      });
     }
   };
+
 
   const fileCount = batch.fileOrder.length;
   const totalSize = batch.fileOrder.reduce(

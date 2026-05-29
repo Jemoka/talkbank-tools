@@ -5,6 +5,7 @@
 //! `DAEMON_PORT=<n>` to stdout, and consumed by every HTTP-proxy command.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use arc_swap::ArcSwapOption;
 use tokio::sync::Mutex;
@@ -20,6 +21,11 @@ pub struct DaemonHandle {
 #[derive(Default)]
 pub struct AppState {
     pub daemon: ArcSwapOption<DaemonHandle>,
+    /// Latch flipped to `true` by the first `daemon::spawn()` caller
+    /// (compare_exchange). Subsequent callers — typically `bridge.ts`
+    /// invoking `ensure_daemon` while the setup() spawn is still in
+    /// flight — see `true` and bail without launching a second sidecar.
+    pub daemon_spawning: AtomicBool,
     /// Per-batch SSE pump cancellers. A new batch start replaces the
     /// previous canceller for that batch (rare; the GUI runs at most
     /// one job per tab).

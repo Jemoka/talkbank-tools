@@ -87,3 +87,9 @@ python/batchalign/_core/_proto_generated.py
 
 # Coordination scratch (multi-agent talk doc; not source of truth)
 talk.txt
+
+# Playwright e2e outputs (batchalign-gui)
+apps/batchalign/batchalign-gui/test-results/
+apps/batchalign/batchalign-gui/playwright-report/
+apps/batchalign/batchalign-gui/e2e-final.png
+apps/batchalign/batchalign-gui/e2e-*.png
