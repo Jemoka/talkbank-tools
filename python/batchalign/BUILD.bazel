@@ -226,33 +226,35 @@ sh_binary(
 genrule(
     name = "sidecar_bin",
     outs = ["sidecar.bin"],
-    # Consume the Bazel-tracked wheel directly. NO maturin re-run here;
-    # the only remaining shell-out in this genrule's action is the
-    # `cargo install pyapp` step, scoped to fetching + compiling pyapp's
-    # source from crates.io.
-    #
-    # Escape budget for this target:
-    #   1. cargo install pyapp — fetches from crates.io. Follow-up:
-    #      replace with `crate.spec(package = "pyapp", artifact = "bin")`
-    #      + rules_rust crate_universe bindep so pyapp is built from
-    #      pinned source like every other Rust dep. Tracked in
-    #      bazel-reactive-builds.md memory.
-    #
-    # All other tools are Bazel-managed: cargo + rustc via rules_rust,
-    # clang on linux/win via @llvm_toolchain_llvm. macOS still needs
-    # Xcode CLI Tools for clang+SDK; see macos-xcode-hermeticity-gap.md.
-    srcs = [":wheel_file"],
+    srcs = [
+        ":wheel_file",
+        # pyapp source is fetched lazily via git_repository in
+        # MODULE.bazel — Bazel only clones when this target is
+        # actually built.
+        "@pyapp_src//:srcs",
+        "@pyapp_src//:Cargo.toml",
+    ],
     tools = [
         "//bazel/python:pyapp_install.sh",
-        "//bazel/python:pyapp_genrule.sh",
+        # Bazel-provided cargo + rustc. PATH-injected by the script
+        # via PYAPP_RUST_BIN_DIRS, so the inner `cargo install`
+        # never touches host cargo.
         "@rules_rust//rust/toolchain:current_cargo_files",
         "@rules_rust//rust/toolchain:current_rustc_files",
     ],
+    # `local = True` is required: pyapp's build.rs writes into its
+    # source dir (an upstream design choice); cargo install's tmpdir
+    # copy of the source satisfies that, but only if cargo can use a
+    # persistent build cache — which sandboxed actions can't supply.
+    # All other hermeticity holds: cargo + rustc from rules_rust,
+    # pyapp source from @pyapp_src (Bazel-fetched, pinned SHA), wheel
+    # from :wheel_file. No crates.io network, no host cargo.
     cmd = " ".join([
         "PYAPP_RUST_BIN_DIRS='$(execpaths @rules_rust//rust/toolchain:current_cargo_files) $(execpaths @rules_rust//rust/toolchain:current_rustc_files)'",
-        "$(execpath //bazel/python:pyapp_genrule.sh)",
+        "$(execpath //bazel/python:pyapp_install.sh)",
         "$@",
         "$(execpath :wheel_file)",
+        "$(execpath @pyapp_src//:Cargo.toml)",
         "$(COMPILATION_MODE)",
     ]),
     local = True,

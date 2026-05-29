@@ -1,86 +1,112 @@
 #!/usr/bin/env bash
-# Install pyapp with an already-built wheel — no maturin step.
+# Build pyapp from local source via Bazel-provided cargo.
 #
-# Split out of pyapp_build.sh to remove the duplicate maturin build:
-# the sidecar genrule consumes :wheel_file (which already produced a
-# Bazel-tracked .whl via maturin_genrule.sh) and passes that wheel
-# path here. This script ONLY does Step 2 of the old pyapp_build.sh
-# (cargo install pyapp with PYAPP_* env vars).
+# Run as the cmd of //python/batchalign:sidecar_bin (a genrule with
+# `local = True`). Bazel hands us the Bazel-tracked wheel + the
+# Bazel-fetched pyapp source as $(execpath …) args, plus PATH-injects
+# rules_rust's cargo via PYAPP_RUST_BIN_DIRS. We invoke `cargo install
+# --path <pyapp_src>` so cargo:
+#   - never contacts crates.io (source is local)
+#   - never uses host cargo (Bazel-provided cargo on PATH)
+#   - creates its own writable tmpdir copy of the source (which pyapp's
+#     build.rs needs — it writes to $CARGO_MANIFEST_DIR/src/embed/)
 #
-# Remaining escape: `cargo install pyapp --version` reaches out to
-# crates.io to fetch pyapp's source. To eliminate this last escape,
-# pin pyapp via rules_rust crate_universe's bindep pattern:
-#   crate.spec(package = "pyapp", version = "=0.27.0", artifact = "bin")
-#   crate.annotation(crate = "pyapp", gen_all_binaries = True)
-# Then the sidecar genrule consumes @crates//:pyapp__bin directly —
-# zero network access at build time. (See user feedback in
-# bazel-reactive-builds.md.) Not done in this pass because the
-# PYAPP_* env vars are baked at compile time and require careful
-# action-time injection; tracked as follow-up.
+# `local = True` is required so cargo has a persistent place for its
+# build cache; pure sandboxed actions would discard cargo's tmpdir
+# between runs and pyapp's deps would re-compile every time.
 #
 # Args:
-#   $1 = wheel path (Bazel-tracked artifact from :wheel_file)
-#   $2 = output binary path (caller hands us where to put the result)
-#   $3 = compilation mode (opt|dbg|fastbuild)
+#   $1 = output binary path (the genrule's $@)
+#   $2 = wheel path        (//python/batchalign:wheel_file)
+#   $3 = pyapp Cargo.toml  (@pyapp_src//:Cargo.toml — we take dirname
+#                           for `cargo install --path`)
+#   $4 = compilation mode  (opt|dbg|fastbuild)
 
 set -euo pipefail
 
-if [[ $# -lt 3 ]]; then
-    echo "pyapp_install.sh: usage: <wheel> <output> <mode>" >&2
+if [[ $# -lt 4 ]]; then
+    echo "pyapp_install.sh: usage: <output> <wheel> <pyapp_cargo_toml> <mode>" >&2
     exit 2
 fi
+case "$1" in /*) OUTPUT="$1" ;; *) OUTPUT="$PWD/$1" ;; esac
+shift
 WHEEL="$1"; shift
-OUTPUT="$1"; shift
-COMPILATION_MODE="${1:-opt}"; shift
+PYAPP_CARGO_TOML="$1"; shift
+COMPILATION_MODE="$1"; shift
 
-# Resolve absolute paths (cargo install --root needs absolute).
-case "$WHEEL" in /*) ;; *) WHEEL="$PWD/$WHEEL" ;; esac
-case "$OUTPUT" in /*) ;; *) OUTPUT="$PWD/$OUTPUT" ;; esac
-if [[ ! -f "$WHEEL" ]]; then
-    echo "pyapp_install.sh: wheel not found: $WHEEL" >&2
-    exit 2
-fi
+case "$WHEEL"            in /*) ;; *) WHEEL="$PWD/$WHEEL" ;; esac
+case "$PYAPP_CARGO_TOML" in /*) ;; *) PYAPP_CARGO_TOML="$PWD/$PYAPP_CARGO_TOML" ;; esac
+PYAPP_SRC_DIR="$(cd "$(dirname "$PYAPP_CARGO_TOML")" && pwd -P)"
 
-# Read pinned pyapp + python versions from pyproject.toml (same source
-# of truth pyapp_build.sh used). Workspace path is required for this;
-# callers must export BUILD_WORKSPACE_DIRECTORY.
-pyproject="${BUILD_WORKSPACE_DIRECTORY:?BUILD_WORKSPACE_DIRECTORY must be set}/python/pyproject.toml"
-pin_pyapp=$(sed -n "/^\[tool\.batchalign\.pinned_tools\]/,/^\[/p" "$pyproject" \
-    | sed -n 's/^pyapp[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-pin_python=$(sed -n "/^\[tool\.batchalign\.pinned_tools\]/,/^\[/p" "$pyproject" \
-    | sed -n 's/^python[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-if [[ -z "$pin_pyapp" ]]; then
-    echo "pyapp_install.sh: missing pyapp pin in [tool.batchalign.pinned_tools]" >&2
-    exit 2
+[[ -f "$WHEEL" ]]            || { echo "wheel not found: $WHEEL" >&2; exit 2; }
+[[ -d "$PYAPP_SRC_DIR" ]]    || { echo "pyapp source not found: $PYAPP_SRC_DIR" >&2; exit 2; }
+
+# Self-locate workspace via realpath of BASH_SOURCE: Bazel symlinks
+# this script into the action sandbox from its source location. cargo
+# needs BUILD_WORKSPACE_DIRECTORY/python/target/... as a persistent
+# cache root so deps aren't recompiled from scratch each run.
+self_real="$(realpath "${BASH_SOURCE[0]}")"
+ws="$(dirname "$self_real")"
+while [[ "$ws" != "/" && ! -f "$ws/MODULE.bazel" ]]; do
+    ws="$(dirname "$ws")"
+done
+[[ -f "$ws/MODULE.bazel" ]] || { echo "couldn't locate workspace MODULE.bazel" >&2; exit 2; }
+export BUILD_WORKSPACE_DIRECTORY="$ws"
+
+# Inject Bazel-provided cargo + rustc onto PATH so the inner cargo
+# call never touches host cargo. PYAPP_RUST_BIN_DIRS is a space-
+# separated list of $(execpaths …) for rules_rust's
+# current_{cargo,rustc}_files filegroups.
+if [[ -n "${PYAPP_RUST_BIN_DIRS:-}" ]]; then
+    for p in $PYAPP_RUST_BIN_DIRS; do
+        case "$p" in
+            */bin/cargo|*/bin/rustc)
+                abs="$(cd "$(dirname "$p")" && pwd)"
+                case ":$PATH:" in
+                    *":$abs:"*) ;;
+                    *) PATH="$abs:$PATH" ;;
+                esac
+                ;;
+        esac
+    done
+    export PATH
 fi
 
 case "$COMPILATION_MODE" in
-    release|opt) cargo_flag=() ;;
+    release|opt)         cargo_flag=() ;;
     debug|dbg|fastbuild) cargo_flag=(--debug) ;;
-    *) echo "pyapp_install.sh: unknown profile $COMPILATION_MODE" >&2; exit 2 ;;
+    *) echo "unknown profile $COMPILATION_MODE" >&2; exit 2 ;;
 esac
 
-# Use a workspace-anchored tempdir so cargo's build cache survives
-# between invocations (cargo install reuses target/ artifacts when the
-# same `--root` is given again).
-out_dir="${BUILD_WORKSPACE_DIRECTORY}/python/target/pyapp"
+out_dir="$BUILD_WORKSPACE_DIRECTORY/python/target/pyapp"
 mkdir -p "$out_dir"
+
+# Bazel materializes git_repository content read-only in its cache.
+# pyapp's build.rs writes to $CARGO_MANIFEST_DIR/src/embed/ — an
+# upstream design choice — so we need a writable copy of the source.
+# `cargo install --path` (unlike `cargo install <pkg>` from registry)
+# does NOT make its own tmpdir copy; it builds in-place at the
+# manifest path. So we make our own writable copy here.
+build_src="$BUILD_WORKSPACE_DIRECTORY/python/target/pyapp-src"
+rm -rf "$build_src"
+mkdir -p "$build_src"
+cp -R "$PYAPP_SRC_DIR/." "$build_src/"
+chmod -R u+w "$build_src"
+PYAPP_SRC_DIR="$build_src"
 
 export PYAPP_PROJECT_PATH="$WHEEL"
 export PYAPP_EXEC_SPEC="batchalign.cli.daemon:run_pyapp_entry"
-export PYAPP_PYTHON_VERSION="${PYAPP_PYTHON_VERSION:-$pin_python}"
-export PYAPP_DISTRIBUTION_EMBED="${PYAPP_DISTRIBUTION_EMBED:-1}"
-export PYAPP_FULL_ISOLATION="${PYAPP_FULL_ISOLATION:-1}"
-export PYAPP_PROJECT_DEPENDENCY_FILE=""
-export PYAPP_PIP_EXTRA_ARGS="${PYAPP_PIP_EXTRA_ARGS:-}"
+export PYAPP_PYTHON_VERSION="3.12"
+export PYAPP_DISTRIBUTION_EMBED="1"
+export PYAPP_FULL_ISOLATION="1"
 export PYAPP_PROJECT_FEATURES="api"
 
-echo "pyapp_install.sh: cargo install pyapp@$pin_pyapp"
-echo "  PYAPP_PROJECT_PATH=$PYAPP_PROJECT_PATH"
-echo "  PYAPP_PYTHON_VERSION=$PYAPP_PYTHON_VERSION"
+echo "pyapp_install.sh: cargo=$(command -v cargo)"
+echo "pyapp_install.sh: pyapp source = $PYAPP_SRC_DIR"
+echo "pyapp_install.sh: wheel = $WHEEL"
 
-cargo install pyapp \
-    --version "$pin_pyapp" \
+cargo install \
+    --path "$PYAPP_SRC_DIR" \
     --force \
     --root "$out_dir" \
     "${cargo_flag[@]+"${cargo_flag[@]}"}"

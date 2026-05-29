@@ -68,6 +68,7 @@ crate.annotation(
         "PYO3_CONFIG_FILE": "$(execpath @@//bazel/python:pyo3_config)",
     },
     crate = "pyo3-build-config",
+    repositories = ["crates"],
 )
 crate.annotation(
     build_script_data = ["@@//bazel/python:pyo3_config"],
@@ -75,6 +76,7 @@ crate.annotation(
         "PYO3_CONFIG_FILE": "$(execpath @@//bazel/python:pyo3_config)",
     },
     crate = "pyo3-ffi",
+    repositories = ["crates"],
 )
 
 # Enable abi3 + abi3-py310 features on the pyo3 crate so its macros emit
@@ -90,6 +92,7 @@ crate.annotation(
         "abi3",
         "abi3-py310",
     ],
+    repositories = ["crates"],
 )
 
 # Feed hermetic protoc into every crate whose build script invokes it.
@@ -131,51 +134,52 @@ crate.from_cargo(
 )
 use_repo(crate, "crates")
 
-# =============================================================================
-# pyapp — built natively via Bazel from crates.io source.
+# pyapp source — Bazel fetches it lazily via git_repository (only
+# materialized when a downstream target actually consumes @pyapp_src,
+# e.g. //python/batchalign:sidecar_bin). Contributors building paths
+# that don't touch the sidecar never trigger the fetch — no manual
+# `git submodule update --init` required.
 #
-# This replaces the `cargo install pyapp` shell-out the previous
-# pyapp_install.sh script used. With pyapp pinned via crate_universe
-# and built as a Bazel-tracked target, there's no network access at
-# action time and no host-cargo escape — the binary is produced by
-# rules_rust like every other Rust target in this workspace.
-#
-# PYAPP_PROJECT_PATH is passed at compile time via build_script_env.
-# The $(execpath …) expansion resolves to the Bazel-tracked wheel
-# produced by //python/batchalign:wheel_file, so pyapp's build.rs
-# embeds OUR wheel — not a pypi fetch.
-#
-# Static PYAPP_* env vars mirror what pyapp_install.sh was setting
-# manually before. Update both call sites in lockstep if changing.
-# =============================================================================
-# TODO(hermeticity): replace pyapp_install.sh's cargo-install escape
-# with a rules_rust-native build. Tried two paths in feat/baapp; both
-# blocked on specific cargo/rules_rust limitations:
-#
-# Path 1: crate.from_specs(name = "pyapp_crates") + crate.annotation
-#         with repositories = ["pyapp_crates"]. Blocked because
-#         annotation's `repositories = […]` filter only matches
-#         from_cargo names (not from_specs ones); rules_rust 0.70.0
-#         doesn't extend the filter to from_specs.
-#
-# Path 2: add `crates/_bindeps/Cargo.toml` with `[dependencies]
-#         pyapp = "=0.27.0"` so from_cargo picks it up. Blocked
-#         because cargo silently ignores binary-only crate deps:
-#         `warning: ... ignoring invalid dependency pyapp which is
-#         missing a lib target`. cargo_metadata then never sees pyapp,
-#         and crate_universe's "Unused annotations" fires because
-#         there's no package to attach to. Cargo's `bindeps` feature
-#         (artifact-dependencies) is the canonical fix and would let
-#         the existing pyapp annotation work — but it requires a
-#         nightly Cargo, i.e. registering a nightly @rust_host_tools
-#         alongside the stable toolchain just for crate_universe
-#         resolution. That's a workspace-skeleton change outside
-#         this PR's scope.
-#
-# Both paths are well-understood and documented in
-# bazel-reactive-builds.md. Remaining escape: pyapp_install.sh runs
-# `cargo install pyapp` via Bazel-provided cargo (rules_rust toolchain
-# on PATH); fetches one crate from crates.io. Scoped to one script.
+# The compile itself happens in the sidecar_bin genrule (with
+# local = True): it invokes Bazel-provided cargo (from rules_rust's
+# host toolchain) against this source with `cargo install --path
+# $(execpath @pyapp_src//:srcs_root)` — no crates.io network access,
+# no host cargo dependency. local = True is required because pyapp's
+# build.rs writes to $CARGO_MANIFEST_DIR/src/embed/ (an upstream
+# design choice we can't change), which Bazel sandboxes mark
+# read-only; cargo install bypasses this by creating a writable tmpdir
+# copy of the source before invoking the build script.
+git_repo = use_repo_rule(
+    "@bazel_tools//tools/build_defs/repo:git.bzl",
+    "new_git_repository",
+)
+git_repo(
+    name = "pyapp_src",
+    remote = "https://github.com/ofek/pyapp.git",
+    commit = "b2dbcfa822db0e390c0ea2d8d965392903b776c4",  # v0.27.0
+    shallow_since = "1738400000 +0000",  # approx tag date; bumped if commit changes
+    build_file_content = """
+package(default_visibility = ["//visibility:public"])
+
+# Surface the entire pyapp source tree as one filegroup. The sidecar
+# genrule resolves the on-disk path via $(execpath …) and hands it to
+# `cargo install --path` so cargo uses local source (no crates.io).
+filegroup(
+    name = "srcs",
+    srcs = glob(
+        ["**"],
+        allow_empty = False,
+        exclude = ["**/BUILD.bazel", "**/BUILD"],
+    ),
+)
+
+# Cargo.toml is referenced via the file path directly (Bazel
+# auto-exports files in external repositories) — the sidecar genrule
+# uses `$(execpath @pyapp_src//:Cargo.toml)` to anchor `cargo install
+# --path` at pyapp's source root.
+exports_files(["Cargo.toml"])
+""",
+)
 
 # =============================================================================
 # Python — rules_uv (deps) → rules_python (py_*) → rules_rust (cdylib via

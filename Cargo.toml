@@ -28,8 +28,18 @@ members = [
     "apps/chatter/chatter-gui/src-tauri",
     "apps/batchalign/batchalign-gui/src-tauri",
 ]
+# Third-party Rust crates that aren't on crates.io (or that we want
+# Bazel-fetched rather than cargo-fetched) are wired in via MODULE.bazel
+# — see the `git_repository` block for pyapp. They are NOT workspace
+# members, so cargo doesn't require them to be present for any cargo
+# command. Bazel pulls them lazily, only on the path that needs them.
 exclude = [
     "fuzz",  # cargo-fuzz uses its own nightly toolchain with sanitizer flags
+    # Writable working copy of @pyapp_src made by pyapp_install.sh at
+    # sidecar-build time. Lives inside the workspace tree so cargo's
+    # incremental build cache (under target/) survives across runs,
+    # but is NOT a workspace member.
+    "python/target/pyapp-src",
 ]
 
 [workspace.package]

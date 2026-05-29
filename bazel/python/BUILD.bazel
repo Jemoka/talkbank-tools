@@ -17,7 +17,6 @@ exports_files([
     "maturin_build.sh",
     "maturin_genrule.sh",
     "pyapp_build.sh",
-    "pyapp_genrule.sh",
     "pyapp_install.sh",
     "pytest.sh",
     "lint.sh",
