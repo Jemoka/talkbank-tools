@@ -17,7 +17,8 @@
 #
 # Args:
 #   $1 = output binary path (the genrule's $@)
-#   $2 = wheel path        (//python/batchalign:wheel_file)
+#   $2 = wheel path        (//python/batchalign:batchalign.whl — one of
+#                           the //python/batchalign:wheel genrule's outputs)
 #   $3 = pyapp Cargo.toml  (@pyapp_src//:Cargo.toml — we take dirname
 #                           for `cargo install --path`)
 #   $4 = compilation mode  (opt|dbg|fastbuild)

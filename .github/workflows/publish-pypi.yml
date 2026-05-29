@@ -9,6 +9,11 @@ name: publish · pypi (batchalign)
 # Per-cell flow:
 #   setup-bazel → `bazel run //python/batchalign:wheel` → upload artifact.
 #
+# `bazel run //python/batchalign:wheel` is one target end-to-end:
+# the genrule produces the wheel + tag in bazel-bin, the sh_binary
+# copies it under the tagged name into python/target/wheels/. CI does
+# not script the copy.
+#
 # Everything else (uv, maturin, rust, clang) is pulled hermetically by
 # Bazel from MODULE.bazel / multitool.lock.json / pyproject.toml's
 # [tool.batchalign.pinned_tools]. We do not pre-install rust/uv/etc on

@@ -13,8 +13,15 @@ alongside the Python sources in the runfiles tree.
 Release-only (still maturin — sole reader of pyproject.toml's full
 multi-platform tagging matrix + optional-deps groups):
 
-    bazel run //python/batchalign:wheel       # maturin build
+    bazel run //python/batchalign:wheel       # build + install under
+                                              # python/target/wheels/<tag>.whl
     bazel run //python/batchalign:publish     # twine upload
+
+The wheel command is one target end-to-end: it triggers the maturin
+build (cached as `:_wheel_artifact`, also depended on by `:sidecar`)
+and copies the result into `python/target/wheels/<tag>.whl` with the
+PyPI-tagged basename. No multi-step incantations; no separate `bazel
+build` + `cp` recipe for contributors or CI to memorize.
 
 `pyproject.toml` is the single source of truth for the wheel
 (version, runtime deps, all `[project.optional-dependencies]`
@@ -90,69 +97,80 @@ py_test(
 )
 
 # ---------------------------------------------------------------------------
-# Maturin-driven wheel + publish (release path only).
+# Maturin-driven wheel (release path).
 # ---------------------------------------------------------------------------
-# Hermetic C toolchain injected into both maturin escape paths. The
-# toolchains_llvm-managed clang + ar + ranlib are passed as runfiles
-# rootpaths; the shell scripts resolve them via $RUNFILES_DIR and export
-# CC/CXX/AR/RANLIB before invoking maturin. cc-rs inside cargo then
-# picks up the pinned compiler instead of /usr/bin/cc, which decouples
-# every `*-sys` crate build from the host CommandLineTools state. See
-# MODULE.bazel's `toolchains_llvm` block for the cflag injection that
-# papers over the macOS 26.x SDK `__kernel_ptr_semantics` regression.
+# Two-layer shape:
+#
+#   :_wheel_artifact      genrule. Produces `batchalign.whl` (wheel
+#                          bytes) + `wheel_tag.txt` (maturin's PyPI-
+#                          tagged basename, e.g.
+#                          `batchalign-0.7.1-cp312-cp312-macosx_11_0_arm64.whl`).
+#                          Tagged `no-cache` because maturin reads
+#                          `.rs` / `.py` / `pyproject.toml` from the
+#                          source tree directly, not through Bazel
+#                          inputs — letting Bazel always re-invoke
+#                          maturin (cargo's incremental cache makes the
+#                          no-op case sub-second) is cheaper than
+#                          declaring every Rust crate target in `srcs`
+#                          for invalidation and paying for a parallel
+#                          rules_rust build of every crate maturin
+#                          already compiles. Not user-facing — both
+#                          `:sidecar` and `:wheel` consume it.
+#
+#   :wheel                 sh_binary. `bazel run //python/batchalign:wheel`
+#                          builds :_wheel_artifact, reads the tag, and
+#                          copies the wheel into
+#                          `python/target/wheels/<tag>.whl`. This is
+#                          the single user-facing wheel command —
+#                          contributors, the justfile, and CI all
+#                          invoke it the same way. No
+#                          memorized-shell-snippet alternative.
+#
+# Hermetic C toolchain. The toolchains_llvm-managed clang + ar +
+# ranlib are passed as execpaths; the shell scripts resolve them and
+# export CC/CXX/AR/RANLIB before invoking maturin. cc-rs inside
+# cargo then picks up the pinned compiler instead of /usr/bin/cc,
+# which decouples every `*-sys` crate build from the host
+# CommandLineTools state. See MODULE.bazel's `toolchains_llvm` block
+# for the cflag injection that papers over the macOS 26.x SDK
+# `__kernel_ptr_semantics` regression.
+#
+# `$(COMPILATION_MODE)` is a Bazel make-variable that expands to
+# `opt`, `dbg`, or `fastbuild` based on `-c <mode>`. The shell scripts
+# translate that into maturin's `--release` / dev profile, so users
+# never need PYAPP_PROFILE / MATURIN_PROFILE env vars — `bazel run
+# -c opt //...` is the only knob.
+#
+# Historical note: this used to be two parallel targets (a
+# `sh_binary :wheel` that ran maturin and dropped a wheel into the
+# source tree, plus a `:wheel_file` genrule that ran maturin a second
+# time for Bazel-tracked output). Editing a single .rs file forced
+# two maturin runs. Collapsed: one genrule produces the wheel bytes;
+# the sh_binary is now a thin copy-out that reuses that output. A
+# follow-up pass also stripped the rules_rust crate targets from
+# `srcs` — they were never consumed by maturin, only triggering a
+# Bazel-side rust_library build that doubled the rustc cost on every
+# `.rs` edit. The `no-cache` tag below preserves correctness without
+# that cost.
 _LLVM_TOOLS = [
     "@llvm_toolchain_llvm//:bin/clang",
     "@llvm_toolchain_llvm//:bin/llvm-ar",
     "@llvm_toolchain_llvm//:bin/llvm-ranlib",
 ]
 
-_WHEEL_DATA = [
-    "//bazel/python:hermeticity_guard.sh",
-    "//bazel/python:runfiles_resolve.sh",
-    "//crates/batchalign/batchalign-engine:_core",
-    "//crates/batchalign/batchalign-core:batchalign_core",
-    "//crates/core/talkbank-model:talkbank_model",
-    "//crates/core/talkbank-parser:talkbank_parser",
-    "//crates/core/talkbank-transform:talkbank_transform",
-    "//python:pyproject.toml",
-    # The autogenerated proto module is staged into the source tree by
-    # `maturin_build.sh` before maturin packages — wheels MUST ship a
-    # current copy.
-    "//python/batchalign/_core:_proto_generated_py",
-] + _LLVM_TOOLS
-
-# `$(COMPILATION_MODE)` is a Bazel make-variable that expands to `opt`,
-# `dbg`, or `fastbuild` based on `-c <mode>` at run time. The shell
-# scripts translate that into maturin's `--release` / dev profile, so
-# users never need PYAPP_PROFILE / MATURIN_PROFILE env vars -- `bazel run
-# -c opt //...` is the only knob.
-sh_binary(
-    name = "wheel",
-    srcs = ["//bazel/python:maturin_build.sh"],
-    args = [
-        "$(rootpath @multitool//tools/uv)",
-        "$(rootpath //python/batchalign/_core:_proto_generated_py)",
-        "$(COMPILATION_MODE)",
-        "$(rootpath @llvm_toolchain_llvm//:bin/clang)",
-        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-ar)",
-        "$(rootpath @llvm_toolchain_llvm//:bin/llvm-ranlib)",
-    ],
-    data = ["@multitool//tools/uv"] + _WHEEL_DATA,
-)
-
-# Bazel-tracked wheel artifact. Same maturin shell-out as :wheel (which
-# is the allowed-and-necessary escape — maturin is the sole reader of
-# pyproject.toml's multi-platform tagging matrix), but the output is a
-# real file that downstream Bazel targets can depend on via
-# $(execpath …) / rlocation. Used by :sidecar so the sidecar
-# pipeline doesn't re-run maturin a second time.
 genrule(
-    name = "wheel_file",
-    outs = ["batchalign.whl"],
-    srcs = _WHEEL_DATA + glob(
-        ["**/*.py"],
-        exclude = ["tests/**", "_core/_proto_generated.py"],
-    ),
+    name = "_wheel_artifact",
+    outs = ["batchalign.whl", "wheel_tag.txt"],
+    srcs = [
+        # `_proto_generated.py` is the only input the genrule action
+        # actually *reads via Bazel runfiles* — maturin_build.sh stages
+        # it into the source tree before maturin packages. Everything
+        # else maturin needs (`pyproject.toml`, `.rs` sources under
+        # `crates/`, `.py` sources under `python/batchalign/`) lives in
+        # the source tree and is read directly via
+        # `BUILD_WORKSPACE_DIRECTORY`, not through Bazel inputs.
+        "//python/batchalign/_core:_proto_generated_py",
+    ] + _LLVM_TOOLS,
     tools = [
         "//bazel/python:maturin_build.sh",
         "//bazel/python:maturin_genrule.sh",
@@ -165,7 +183,8 @@ genrule(
     cmd = " ".join([
         "PYAPP_RUST_BIN_DIRS='$(execpaths @rules_rust//rust/toolchain:current_cargo_files) $(execpaths @rules_rust//rust/toolchain:current_rustc_files)'",
         "$(execpath //bazel/python:maturin_genrule.sh)",
-        "$@",
+        "$(location batchalign.whl)",
+        "$(location wheel_tag.txt)",
         "$(execpath @multitool//tools/uv)",
         "$(execpath //python/batchalign/_core:_proto_generated_py)",
         "$(COMPILATION_MODE)",
@@ -173,7 +192,42 @@ genrule(
         "$(execpath @llvm_toolchain_llvm//:bin/llvm-ar)",
         "$(execpath @llvm_toolchain_llvm//:bin/llvm-ranlib)",
     ]),
+    # `local = True`: maturin needs network access (cargo fetches) and a
+    # persistent target/ cache that a sandboxed action can't supply.
+    # All other hermeticity holds — uv, rustc, cargo, the LLVM toolchain
+    # all come from Bazel-managed deps.
     local = True,
+    # `no-cache`: this action reads its real inputs (`.rs` under
+    # `crates/`, `.py` under `python/batchalign/`, `pyproject.toml`)
+    # from the source tree at run time, NOT through Bazel's input set.
+    # If we declared all of those in `srcs` for invalidation, building
+    # the wheel would also force a parallel Bazel-side `rust_library`
+    # build of every crate maturin already compiles via cargo — every
+    # `.rs` edit would pay rustc twice. Instead, we let the action
+    # always re-run; cargo's incremental cache and maturin's "already
+    # up to date" check keep the no-op case sub-second. Net effect:
+    # one rustc compile per `.rs` edit (the maturin one), no stale
+    # wheels, no double-build cost for the GUI sidecar dev loop.
+    tags = ["no-cache"],
+)
+
+# User-facing wheel command. `bazel run //python/batchalign:wheel`
+# (and `just batchalign wheel`, and CI wheel jobs) all funnel through
+# this one target. It reads the cached `:_wheel_artifact` outputs from
+# runfiles and copies them into `python/target/wheels/<tag>.whl`
+# inside the source tree. No second maturin run; no shell snippet
+# contributors need to memorize.
+sh_binary(
+    name = "wheel",
+    srcs = ["//bazel/python:install_wheel.sh"],
+    args = [
+        "$(rootpath :batchalign.whl)",
+        "$(rootpath :wheel_tag.txt)",
+    ],
+    data = [
+        ":batchalign.whl",
+        ":wheel_tag.txt",
+    ],
 )
 
 # Standalone production-daemon sidecar binary built via PyApp.
@@ -188,7 +242,11 @@ genrule(
 #
 # Architecture (all Bazel-managed, no host tool requirements beyond
 # bazel + just):
-#   - Wheel input from `:wheel_file` genrule (Bazel-tracked .whl).
+#   - Wheel input from `:batchalign.whl` (one of `:_wheel_artifact`'s
+#     outputs). Depending on the specific output rather than the
+#     genrule label keeps `wheel_tag.txt` out of the sidecar's input
+#     set (clean and explicit; not strictly required since the tag
+#     file is small and irrelevant to PyApp).
 #   - pyapp source from `@pyapp_src` (Bazel `git_repository`, pinned
 #     by SHA in MODULE.bazel; fetched lazily on first build).
 #   - cargo + rustc from `@rules_rust//rust/toolchain` (PATH-injected
@@ -203,7 +261,7 @@ genrule(
     name = "sidecar",
     outs = ["sidecar"],
     srcs = [
-        ":wheel_file",
+        ":batchalign.whl",
         # pyapp source is fetched lazily via git_repository in
         # MODULE.bazel — Bazel only clones when this target is
         # actually built.
@@ -224,12 +282,12 @@ genrule(
     # persistent build cache — which sandboxed actions can't supply.
     # All other hermeticity holds: cargo + rustc from rules_rust,
     # pyapp source from @pyapp_src (Bazel-fetched, pinned SHA), wheel
-    # from :wheel_file. No crates.io network, no host cargo.
+    # from :batchalign.whl. No crates.io network, no host cargo.
     cmd = " ".join([
         "PYAPP_RUST_BIN_DIRS='$(execpaths @rules_rust//rust/toolchain:current_cargo_files) $(execpaths @rules_rust//rust/toolchain:current_rustc_files)'",
         "$(execpath //bazel/python:pyapp_install.sh)",
         "$@",
-        "$(execpath :wheel_file)",
+        "$(execpath //python/batchalign:batchalign.whl)",
         "$(execpath @pyapp_src//:Cargo.toml)",
         "$(COMPILATION_MODE)",
     ]),

@@ -123,6 +123,12 @@ lint:
 # ---------------------------------------------------------------------------
 
 # Wheel for the host platform.
+#
+# Single target end-to-end: `:wheel` is a sh_binary that depends on
+# the `:_wheel_artifact` genrule (one maturin run, Bazel-cached, also
+# consumed by `:sidecar`) and copies the wheel into
+# `python/target/wheels/<tagged-name>.whl`. Building both targets
+# back-to-back doesn't double-invoke maturin.
 wheel:
     bazel run -c opt //python/batchalign:wheel
 

@@ -28,7 +28,8 @@ package(default_visibility = ["//visibility:public"])
 
 # Both targets consume //python/batchalign:sidecar — a real Bazel-
 # tracked file output produced by a genrule that vendors pyapp, embeds
-# the wheel from //python/batchalign:wheel_file, and emits the
+# the wheel from //python/batchalign:batchalign.whl (an output of the
+# //python/batchalign:wheel genrule), and emits the
 # finished binary at bazel-bin/python/batchalign/sidecar. The wrapper
 # scripts rlocation-resolve it and stage under src-tauri/binaries/
 # before invoking cargo tauri.
