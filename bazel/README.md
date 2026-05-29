@@ -20,7 +20,7 @@ Ordered by where each entry sits in the build graph:
 
 | Stage | Path | Purpose | Consumer |
 |---|---|---|---|
-| 1. Dep prep | `cargo/` | `bazel run //bazel/cargo:repin` — regenerate `crate_universe` lock after any `Cargo.toml` edit | public |
+| 1. Dep prep | `cargo/` | `crate_universe` repin target. **Not called directly** — `tools/bazel` triggers a repin on every Bazel invocation when `Cargo.toml` is newer than `Cargo.lock`. The target remains as a manual escape hatch. | public |
 | 1. Dep prep | `sqlx/` | `bazel run //bazel/sqlx:prepare` — regenerate `.sqlx/` query cache for `batchalign-cli`'s `sqlx::query!` macros | public |
 | 1. Dep prep | `patches/` | crate_universe patch files (see `MODULE.bazel`) | crate_universe only |
 | 2. Toolchains | `python/` | `uv` + `maturin` orchestration: `cli`, `develop`, `maturin_build`, `pytest`, `lint`. Profile via `MATURIN_PROFILE` or `BAZEL_COMPILATION_MODE`. | `//python` only |
@@ -51,9 +51,9 @@ that touch many packages), it belongs under `scripts/`, not here.
 Every subpackage scopes `default_visibility` to the single Bazel package
 that consumes it (`//visibility:private` would be even tighter, but the
 `exports_files()` declarations need at least the consumer's package to
-see them). The two exceptions (`cargo/` and `sqlx/`) are public because
-every developer needs `repin` after a `Cargo.toml` edit and every
-developer touching SQL needs `prepare`.
+see them). Two exceptions are public: `cargo/` (escape-hatch repin
+target; the routine flow is automatic via `tools/bazel`) and `sqlx/`
+(`prepare` invoked by every developer touching SQL).
 
 ## Why `build/` and not `tools/`?
 

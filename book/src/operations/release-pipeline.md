@@ -1,6 +1,6 @@
 # Release Pipeline
 
-**Last modified:** 2026-05-15 20:24 IST
+**Last modified:** 2026-05-29 10:58 PDT
 
 How a code change becomes a published artifact. Five surfaces ship from
 this monorepo, each with its own chain:
@@ -319,18 +319,19 @@ dispatch). Build/test gates run automatically.
 
 ## Cross-cutting workflows
 
-### Repinning the crate_universe lockfile
+### Refreshing the crate_universe lockfile
 
-Required after any `Cargo.toml` edit that touches a dependency.
+Automatic. `tools/bazel` (the Bazelisk wrapper at the workspace root)
+detects when any `Cargo.toml` is newer than `Cargo.lock` and sets
+`CARGO_BAZEL_REPIN=true` on the next Bazel invocation. crate_universe
+re-resolves and refreshes `Cargo.lock` + `MODULE.bazel.lock` inline.
+Just edit `Cargo.toml` and run whatever Bazel command you were going to
+run; commit the resulting `Cargo.lock` / `MODULE.bazel.lock` diff.
 
-```bash
-bazel run //bazel/cargo:repin
-git diff MODULE.bazel.lock     # inspect what changed
-git add MODULE.bazel.lock && git commit -m "deps: repin crate_universe"
-```
-
-If you forget, the CI Rust workflow will fail with a `crate_universe`
-mismatch error. The fix is the same as above.
+The underlying `//bazel/cargo:repin` target still exists as a manual
+escape hatch (useful when running raw `bazel` without the wrapper, or
+debugging a stuck repin), but should not appear in any contributor
+workflow.
 
 ### Refreshing the sqlx query cache
 
@@ -393,7 +394,8 @@ bazel run //apps/vscode-extension:package        # .vsix
 cd apps/chatter/chatter-gui && cargo tauri build # unsigned Tauri bundle
 
 # Lockfile / cache maintenance
-bazel run //bazel/cargo:repin                    # after Cargo.toml edit
+# Cargo.lock and python/requirements.lock.txt regenerate automatically
+# on every Bazel invocation via tools/bazel. No manual command needed.
 bazel run //bazel/sqlx:prepare                   # after sqlx::query! edit
 bazel run //grammar:tree_sitter_generate         # after grammar.js edit
 ```

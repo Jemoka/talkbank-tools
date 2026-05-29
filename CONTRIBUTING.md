@@ -1,6 +1,6 @@
 # Contributing to talkbank-tools
 
-**Last updated:** 2026-05-29 03:29 PDT
+**Last updated:** 2026-05-29 10:58 PDT
 
 Welcome. This repo is a polyglot monorepo orchestrated by **Bazel**. It
 ships two end-user products:
@@ -47,76 +47,63 @@ match what's actually live before any host-tool shell-out.
 
 ### Host prerequisites
 
-The base toolchain (sidecar, wheel, CLI) needs only a Bazel launcher,
-the `just` task runner, git, and an OS-specific C toolchain + system
-sqlite — some `*-sys` Rust crates link, not compile, against system
-libraries. **The desktop GUI** (`just batchalign::gui::*`) needs
-additional UI runtime libraries on Linux; see
-[GUI-only host prerequisites](#gui-only-host-prerequisites) below.
+The base toolchain (Bazel build/test, batchalign sidecar, batchalign
+wheel, batchalign3 CLI, chatter CLI/LSP) needs only:
 
-Bazel-managed dependencies (cargo / rustc / cargo-tauri / pyapp / node
-/ python / maturin / uv / llvm) are NOT host installs — Bazel fetches
-them on first build.
+  - a Bazel launcher (`bazelisk` recommended — it picks up the
+    workspace's `tools/bazel` wrapper for lockfile auto-reactivity),
+  - the `just` task runner,
+  - git,
+  - an OS-specific C toolchain (a working host `cc` — Bazel's
+    `toolchains_llvm` ships its own hermetic clang on Linux/Windows
+    and uses Apple's bundled clang via `xcrun` on macOS).
 
-#### macOS
+Nothing else is required at the host level. Bazel-managed
+dependencies (cargo / rustc / cargo-tauri / pyapp / node / python /
+maturin / uv / llvm / sqlite for chatter) are NOT host installs —
+Bazel fetches them on first build.
+
+**Two product groups have additional host prereqs:**
+
+  - **chatter** (CLI, LSP, desktop GUI): links the SQLite-backed
+    validation cache (`talkbank-cache`) via `libsqlite3-sys`. See
+    [Chatter-only host prereqs](#chatter-only-host-prereqs).
+  - **Tauri desktop apps** (`apps/chatter/chatter-gui` and
+    `apps/batchalign/batchalign-gui`): link the host's WebView + UI
+    frameworks; on macOS this means **full Xcode**, not just CLT. See
+    [Desktop-GUI host prereqs](#desktop-gui-host-prereqs).
+
+Skip both sections if you're only working on batchalign (Rust engine,
+wheel, sidecar, `batchalign3` CLI) or the spec / grammar /
+talkbank-* library crates.
+
+#### macOS (base toolchain)
 
 ```bash
-# 1. Install Xcode (NOT just `xcode-select --install`).
-#    Recent macOS releases (26.x) ship a CommandLineTools bundle whose
-#    clang and SDK don't agree with each other -- every cc-rs-driven
-#    build fails with `__kernel_ptr_semantics` / `__sized_by` /
-#    `fixpt_t` parse errors. Full Xcode bundles a matched clang/SDK
-#    pair.
-mas install 497799835                                   # `brew install mas` first
-# or download Xcode from https://developer.apple.com/xcode/
+# 1. Workspace tools. Bazelisk is what enables tools/bazel
+#    (the lockfile-reactivity wrapper) to run.
+brew install bazelisk just git
 
-# 2. Accept the Xcode license + finish post-install.
-sudo xcodebuild -license accept
+# 2. A working host C toolchain. Xcode Command Line Tools is enough
+#    for the base toolchain (batchalign wheel / sidecar / CLI; chatter
+#    CLI / LSP via the Bazel-native build path). The wheel build no
+#    longer transitively pulls libsqlite3-sys, so the CLT clang/SDK
+#    is sufficient on its own.
+xcode-select --install                                  # accept dialog if first time
 
-# 3. Point xcode-select at Xcode.app, not CommandLineTools.
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
-# 4. Verify the SDK path lives inside Xcode.app.
-xcrun --sdk macosx --show-sdk-path
-# expect: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-# NOT:    /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
-
-# 5. Workspace tools.
-brew install bazelisk just sqlite git
-
-# 6. Optional: faster development feedback for the GUI / VS Code
-#    extension. These are NOT required for `just build` / `just test`.
+# 3. Optional: faster dev feedback for the VS Code extension.
 brew install node                                       # only if you want host-side `npm`
 ```
 
-**Why system sqlite?** `talkbank-transform` links against system
-sqlite via the `sqlx-sqlite/unbundled` feature. Bundling sqlite (the
-default in many `*-sys` crates) tries to compile `sqlite3.c` against
-the macOS SDK from a plain cargo invocation, which the SDK's
-`<sys/sysctl.h>` etc. don't cleanly tolerate. The maturin shell
-scripts (`bazel/python/{maturin,pyapp}_build.sh`) auto-detect
-homebrew sqlite and export `SQLITE3_LIB_DIR` /
-`SQLITE3_INCLUDE_DIR` so libsqlite3-sys's `build_linked` path picks
-it up. See [Architecture decisions: sqlite linking](#architecture-decisions-sqlite-linking)
-below.
+That's it. Full Xcode is only required for the Tauri desktop apps;
+see [Desktop-GUI host prereqs](#desktop-gui-host-prereqs).
 
-**Why full Xcode and not CLT?** Bazel-native builds work fine with
-either, because `rules_rust` wraps `cargo_build_script` in a
-hermetic-cc shell that papers over a lot of SDK quirks. The
-maturin escape path (wheel, sidecar) uses host cargo directly and
-sees the raw SDK headers; with CLT 26.x those don't parse. We don't
-vendor an SDK as a workaround because Apple's EULA prohibits
-redistribution.
-
-#### Linux (Debian/Ubuntu)
+#### Linux (Debian/Ubuntu) (base toolchain)
 
 ```bash
-# Workspace tools.
 sudo apt-get update
 sudo apt-get install -y \
-    git curl build-essential pkg-config \
-    libsqlite3-dev \
-    ca-certificates
+    git curl build-essential pkg-config ca-certificates
 
 # Bazel launcher + just.
 # Option A (apt):
@@ -131,18 +118,17 @@ npm install -g @bazel/bazelisk
 # https://github.com/casey/just/releases)
 ```
 
-Linux distros ship matched clang/SDK by default; no equivalent of the
-macOS gotcha. `libsqlite3-dev` provides the headers + library the
-unbundled sqlx-sqlite needs.
+Linux distros ship matched clang/SDK by default; no macOS-style
+toolchain caveat applies.
 
-#### Linux (Fedora/RHEL)
+#### Linux (Fedora/RHEL) (base toolchain)
 
 ```bash
-sudo dnf install -y git gcc gcc-c++ make pkgconf-pkg-config sqlite-devel
+sudo dnf install -y git gcc gcc-c++ make pkgconf-pkg-config
 # Bazel + just same as Debian (apt → dnf for the bazelisk package).
 ```
 
-#### Windows
+#### Windows (base toolchain)
 
 Not tested by maintainers as a daily-driver dev environment, but CI
 builds wheels on Windows runners. Bare minimum:
@@ -152,40 +138,81 @@ builds wheels on Windows runners. Bare minimum:
 scoop install bazelisk just git
 # Visual Studio 2022 Build Tools provides MSVC (the `*-sys` crate
 # linker target on Windows).
-# vcpkg for sqlite:
-vcpkg install sqlite3:x64-windows-static
-$env:SQLITE3_LIB_DIR = "$(vcpkg list --x-install-root .\vcpkg_installed)\x64-windows-static\lib"
-$env:SQLITE3_INCLUDE_DIR = "$(vcpkg list --x-install-root .\vcpkg_installed)\x64-windows-static\include"
 ```
 
 WSL2 (Ubuntu) is the easier path if you don't have a hard Windows
 requirement -- the Linux instructions above work as-is.
 
-### GUI-only host prerequisites
+### Chatter-only host prereqs
 
-The desktop GUI (`just batchalign::gui::dev`, `just batchalign::gui::build`,
-and the Chatter desktop app under `apps/chatter/chatter-gui/`) embeds
-the system's WebView via Tauri. WebView bindings require native UI
-libraries that aren't vendorable through Bazel — they're shared libs
-the OS expects to find at link/run time.
+The chatter CLI, LSP, and desktop GUI link the `talkbank-cache` crate
+(`crates/core/talkbank-cache`), which talks to a SQLite validation
+cache via `sqlx-sqlite` with the `sqlite-unbundled` feature. That
+feature **links** against the system sqlite headers/library rather
+than compiling a bundled `sqlite3.c`; this sidesteps the macOS-26.x
+CLT SDK regressions that prevent bundled sqlite3.c from compiling.
 
-These are **not** required for `just batchalign sidecar`,
-`just batchalign cli`, `just batchalign wheel`, `just batchalign test`,
-or `just batchalign build`. Skip this section unless you're touching
-the GUI.
+If you're building or testing any chatter target
+(`just chatter ...`, `bazel ... //crates/chatter/...`,
+`bazel ... //apps/chatter/...`), install one of:
 
-**The base toolchain provides cargo-tauri itself** via
-`//bazel/tauri:cargo_tauri` (Bazel-built from a SHA-pinned crates.io
-tarball, PATH-injected by the bundle/dev wrapper). You do **not** need
-to `cargo install tauri-cli`. The deps below are for Tauri's runtime
-linkage only.
+```bash
+brew install sqlite                                     # macOS
+sudo apt-get install -y libsqlite3-dev                  # Debian/Ubuntu
+sudo dnf install -y sqlite-devel                        # Fedora/RHEL
+vcpkg install sqlite3:x64-windows-static                # Windows
+```
 
-#### macOS (GUI)
+Batchalign does not need any of this — its cache is `redb`, a pure-Rust
+embedded KV store.
 
-WebKit ships with macOS via WebKit.framework. Xcode CLI Tools (already
-required by the base toolchain) cover everything. **No extra installs.**
+### Desktop-GUI host prereqs
 
-#### Linux (GUI, Debian/Ubuntu)
+The Tauri desktop apps embed the host's WebView via Tauri, which links
+against native UI libraries that aren't vendorable through Bazel.
+**The base toolchain provides `cargo-tauri` itself** (`//bazel/tauri:cargo_tauri`,
+SHA-pinned crates.io tarball, PATH-injected by the bundle wrapper) —
+you do not need `cargo install tauri-cli`. The host prereqs below are
+for Tauri's runtime linkage only.
+
+These apply to:
+  - `apps/chatter/chatter-gui`     (Chatter.app — chatter desktop)
+  - `apps/batchalign/batchalign-gui` (Batchalign.app — experimental)
+
+#### macOS (Tauri)
+
+Tauri on macOS links against WebKit.framework and other Cocoa
+frameworks. The CLT SDK exposes these symbols, but Tauri's bundler
+chain (`cargo tauri build` → codesign → notarytool) sometimes hits
+SDK-header drift on recent macOS releases; the supported answer is
+**full Xcode** for desktop-app contributors:
+
+```bash
+# 1. Install Xcode. Recent macOS releases (26.x) ship a CLT bundle
+#    whose clang and SDK don't agree with each other — cc-rs-driven
+#    builds can fail with `__kernel_ptr_semantics` / `__sized_by` /
+#    `fixpt_t` parse errors. Full Xcode bundles a matched clang/SDK.
+mas install 497799835                                   # `brew install mas` first
+# or download Xcode from https://developer.apple.com/xcode/
+
+# 2. Accept the Xcode license + finish post-install.
+sudo xcodebuild -license accept
+
+# 3. Point xcode-select at Xcode.app, not CommandLineTools.
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+# 4. Verify the SDK path lives inside Xcode.app.
+xcrun --sdk macosx --show-sdk-path
+# expect: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+# NOT:    /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+```
+
+We don't vendor an SDK as a workaround because Apple's EULA prohibits
+redistribution. The Bazel-native build path goes through
+`toolchains_llvm`'s hermetic clang on Linux/Windows; on macOS we
+defer to whatever clang `xcrun -find clang` resolves (Xcode or CLT).
+
+#### Linux (Tauri, Debian/Ubuntu)
 
 ```bash
 sudo apt-get install -y \
@@ -202,7 +229,7 @@ sudo apt-get install -y nodejs npm
 # or use nvm / fnm if you want a specific version
 ```
 
-#### Linux (GUI, Fedora/RHEL)
+#### Linux (Tauri, Fedora/RHEL)
 
 ```bash
 sudo dnf install -y \
@@ -214,7 +241,7 @@ sudo dnf install -y \
     nodejs npm
 ```
 
-#### Windows (GUI)
+#### Windows (Tauri)
 
 WebView2 ships with Windows 11 and on Windows 10 via the Edge runtime.
 No extra installs beyond the base toolchain. Install Node.js separately
@@ -235,13 +262,20 @@ just batchalign cli -- --help
 just chatter cli -- --help
 ```
 
-If the first build complains about `crate_universe`, run
-`just tooling cargo-repin` (which is `bazel run //bazel/cargo:repin`).
+Lockfile drift is automatic: `tools/bazel` (a Bazelisk wrapper) sees
+`Cargo.toml` or `python/pyproject.toml` newer than its lockfile and
+regenerates the lockfile inline before handing off to the real Bazel.
+No separate command to remember. If you ever want to bypass that
+behavior (debugging the wrapper itself), set
+`TALKBANK_BAZEL_SKIP_RESOLVE=1`.
 
 If `xcrun` errors with "agreed to the Xcode license" on macOS, run
-`sudo xcodebuild -license accept` and retry. If `xcrun --sdk macosx
---show-sdk-path` still points at CommandLineTools after step 3, your
-shell may be caching `DEVELOPER_DIR` -- open a fresh terminal.
+`sudo xcodebuild -license accept` and retry. (Only the Tauri desktop
+apps require Xcode in the first place — see
+[Desktop-GUI host prereqs](#desktop-gui-host-prereqs).) If
+`xcrun --sdk macosx --show-sdk-path` still points at CommandLineTools
+after `xcode-select -s`, your shell may be caching `DEVELOPER_DIR` —
+open a fresh terminal.
 
 ### Daily workflow
 
@@ -255,7 +289,7 @@ just --list spec           # spec generators
 just --list clan           # CLAN crate
 just --list vscode         # VS Code extension
 just --list docs           # mdBook
-just --list tooling        # cargo-repin, sqlx-prepare, xtask
+just --list tooling        # sqlx-prepare, xtask (lockfiles auto-regen via tools/bazel)
 ```
 
 Most recipes accept a `profile` argument: `release` (default; opt
@@ -264,21 +298,31 @@ Bazel's `--config=release` / `--config=dev`.
 
 ### Architecture decisions: sqlite linking
 
-`talkbank-transform`'s public API includes `UnifiedCache`, a
-`sqlx::SqlitePool`-backed validation/roundtrip cache. It's consumed by
-**chatter** (`chatter-cli`'s `cache clear`, `validate`; the test
-dashboard; roundtrip-corpus regression tests) and is NOT used by
-**batchalign-engine** (which has its own `redb`-backed cache in
-`crates/batchalign/batchalign-engine/src/cache.rs`).
+The SQLite validation/roundtrip cache lives in
+`crates/core/talkbank-cache` (the `talkbank_cache::CachePool` type,
+re-exported as `UnifiedCache`). It uses `sqlx::SqlitePool` via the
+`sqlx-sqlite/sqlite-unbundled` feature so it **links** against the
+host's libsqlite3 rather than compiling a bundled `sqlite3.c`. The
+unbundled path is what lets the macOS CLT 26.x SDK regression (broken
+parse of `<sys/sysctl.h>` etc. under cc-rs) not bite this codebase.
 
-Because `talkbank-transform` is a shared dep, the batchalign wheel
-transitively links sqlite even though Batchalign code never touches
-it. We accept the unused-link tax rather than splitting the cache
-into its own crate -- the diff isn't worth the maintenance cost. If
-that calculus changes, the right refactor is to move `unified_cache`
-into a separate `talkbank-cache` crate that only chatter depends on,
-or to feature-gate it behind `#[cfg(feature = "sqlite-cache")]` on
-`talkbank-transform`.
+**Who pulls in libsqlite3-sys:**
+
+  - chatter-cli, chatter-lsp, chatter-gui (via talkbank-cache) — yes
+  - talkbank-transform                                              — no
+  - batchalign-core, batchalign-engine, the wheel, the sidecar      — no
+  - batchalign-gui                                                  — no
+
+Batchalign has its own `redb`-backed cache
+(`crates/batchalign/batchalign-engine/src/cache.rs`) — a pure-Rust
+embedded KV store with no system-library dependency. The wheel / CLI
+/ sidecar therefore build on a host with no sqlite installed at all.
+
+If you ever need to remove sqlite from chatter too, the
+`sqlite-unbundled` feature in `crates/core/talkbank-cache/Cargo.toml`
+is the single switch — flipping it back to `sqlite` returns to the
+bundled `sqlite3.c` compile (which fails on CLT 26.x but is fine on
+Linux/Windows and works on macOS once Xcode is selected).
 
 ---
 
@@ -345,34 +389,23 @@ invalidates `_core.so` automatically. Re-running `just batchalign cli`
 rebuilds the .so and the py_binary launcher in one shot — no
 `maturin develop` step.
 
-When you edit `python/pyproject.toml` (adding a dep, bumping the
-version), regenerate the Bazel-side lockfile:
-
-```bash
-just batchalign relock
-```
-
-**Why isn't this automatic?** `pip.parse` (rules_python) reads
-`requirements.lock.txt` at Bazel's *module-resolution phase*, which
-happens before any action graph exists. A build action that *produces*
-the lockfile runs during the *execution phase*, much later. Bazel
-can't do both in one invocation — execution is strictly downstream of
-loading. Truly automatic regeneration requires a module extension that
-resolves `uv.lock`/`pyproject.toml` at module-resolution time (which is
-what `aspect_rules_py`'s `uv` extension does — blocked on a Bazel
-version bump). Until then: `just batchalign relock` after pyproject
-edits, and `just test` gates drift via the `:requirements_test` target
-so CI fails on a missed regen.
+Editing `python/pyproject.toml` (adding a dep, bumping the version) is
+also automatic: `tools/bazel` detects pyproject is newer than
+`python/requirements.lock.txt` and regenerates both
+`requirements.lock.txt` (Bazel-consumed) and `python/uv.lock`
+(maturin-consumed) before handing off to Bazel. The next
+`just batchalign cli` / `bazel run //python/batchalign` "just works"
+against the refreshed deps. Same story for editing any `Cargo.toml` —
+crate_universe re-resolves on the next Bazel invocation.
 
 ### Release a wheel
 
 `python/pyproject.toml [project].version` is the source of truth for
-the wheel version. Bump it, regenerate the lockfile, then build a wheel
-on each platform:
+the wheel version. Bump it and build a wheel on each platform — the
+lockfile refresh is implicit:
 
 ```bash
-just batchalign relock                                       # if deps changed
-just batchalign wheel                                        # host-platform wheel
+just batchalign wheel                                        # host-platform wheel (auto-regen if needed)
 just batchalign wheel-macos-arm64                            # cross-tag (host triple only)
 just batchalign wheel-macos-x86_64
 just batchalign wheel-linux-x86_64
@@ -390,49 +423,17 @@ CI matrix (5 runners, one per platform, OIDC trusted-publisher to PyPI).
 To cut a real release:
 
 1. Bump `python/pyproject.toml [project].version`.
-2. `just batchalign relock`.
-3. Open a PR; CI runs the lockfile drift test + the Bazel-native py_test.
-4. After merge, dispatch `publish-pypi.yml` from the Actions UI with the
+2. Open a PR. The lockfile diff is auto-included on the next Bazel
+   invocation; commit it as part of the PR (CI re-runs the
+   `:requirements_test` drift gate and fails if you forgot).
+3. After merge, dispatch `publish-pypi.yml` from the Actions UI with the
    new version as the input `tag` and `publish=true`.
 
-### macOS: `sqlite-unbundled` and homebrew sqlite
+### Troubleshooting: macOS SDK header errors
 
-`talkbank-transform`'s `Cargo.toml` requests `sqlx-sqlite` via the
-`sqlite-unbundled` feature, which tells `libsqlite3-sys` to **link the
-system sqlite** instead of compiling its bundled `sqlite3.c`. This
-sidesteps a class of macOS SDK header regressions (the 26.x bundle
-ships parse-broken `<sys/sysctl.h>` and friends that the cc-rs
-invocation can't tolerate outside Bazel's sandboxed `cargo_build_script`).
-The Bazel-native build path goes through `rules_rust`'s
-`cargo_build_script`, which wires the full hermetic cc toolchain and
-*can* compile the bundled sqlite — but the maturin escape path
-(`just batchalign wheel` / `sidecar`) uses host cargo and would
-choke. Linking system sqlite makes both paths consistent.
-
-The maturin shell scripts auto-set `SQLITE3_LIB_DIR` /
-`SQLITE3_INCLUDE_DIR` to homebrew sqlite when present
-(`brew install sqlite`). On Linux the distro packages do; on Windows
-vcpkg does. If you switch to a setup that genuinely needs the bundled
-compile, change the feature back to `sqlite` and the cargo dep
-graph regenerates.
-
-### Troubleshooting: macOS SDK / `libsqlite3-sys` build errors
-
-If `just batchalign wheel` / `just batchalign sidecar` on macOS
-prints any of these errors, the host setup didn't follow the
-[Getting started](#macos) macOS section. The errors fall into two
-buckets:
-
-```
-sys/proc.h:126:2: error: unknown type name 'u_quad_t'
-sys/proc.h:138:17: error: use of undeclared identifier 'MAXCOMLEN'
-```
-
-→ libsqlite3-sys tried to compile its bundled `sqlite3.c` against the
-SDK. This shouldn't happen with the workspace's `sqlx-sqlite/unbundled`
-feature -- if it does, `brew install sqlite` is missing or
-`SQLITE3_LIB_DIR` / `SQLITE3_INCLUDE_DIR` weren't picked up. Verify
-with `brew --prefix sqlite` and re-run.
+The batchalign wheel / sidecar no longer transitively links sqlite,
+so the historical `libsqlite3-sys` failure mode is gone. SDK-header
+parse errors can still appear in two situations:
 
 ```
 mach/arm/vm_types.h:104:44: error: expected ';' after top level declarator
@@ -441,14 +442,21 @@ sys/sysctl.h:801:22: error: a parameter list without types is only allowed
 sys/event.h:257: error: missing ',' between enumerators (on `__deprecated_enum_msg`)
 ```
 
-→ The CommandLineTools 26.x clang and SDK are mismatched; *any*
-cc-rs-driven crate hits this, not just sqlite. Fix by following the
-Xcode-install steps in [Getting started → macOS](#macos). Verifying:
+→ CommandLineTools 26.x ships a mismatched clang/SDK pair; any
+cc-rs-driven crate that includes those headers (rare in batchalign's
+wheel graph, but possible — `ring` is the usual suspect) will
+fail. Install full Xcode and select it
+(see [Desktop-GUI host prereqs → macOS](#macos-tauri) for the exact
+steps). Verify with:
 
 ```bash
 xcrun --sdk macosx --show-sdk-path
 # must be inside Xcode.app, not CommandLineTools
 ```
+
+The same fix applies when building chatter (`talkbank-cache` links
+libsqlite3, and any chatter contributor already needs `brew install
+sqlite` from [Chatter-only host prereqs](#chatter-only-host-prereqs)).
 
 Linux + Windows runners ship matched toolchains and are unaffected.
 
@@ -476,12 +484,14 @@ pick the C toolchain by host OS:
   of the sh_binary runfiles tree and export them as `CC` / `CXX` /
   `AR` / `RANLIB` / `CARGO_TARGET_*_LINKER`. `/usr/bin/cc` is never
   touched.
-- **macOS:** defer to Xcode's bundled clang via `xcrun -find clang`.
-  Apple ships SDK + clang as a matched pair, and `toolchains_llvm`
-  1.7.0 caps its darwin-arm64 prebuilts at LLVM 17.0.6 (LLVM stopped
-  publishing arm64-apple-darwin prebuilts on llvm.org), so a hermetic
-  clang would be too old for current SDK headers. Xcode is the
-  pragmatic answer; see [Getting started → macOS](#macos).
+- **macOS:** defer to whatever clang `xcrun -find clang` resolves
+  (Xcode or CommandLineTools — Apple ships the SDK and clang as a
+  matched pair inside each). `toolchains_llvm` 1.7.0 caps its
+  darwin-arm64 prebuilts at LLVM 17.0.6 (LLVM stopped publishing
+  arm64-apple-darwin prebuilts on llvm.org), so a hermetic clang
+  would be too old for current SDK headers. For the wheel and CLI
+  paths CLT is enough; full Xcode is only required for the Tauri
+  desktop apps, see [Desktop-GUI host prereqs](#desktop-gui-host-prereqs).
 
 A `BATCHALIGN_FORCE_DARWIN_SDK_WORKAROUND=1` escape hatch in the
 shell scripts re-enables the `-D__kernel_ptr_semantics=` CFLAGS
@@ -780,9 +790,14 @@ bazel run //crates/spec/talkbank-spec-testrun:extract_corpus_candidates
 
 ```bash
 bazel run //crates/xtask:xtask -- <subcommand>
-bazel run //bazel/cargo:repin                           # after any Cargo.toml edit
 bazel run //bazel/sqlx:prepare                          # after any sqlx::query! edit
 ```
+
+Lockfile maintenance (`Cargo.lock`, `python/requirements.lock.txt`,
+`python/uv.lock`) is handled automatically by `tools/bazel` on every
+Bazel invocation — there is no separate command. The
+`//bazel/cargo:repin` target still exists as a manual escape hatch but
+should not appear in any contributor workflow.
 
 ### Docs
 
@@ -813,9 +828,9 @@ bazel test  //grammar:tree_sitter_talkbank_unit_test
 
 ### "I edited a Cargo.toml"
 
-```bash
-just tooling cargo-repin                                  # = bazel run //bazel/cargo:repin
-```
+Nothing. `tools/bazel` regenerates `Cargo.lock` and the crate_universe
+metadata on the next Bazel invocation. Just run whatever command you
+were going to run (`just build`, `bazel test //...`, etc.).
 
 ### "I edited a `sqlx::query!` in batchalign"
 
@@ -855,10 +870,10 @@ natively via the rust_shared_library → genrule → py_library chain.
 
 ### "I edited pyproject.toml"
 
-```bash
-just batchalign relock                                    # regenerate lockfile
-# commit pyproject.toml + python/requirements.lock.txt together
-```
+Nothing. `tools/bazel` regenerates `python/requirements.lock.txt` (and
+`python/uv.lock` if `uv` is on PATH) on the next Bazel invocation.
+Commit `pyproject.toml` and both lockfiles together when you're ready
+to open the PR — `git status` will surface them after the next build.
 
 ### "I want a release wheel"
 

@@ -92,9 +92,13 @@ case "$(uname -s)" in
         AR_ABS="$(xcrun -find ar 2>/dev/null || true)"
         RANLIB_ABS="$(xcrun -find ranlib 2>/dev/null || true)"
         if [[ -z "$CC_ABS" || ! -x "$CC_ABS" ]]; then
-            echo "pyapp_build.sh: xcrun could not find clang. Install Xcode and run" >&2
+            echo "pyapp_build.sh: xcrun could not find clang. Install Xcode" >&2
+            echo "  Command Line Tools (\`xcode-select --install\`); for the" >&2
+            echo "  PyApp / wheel paths CLT is sufficient. If you later hit" >&2
+            echo "  SDK-header parse errors (__kernel_ptr_semantics, __sized_by," >&2
+            echo "  fixpt_t) install full Xcode and point at it via:" >&2
             echo "    sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
-            echo "  See CONTRIBUTING.md 'macOS: install Xcode' for the full setup." >&2
+            echo "  See CONTRIBUTING.md 'macOS host prereqs' for the full setup." >&2
             exit 2
         fi
         toolchain_source="Xcode ($(dirname "$(dirname "$CC_ABS")"))"
@@ -143,11 +147,16 @@ chmod +w "$proto_dst"
 
 cd "$BUILD_WORKSPACE_DIRECTORY/python"
 
-# cc-rs (libsqlite3-sys and friends) needs SDKROOT pointing at the
-# macOS SDK so the hermetic clang can resolve <sys/proc.h>, <mach/...>
-# and friends. Interactive Mac shells usually have SDKROOT set via the
-# user's profile or xcrun shim; non-interactive subshells (Bazel run,
-# CI runners, fresh terminals) often do not.
+# Any cc-rs-driven crate in the wheel's transitive graph (pyo3 build
+# scripts, ring, prost-build, etc.) needs SDKROOT pointing at the
+# macOS SDK so the hermetic clang can resolve <sys/proc.h>,
+# <mach/...> and friends. Interactive Mac shells usually have SDKROOT
+# set via the user's profile or xcrun shim; non-interactive subshells
+# (Bazel run, CI runners, fresh terminals) often do not. Note: the
+# wheel no longer transitively links sqlite -- the SQLite-backed
+# cache lives in the `talkbank-cache` crate, which only the chatter
+# CLI / LSP / desktop link. Comments referring to libsqlite3-sys here
+# are historical.
 #
 # Use `xcrun --sdk macosx --show-sdk-path`, NOT `xcrun --show-sdk-path`:
 # the latter is sticky on whichever SDK xcrun saw first (often the CLT

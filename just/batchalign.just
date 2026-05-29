@@ -6,7 +6,6 @@
 #   cli  *args        primary user-facing CLI for the product
 #   versions          source-of-truth versions for this product
 # Batchalign-specific:
-#   relock            regenerate python/requirements.lock.txt from pyproject.toml
 #   pytest *args      run py_test (pytest under Bazel)
 #   lint              mypy (+ ruff if present)
 #   wheel             host-platform wheel
@@ -72,7 +71,7 @@ default:
 # bumps its mtime past pyproject's, so steady-state `cli`/`build` calls skip it.
 _synclock:
     @if [ '{{ justfile_directory() }}/python/pyproject.toml' -nt '{{ justfile_directory() }}/python/requirements.lock.txt' ]; then \
-        echo "pyproject.toml changed → relocking (uv.lock + requirements.lock.txt)…"; \
+        echo "pyproject.toml changed → refreshing lockfiles (uv.lock + requirements.lock.txt)…"; \
         (cd '{{ justfile_directory() }}/python' && uv lock) \
         && bazel run //python:requirements; \
     fi

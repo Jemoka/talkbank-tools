@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# tools/bazel — Bazelisk wrapper for lockfile auto-reactivity.
+#
+# Why this exists
+# ---------------
+# Bazel's loading phase reads checked-in lockfiles
+# (`Cargo.lock` for `rules_rust`'s crate_universe;
+# `python/requirements.lock.txt` for `rules_python`'s `pip.parse`)
+# BEFORE any action graph exists. They cannot auto-regenerate a stale
+# lockfile in the same invocation — loading is strictly upstream of
+# execution. Historically this meant every dependency-manifest edit
+# required a memorized `repin` / `relock` ritual that contributors had
+# to know about, and forgetting it produced silent "runs against stale
+# deps" failures.
+#
+# This wrapper closes that gap. Bazelisk invokes `tools/bazel` (if it
+# exists in the workspace root and is executable) instead of the
+# resolved Bazel binary. We compare manifest mtimes against lockfile
+# mtimes, regenerate the stale lockfiles, then exec the real Bazel
+# (`$BAZEL_REAL`) with the original argv. From the contributor's
+# perspective every `bazel ...` command is reactive to every
+# dependency-file change. There is no separate command to remember.
+#
+# Reactivity contract (must be preserved when editing this file):
+#
+#   - Editing any `Cargo.toml` and running ANY `bazel ...` command
+#     triggers crate_universe to re-resolve and refresh `Cargo.lock`.
+#   - Editing `python/pyproject.toml` and running ANY `bazel ...`
+#     command triggers `pip_compile` to refresh
+#     `python/requirements.lock.txt` (and `uv.lock` if `uv` is on
+#     PATH). The wrapper does NOT block on network errors; if regen
+#     fails, the wrapper warns and proceeds, so an offline contributor
+#     still gets a working build against the previous lockfile.
+#
+# Bypass (rare):
+#
+#   - `TALKBANK_BAZEL_SKIP_RESOLVE=1 bazel ...` skips the check
+#     entirely (use when iterating on the wrapper itself).
+#   - Setting `BAZELISK_SKIP_WRAPPER=true` makes Bazelisk run the
+#     resolved Bazel directly, also bypassing this script.
+#
+# Re-entrancy:
+#
+#   The wrapper itself shells out to `$BAZEL_REAL run //python:requirements`
+#   to regenerate the Python lockfile, which Bazelisk would route back
+#   through `tools/bazel` and recurse infinitely. The
+#   `TALKBANK_BAZEL_WRAPPER_ACTIVE` sentinel breaks the cycle: child
+#   bazel invocations inherit it and skip the staleness check.
+
+set -euo pipefail
+
+# Reentrancy / explicit bypass guards. Must come first.
+if [[ -n "${TALKBANK_BAZEL_WRAPPER_ACTIVE:-}" \
+   || -n "${TALKBANK_BAZEL_SKIP_RESOLVE:-}" ]]; then
+    exec "${BAZEL_REAL:-bazel}" "$@"
+fi
+export TALKBANK_BAZEL_WRAPPER_ACTIVE=1
+
+# Locate workspace root from the wrapper's own location, not $PWD: a
+# user can run `bazel ...` from a subdirectory.
+workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$workspace_root"
+
+# ---------------------------------------------------------------------------
+# Helper: log only when the wrapper actually does work, so a no-op
+# steady-state `bazel build` stays silent.
+# ---------------------------------------------------------------------------
+say() { printf 'tools/bazel: %s\n' "$*" >&2; }
+
+# ---------------------------------------------------------------------------
+# Cargo lockfile staleness.
+#
+# crate_universe consumes `Cargo.lock` at the workspace root. If any
+# workspace `Cargo.toml` is newer than `Cargo.lock`, set
+# `CARGO_BAZEL_REPIN=true` so crate_universe re-resolves on this
+# invocation. Cargo.lock is regenerated as a side effect of repin.
+#
+# We use mtime comparison rather than content-hash comparison because:
+#   (a) Cargo.toml is the canonical source of truth — Cargo.lock cannot
+#       be newer than it without being out of sync.
+#   (b) A spurious mtime bump (e.g. `git checkout` resets mtimes) costs
+#       only one extra crate_universe re-resolve (a few seconds with a
+#       warm cache); we trade a rare false positive for a guaranteed
+#       no-false-negative contract.
+# ---------------------------------------------------------------------------
+cargo_lock="$workspace_root/Cargo.lock"
+cargo_stale=0
+if [[ -f Cargo.toml ]]; then
+    if [[ ! -f "$cargo_lock" ]]; then
+        cargo_stale=1
+    else
+        # find -newer is portable across macOS/BSD/GNU; -quit short-circuits
+        # on the first hit so we don't scan the whole workspace.
+        # Exclude target/, node_modules/, .git/, and the fuzz workspace
+        # (separate Cargo workspace; its own lock).
+        stale_toml="$(find . \
+            \( -path './target' -o -path './node_modules' -o -path './.git' \
+               -o -path './fuzz' -o -path './bazel-*' \) -prune \
+            -o -name Cargo.toml -newer "$cargo_lock" -print -quit 2>/dev/null || true)"
+        if [[ -n "$stale_toml" ]]; then
+            cargo_stale=1
+        fi
+    fi
+fi
+if [[ "$cargo_stale" == "1" ]]; then
+    say "Cargo.toml newer than Cargo.lock — crate_universe will re-resolve"
+    export CARGO_BAZEL_REPIN=true
+fi
+
+# ---------------------------------------------------------------------------
+# Python lockfile staleness.
+#
+# `pip.parse` reads `python/requirements.lock.txt`. If
+# `python/pyproject.toml` is newer, regenerate via
+# `//python:requirements` (which wraps `uv pip compile`). Also refresh
+# `python/uv.lock` (used by maturin/PyApp via host uv) when uv is on
+# PATH.
+#
+# We re-enter `$BAZEL_REAL` here. The TALKBANK_BAZEL_WRAPPER_ACTIVE
+# sentinel above prevents recursion.
+# ---------------------------------------------------------------------------
+py_pyproject="$workspace_root/python/pyproject.toml"
+py_lockfile="$workspace_root/python/requirements.lock.txt"
+py_uvlock="$workspace_root/python/uv.lock"
+if [[ -f "$py_pyproject" ]]; then
+    py_stale=0
+    if [[ ! -f "$py_lockfile" ]] \
+       || [[ "$py_pyproject" -nt "$py_lockfile" ]]; then
+        py_stale=1
+    fi
+    if [[ -f "$py_uvlock" && "$py_pyproject" -nt "$py_uvlock" ]]; then
+        py_stale=1
+    fi
+    if [[ "$py_stale" == "1" ]]; then
+        say "python/pyproject.toml newer than its lockfiles — refreshing"
+        # uv.lock first: cheaper, no Bazel server round-trip, and it's
+        # what host-cargo paths (maturin, pyapp) consume.
+        if command -v uv >/dev/null 2>&1; then
+            (cd "$workspace_root/python" && uv lock --quiet) \
+                || say "warning: 'uv lock' failed; continuing with existing uv.lock"
+        fi
+        # pip_compile via Bazel: writes requirements.lock.txt in-place.
+        # Silence the routine logging so steady-state lockfile regen
+        # doesn't dominate the user's terminal; surface errors only.
+        "${BAZEL_REAL:-bazel}" run \
+            --ui_event_filters=-info,-stdout \
+            --noshow_progress \
+            //python:requirements \
+            || say "warning: //python:requirements failed; continuing with existing lockfile"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Hand off to the real Bazel with the original argv.
+# ---------------------------------------------------------------------------
+exec "${BAZEL_REAL:-bazel}" "$@"

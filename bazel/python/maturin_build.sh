@@ -52,9 +52,13 @@ case "$(uname -s)" in
         AR_ABS="$(xcrun -find ar 2>/dev/null || true)"
         RANLIB_ABS="$(xcrun -find ranlib 2>/dev/null || true)"
         if [[ -z "$CC_ABS" || ! -x "$CC_ABS" ]]; then
-            echo "maturin_build.sh: xcrun could not find clang. Install Xcode and run" >&2
+            echo "maturin_build.sh: xcrun could not find clang. Install Xcode" >&2
+            echo "  Command Line Tools (\`xcode-select --install\`); for the" >&2
+            echo "  wheel path CLT is sufficient. If you later hit SDK-header" >&2
+            echo "  parse errors (__kernel_ptr_semantics, __sized_by, fixpt_t)," >&2
+            echo "  install full Xcode and point at it via:" >&2
             echo "    sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
-            echo "  See CONTRIBUTING.md 'macOS: install Xcode' for the full setup." >&2
+            echo "  See CONTRIBUTING.md 'macOS host prereqs' for the full setup." >&2
             exit 2
         fi
         toolchain_source="Xcode"
