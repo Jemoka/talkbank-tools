@@ -233,17 +233,6 @@ just test                      # `bazel test  --config=release //...`
 # Smoke-test each product's CLI:
 just batchalign cli -- --help
 just chatter cli -- --help
-
-# Verify the Bazel-vendored sidecar daemon (pyapp-bundled batchalign
-# wheel + Python runtime). All toolchain comes from Bazel — no host
-# `cargo install pyapp` required.
-just batchalign sidecar
-
-# Optional: verify the GUI bundle path. Requires the GUI-only
-# prerequisites above (libwebkit2gtk on Linux, Xcode on macOS).
-# cargo-tauri itself is Bazel-built; you do NOT need to
-# `cargo install tauri-cli`.
-just batchalign::gui::build
 ```
 
 If the first build complains about `crate_universe`, run
