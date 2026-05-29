@@ -41,12 +41,19 @@ export interface LogEntry {
   text: string;
 }
 
+/** Which discovery bucket a file belongs to (matches the daemon's
+ *  `InputKind`). Drives kind-based filtering in the right-pane file
+ *  table — only files whose `kind` is compatible with the first verb
+ *  in the active pipeline get rendered. */
+export type FileKind = "media" | "chat";
+
 export interface FileRow {
   source_id: string;
   stem: string; // "P_1025_baseline"
   filename: string; // "P_1025_baseline.wav"
   sizeBytes: number;
   durationMs: number | null;
+  kind: FileKind;
   status: FileStatus;
   stages: StageRow[];
   log: LogEntry[];

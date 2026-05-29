@@ -3,9 +3,11 @@
 
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { useStore, type Batch, type VerbStep, type FileRow } from "../store";
+import { useStore, type Batch, type FileRow } from "../store";
 
-const DEFAULT_PIPELINE: VerbStep[] = ["transcribe", "morphotag"];
+// No default pipeline — the user chooses every step themselves so the
+// chain reflects exactly what they intend to run. PipelineBlock renders
+// an "+ add step" affordance for the empty case.
 
 interface FolderSummary {
   files: Array<{
@@ -14,6 +16,7 @@ interface FolderSummary {
     filename: string;
     size_bytes: number;
     duration_ms: number | null;
+    kind: "media" | "chat";
   }>;
 }
 
@@ -44,12 +47,11 @@ export default function DropZone() {
         filename: f.filename,
         sizeBytes: f.size_bytes,
         durationMs: f.duration_ms,
+        kind: f.kind,
         status: "queued",
-        stages: DEFAULT_PIPELINE.map((v) => ({
-          verb: v,
-          state: "queued" as const,
-          pct: 0,
-        })),
+        // Pipeline stages are materialized when the user picks verbs
+        // — empty until then so the row doesn't display ghost stages.
+        stages: [],
         log: [],
       };
       fileOrder.push(f.source_id);
@@ -65,7 +67,7 @@ export default function DropZone() {
       folderPath: path,
       inPlace: true,
       outputPath: null,
-      pipeline: DEFAULT_PIPELINE,
+      pipeline: [],
       config: {
         transcribe: {},
         align: {},

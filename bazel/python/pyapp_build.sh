@@ -238,7 +238,11 @@ export PYAPP_FULL_ISOLATION="${PYAPP_FULL_ISOLATION:-1}"
 # the right extra. PyApp passes this string straight to pip.
 export PYAPP_PROJECT_DEPENDENCY_FILE=""
 export PYAPP_PIP_EXTRA_ARGS="${PYAPP_PIP_EXTRA_ARGS:-}"
-export PYAPP_PROJECT_FEATURES="api"
+# Bundle every backend extra — see the matching comment in
+# pyapp_install.sh. Without `all` the sidecar's pip install at first
+# run skips stanza / torch / transformers / etc. and the daemon hits
+# ImportErrors on every non-trivial recipe.
+export PYAPP_PROJECT_FEATURES="api,all"
 
 echo "pyapp_build.sh: cargo install pyapp@$pin_pyapp"
 echo "  PYAPP_PROJECT_PATH=$PYAPP_PROJECT_PATH"

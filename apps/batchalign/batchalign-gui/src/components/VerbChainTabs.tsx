@@ -15,8 +15,10 @@ const AVAILABLE_VERBS: VerbStep[] = [
 ];
 
 interface Props {
-  selected: VerbStep;
-  onSelect: (v: VerbStep) => void;
+  /** Active verb, or `null` when the pipeline is empty. */
+  selected: VerbStep | null;
+  /** Notify the parent that selection changed (or cleared). */
+  onSelect: (v: VerbStep | null) => void;
 }
 
 export default function VerbChainTabs({ selected, onSelect }: Props) {
@@ -24,17 +26,22 @@ export default function VerbChainTabs({ selected, onSelect }: Props) {
   const batch = activeBatchId ? batches[activeBatchId] : null;
   if (!batch) return null;
   const chain = batch.pipeline;
-  const canRemove = chain.length > 1;
+  // Per the user's design intent, the chain can be emptied entirely —
+  // the user "deletes pipelines for themselves" — so removal is allowed
+  // even down to zero verbs. PipelineBlock renders an empty-state hint
+  // when the chain is empty.
+  const canRemove = chain.length > 0 && selected != null;
   const unused = AVAILABLE_VERBS.filter((v) => !chain.includes(v));
 
   const onRemove = () => {
+    if (!selected) return;
     const next = chain.filter((x) => x !== selected);
     dispatch({
       type: "PIPELINE_CHANGED",
       batchId: batch.id,
       pipeline: next,
     });
-    onSelect(next[0]);
+    onSelect(next[0] ?? null);
   };
 
   const onAdd = (v: VerbStep) => {

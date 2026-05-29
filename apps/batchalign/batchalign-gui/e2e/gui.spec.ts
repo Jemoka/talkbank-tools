@@ -85,6 +85,7 @@ test("Batchalign GUI end-to-end (real daemon)", async ({ page }) => {
     filename: f.name,
     size_bytes: f.size,
     duration_ms: null,
+    kind: "media" as const,
   }));
 
   // Inject the Tauri stubs before any frontend code runs. The init
@@ -134,24 +135,32 @@ test("Batchalign GUI end-to-end (real daemon)", async ({ page }) => {
     timeout: 15_000,
   });
 
-  // --- 2. Open folder → file table populated ---------------------
+  // --- 2. Open folder → BatchView mounts, placeholder visible ---
+  // After BATCH_OPENED dispatches the right pane is a placeholder (no
+  // pipeline picked yet, so the daemon would process nothing). The
+  // empty-pipeline hint in PipelineBlock guides the user to add a step.
   await page.click("text=open folder…");
-  // The BatchView replaces EmptyView after BATCH_OPENED dispatches.
-  // The file table column shows the file *stem* (no extension) — see
-  // FileTable.tsx — so we assert against the stem here.
+  await expect(page.locator("text=no pipeline steps yet")).toBeVisible({
+    timeout: 5_000,
+  });
+
+  // --- 3. Add a pipeline step → file table populates -------------
+  await page.click("button:has-text('+ add step')");
+  await page.click("text=transcribe");
+  // FileTable column shows file *stem* (no extension).
   await expect(page.locator(`text=${files[0].stem}`).first()).toBeVisible({
     timeout: 5_000,
   });
   await expect(page.locator(`text=${files[1].stem}`).first()).toBeVisible();
 
-  // --- 3. Settings view opens ------------------------------------
+  // --- 4. Settings view opens ------------------------------------
   await page.click("button:has-text('settings')");
   await expect(page.locator("text=workers").first()).toBeVisible({
     timeout: 3_000,
   });
   await page.click("button:has-text('close')");
 
-  // --- 4. Start batch → request is issued + UI reacts -----------
+  // --- 5. Start batch → request is issued + UI reacts -----------
   const requestPromise = page.waitForRequest(
     (req) =>
       req.url().includes(`/recipes/transcribe`) && req.method() === "POST",

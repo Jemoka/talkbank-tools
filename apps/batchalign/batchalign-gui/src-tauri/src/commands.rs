@@ -15,10 +15,33 @@ use crate::daemon;
 use crate::events as event_pump;
 use crate::state::AppState;
 
-const AUDIO_EXTS: &[&str] = &[
-    "wav", "mp3", "mp4", "m4a", "flac", "ogg", "opus", "webm",
-];
+// Extensions mirror python/batchalign/inputs.py's `iter_media`/`iter_chat`
+// defaults so the GUI's folder scan returns the exact same file set the
+// CLI would pick up for a recipe submission. Keep these in sync if the
+// Python side broadens its discovery.
+const AUDIO_EXTS: &[&str] = &["wav", "mp3", "m4a", "flac", "ogg", "mp4"];
 const CHAT_EXTS: &[&str] = &["cha", "chat"];
+
+/// Which subset of files in a folder the GUI cares about, given the
+/// first verb in the active pipeline. Each variant maps to a Python
+/// `InputKind` (api.py:`InputKind = Literal["media","chat","paired"]`).
+///
+/// - `Media` — audio inputs only (transcribe, align consumes media).
+/// - `Chat` — `.cha` / `.chat` transcripts only (morphotag, translate).
+/// - `Paired` — only stems that have BOTH an audio file AND a `.cha`
+///   (compare; align actually also needs paired, but we approximate
+///   align as media since the chat-side is auto-produced by an earlier
+///   transcribe stage in most flows).
+/// - `Any` — everything (folder-open before the user picks a pipeline).
+#[derive(Debug, Default, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FileKind {
+    Media,
+    Chat,
+    Paired,
+    #[default]
+    Any,
+}
 
 #[tauri::command]
 pub async fn ensure_daemon(app: AppHandle) -> Result<u16, String> {
@@ -81,13 +104,16 @@ pub async fn daemon_request(
     serde_json::from_slice(&bytes).map_err(|e| format!("invalid JSON from daemon: {e}"))
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct FolderFile {
     pub source_id: String,
     pub stem: String,
     pub filename: String,
     pub size_bytes: u64,
     pub duration_ms: Option<u64>,
+    /// `"media"` for audio, `"chat"` for `.cha`/`.chat`. Drives the
+    /// kind-based filtering the right-pane file table applies.
+    pub kind: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -95,31 +121,53 @@ pub struct FolderSummary {
     pub files: Vec<FolderFile>,
 }
 
+/// Walk `path` recursively and return every audio + chat file the
+/// daemon's `iter_media` / `iter_chat` would pick up. Matches the
+/// CLI's discovery: hidden dotfiles skipped, case-insensitive
+/// extension match, recursive. If `kind` is supplied (`media`/`chat`/
+/// `paired`), filters accordingly; otherwise returns all.
+///
+/// `paired` returns only stems for which BOTH an audio and a `.cha`
+/// exist in the folder — that's what the Compare recipe needs.
 #[tauri::command]
-pub async fn list_folder_files(path: String) -> Result<FolderSummary, String> {
+pub async fn list_folder_files(
+    path: String,
+    kind: Option<FileKind>,
+) -> Result<FolderSummary, String> {
     let root = PathBuf::from(&path);
     if !root.is_dir() {
         return Err(format!("not a directory: {path}"));
     }
-    let mut files: Vec<FolderFile> = Vec::new();
-    // Surface only audio/cha files; the daemon will decide what to do
-    // with each in the pipeline. We don't probe audio duration here
-    // (avoids pulling a heavy decoder); the table simply shows "—" for
-    // duration until the daemon emits it.
+    let kind = kind.unwrap_or_default();
+    let mut all: Vec<FolderFile> = Vec::new();
     for entry in WalkDir::new(&root).follow_links(false).into_iter().flatten()
     {
         if !entry.file_type().is_file() {
             continue;
         }
         let path = entry.path();
+        // Skip macOS / Unix hidden dotfiles, matching Python's
+        // `path.name.startswith(".")` check in iter_media/iter_chat.
+        if path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|n| n.starts_with('.'))
+            .unwrap_or(false)
+        {
+            continue;
+        }
         let ext = path
             .extension()
             .and_then(|s| s.to_str())
             .map(|s| s.to_ascii_lowercase())
             .unwrap_or_default();
-        if !(AUDIO_EXTS.contains(&ext.as_str()) || CHAT_EXTS.contains(&ext.as_str())) {
+        let file_kind: &'static str = if AUDIO_EXTS.contains(&ext.as_str()) {
+            "media"
+        } else if CHAT_EXTS.contains(&ext.as_str()) {
+            "chat"
+        } else {
             continue;
-        }
+        };
         let meta = entry.metadata().map_err(|e| e.to_string())?;
         let stem = path
             .file_stem()
@@ -136,15 +184,44 @@ pub async fn list_folder_files(path: String) -> Result<FolderSummary, String> {
             .unwrap_or(path)
             .to_string_lossy()
             .to_string();
-        files.push(FolderFile {
+        all.push(FolderFile {
             source_id: rel,
             stem,
             filename,
             size_bytes: meta.len(),
             duration_ms: None,
+            kind: file_kind,
         });
     }
-    files.sort_by(|a, b| a.source_id.cmp(&b.source_id));
+    all.sort_by(|a, b| a.source_id.cmp(&b.source_id));
+
+    let files: Vec<FolderFile> = match kind {
+        FileKind::Any => all,
+        FileKind::Media => all.into_iter().filter(|f| f.kind == "media").collect(),
+        FileKind::Chat => all.into_iter().filter(|f| f.kind == "chat").collect(),
+        FileKind::Paired => {
+            // Only stems with BOTH a media and a chat companion.
+            use std::collections::HashSet;
+            let mut media_stems: HashSet<String> = HashSet::new();
+            let mut chat_stems: HashSet<String> = HashSet::new();
+            for f in &all {
+                match f.kind {
+                    "media" => {
+                        media_stems.insert(f.stem.clone());
+                    }
+                    "chat" => {
+                        chat_stems.insert(f.stem.clone());
+                    }
+                    _ => {}
+                }
+            }
+            all.into_iter()
+                .filter(|f| {
+                    media_stems.contains(&f.stem) && chat_stems.contains(&f.stem)
+                })
+                .collect()
+        }
+    };
     Ok(FolderSummary { files })
 }
 

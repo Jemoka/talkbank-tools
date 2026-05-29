@@ -4,6 +4,7 @@
 
 import { Fragment } from "react";
 import { useStore } from "../store";
+import { useFilteredFiles } from "../hooks/useFilteredFiles";
 import PipelineRibbon from "./PipelineRibbon";
 import StatusBadge from "./StatusBadge";
 import LogDrawer from "./LogDrawer";
@@ -23,6 +24,10 @@ function fmtSize(bytes: number): string {
 export default function FileTable() {
   const { activeBatchId, batches, dispatch } = useStore();
   const batch = activeBatchId ? batches[activeBatchId] : null;
+  // Restrict to files the daemon would actually pick up given the
+  // first verb in the pipeline (mirrors python/batchalign/inputs.py's
+  // iter_media / iter_chat + per-recipe input-kind expectations).
+  const visibleIds = useFilteredFiles();
   if (!batch) return null;
   const expandedId = batch.expandedFileId;
 
@@ -49,7 +54,7 @@ export default function FileTable() {
         </tr>
       </thead>
       <tbody>
-        {batch.fileOrder.map((id) => {
+        {visibleIds.map((id) => {
           const file = batch.files[id];
           if (!file) return null;
           const isOpen = expandedId === id;

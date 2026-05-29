@@ -14,9 +14,24 @@ import PipelineBlock from "../components/PipelineBlock";
 import BatchActionFooter from "../components/BatchActionFooter";
 import JobsHeader from "../components/JobsHeader";
 import FileTable from "../components/FileTable";
+import JobsPlaceholder from "../components/JobsPlaceholder";
 import CommandPreview from "../components/CommandPreview";
+import { useStore } from "../store";
+import { useFilteredFiles } from "../hooks/useFilteredFiles";
 
 export default function BatchView() {
+  const { activeBatchId, batches } = useStore();
+  const batch = activeBatchId ? batches[activeBatchId] : null;
+  const visible = useFilteredFiles();
+
+  // The right pane shows ONLY what the daemon would genuinely process:
+  //   - while idle (no batch started), it's a silhouette placeholder
+  //     with a one-line reason ("pick a pipeline step", or "no files
+  //     match the chosen verb")
+  //   - while running / done / failed, it's the real FileTable
+  const isIdle = batch?.state === "idle";
+  const reason = pickReason(batch?.pipeline.length ?? 0, visible.length);
+
   return (
     <div
       style={{
@@ -53,11 +68,25 @@ export default function BatchView() {
         >
           <JobsHeader />
           <div className="ba-scroll" style={{ flex: 1, minHeight: 0 }}>
-            <FileTable />
+            {isIdle ? (
+              <JobsPlaceholder reason={reason} />
+            ) : (
+              <FileTable />
+            )}
           </div>
         </div>
       </div>
       <CommandPreview />
     </div>
   );
+}
+
+function pickReason(pipelineLen: number, visibleCount: number): string {
+  if (pipelineLen === 0) {
+    return "pick a pipeline step to preview the files batchalign will process.";
+  }
+  if (visibleCount === 0) {
+    return "no files in this folder match the first step's input kind. add a different step, or drop in a folder with matching files.";
+  }
+  return `${visibleCount} file${visibleCount === 1 ? "" : "s"} will be processed. hit start batch when ready.`;
 }

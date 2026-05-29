@@ -131,7 +131,20 @@ export PYAPP_EXEC_SPEC="batchalign.cli.daemon:run_pyapp_entry"
 export PYAPP_PYTHON_VERSION="3.12"
 export PYAPP_DISTRIBUTION_EMBED="1"
 export PYAPP_FULL_ISOLATION="1"
-export PYAPP_PROJECT_FEATURES="api"
+# Bundle every backend extra so the shipped sidecar can service any
+# recipe — transcribe (whisper / openai / vllm / qwen3 / nllb / etc.),
+# align, morphotag (stanza), translate, compare — plus the api server
+# itself. Without `all` here the sidecar pip-installs only the [api]
+# extra at first run, and the daemon raises `ModuleNotFoundError:
+# stanza` (or whatever backend the recipe needs) the moment the user
+# actually submits a job.
+#
+# Cost: the on-disk install in ~/Library/Application Support/pyapp/
+# batchalign/<hash>/ balloons to ~several GB (torch + transformers +
+# stanza + pyannote + ...). That's the price of a self-contained
+# desktop bundle that does NOT ask the user to manage a Python
+# environment.
+export PYAPP_PROJECT_FEATURES="api,all"
 
 echo "pyapp_install.sh: cargo=$(command -v cargo)"
 echo "pyapp_install.sh: pyapp source = $PYAPP_SRC_DIR"

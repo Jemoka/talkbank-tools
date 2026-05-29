@@ -6,6 +6,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { submitRecipe } from "../api";
 import { useStore, type VerbConfig, type VerbStep } from "../store";
+import { filterFilesForVerb } from "./useFilteredFiles";
 
 function buildRecipeKwargs(
   verb: VerbStep,
@@ -73,25 +74,39 @@ export function useStartBatch(): UseStartBatchResult {
   const batch = activeBatchId ? batches[activeBatchId] : null;
 
   const isRunning = batch?.state === "running";
+  // Only count files the daemon would actually pick up — the start
+  // button stays disabled if the user has dropped in chat files but
+  // their first verb is transcribe (and similar mismatches).
+  const visibleIds = batch?.pipeline[0]
+    ? filterFilesForVerb(batch.files, batch.fileOrder, batch.pipeline[0])
+    : [];
   const canStart =
-    !!batch && batch.fileOrder.length > 0 && batch.pipeline.length > 0;
+    !!batch && visibleIds.length > 0 && batch.pipeline.length > 0;
 
   const start = async () => {
     if (!batch) return;
     const firstVerb = batch.pipeline[0];
     if (!firstVerb) return;
+    const ids = filterFilesForVerb(batch.files, batch.fileOrder, firstVerb);
+    if (ids.length === 0) return;
     const kwargs = buildRecipeKwargs(firstVerb, batch.config[firstVerb]);
-    const inputs = batch.fileOrder.map((id) => ({
-      kind: "media" as const,
-      path: `${batch.folderPath}/${batch.files[id].filename}`,
-    }));
+    const inputs = ids.map((id) => {
+      const file = batch.files[id];
+      // The daemon's InputSpec.kind set is "media" | "chat" | "paired".
+      // We tag with the file's discovered kind so the daemon doesn't
+      // need to re-classify.
+      return {
+        kind: file.kind,
+        path: `${batch.folderPath}/${file.filename}`,
+      };
+    });
     try {
       const job = await submitRecipe(firstVerb, { ...kwargs, inputs });
       dispatch({
         type: "BATCH_STARTED",
         batchId: batch.id,
         jobId: job.job_id,
-        files: batch.fileOrder.map((id) => batch.files[id]),
+        files: ids.map((id) => batch.files[id]),
       });
       await invoke("start_batch_pump", {
         batchId: batch.id,
