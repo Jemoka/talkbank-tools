@@ -4,44 +4,25 @@
 // (file picker, recipe panels, "start batch") before the daemon is
 // reachable.
 //
-// Design intent: visible but calm. No spinner, no bouncing dots. A
-// breathing two-bar tick that advances once per second, an elapsed
-// timer, and a slowly rotating prose line drawn from a small pool of
-// facts about what's actually happening during cold-start (PyApp
-// unpacking CPython, pip installing the api extra, uvicorn binding,
-// FastAPI introspection of the recipes module). Density without
-// motion.
+// Design intent: visible but calm. A breathing two-bar tick that
+// advances once per second, an elapsed timer, and a one-line
+// expectation-setting message. The audience is clinical researchers,
+// not developers — no implementation jargon (PyApp, uvicorn, SSE)
+// on screen.
 
 import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
 
-const FACTS: ReadonlyArray<string> = [
-  "the embedded daemon is a PyApp bundle: a self-contained CPython runtime + the batchalign wheel + the [api] extra. first launch unpacks all three into ~/Library/Application Support/pyapp/. subsequent launches reuse the cache and start in under a second.",
-  "every recipe — transcribe, align, morphotag, translate, compare — is a thin pairing of `tasks` and `backends` in batchalign.recipes. FastAPI introspects each recipe's signature at startup and generates a Pydantic request model so the HTTP surface is always in sync with the python.",
-  "the GUI talks to the daemon over loopback HTTP. the sidecar binds 127.0.0.1 only and is shut down when the Tauri shell exits — no daemons survive a window close.",
-  "uvicorn picks an unused port via --port 0; the GUI discovers it by reading the daemon's `DAEMON_PORT=<n>` stdout line (or, since 2026-05, by recognizing uvicorn's own \"Uvicorn running on http://...\" log as a fallback).",
-  "ASR engines aren't loaded until the first transcribe job hits them. capabilities are advertised eagerly; weights are demand-loaded.",
-  "the daemon's job registry is in-memory and per-process. workers are pinned to 1 by default — a shared backend would be needed to scale beyond a single host process.",
-  "progress events stream over a per-job SSE channel at /jobs/<id>/events. the Tauri shell relays them onto the `progress-v2` event channel tagged with the originating batch id so the React store can route to the right tab.",
-];
-
 export default function DaemonBootOverlay() {
   const { daemon } = useStore();
   const [elapsed, setElapsed] = useState(0);
-  const [factIdx, setFactIdx] = useState(() => Math.floor(Math.random() * FACTS.length));
 
   useEffect(() => {
     const startedAt = Date.now();
     const tick = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startedAt) / 1000));
     }, 250);
-    const rotate = setInterval(() => {
-      setFactIdx((i) => (i + 1) % FACTS.length);
-    }, 9000);
-    return () => {
-      clearInterval(tick);
-      clearInterval(rotate);
-    };
+    return () => clearInterval(tick);
   }, []);
 
   // Two-bar tick that advances once per second. Even seconds show the
@@ -54,14 +35,13 @@ export default function DaemonBootOverlay() {
   }, [elapsed]);
 
   const hasError = !!daemon.error;
-  const fact = FACTS[factIdx];
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-busy={!hasError}
-      aria-label={hasError ? "Daemon failed to start" : "Starting daemon"}
+      aria-label={hasError ? "Loading failed" : "Loading"}
       onMouseDownCapture={swallow}
       onClickCapture={swallow}
       onKeyDownCapture={swallow}
@@ -104,7 +84,7 @@ export default function DaemonBootOverlay() {
               color: hasError ? "#B85C5C" : "var(--fg-muted)",
             }}
           >
-            {hasError ? "daemon failed" : "starting daemon"}
+            {hasError ? "loading failed" : "loading"}
           </div>
           <div
             className="ba-num"
@@ -121,7 +101,7 @@ export default function DaemonBootOverlay() {
         {hasError ? (
           <ErrorBody reason={daemon.error!} />
         ) : (
-          <BootingBody tickGlyph={tickGlyph} fact={fact} />
+          <BootingBody tickGlyph={tickGlyph} progressLine={daemon.progressLine} />
         )}
       </div>
     </div>
@@ -130,10 +110,10 @@ export default function DaemonBootOverlay() {
 
 function BootingBody({
   tickGlyph,
-  fact,
+  progressLine,
 }: {
   tickGlyph: string;
-  fact: string;
+  progressLine: string | null;
 }) {
   return (
     <>
@@ -142,7 +122,7 @@ function BootingBody({
           display: "flex",
           alignItems: "center",
           gap: 14,
-          marginBottom: 22,
+          marginBottom: 14,
         }}
       >
         <span
@@ -167,33 +147,42 @@ function BootingBody({
             lineHeight: 1.15,
           }}
         >
-          warming up the engine
+          Loading…
         </div>
-      </div>
-
-      <div
-        className="ba-mono"
-        style={{
-          fontSize: "var(--fs-xs)",
-          textTransform: "uppercase",
-          letterSpacing: "0.12em",
-          color: "var(--fg-meta)",
-          marginBottom: 8,
-        }}
-      >
-        while you wait
       </div>
       <p
         style={{
           fontSize: "var(--fs-sm)",
           lineHeight: 1.55,
-          color: "var(--fg)",
+          color: "var(--fg-muted)",
           margin: 0,
-          minHeight: 88,
+          marginBottom: progressLine ? 10 : 0,
         }}
       >
-        {fact}
+        This takes a few minutes upon first load, but will be much faster
+        after that.
       </p>
+      {progressLine && (
+        <div
+          className="ba-mono"
+          aria-live="polite"
+          style={{
+            fontSize: "var(--fs-xs)",
+            color: "var(--fg-meta)",
+            background: "var(--bg-sunken)",
+            border: "var(--hairline)",
+            borderRadius: "var(--r-1)",
+            padding: "6px 10px",
+            marginTop: 6,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+          title={progressLine}
+        >
+          {progressLine}
+        </div>
+      )}
     </>
   );
 }
@@ -211,7 +200,7 @@ function ErrorBody({ reason }: { reason: string }) {
           lineHeight: 1.2,
         }}
       >
-        the daemon couldn&rsquo;t start.
+        Batchalign couldn&rsquo;t start.
       </div>
       <div
         className="ba-mono"
@@ -252,7 +241,7 @@ function ErrorBody({ reason }: { reason: string }) {
         }}
       >
         relaunching the app is the easiest first step. if it keeps
-        failing, the Tauri terminal window has the daemon&rsquo;s
+        failing, the terminal window has the application&rsquo;s
         stdout/stderr prefixed with{" "}
         <code
           className="ba-mono"

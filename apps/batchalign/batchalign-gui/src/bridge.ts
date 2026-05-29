@@ -14,6 +14,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   TauriEvents,
   type DaemonFailedPayload,
+  type DaemonProgressPayload,
   type DaemonReadyPayload,
   type ProgressV2Payload,
 } from "./protocol/events";
@@ -56,6 +57,17 @@ export async function bootBridge(): Promise<() => void> {
     },
   );
   unlisteners.push(offFailed);
+
+  // One stdout/stderr line from the booting sidecar — the boot overlay
+  // surfaces the most recent line so cold installs (pip downloading
+  // torch / transformers / stanza / ...) don't look frozen.
+  const offProgressLine = await listen<DaemonProgressPayload>(
+    TauriEvents.daemonProgress,
+    ({ payload }) => {
+      dispatch({ type: "DAEMON_PROGRESS", line: payload.line });
+    },
+  );
+  unlisteners.push(offProgressLine);
 
   // Per-progress-event push from the sidecar. The Rust side owns one SSE
   // stream per active batch and tags every emit with `batchId` so the

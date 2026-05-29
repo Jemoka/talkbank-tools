@@ -20,7 +20,7 @@ use tauri_plugin_shell::ShellExt;
 use tokio::sync::watch;
 
 use crate::protocol::{
-    events, DaemonFailedPayload, DaemonReadyPayload,
+    events, DaemonFailedPayload, DaemonProgressPayload, DaemonReadyPayload,
 };
 use crate::state::{AppState, DaemonHandle};
 
@@ -121,7 +121,7 @@ async fn start(app: &AppHandle) -> Result<(), DaemonError> {
         .map_err(|e| DaemonError::Spawn(e.to_string()))?;
 
     // Read the daemon's stdout until "DAEMON_PORT=<n>" appears or it dies.
-    let port = wait_for_port(&mut rx).await?;
+    let port = wait_for_port(app, &mut rx).await?;
     let (shutdown_tx, _shutdown_rx) = watch::channel(false);
 
     // PyApp finished unpacking + installing extras by the time it
@@ -154,13 +154,22 @@ async fn start(app: &AppHandle) -> Result<(), DaemonError> {
 }
 
 async fn wait_for_port(
+    app: &AppHandle,
     rx: &mut tauri::async_runtime::Receiver<CommandEvent>,
 ) -> Result<u16, DaemonError> {
-    // Cold-start budget: PyApp unpacks CPython + pip-installs the
-    // wheel on first launch, which can take 20–25s on a quiet machine
-    // and considerably longer if the api extra needs to compile any
-    // C extensions. 60s gives us headroom without hiding a real hang.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    // Cold-start budget. First-ever launch downloads ~several GB worth
+    // of wheels (torch, transformers, stanza, pyannote, openai-whisper
+    // …) and pip-installs them all. On a quiet machine with a good
+    // connection that's 3–6 minutes; on a slow one it can be 10+. We
+    // pick 15 minutes — long enough to cover almost any cold install
+    // without hiding a genuine hang forever.
+    //
+    // To keep the user from thinking the app froze during that window,
+    // every stderr line is forwarded to the frontend as a
+    // `daemon-progress` event; the overlay surfaces the latest line
+    // (e.g. "Collecting torch", "Installing collected packages …") so
+    // there's visible motion the whole time.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(900);
     let mut tail: Vec<String> = Vec::new();
     while std::time::Instant::now() < deadline {
         let evt = match tokio::time::timeout(
@@ -184,6 +193,12 @@ async fn wait_for_port(
                 let trimmed = text.trim();
                 eprintln!("[daemon stdout] {trimmed}");
                 push_tail(&mut tail, &text);
+                if !trimmed.is_empty() {
+                    let _ = app.emit(
+                        events::DAEMON_PROGRESS,
+                        DaemonProgressPayload { line: trimmed.to_owned() },
+                    );
+                }
                 if let Some(port) = parse_port(trimmed) {
                     return Ok(port);
                 }
@@ -193,6 +208,12 @@ async fn wait_for_port(
                 let trimmed = text.trim_end();
                 eprintln!("[daemon stderr] {trimmed}");
                 push_tail(&mut tail, &text);
+                if !trimmed.is_empty() {
+                    let _ = app.emit(
+                        events::DAEMON_PROGRESS,
+                        DaemonProgressPayload { line: trimmed.to_owned() },
+                    );
+                }
                 // Fallback: newer uvicorn versions moved `Server.servers`,
                 // breaking `_PortAnnouncingServer.startup`'s stdout
                 // announcement (the override swallows AttributeError and

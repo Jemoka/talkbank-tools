@@ -120,7 +120,15 @@ export interface AppState {
   batches: Record<string, Batch>;
   tabOrder: string[];
   activeBatchId: string | null;
-  daemon: { port: number | null; ready: boolean; error: string | null };
+  daemon: {
+    port: number | null;
+    ready: boolean;
+    error: string | null;
+    /** Last stdout/stderr line from the booting sidecar — surfaced by
+     *  the boot overlay so a multi-minute first-launch install looks
+     *  alive instead of frozen. Cleared once the daemon is ready. */
+    progressLine: string | null;
+  };
   capabilities: CapabilitiesJson | null;
   settings: SettingsState;
   showSettings: boolean;
@@ -129,6 +137,7 @@ export interface AppState {
 export type Action =
   | { type: "DAEMON_READY"; port: number }
   | { type: "DAEMON_FAILED"; reason: string }
+  | { type: "DAEMON_PROGRESS"; line: string }
   | { type: "CAPABILITIES_LOADED"; capabilities: CapabilitiesJson }
   | { type: "BATCH_OPENED"; batch: Batch }
   | { type: "BATCH_CLOSED"; batchId: string }
@@ -170,7 +179,7 @@ const initial: AppState = {
   batches: {},
   tabOrder: [],
   activeBatchId: null,
-  daemon: { port: null, ready: false, error: null },
+  daemon: { port: null, ready: false, error: null, progressLine: null },
   capabilities: null,
   settings: defaultSettings,
   showSettings: false,
@@ -216,12 +225,27 @@ export function reducer(state: AppState, action: Action): AppState {
     case "DAEMON_READY":
       return {
         ...state,
-        daemon: { port: action.port, ready: true, error: null },
+        daemon: {
+          port: action.port,
+          ready: true,
+          error: null,
+          progressLine: null,
+        },
       };
     case "DAEMON_FAILED":
       return {
         ...state,
-        daemon: { port: null, ready: false, error: action.reason },
+        daemon: {
+          port: null,
+          ready: false,
+          error: action.reason,
+          progressLine: null,
+        },
+      };
+    case "DAEMON_PROGRESS":
+      return {
+        ...state,
+        daemon: { ...state.daemon, progressLine: action.line },
       };
     case "CAPABILITIES_LOADED":
       return { ...state, capabilities: action.capabilities };

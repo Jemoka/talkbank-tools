@@ -43,8 +43,8 @@ export default function App() {
           daemon.ready
             ? null
             : daemon.error
-              ? `daemon error: ${daemon.error}`
-              : "starting daemon…"
+              ? `error: ${daemon.error}`
+              : "loading…"
         }
         right={
           <div style={{ display: "flex", gap: 8 }}>

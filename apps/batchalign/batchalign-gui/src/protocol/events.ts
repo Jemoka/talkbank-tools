@@ -14,6 +14,10 @@ export const TauriEvents = {
   daemonReady: "daemon-ready",
   /** Daemon could not be started or crashed before binding. */
   daemonFailed: "daemon-failed",
+  /** One stdout/stderr line from the booting daemon — drives the boot
+   *  overlay's status text so multi-minute cold installs don't look
+   *  frozen. */
+  daemonProgress: "daemon-progress",
   /**
    * A single `progress_v2` event from the daemon (one of StageStarted /
    * StageInjected / StageFailed / StageSkipped / SourceCompleted).
@@ -27,6 +31,9 @@ export interface DaemonReadyPayload {
 }
 export interface DaemonFailedPayload {
   reason: string;
+}
+export interface DaemonProgressPayload {
+  line: string;
 }
 
 /** ProgressEvent from python/batchalign/api.py:_event_to_dict. */
