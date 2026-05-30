@@ -3,10 +3,11 @@
 # Submodule of `just batchalign`. Discovery:
 #   just --list batchalign::gui
 #
-# Three recipes — all single-shot, no prerequisites:
+# Recipes — all single-shot, no prerequisites:
 #   build [profile]   bundle .app/.msi/.AppImage (cargo tauri build, Bazel)
 #   dev               cargo tauri dev — hot-reload (Bazel)
 #   openapi           regenerate openapi.gen.ts + capabilities.snapshot.json
+#   test-e2e          Playwright end-to-end test against a real sidecar
 #
 # Both `build` and `dev` declare //python/batchalign:sidecar (a Bazel-
 # data dep, so the daemon binary is materialized + staged into
@@ -42,8 +43,8 @@ openapi:
 # End-to-end Playwright test. Drives the Vite-served React frontend
 # inside Chromium against the real Bazel-built PyApp sidecar daemon.
 # Tauri host APIs (invoke / listen / dialog.open) are stubbed; the
-# stubs forward to the real daemon for HTTP routes so the e2e exercises
+# stubs forward to the real daemon for HTTP routes so the test exercises
 # the same wire format the production Tauri shell uses.
-e2e:
+test-e2e:
     bazel build //python/batchalign:sidecar
     cd {{ justfile_directory() }}/apps/batchalign/batchalign-gui && npx playwright test e2e/gui.spec.ts --reporter=list

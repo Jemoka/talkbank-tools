@@ -148,6 +148,7 @@ sidecar:
 #   just batchalign::gui::build [profile]   bundle .app/.msi/.AppImage (cargo tauri build via Bazel)
 #   just batchalign::gui::dev               cargo tauri dev (hot reload, no Bazel)
 #   just batchalign::gui::openapi           regenerate openapi.gen.ts + capabilities.snapshot.json
+#   just batchalign::gui::test-e2e          Playwright end-to-end test against a real sidecar
 #
 # All three live in `just/batchalign-gui.just`. Discovery:
 #   just --list batchalign::gui
