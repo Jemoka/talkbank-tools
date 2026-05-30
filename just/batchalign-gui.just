@@ -7,7 +7,7 @@
 #   build [profile]   bundle .app/.msi/.AppImage (cargo tauri build, Bazel)
 #   dev               cargo tauri dev — hot-reload (Bazel)
 #   openapi           regenerate openapi.gen.ts + capabilities.snapshot.json
-#   test-e2e          Playwright end-to-end test against a real sidecar
+#   test              Playwright end-to-end test against a real sidecar
 #
 # Both `build` and `dev` declare //python/batchalign:sidecar (a Bazel-
 # data dep, so the daemon binary is materialized + staged into
@@ -45,6 +45,6 @@ openapi:
 # Tauri host APIs (invoke / listen / dialog.open) are stubbed; the
 # stubs forward to the real daemon for HTTP routes so the test exercises
 # the same wire format the production Tauri shell uses.
-test-e2e:
+test:
     bazel build //python/batchalign:sidecar
     cd {{ justfile_directory() }}/apps/batchalign/batchalign-gui && npx playwright test e2e/gui.spec.ts --reporter=list
