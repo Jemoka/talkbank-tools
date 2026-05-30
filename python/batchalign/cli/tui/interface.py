@@ -188,60 +188,71 @@ class Interface:
         return bridge.callbacks_for(tasks, on_event=self._on_event)
 
     def run_pipeline(self, pipeline: Any, inputs: list[Any]):
-        """Iterate `inputs`, running `pipeline.run([single], callbacks=…)` per file.
+        """Submit `inputs` as a single `pipeline.run(inputs, callbacks=…)` call.
 
-        The Rust pipeline pre-parses *every* input in one batch before
-        any stages run (`crates/batchalign/batchalign-engine/src/pipeline.rs:185`).
-        If any single input fails that pre-parse, the whole call
-        raises and no other source ever gets touched. From the user's
-        POV that looks like "1 broken file killed my 50-file run."
+        Rust does both the concurrency and the per-backend batching:
 
-        Running file-by-file moves the parse blast radius from
-        "the entire batch" to "this one source." Concurrency drops
-        (we serialise what the Rust semaphore would otherwise run up
-        to 8-wide), but for a CLI batch isolation > concurrency. A
-        future optimisation could parallelise this loop with a Python
-        thread pool; today we keep it simple.
+        - `pipeline.rs` acquires from a `max_concurrent_values=8`
+          semaphore per input future, so submitting N inputs caps
+          in-flight work at 8 without any Python-side limiter.
+        - Each backend's batcher loop coalesces in-flight calls up to
+          `BatchPolicy.max_size` per `window_ms`, which is the whole
+          point of batching: Stanza / MT / ASR see one fat call across
+          sources, not N tiny ones.
+
+        We previously called `pipeline.run([single], …)` per file to
+        contain "1 broken file killed my 50-file run". That isolation
+        is now enforced inside `convert_py_input` — a parse failure
+        becomes a `BAValue::Failed` for that source and the rest of
+        the batch keeps running. So we can hand all inputs over and
+        let the engine do its job.
 
         Yields the outcome of each successfully-processed input.
-        Failures land on that input's `Task` directly so they show
-        up in the deck without aborting the rest of the run.
+        Failures land on that input's `Task` directly (via callbacks)
+        and on the returned `BAValue::Failed` (filtered out here).
         """
         self._open_run()
+        tasks_by_sid: dict[str, Task] = {}
+        ordered_sids: list[str] = []
         for inp in inputs:
             sid = str(getattr(inp, "source_id", "") or "")
             task = self._tasks.get(sid)
             if task is None:
-                # Caller forgot to push it; show it so we don't drop
-                # the file silently.
                 task = self.push(Task.from_input(inp))
-            cbs = bridge.callbacks_for({sid: task}, on_event=self._on_event)
-            try:
-                outcomes = pipeline.run([inp], callbacks=cbs)
-            except Exception as exc:  # noqa: BLE001
-                # Rust raised before firing a callback (e.g. parse
-                # failure during input conversion). Mark the task
-                # ourselves and credit the overall counter so the bar
-                # doesn't stick at N-1/N.
-                task.fail(f"{type(exc).__name__}: {exc}")
-                if self._progress is not None:
-                    self._refresh_task(task)
-                self._mark_completed(task)
+            tasks_by_sid[sid] = task
+            ordered_sids.append(sid)
+
+        cbs = bridge.callbacks_for(tasks_by_sid, on_event=self._on_event)
+        try:
+            outcomes = pipeline.run(list(inputs), callbacks=cbs)
+        except Exception as exc:  # noqa: BLE001
+            # A pipeline-level raise now means a genuinely unrecoverable
+            # error (no source_id could even be derived for one of the
+            # inputs, or the engine itself died). Mark every still-live
+            # task as failed and surface the banner once.
+            self._pipeline_error = f"{type(exc).__name__}: {exc}"
+            for task in tasks_by_sid.values():
+                if not task.is_terminal:
+                    task.fail(self._pipeline_error)
+                    if self._progress is not None:
+                        self._refresh_task(task)
+                    self._mark_completed(task)
+            return
+
+        # Outcomes come back in the same order as inputs. Yield only
+        # the healthy ones; failed sources already wrote their fail
+        # state via callbacks. We don't want write_outcomes to litter
+        # the working directory with `<name>.error.log` sidecars when
+        # the summary already reports the failure.
+        for sid, outcome in zip(ordered_sids, outcomes):
+            task = tasks_by_sid.get(sid)
+            if task is None:
+                yield outcome
                 continue
-            # Skip yielding outcomes for failed tasks. The Rust runtime
-            # produces a `BAValue::Failed` poison pill for any source
-            # that fails mid-pipeline, and its `.write(path)` writes a
-            # `<name>.error.log` sidecar next to the source
-            # (see `crates/batchalign/batchalign-core/src/base.rs:501`).
-            # The CLI's summary already carries the error; we don't
-            # want to litter the user's working directory.
-            if task.state is not TaskState.FAIL:
-                for outcome in outcomes:
-                    yield outcome
-            # In case the Rust pipeline returned cleanly but never
-            # emitted SourceCompleted (defensive), still credit it.
             if task.is_terminal:
                 self._mark_completed(task)
+            if task.state is not TaskState.FAIL:
+                yield outcome
 
     # ----- lifecycle ------------------------------------------------------
 

@@ -148,10 +148,46 @@ impl Pipeline {
             }
         }
         let sink = Arc::new(crate::progress_sink::CallbackSink::from_pairs(sink_pairs)) as Arc<dyn ProgressSink>;
-        let bavalues = inputs
-            .into_iter()
-            .map(|obj| convert_py_input(py, obj))
-            .collect::<PyResult<Vec<BAValue>>>()?;
+        // Per-input fallible conversion. A parse failure on one source must
+        // not abort the rest of the batch — convert it into a
+        // `BAValue::Failed` and emit StageFailed + SourceCompleted so the
+        // per-file bar resolves and the overall counter advances. Genuine
+        // type-mismatch errors (no recoverable source_id) still raise so
+        // the caller learns of the API misuse.
+        let mut bavalues: Vec<BAValue> = Vec::with_capacity(inputs.len());
+        for obj in inputs {
+            let snapshot_sid = recover_source_id(py, &obj);
+            match convert_py_input(py, obj) {
+                Ok(v) => bavalues.push(v),
+                Err(err) => match snapshot_sid {
+                    Some(sid) => {
+                        let msg = err.to_string();
+                        sink.emit(ProgressEvent {
+                            source_id: sid.clone(),
+                            task: None,
+                            kind: ProgressKind::StageFailed,
+                            completed: 0,
+                            total: 0,
+                            label: msg.clone(),
+                        });
+                        sink.emit(ProgressEvent {
+                            source_id: sid.clone(),
+                            task: None,
+                            kind: ProgressKind::SourceCompleted,
+                            completed: 0,
+                            total: 0,
+                            label: String::new(),
+                        });
+                        bavalues.push(BAValue::Failed {
+                            source_id: sid,
+                            error: BAError::Parse(msg),
+                            partial: None,
+                        });
+                    }
+                    None => return Err(err),
+                },
+            }
+        }
         let inner = self.inner.clone();
 
         // Release the GIL while the runtime drives async work; runners that
@@ -266,6 +302,49 @@ fn convert_py_input(py: Python<'_>, obj: Py<PyAny>) -> PyResult<BAValue> {
         return load_chat_at(&path, &sid).map(BAValue::Chat);
     }
     Ok(BAValue::Media(MediaInput::new(sid, path)))
+}
+
+/// Best-effort `source_id` recovery for inputs that may fail to convert.
+///
+/// Tries (in order): `.source_id` attribute, `MediaInput`/`ChatInput`/
+/// `PairedInput` extraction (each carries a typed `source_id`), then the
+/// file stem of `.path` / `.main` / a path string. Returns `None` when
+/// none of those yield a non-empty id — that signals genuine API misuse
+/// (the caller passed something we can't route at all) and the outer
+/// loop propagates the original `PyErr` instead of inventing a failure.
+fn recover_source_id(py: Python<'_>, obj: &Py<PyAny>) -> Option<SourceId> {
+    let bound = obj.bind(py);
+    // 1. Explicit `.source_id` attribute (works for any duck-typed input).
+    if let Ok(s) = bound
+        .getattr("source_id")
+        .and_then(|v| v.extract::<String>())
+    {
+        if let Ok(sid) = SourceId::try_new(&s) {
+            return Some(sid);
+        }
+    }
+    // 2. Typed extractions carry their own validated source_id.
+    if let Ok(m) = bound.extract::<MediaInput>() {
+        return Some(m.source_id);
+    }
+    if let Ok(c) = bound.extract::<ChatInput>() {
+        return Some(c.source_id);
+    }
+    if let Ok(p) = bound.extract::<PairedInput>() {
+        return Some(p.source_id);
+    }
+    // 3. File-stem fallback for path-like inputs.
+    let path_attr = bound
+        .getattr("path")
+        .and_then(|v| v.extract::<String>())
+        .or_else(|_| bound.getattr("main").and_then(|v| v.extract::<String>()))
+        .or_else(|_| bound.extract::<String>())
+        .ok()?;
+    let stem = std::path::PathBuf::from(&path_attr)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(str::to_owned)?;
+    SourceId::try_new(&stem).ok()
 }
 
 fn media_from_string(path_str: &str) -> PyResult<BAValue> {
