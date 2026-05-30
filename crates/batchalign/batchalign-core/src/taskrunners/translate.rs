@@ -71,7 +71,7 @@ impl TaskRunner for TranslateTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Translate(input)).await?;
         let output: TranslateOutput = output_raw.try_into()?;
 
-        inject_translation_tiers(chat, &output.utterances)?;
+        inject_translation_tiers(chat, &output.utterances, sink)?;
 
         sink.emit(ProgressEvent::stage_injected(
             chat.source_id(),
@@ -118,10 +118,16 @@ fn utterance_texts(chat: &Chat) -> Vec<String> {
     out
 }
 
-fn inject_translation_tiers(chat: &mut Chat, translations: &[String]) -> BAResult<()> {
+fn inject_translation_tiers(
+    chat: &mut Chat,
+    translations: &[String],
+    sink: &dyn ProgressSink,
+) -> BAResult<()> {
     use talkbank_model::model::dependent_tier::UserDefinedDependentTier;
     use talkbank_model::{DependentTier, NonEmptyString, Span};
 
+    let source_id = chat.source_id().clone();
+    let total = translations.len() as u64;
     let mut idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
         let Line::Utterance(u) = line else { continue };
@@ -132,19 +138,24 @@ fn inject_translation_tiers(chat: &mut Chat, translations: &[String]) -> BAResul
         };
         idx += 1;
         let trimmed = text.trim();
-        if trimmed.is_empty() {
-            continue;
+        if !trimmed.is_empty() {
+            let label = NonEmptyString::new("xtra")
+                .ok_or_else(|| BAError::Internal("xtra label empty".into()))?;
+            let content = NonEmptyString::new(trimmed)
+                .ok_or_else(|| BAError::Internal("xtra content empty".into()))?;
+            u.dependent_tiers
+                .push(DependentTier::UserDefined(UserDefinedDependentTier {
+                    label,
+                    content,
+                    span: Span::DUMMY,
+                }));
         }
-        let label = NonEmptyString::new("xtra")
-            .ok_or_else(|| BAError::Internal("xtra label empty".into()))?;
-        let content = NonEmptyString::new(trimmed)
-            .ok_or_else(|| BAError::Internal("xtra content empty".into()))?;
-        u.dependent_tiers
-            .push(DependentTier::UserDefined(UserDefinedDependentTier {
-                label,
-                content,
-                span: Span::DUMMY,
-            }));
+        sink.emit(ProgressEvent::stage_tick(
+            &source_id,
+            Task::Translate,
+            idx as u64,
+            total,
+        ));
     }
     if idx != translations.len() {
         return Err(BAError::Internal(format!(

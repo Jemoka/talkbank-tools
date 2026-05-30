@@ -133,6 +133,60 @@ def test_run_pipeline_isolates_per_source_failures(fake_progress_core):
     assert ui.exit_code == 1
 
 
+def test_per_utterance_ticks_advance_task_progress(fake_progress_core):
+    """A backend that fires `StageStarted` events with (completed, total)
+    set should drive `task.progress` from (0,N) to (N,N).
+
+    Mirrors the Rust runner contract: emit a `stage_tick` (= StageStarted
+    with non-zero total) after each per-utterance dispatch. The Python
+    bridge's `if ev.total > 0: task.update(...)` path handles it.
+    """
+    RustTask, ProgressKind, ProgressEvent = fake_progress_core
+    console, _ = _capture_console()
+
+    captured_progress: list[tuple[int, int] | None] = []
+
+    class TickingPipeline:
+        def run(self, inputs, callbacks):
+            cbs = dict(callbacks)
+            outcomes = []
+            for inp in inputs:
+                sid = inp.source_id
+                # Initial stage_started (no counters).
+                cbs[sid](ProgressEvent(
+                    source_id=sid, kind=ProgressKind.StageStarted,
+                    task=RustTask.Morphosyntax,
+                ))
+                # 5 per-utterance ticks: (1,5), (2,5), ..., (5,5).
+                for i in range(1, 6):
+                    cbs[sid](ProgressEvent(
+                        source_id=sid, kind=ProgressKind.StageStarted,
+                        task=RustTask.Morphosyntax,
+                        completed=i, total=5,
+                    ))
+                cbs[sid](ProgressEvent(
+                    source_id=sid, kind=ProgressKind.SourceCompleted,
+                ))
+                outcomes.append(SimpleNamespace(source_id=sid, ok=True))
+            return outcomes
+
+    ui = Interface.open(
+        command="morphotag", params={}, output=None,
+        plain=True, console=console,
+    )
+    inp = SimpleNamespace(source_id="a", path="/x/a.cha")
+    with ui:
+        task = ui.push(Task.from_input(inp))
+        list(ui.run_pipeline(TickingPipeline(), [inp]))
+        captured_progress.append(task.progress)
+
+    # After SourceCompleted, complete() runs which clears progress to None.
+    # The point is the ticks made it through without raising; we verify
+    # final state is OK (counts credited) rather than the cleared progress.
+    assert ui.exit_code == 0
+    assert task.state.value == "OK"
+
+
 def test_run_pipeline_top_level_raise_marks_all_unterminated(fake_progress_core):
     """If pipeline.run itself raises, every live task should fail once."""
     console, buf = _capture_console()

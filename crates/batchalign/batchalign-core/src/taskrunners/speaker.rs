@@ -61,7 +61,7 @@ impl TaskRunner for SpeakerTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Speaker(input)).await?;
         let output: SpeakerOutput = output_raw.try_into()?;
 
-        relabel_utterances_by_diarization(chat, &output)?;
+        relabel_utterances_by_diarization(chat, &output, sink)?;
 
         sink.emit(ProgressEvent::stage_injected(
             chat.source_id(),
@@ -71,30 +71,49 @@ impl TaskRunner for SpeakerTaskRunner {
     }
 }
 
-fn relabel_utterances_by_diarization(chat: &mut Chat, out: &SpeakerOutput) -> BAResult<()> {
+fn relabel_utterances_by_diarization(
+    chat: &mut Chat,
+    out: &SpeakerOutput,
+    sink: &dyn ProgressSink,
+) -> BAResult<()> {
     use talkbank_model::SpeakerCode;
     let segs = &out.diarization.segments;
     if segs.is_empty() {
         return Ok(());
     }
+    let source_id = chat.source_id().clone();
+    let total = chat
+        .ast()
+        .lines
+        .0
+        .iter()
+        .filter(|l| matches!(l, Line::Utterance(_)))
+        .count() as u64;
+    let mut completed: u64 = 0;
     for line in chat.ast_mut().lines.0.iter_mut() {
         let Line::Utterance(u) = line else { continue };
-        let Some(mid) = utterance_midpoint_ms(&u.main.content.content.0) else {
-            continue;
-        };
-        let best = segs
-            .iter()
-            .find(|s| mid >= s.start_ms && mid <= s.end_ms)
-            .or_else(|| {
-                segs.iter().min_by_key(|s| {
-                    let lo = s.start_ms.abs_diff(mid);
-                    let hi = s.end_ms.abs_diff(mid);
-                    lo.min(hi)
-                })
-            });
-        if let Some(seg) = best {
-            u.main.speaker = SpeakerCode::new(canonical_speaker_code(seg.speaker.as_str()));
+        if let Some(mid) = utterance_midpoint_ms(&u.main.content.content.0) {
+            let best = segs
+                .iter()
+                .find(|s| mid >= s.start_ms && mid <= s.end_ms)
+                .or_else(|| {
+                    segs.iter().min_by_key(|s| {
+                        let lo = s.start_ms.abs_diff(mid);
+                        let hi = s.end_ms.abs_diff(mid);
+                        lo.min(hi)
+                    })
+                });
+            if let Some(seg) = best {
+                u.main.speaker = SpeakerCode::new(canonical_speaker_code(seg.speaker.as_str()));
+            }
         }
+        completed += 1;
+        sink.emit(ProgressEvent::stage_tick(
+            &source_id,
+            Task::Speaker,
+            completed,
+            total,
+        ));
     }
     Ok(())
 }

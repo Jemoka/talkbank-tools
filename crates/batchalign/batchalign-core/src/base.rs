@@ -653,6 +653,34 @@ impl ProgressEvent {
         }
     }
 
+    /// Convenience constructor for an in-stage progress tick.
+    ///
+    /// Carries `(completed, total)` so a runner with a per-unit loop
+    /// (per-utterance Stanza, per-segment FA, etc.) can advance the
+    /// per-file progress bar incrementally — matching BA2's
+    /// `status_hook(completed, total)` semantics.
+    ///
+    /// Reuses `ProgressKind::StageStarted` deliberately: the Python
+    /// bridge gates the progress-bar update on `ev.total > 0` rather
+    /// than on `kind`, and `Task.stage_started` is idempotent in RUN
+    /// state, so re-emitting it with non-zero counters is the
+    /// no-schema-change path.
+    pub fn stage_tick(
+        source_id: &SourceId,
+        task: Task,
+        completed: u64,
+        total: u64,
+    ) -> Self {
+        Self {
+            source_id: source_id.clone(),
+            task: Some(task),
+            kind: ProgressKind::StageStarted,
+            completed,
+            total,
+            label: format!("{completed}/{total}"),
+        }
+    }
+
     /// Convenience constructor for `SourceCompleted`.
     pub fn source_completed(source_id: &SourceId) -> Self {
         Self {

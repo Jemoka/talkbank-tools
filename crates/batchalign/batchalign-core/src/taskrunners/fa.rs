@@ -90,7 +90,7 @@ impl TaskRunner for FaTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Fa(input)).await?;
         let output: FaOutput = output_raw.try_into()?;
 
-        inject_word_timings(chat, &output.utterances)?;
+        inject_word_timings(chat, &output.utterances, sink)?;
 
         sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Fa));
         Ok(())
@@ -145,10 +145,16 @@ fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
 /// `Word` carrying an `inline_bullet` (`\x15start_end\x15` media-time mark) —
 /// and lets the CHAT writer serialize it. No `%wor` text is assembled by hand;
 /// building CHAT by string concatenation is forbidden (see `CLAUDE.md`).
-fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> {
+fn inject_word_timings(
+    chat: &mut Chat,
+    aligned: &[AsrSegment],
+    sink: &dyn ProgressSink,
+) -> BAResult<()> {
     use talkbank_model::DependentTier;
     use talkbank_model::model::{Bullet, WorTier, Word};
 
+    let source_id = chat.source_id().clone();
+    let total = aligned.len() as u64;
     let mut idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
         let Line::Utterance(u) = line else { continue };
@@ -181,6 +187,12 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             u.main.content.bullet = Some(Bullet::new(seg.start_ms, seg.end_ms));
         }
         idx += 1;
+        sink.emit(ProgressEvent::stage_tick(
+            &source_id,
+            Task::Fa,
+            idx as u64,
+            total,
+        ));
     }
     if idx != aligned.len() {
         return Err(BAError::Internal(format!(

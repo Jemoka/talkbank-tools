@@ -126,7 +126,15 @@ async fn process_chat(
     // Phase 2: dispatch only for utterances missing `%mor`. Track the source
     // utterance index alongside each output so injection can apply them to
     // the right slots while leaving pre-tagged utterances untouched.
+    //
+    // After each per-utterance dispatch we emit a `stage_tick` so the
+    // per-file Rich progress bar advances incrementally instead of
+    // sitting at 0 for the entire Stanza pass. `total` excludes
+    // already-tagged utterances — the bar reflects real work to do,
+    // matching BA2's `status_hook` semantics.
+    let total_to_tag = already_tagged.iter().filter(|t| !**t).count() as u64;
     let mut dispatched: Vec<(usize, MorphosyntaxOutput)> = Vec::new();
+    let mut completed_ticks: u64 = 0;
     for (idx, tokens) in per_utt_tokens.iter().enumerate() {
         if already_tagged[idx] {
             continue;
@@ -146,6 +154,13 @@ async fn process_chat(
         let task_out = dispatcher.dispatch(input.into()).await?;
         let out: MorphosyntaxOutput = task_out.try_into()?;
         dispatched.push((idx, out));
+        completed_ticks += 1;
+        sink.emit(ProgressEvent::stage_tick(
+            &source_id,
+            Task::Morphosyntax,
+            completed_ticks,
+            total_to_tag,
+        ));
     }
 
     // Phase 3: build typed tiers and inject into the utterances we tagged.
@@ -392,6 +407,50 @@ mod tests {
     }
 
     const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tit's red .\n*CHI:\tcat dog .\n@End\n";
+
+    /// Capturing sink for tick-sequence assertions.
+    struct CapturingSink {
+        events: Mutex<Vec<crate::base::ProgressEvent>>,
+    }
+    impl CapturingSink {
+        fn new() -> Self {
+            Self {
+                events: Mutex::new(Vec::new()),
+            }
+        }
+    }
+    impl crate::base::ProgressSink for CapturingSink {
+        fn emit(&self, event: crate::base::ProgressEvent) {
+            self.events.lock().expect("poisoned").push(event);
+        }
+    }
+
+    #[tokio::test]
+    async fn emits_per_utterance_progress_ticks() -> BAResult<()> {
+        let chat = Chat::parse(FIXTURE, SourceId::try_new("fixture")?)?;
+        let mut value = BAValue::Chat(chat);
+        let dispatcher = RecordingDispatcher::new();
+        let sink = CapturingSink::new();
+        MorphosyntaxTaskRunner
+            .apply(&mut value, &dispatcher, &sink)
+            .await?;
+
+        // Pull out only ticks (StageStarted with non-zero total). The
+        // initial bare `stage_started(... total=0)` and the final
+        // `stage_injected(... total=0)` are gated out.
+        let evs = sink.events.lock().expect("poisoned");
+        let ticks: Vec<(u64, u64)> = evs
+            .iter()
+            .filter(|e| e.total > 0)
+            .map(|e| (e.completed, e.total))
+            .collect();
+        assert_eq!(
+            ticks,
+            vec![(1, 2), (2, 2)],
+            "expected one tick per dispatched utterance with total=2"
+        );
+        Ok(())
+    }
 
     #[tokio::test]
     async fn injects_typed_mor_and_gra() -> BAResult<()> {

@@ -63,8 +63,9 @@ impl TaskRunner for UtSegTaskRunner {
         // Per-utterance text (typed extraction via `walk_words`) → dispatch →
         // collect the re-segmented sub-utterances.
         let rows: Vec<UtteranceRow> = collect_utterance_rows(chat);
+        let total = rows.len() as u64;
         let mut new_utts: Vec<NewUtterance> = Vec::new();
-        for row in &rows {
+        for (idx, row) in rows.iter().enumerate() {
             let input = UtSegInput {
                 source_id: source_id.clone(),
                 segments: vec![row.as_segment()],
@@ -76,6 +77,12 @@ impl TaskRunner for UtSegTaskRunner {
             let out_raw = dispatcher.dispatch(TaskInput::UtSeg(input)).await?;
             let out: UtSegOutput = out_raw.try_into()?;
             collect_split(row, &out, &mut new_utts);
+            sink.emit(ProgressEvent::stage_tick(
+                &source_id,
+                Task::UtSeg,
+                (idx + 1) as u64,
+                total,
+            ));
         }
 
         let mut new_chat = build_chat_from_utterances(&source_id, &langs, &new_utts)?;

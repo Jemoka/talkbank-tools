@@ -53,7 +53,7 @@ impl TaskRunner for CorefTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Coref(input)).await?;
         let output: CorefOutput = output_raw.try_into()?;
 
-        inject_coref_tiers(chat, &output.annotations)?;
+        inject_coref_tiers(chat, &output.annotations, sink)?;
 
         sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Coref));
         Ok(())
@@ -79,10 +79,16 @@ fn collect_inputs(chat: &Chat) -> (Vec<String>, Vec<String>) {
     (utts, spks)
 }
 
-fn inject_coref_tiers(chat: &mut Chat, annotations: &[String]) -> BAResult<()> {
+fn inject_coref_tiers(
+    chat: &mut Chat,
+    annotations: &[String],
+    sink: &dyn ProgressSink,
+) -> BAResult<()> {
     use talkbank_model::model::dependent_tier::UserDefinedDependentTier;
     use talkbank_model::{DependentTier, NonEmptyString, Span};
 
+    let source_id = chat.source_id().clone();
+    let total = annotations.len() as u64;
     let mut idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
         let Line::Utterance(u) = line else { continue };
@@ -93,19 +99,24 @@ fn inject_coref_tiers(chat: &mut Chat, annotations: &[String]) -> BAResult<()> {
         };
         idx += 1;
         let trimmed = ann.trim();
-        if trimmed.is_empty() {
-            continue;
+        if !trimmed.is_empty() {
+            let label = NonEmptyString::new("xcor")
+                .ok_or_else(|| BAError::Internal("xcor label empty".into()))?;
+            let content = NonEmptyString::new(trimmed)
+                .ok_or_else(|| BAError::Internal("xcor content empty".into()))?;
+            u.dependent_tiers
+                .push(DependentTier::UserDefined(UserDefinedDependentTier {
+                    label,
+                    content,
+                    span: Span::DUMMY,
+                }));
         }
-        let label = NonEmptyString::new("xcor")
-            .ok_or_else(|| BAError::Internal("xcor label empty".into()))?;
-        let content = NonEmptyString::new(trimmed)
-            .ok_or_else(|| BAError::Internal("xcor content empty".into()))?;
-        u.dependent_tiers
-            .push(DependentTier::UserDefined(UserDefinedDependentTier {
-                label,
-                content,
-                span: Span::DUMMY,
-            }));
+        sink.emit(ProgressEvent::stage_tick(
+            &source_id,
+            Task::Coref,
+            idx as u64,
+            total,
+        ));
     }
     if idx != annotations.len() {
         return Err(BAError::Internal(format!(
