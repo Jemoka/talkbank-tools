@@ -8,5 +8,5 @@ the one that matches what you want to do.
 
 - **chatter (CHAT-first CLI):** [Installation](../chatter/user-guide/installation.md)
 - **Batchalign3 (audio + ML):** [Installation](../batchalign/user-guide/installation.md)
-- **VS Code extension:** [Getting Started](../apps/vscode-extension/getting-started/installation.md)
+- **VS Code extension:** [Getting Started](../vscode/getting-started/installation.md)
 - **CLAN command reference:** [Getting Started](../clan-reference/getting-started/installation.md)

@@ -11,7 +11,7 @@
 > `uv run --project python batchalign3`. Treat sections below that
 > rely on those commands as background reading from the upstream
 > fork until this file is rewritten. See
-> [`developer/building.md`](./building.md) for the canonical
+> [`developer/building.md`](../developer/building.md) for the canonical
 > build/test surface.
 **Last updated:** 2026-04-02 07:32 EDT
 
