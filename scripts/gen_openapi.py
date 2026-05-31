@@ -128,14 +128,18 @@ def _run_openapi_typescript(openapi_path: Path) -> str:
     out via `npx --no-install` to fail loudly when it's missing rather
     than auto-fetching at codegen time.
     """
-    gui_dir = openapi_path.parent.parent / "apps" / "batchalign" / "batchalign-gui"
+    gui_dir = repo_root() / "apps" / "batchalign" / "batchalign-gui"
     # Locate openapi-typescript from the GUI's node_modules; fall back
     # to a globally-available `openapi-typescript` shim if present.
+    which = shutil.which("openapi-typescript")
     candidates = [
         gui_dir / "node_modules" / ".bin" / "openapi-typescript",
-        Path(shutil.which("openapi-typescript") or ""),
+        Path(which) if which else None,
     ]
-    binary = next((p for p in candidates if p and p.exists()), None)
+    binary = next(
+        (p for p in candidates if p is not None and p.is_file()),
+        None,
+    )
     if binary is None:
         # If neither is installed, emit a placeholder file so the GUI
         # build doesn't break — but warn loudly. The freshness check

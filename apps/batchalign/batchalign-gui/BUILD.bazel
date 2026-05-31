@@ -51,4 +51,12 @@ sh_test(
     srcs = ["openapi_gen.sh"],
     args = ["--check"],
     data = ["//scripts:gen_openapi.py"],
+    # Needs access to python/.venv (uv-managed) to import batchalign +
+    # fastapi; that lives in the source workspace, not the sandbox. Mark
+    # as local + no-sandbox so the shim's BUILD_WORKSPACE_DIRECTORY
+    # fallback to the host's source tree resolves correctly.
+    tags = [
+        "local",
+        "no-sandbox",
+    ],
 )
