@@ -185,11 +185,21 @@ class GoogleTranslateBackend(Translate):
         # is closed". Mirror that: one Translator per utterance.
         from googletrans import Translator  # type: ignore[import-not-found]
 
+        # Pass src= explicitly when we have a source language. Auto-detect
+        # silently mis-routes short utterances (e.g. "hola amigos como
+        # estan" detects as English fallback and passes through verbatim).
+        # Discovered via cross-fork parity test 2026-05-31 — BA2 also
+        # auto-detects but its googletrans version handled this case.
+        src_code = _iso2(source) if source else None
+
         async def _translate(t: str) -> Any:
             translator = Translator()
+            kwargs: dict[str, Any] = {}
             if dest:
-                return await translator.translate(t, dest=dest)
-            return await translator.translate(t)
+                kwargs["dest"] = dest
+            if src_code:
+                kwargs["src"] = src_code
+            return await translator.translate(t, **kwargs)
 
         out = []
         for text in texts:
