@@ -35,6 +35,29 @@ fn main() {
     // changes; the explicit rerun-if directives keep things robust
     // against build-dep graph quirks (and document intent).
     println!("cargo:rerun-if-changed=build.rs");
+
+    // Bake the short git SHA into the binary as VERGEN_GIT_SHA. Used by
+    // the `batchalign3 version` CLI (Landing 7 #30) and the
+    // X-Batchalign-SHA response header middleware (Landing 7 #31). We
+    // resolve manually instead of pulling the `vergen` crate to keep
+    // the build-deps surface small. CI can override via the env var.
+    let sha = env::var("BATCHALIGN_GIT_SHA")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            Command::new("git")
+                .args(["rev-parse", "--short", "HEAD"])
+                .output()
+                .ok()
+                .and_then(|o| if o.status.success() {
+                    String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
+                } else {
+                    None
+                })
+        })
+        .unwrap_or_else(|| "unknown".to_string());
+    println!("cargo:rustc-env=VERGEN_GIT_SHA={}", sha);
+    println!("cargo:rerun-if-env-changed=BATCHALIGN_GIT_SHA");
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let proto_src_dir = manifest_dir
         .parent()

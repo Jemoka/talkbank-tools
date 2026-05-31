@@ -537,6 +537,34 @@ app.add_middleware(
 )
 
 
+# Landing 7 #31 — every API response carries `X-Batchalign-SHA` so clients
+# can detect server/client version skew. The SHA is preferentially baked
+# into the PyO3 extension at compile time (build.rs); when the extension
+# isn't built, we fall back to the env override / `unknown`.
+def _resolve_server_sha() -> str:
+    import os as _os
+
+    env = _os.environ.get("BATCHALIGN_GIT_SHA")
+    if env:
+        return env.strip()
+    try:
+        from batchalign._core import BATCHALIGN_GIT_SHA  # type: ignore[attr-defined]
+
+        return str(BATCHALIGN_GIT_SHA)
+    except (ImportError, AttributeError):
+        return "unknown"
+
+
+_SERVER_SHA = _resolve_server_sha()
+
+
+@app.middleware("http")
+async def add_sha_header(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Batchalign-SHA"] = _SERVER_SHA
+    return response
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {

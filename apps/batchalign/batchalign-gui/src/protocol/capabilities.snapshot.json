@@ -434,6 +434,39 @@
         "ASR"
       ]
     },
+    "Qwen3FaBackend": {
+      "doc": "Standalone Qwen3 forced alignment.",
+      "kwargs": [
+        {
+          "annotation": "'str'",
+          "default": "'Qwen/Qwen3-ForcedAligner-0.6B'",
+          "name": "model_id",
+          "required": false
+        },
+        {
+          "annotation": "'str'",
+          "default": "'cpu'",
+          "name": "device",
+          "required": false
+        },
+        {
+          "annotation": "'int'",
+          "default": "1",
+          "name": "batch_size",
+          "required": false
+        },
+        {
+          "annotation": "'int'",
+          "default": "0",
+          "name": "batch_window_ms",
+          "required": false
+        }
+      ],
+      "module": "batchalign.backends.fa.qwen3_fa",
+      "tasks": [
+        "FA"
+      ]
+    },
     "QwenAsrBackend": {
       "doc": "Qwen2-Audio chat-style ASR (no native word timestamps).",
       "kwargs": [
@@ -510,6 +543,18 @@
           "annotation": "'float'",
           "default": "3600.0",
           "name": "timeout_s",
+          "required": false
+        },
+        {
+          "annotation": "'int'",
+          "default": "8",
+          "name": "batch_size",
+          "required": false
+        },
+        {
+          "annotation": "'int'",
+          "default": "250",
+          "name": "batch_window_ms",
           "required": false
         }
       ],
@@ -943,6 +988,7 @@
     "AVQI": [],
     "Coref": [],
     "FA": [
+      "Qwen3FaBackend",
       "Wav2Vec2FaBackend",
       "WhisperFaBackend",
       "WhisperXBackend",
