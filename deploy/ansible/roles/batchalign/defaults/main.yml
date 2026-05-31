@@ -1,0 +1,36 @@
+---
+# Role defaults — override in inventory or via -e on the command line.
+
+# Git ref / tag / SHA to deploy. Pinning to a SHA is recommended for
+# reproducibility; "HEAD" pulls whatever is current at run time and is
+# only intended for ad-hoc lab installs.
+batchalign_version: "HEAD"
+
+# Source-of-truth for `git clone`. Public mirror by default.
+batchalign_repo_url: "https://github.com/Jemoka/talkbank-tools.git"
+
+# System user the daemon runs as. Created if missing.
+batchalign_user: "batchalign"
+batchalign_group: "batchalign"
+
+# Installation prefix for the source tree + venv + binary symlink.
+batchalign_install_dir: "/opt/batchalign3"
+batchalign_state_dir: "/var/lib/batchalign3"
+
+# Optional root for paths-mode (Landing 5). When set, the daemon will
+# resolve client-supplied relative job paths against this directory and
+# refuse anything that escapes it.
+batchalign_media_paths_root: ""
+
+# Daemon listen address. Default loopback; front with a reverse proxy
+# for any external access.
+batchalign_bind_host: "127.0.0.1"
+batchalign_bind_port: 8000
+
+# Whether to install Rust toolchain (needed to build the native CLI).
+# If the host already has Rust ≥1.95, set this to false.
+batchalign_install_rust: true
+batchalign_rust_toolchain: "1.95.0"
+
+# Whether to enable the systemd unit on install.
+batchalign_enable_service: true

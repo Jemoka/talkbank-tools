@@ -1,0 +1,123 @@
+---
+# Role tasks — install + configure batchalign3 daemon.
+
+- name: Ensure system packages are present
+  ansible.builtin.package:
+    name:
+      - git
+      - curl
+      - build-essential
+      - pkg-config
+      - libssl-dev
+    state: present
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Ensure batchalign group
+  ansible.builtin.group:
+    name: "{{ batchalign_group }}"
+    system: true
+
+- name: Ensure batchalign user
+  ansible.builtin.user:
+    name: "{{ batchalign_user }}"
+    group: "{{ batchalign_group }}"
+    system: true
+    home: "{{ batchalign_install_dir }}"
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Ensure install + state directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ batchalign_user }}"
+    group: "{{ batchalign_group }}"
+    mode: "0755"
+  loop:
+    - "{{ batchalign_install_dir }}"
+    - "{{ batchalign_state_dir }}"
+
+- name: Install uv (Astral Python manager)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if ! command -v uv >/dev/null 2>&1; then
+      curl -LsSf https://astral.sh/uv/install.sh | sh
+    fi
+  args:
+    creates: /root/.local/bin/uv
+  changed_when: false
+
+- name: Install Rust toolchain
+  when: batchalign_install_rust
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if ! command -v rustup >/dev/null 2>&1; then
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --default-toolchain {{ batchalign_rust_toolchain }}
+    fi
+    rustup install {{ batchalign_rust_toolchain }}
+  args:
+    creates: "/root/.cargo/bin/rustc"
+  changed_when: false
+
+- name: Clone or update batchalign source
+  ansible.builtin.git:
+    repo: "{{ batchalign_repo_url }}"
+    dest: "{{ batchalign_install_dir }}/src"
+    version: "{{ batchalign_version }}"
+    force: true
+  become_user: "{{ batchalign_user }}"
+
+- name: Build native CLI (cargo build --release)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export RUSTUP_TOOLCHAIN={{ batchalign_rust_toolchain }}
+    cd {{ batchalign_install_dir }}/src
+    cargo build --release -p batchalign --bin batchalign3
+  become_user: "{{ batchalign_user }}"
+  args:
+    creates: "{{ batchalign_install_dir }}/src/target/release/batchalign3"
+
+- name: Sync Python deps via uv
+  ansible.builtin.shell: |
+    set -euo pipefail
+    cd {{ batchalign_install_dir }}/src/python
+    uv sync --group dev
+  become_user: "{{ batchalign_user }}"
+  changed_when: false
+
+- name: Build batchalign_core PyO3 extension
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export RUSTUP_TOOLCHAIN={{ batchalign_rust_toolchain }}
+    cd {{ batchalign_install_dir }}/src
+    uv run maturin develop \
+      -m crates/batchalign/batchalign-pyo3/Cargo.toml \
+      -F pyo3/extension-module
+  become_user: "{{ batchalign_user }}"
+  changed_when: false
+
+- name: Symlink batchalign3 binary into /usr/local/bin
+  ansible.builtin.file:
+    src: "{{ batchalign_install_dir }}/src/target/release/batchalign3"
+    dest: /usr/local/bin/batchalign3
+    state: link
+    force: true
+
+- name: Render systemd unit
+  ansible.builtin.template:
+    src: batchalign3.service.j2
+    dest: /etc/systemd/system/batchalign3.service
+    mode: "0644"
+  notify: restart batchalign3
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable + start batchalign3
+  when: batchalign_enable_service
+  ansible.builtin.systemd:
+    name: batchalign3
+    enabled: true
+    state: started

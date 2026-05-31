@@ -1,0 +1,37 @@
+[Unit]
+Description=Batchalign3 daemon — TalkBank CHAT processing pipeline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ batchalign_user }}
+Group={{ batchalign_group }}
+WorkingDirectory={{ batchalign_install_dir }}/src
+Environment="BATCHALIGN_STATE_DIR={{ batchalign_state_dir }}"
+{% if batchalign_media_paths_root %}
+Environment="BATCHALIGN_MEDIA_PATHS_ROOT={{ batchalign_media_paths_root }}"
+{% endif %}
+Environment="BATCHALIGN_BIND_HOST={{ batchalign_bind_host }}"
+Environment="BATCHALIGN_BIND_PORT={{ batchalign_bind_port }}"
+# vergen-baked SHA propagates via the build; we surface the deployed
+# git ref so /version (Landing 7) can warn on drift.
+Environment="BATCHALIGN_GIT_SHA={{ batchalign_version }}"
+ExecStart=/usr/local/bin/batchalign3 daemon \
+    --host {{ batchalign_bind_host }} \
+    --port {{ batchalign_bind_port }}
+Restart=on-failure
+RestartSec=5s
+
+# Sandboxing — tighten over time. State dir is the only writable path.
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ batchalign_state_dir }}
+{% if batchalign_media_paths_root %}
+ReadWritePaths={{ batchalign_media_paths_root }}
+{% endif %}
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
