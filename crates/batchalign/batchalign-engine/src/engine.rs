@@ -53,6 +53,13 @@ pub struct BatchalignEngine {
     routes: RwLock<HashMap<Task, mpsc::UnboundedSender<BatchItem>>>,
     cache: Arc<Cache>,
     config: EngineConfig,
+    /// Cooperative cancellation flag (Landing 2 #9). When set, `dispatch`
+    /// short-circuits with `BAError::Cancelled` before issuing the batcher
+    /// send. Backend `call()` implementations are expected to be
+    /// short-running enough that polling between dispatches is sufficient;
+    /// long-running backends are responsible for honoring cancellation
+    /// internally (e.g. checking the same flag via `cancellation()`).
+    cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl BatchalignEngine {
@@ -65,7 +72,27 @@ impl BatchalignEngine {
             routes: RwLock::new(HashMap::new()),
             cache,
             config,
+            cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    /// Mark the engine as cancelled. Subsequent `dispatch` calls return
+    /// `BAError::Cancelled` immediately; in-flight calls are not
+    /// interrupted (cooperative). Idempotent.
+    pub fn cancel(&self) {
+        self.cancelled
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Return a clonable cancellation handle. Long-running backends can
+    /// poll it; the engine itself checks it at dispatch entry.
+    pub fn cancellation(&self) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+        self.cancelled.clone()
+    }
+
+    /// Whether `cancel()` has been called.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Registers a backend by:
@@ -116,6 +143,12 @@ impl BatchalignEngine {
     ///   * the batcher dropped the reply mid-flight.
     #[tracing::instrument(skip(self, input), fields(task = ?input.task()))]
     pub async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
+        // Cooperative cancellation check (Landing 2 #9). Polling at
+        // dispatch entry is enough for task-sized work; long-running
+        // backends should poll `self.cancellation()` themselves.
+        if self.is_cancelled() {
+            return Err(BAError::Worker("engine cancelled".into()));
+        }
         let task = input.task();
         // Clone the sender out so we don't hold the lock across `.await`.
         let tx = {
