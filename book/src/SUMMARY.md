@@ -152,6 +152,7 @@
 # Batchalign3 — Developer Guide
 
 - [Building & Development](batchalign/developer/building.md)
+- [BA3 Cutover Landing Status](batchalign/developer/landing-status.md)
 - [Testing](batchalign/developer/testing.md)
   - [Deterministic Simulation (turmoil)](batchalign/developer/testing-turmoil.md)
   - [Regression Fixtures](batchalign/developer/regression-fixtures.md)
