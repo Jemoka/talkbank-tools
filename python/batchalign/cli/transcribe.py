@@ -66,7 +66,7 @@ def register(app: typer.Typer) -> None:
             help="Optional output folder; if omitted, each `.cha` transcript is written next to its source media.",
         ),
         engine: AsrEngine = typer.Option(
-            AsrEngine.whisperx, "--engine", case_sensitive=False,
+            AsrEngine.rev, "--engine", case_sensitive=False,
             help="ASR engine: rev | whisperx | whisper | openai | vllm.",
         ),
         language: str = typer.Option(
