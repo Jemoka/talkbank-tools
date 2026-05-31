@@ -28,12 +28,40 @@ This project supports UD `%mor` syntax only (see CLAUDE.md). Legacy CLAN-mor
 from __future__ import annotations
 
 import re
+import threading
 from typing import Any
 
 from batchalign.backends.base import Morphosyntax, BatchPolicy
 from batchalign.backends.morphosyntax.ud import render
 from batchalign.backends.morphosyntax.ud.lang import to_stanza
 from batchalign.backends.morphosyntax.ud.tokenize import tokenizer_processor
+
+
+# Module-level thread-local for the "current sentence" the tokenizer
+# postprocessor should see. The closure registered with a Stanza pipeline
+# reads from this rather than from a captured `self`, so a pipeline can
+# be safely shared across StanzaBackend instances (per-(langset, mode)
+# caching, Landing 3 #10).
+_postproc_state = threading.local()
+
+
+def _current_sentence_for(pipeline_key: tuple) -> str:
+    return getattr(_postproc_state, "sentence", {}).get(pipeline_key, "")  # type: ignore[no-any-return]
+
+
+def _set_current_sentence(pipeline_key: tuple, value: str) -> None:
+    bucket = getattr(_postproc_state, "sentence", None)
+    if bucket is None:
+        bucket = {}
+        _postproc_state.sentence = bucket
+    bucket[pipeline_key] = value
+
+
+# Process-wide cache: (frozenset(langs), retokenize) -> Stanza Pipeline.
+# Construction is gated by an instance lock so concurrent backends don't
+# race when warming the same pipeline.
+_pipeline_cache: dict[tuple, Any] = {}
+_pipeline_cache_lock = threading.Lock()
 
 # Languages for which Stanza's MWT splitter is disabled (BA2 ud.py:1034-1036).
 _MWT_EXCLUSION = frozenset(
@@ -89,6 +117,11 @@ class StanzaBackend(Morphosyntax):
         """`zh` → `zh-hans` for the Stanza pipeline (BA2 `_build_nlp`)."""
         return "zh-hans" if lang == "zh" else lang
 
+    @property
+    def _pipeline_key(self) -> tuple:
+        """Process-wide cache key for this backend's pipeline."""
+        return (frozenset(self._langs), self._retokenize)
+
     def _lang_config(self, lang: str) -> dict[str, Any]:
         """Per-language Stanza config matching BA2's `_build_nlp`."""
         config: dict[str, Any] = {
@@ -106,15 +139,19 @@ class StanzaBackend(Morphosyntax):
         if lang == "ja":
             for proc in ("tokenize", "pos", "lemma", "depparse"):
                 config["processors"][proc] = "combined"
-        # When NOT retokenizing, force Stanza's tokenizer to honor the upstream
-        # word split (BA2's `tokenize_postprocessor`). The postprocessor sees
-        # the full language list (BA2 passes `list(langs_alpha2)`).
+        # When NOT retokenizing, force Stanza's tokenizer to honor the
+        # upstream word split (BA2's `tokenize_postprocessor`). The closure
+        # reads the "current sentence" from a module-level thread-local
+        # keyed on the cache key so the pipeline can be shared across
+        # StanzaBackend instances with the same (langset, retokenize).
         if not self._retokenize:
             langs = list(self._langs)
+            key = self._pipeline_key
 
             def _postproc(sentences):
+                current = _current_sentence_for(key)
                 return [
-                    tokenizer_processor(sent, langs, self._current_sentence)
+                    tokenizer_processor(sent, langs, current)
                     for sent in sentences
                 ]
 
@@ -122,16 +159,29 @@ class StanzaBackend(Morphosyntax):
         return config
 
     def _build_pipeline(self, stanza: Any) -> Any:
-        """Construct a single- or multi-language Stanza pipeline (BA2 parity)."""
-        if len(self._langs) > 1:
-            # Code-switching: MultilingualPipeline auto-detects per utterance.
-            configs = {lang: self._lang_config(lang) for lang in self._langs}
-            return stanza.MultilingualPipeline(
-                lang_configs=configs,
-                lang_id_config={"langid_lang_subset": list(self._langs)},
-            )
-        lang = self._langs[0]
-        return stanza.Pipeline(lang=lang, **self._lang_config(lang))
+        """Construct or fetch the per-(langset, mode) cached pipeline.
+
+        First call for a given key constructs and caches; later calls
+        return the cached pipeline. Code-switching files
+        (`MultilingualPipeline`) and single-language files both cache
+        under the same scheme.
+        """
+        key = self._pipeline_key
+        with _pipeline_cache_lock:
+            hit = _pipeline_cache.get(key)
+            if hit is not None:
+                return hit
+            if len(self._langs) > 1:
+                configs = {lang: self._lang_config(lang) for lang in self._langs}
+                nlp = stanza.MultilingualPipeline(
+                    lang_configs=configs,
+                    lang_id_config={"langid_lang_subset": list(self._langs)},
+                )
+            else:
+                lang = self._langs[0]
+                nlp = stanza.Pipeline(lang=lang, **self._lang_config(lang))
+            _pipeline_cache[key] = nlp
+            return nlp
 
     @property
     def name(self) -> str:
@@ -212,8 +262,12 @@ class StanzaBackend(Morphosyntax):
         line_cut = line_cut.replace(",", " ,").replace("  ", " ")
 
         # The postprocessor aligns Stanza's tokens to this exact sentence.
-        self._current_sentence = line_cut.replace("(", "").replace(")", "").strip()
-        doc = self._nlp(self._current_sentence)
+        sentence = line_cut.replace("(", "").replace(")", "").strip()
+        self._current_sentence = sentence
+        # Publish through the module-level thread-local so the shared
+        # pipeline's closure can read it (per-(langset, mode) cache).
+        _set_current_sentence(self._pipeline_key, sentence)
+        doc = self._nlp(sentence)
         sents = getattr(doc, "sentences", [])
         if not sents:
             return render.SentenceAnalysis([], None)
