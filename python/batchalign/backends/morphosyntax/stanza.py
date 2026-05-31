@@ -80,6 +80,22 @@ _MWT_EXCLUSION = frozenset(
 # CHAT-marker cleanup applied to the line before Stanza (BA2 ud.py:730).
 _CLEANUP_RE = re.compile(r"\+<|\+/|\(|\)|\+\^|\+//|\+\.\.\.|_|[#]")
 
+# CA-notation marker cleanup — Conversation-Analysis transcripts use a
+# rich set of prosodic markers (°, ↑, ↓, ∆, ⌈⌉, ⌊⌋, ≈, ≋, ‡, etc.)
+# that Stanza tokenizes incorrectly, producing bogus morphology. Strip
+# them from the line passed to Stanza so we still get %mor on the
+# words; the original text (with markers) is preserved for serialization
+# by the Rust writer.
+#
+# Landing 3 #12 from the BA3 cutover plan (per user direction: don't
+# blanket-skip CA transcripts; strip the markers so morphology survives).
+_CA_NOTATION_RE = re.compile(
+    r"[°↑↓∆⌈⌉⌊⌋≈≋‡↻↺⁎⁋∇∅⌃⌄]|"
+    r"\bH\*|"                 # high pitch accent (word-start anchored)
+    r"\bL\*|"                 # low pitch accent (word-start anchored)
+    r"[‐-―]+"                 # Unicode dashes used as CA continuations
+)
+
 
 class StanzaBackend(Morphosyntax):
     """Stanza UD morphosyntax tagger, one pipeline per language."""
@@ -252,7 +268,14 @@ class StanzaBackend(Morphosyntax):
         placeholder delimiter here.
         """
         line_cut = render.clean_sentence(text)
-        line_cut = _CLEANUP_RE.sub("", line_cut).strip()
+        line_cut = _CLEANUP_RE.sub("", line_cut)
+        # CA-notation markers don't carry word content; strip them so
+        # Stanza tokenizes only the underlying lexical material. The
+        # original (un-stripped) text is preserved by the Rust writer
+        # via the typed utterance content.
+        line_cut = _CA_NOTATION_RE.sub("", line_cut)
+        # Collapse double-spaces introduced by the strip passes.
+        line_cut = re.sub(r"\s+", " ", line_cut).strip()
         if not line_cut:
             return render.SentenceAnalysis([], None)
 
