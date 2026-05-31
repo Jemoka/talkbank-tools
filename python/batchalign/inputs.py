@@ -71,6 +71,53 @@ def paired_from_paths(
     return _CorePairedInput(main=str(main_p), gold=str(gold_p), source_id=sid)
 
 
+def sibling_media_for_chat(
+    chat_path: str | Path,
+    *,
+    extensions: Iterable[str] = (".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4"),
+) -> Path | None:
+    """Locate the sibling media file for a CHAT transcript.
+
+    Strategy:
+      1. Read the `@Media:` header from the CHAT file (BA2 convention:
+         filename without extension); probe each `extensions` suffix
+         alongside the CHAT file.
+      2. Fall back to a stem-match against the CHAT file's own stem
+         (`/path/to/foo.cha` → `/path/to/foo.wav`).
+
+    Returns the resolved Path on success, `None` when no candidate
+    exists. Used by the align CLI when the user passes a directory or a
+    single CHAT file and wants the engine to auto-find the audio.
+
+    Landing 3 #15 from the BA3 cutover plan.
+    """
+    p = Path(chat_path)
+    if not p.is_file():
+        return None
+    media_stem: str | None = None
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("@Media:"):
+                    body = line.split(":", 1)[1].strip()
+                    media_stem = body.split(",", 1)[0].strip()
+                    break
+    except OSError:
+        media_stem = None
+    candidates: list[Path] = []
+    if media_stem:
+        for ext in extensions:
+            candidates.append(p.parent / f"{media_stem}{ext}")
+            candidates.append(p.parent / f"{media_stem}{ext.upper()}")
+    for ext in extensions:
+        candidates.append(p.with_suffix(ext))
+        candidates.append(p.with_suffix(ext.upper()))
+    for cand in candidates:
+        if cand.is_file():
+            return cand
+    return None
+
+
 def iter_media(
     root: str | Path,
     *,
@@ -127,6 +174,7 @@ __all__ = [
     "media_from_path",
     "chat_from_path",
     "paired_from_paths",
+    "sibling_media_for_chat",
     "iter_media",
     "iter_chat",
 ]
