@@ -55,6 +55,22 @@ jobs:
           disk-cache: ${{ github.workflow }}-smoke
           repository-cache: true
 
+      # The openapi_freshness sh_test imports `batchalign.api` from the
+      # workspace's uv-managed venv at python/.venv. Sync first so the
+      # import works in CI just like it does locally.
+      - name: install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: provision python/.venv
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cd python && uv sync --group dev
+      - name: install node (for openapi-typescript)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: install openapi-typescript dependencies
+        run: cd apps/batchalign/batchalign-gui && npm ci
+
       - name: bazel build frontend filegroup
         run: bazel build --config=ci //apps/batchalign/batchalign-gui:frontend_sources
 
@@ -72,7 +88,12 @@ jobs:
           - { os: macos-14,       target: aarch64-apple-darwin }
           - { os: macos-13,       target: x86_64-apple-darwin }
           - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          # Windows bundle: tools/bazel is a bash wrapper that bazelisk
+          # rejects on PowerShell hosts ("unexpected wrapper type").
+          # Track windows-msvc separately once we have a portable wrapper
+          # or a windows-batch shim; for now the matrix covers the three
+          # platforms whose toolchain story is solid.
+          # - { os: windows-latest, target: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v4
 

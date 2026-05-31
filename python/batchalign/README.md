@@ -2,12 +2,12 @@
 
 TalkBank CHAT processing pipeline — ASR, forced alignment, morphosyntax
 (`%mor` / `%gra`), utterance segmentation, translation, and compare.
-This is the user-facing Python package; the runtime is a PyO3 extension
-backed by the Rust crates in `crates/batchalign/`.
+The user-facing Python package; the runtime is a PyO3 extension backed
+by the Rust crates in `crates/batchalign/`.
 
-See `book/src/batchalign/` for end-user docs and
-`book/src/batchalign/developer/building.md` for the canonical build
-recipe.
+User and developer docs live in `book/src/batchalign/` (the mdBook is
+the source of truth). See `book/src/batchalign/developer/building.md`
+for the canonical build recipe.
 
 ## Install
 
@@ -17,14 +17,41 @@ From PyPI (stable wheels):
 pip install batchalign
 ```
 
-From source (development):
+From source: **use the `just` recipes** — they go through Bazel, so
+every dep (proto codegen, Rust crates, PyO3 extension, Python wheel
+extras) is materialized for you. Don't reach for `maturin develop` or
+`uv sync` directly unless you're debugging the build itself.
 
 ```bash
-cd python
-uv sync --group dev
-RUSTUP_TOOLCHAIN=1.95.0 uv run maturin develop \
-    -m ../crates/batchalign/batchalign-pyo3/Cargo.toml \
-    -F pyo3/extension-module
+just batchalign build              # build every Bazel target for batchalign
+just batchalign test               # run every Bazel test target
+just batchalign cli --help         # run `batchalign3` via the development bridge
+just batchalign pytest             # pytest (with full Bazel dep graph)
+just batchalign wheel              # host-platform wheel at python/target/wheels/
+just batchalign sidecar            # standalone daemon binary via PyApp
+just batchalign lint               # mypy (+ ruff)
+just batchalign versions           # source-of-truth version readout
+```
+
+`just --list batchalign` shows the full recipe list. The `just`
+recipes call into Bazel, so `tools/bazel` (the bundled wrapper) takes
+care of:
+
+- regenerating the pydantic-v2 wire types from
+  `crates/batchalign/batchalign-core/src/proto/*.rs`
+- rebuilding the `batchalign_core` PyO3 cdylib via maturin under the
+  hood
+- staging the binary into the wheel
+- propagating dependency changes to dependent targets
+
+If you genuinely need `bazel` directly (because a recipe you want
+isn't wrapped):
+
+```bash
+bazel build //...           # everything
+bazel test //...            # everything
+bazel run //book:html       # static book HTML
+bazel run //apps/batchalign/batchalign-gui:openapi   # GUI OpenAPI codegen
 ```
 
 The base wheel ships only the lightweight runtime. Heavy ML backends
@@ -92,7 +119,8 @@ This package is one slice of the `talkbank-tools` monorepo:
 - `crates/batchalign/` — Rust crates (`batchalign-core`, `batchalign-engine`).
 - `crates/core/` — shared CHAT parser / model / transform.
 - `apps/batchalign/batchalign-gui/` — Tauri desktop GUI.
-- `book/` — user + developer documentation.
+- `book/` — user + developer documentation (mdBook; source of truth).
 
-For repo conventions, build commands, and the BA3 cutover-from-Franklin
-plan, see `CLAUDE.md` at the repo root.
+For repo conventions, build commands, and the BA3 cutover plan, see
+`CLAUDE.md` at the repo root and
+`book/src/batchalign/developer/landing-status.md`.
