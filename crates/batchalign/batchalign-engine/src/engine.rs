@@ -114,6 +114,7 @@ impl BatchalignEngine {
     ///   * no backend handles the input's task,
     ///   * the batcher channel is gone (engine shut down),
     ///   * the batcher dropped the reply mid-flight.
+    #[tracing::instrument(skip(self, input), fields(task = ?input.task()))]
     pub async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
         let task = input.task();
         // Clone the sender out so we don't hold the lock across `.await`.
