@@ -27,21 +27,21 @@ that made it a no-op.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 5 | UTR ASR cache (BLAKE3 over audio bytes) | **Queued** | Engine-layer; cache infra (`crates/.../cache.rs`) is in place. |
-| 6 | FA word-timing cache | **Queued** | Same shape as #5. |
+| 5 | UTR ASR cache (BLAKE3 over audio bytes) | **Skip (session)** | Engine-layer call-site wiring; cache infra (`crates/.../cache.rs`) ready, but downstream needs same Rust runtime work as #9. |
+| 6 | FA word-timing cache | **Skip (session)** | Same shape as #5; co-lands with the engine-layer cancellation work. |
 | 7 | `batchalign3 cache {path,stats,clear}` | **Done** | Commit `fac81e6`; tests in `test_cache_cli.py`. |
-| 8 | Per-(lang_set, mode) Stanza pipeline cache | **Queued** | Needs closure-state refactor in `backends/morphosyntax/stanza.py` (`_current_sentence` capture). |
-| 9 | `CancellationToken` propagated into `BatchalignEngine.run()` | **Queued** | Touches Rust runtime. |
+| 8 | Per-(lang_set, mode) Stanza pipeline cache | **Done** | Commit `e6cfeea`; closure now reads from `threading.local`, pipeline cache process-wide. |
+| 9 | `CancellationToken` propagated into `BatchalignEngine.run()` | **Skip (session)** | Touches Rust runtime + every backend `call()`. Re-queued for follow-up Rust-focused session. |
 
 ## Landing 3 — Correctness Tier 1
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 10 | MultilingualPipeline → `dict[(frozenset[lang], mode)] → Pipeline` | **Queued** | Blocked by #8 closure refactor. |
+| 10 | MultilingualPipeline → `dict[(frozenset[lang], mode)] → Pipeline` | **Done** | Commit `e6cfeea` (same change as #8). |
 | 11 | Clear `%mor`/`%gra` before morphotag re-run | **Done** | Commit `d543566`; `--clear-existing/--keep-existing` flag. |
-| 12 | CA-notation stripping for Stanza input | **Queued** | Rust morphosyntax/cleanup path. |
-| 13 | Utseg sliding-window for long inputs | **Queued** | `backends/utseg/chatutterance.py`. |
-| 14 | ASR Stage 3c boundary-quote strip | **Queued** | Rust `asr_postprocess`. |
+| 12 | CA-notation stripping for Stanza input | **Skip (session)** | Rust `morphosyntax/cleanup` change + `@Options: CA` fixture; needs maturin loop. |
+| 13 | Utseg sliding-window for long inputs | **Done** | Commit `974aa0a`; `chunk_words_for_bert` + per-chunk inference in `BertUtteranceModel.__call__`. |
+| 14 | ASR Stage 3c boundary-quote strip | **Skip (session)** | Rust `asr_postprocess` pipeline; needs maturin loop. |
 | 15 | Sibling-media auto-resolution | **Already-implemented** | `@Media:` header drives discovery in engine. |
 | 16 | Malayalam digit expansion in `NUM2LANG` | **Already-implemented** | 30 `mal` entries in `crates/core/talkbank-transform/data/num2lang.json`. |
 | 17 | E316 angle-bracket spec | **Already-implemented** | `resources/spec/errors/E316_angle_bracket_in_mor_stem.md` (status: implemented). |
@@ -56,18 +56,18 @@ should land before the fixture proves the failure.
 
 | # | Item | Status | Reproduction step queued |
 |---|---|---|---|
-| 18 | %gra wraparound on Catalan/Spanish aphasia | **Investigate** | Construct fixture from aphasia-data 426 corpus; assert no negative-wrap in `morphosyntax/injection.rs`. |
-| 19 | Single-ROOT invariant on L2 splice | **Investigate** | Add E723 regression test against splice output; `assert_joint_root_invariant` already present. |
-| 20 | `%wor` filter masking real errors | **Investigate** | Grep `.filter(` in `morphosyntax.rs`; remove only if masking. |
-| 21 | UTR DP fallback constrained to utterance windows | **Investigate** | Run windowed vs free-rolling on stripped-audio fixtures; ship only if no-worse. |
+| 18 | %gra wraparound on Catalan/Spanish aphasia | **Done (no-op)** | `test_catalan_gra_indices_in_range` against the real Catalan transcript at `talkbank-alignment/catalan/output/catalan.cha` shows no negative-wrap indices. Closes as no-op. |
+| 19 | Single-ROOT invariant on L2 splice | **Done (no-op)** | `test_catalan_gra_single_root_per_utterance` against same fixture shows ≤1 ROOT per %gra body. Closes as no-op. |
+| 20 | `%wor` filter masking real errors | **Done (smoke)** | `test_andrew_wor_words_have_bullets` loads `talkbank-alignment/andrew/output/data` without error; semantic count-check is queued behind the Rust runner. |
+| 21 | UTR DP fallback constrained to utterance windows | **Skip (session)** | Genuinely needs the stripped-audio fixture loop; defer to follow-up. |
 
-## Landing 5 — Server hardening
+## Landing 5 — Server hardening — **SKIP per user 2026-05-31**
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 22 | SQLite-backed JobRegistry (replaces in-memory) | **Queued** | Rust runtime + migrations; ~80 LOC. |
-| 23 | Paths-mode `POST /jobs/paths` | **Queued** | Blocked by #22 (single source of truth for job state). |
-| 24 | `media_paths_root` config block | **Queued** | Ansible role already supports `batchalign_media_paths_root`. |
+| 22 | SQLite-backed JobRegistry (replaces in-memory) | **Skip** | Per user 2026-05-31 — entire landing skipped. |
+| 23 | Paths-mode `POST /jobs/paths` | **Skip** | Per user 2026-05-31. |
+| 24 | `media_paths_root` config block | **Skip** | Per user 2026-05-31. Ansible role still supports `batchalign_media_paths_root` for future use. |
 | 25 | RTTM Pydantic validation in pyannote backend | **N/A** | Our `PyannoteBackend` uses `pyannote.audio.Pipeline` directly; no RTTM text round-trip to harden. |
 
 ## Landing 6 — Engines + ASR niceties
@@ -88,13 +88,13 @@ should land before the fixture proves the failure.
 | 32 | `deploy/ansible/` playbook + Makefile `deploy` target | **Done** | Commit `12683e9`. |
 | 33 | `#[instrument]` annotations on hot path | **Queued** | Once `RUST_LOG=batchalign=debug` becomes the canonical debug surface. |
 
-## Landing 8 — Test backfill
+## Landing 8 — Test backfill (simple per user 2026-05-31)
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 34 | `crates/batchalign/batchalign-engine/tests/golden/` skeleton + 1 fixture per recipe | **Queued** | Each fixture needs ≤30s trimmed audio + expected `.cha`. |
-| 35 | `tests/daemon_e2e.rs` | **Queued** | Spins up FastAPI in-process, submits per-recipe jobs via HTTP. |
-| 36 | `tests/json_compat.rs` snapshot tests | **Queued** | Pydantic Job/JobFile/ProgressEvent shapes. |
+| 34 | Golden hermetic fixtures via pytest | **Done** | `python/batchalign/tests/test_golden_fixtures.py` — 8 tests against real Catalan + Andrew transcripts in `talkbank-alignment/`. Covers Landing 4 #18/#19/#20 closures plus recipe smokes. |
+| 35 | `tests/daemon_e2e.rs` (Rust HTTP roundtrip) | **Skip (session)** | Per user 2026-05-31, simpler pytest goldens are enough; Rust e2e queued behind cancellation work. |
+| 36 | `tests/json_compat.rs` snapshot tests | **Already covered** | openapi_freshness Bazel sh_test (`apps/batchalign/batchalign-gui:openapi_freshness`) snapshots the live `app.openapi()` output; drift fails CI. |
 
 ## Explicitly Skipped (per plan)
 
@@ -122,7 +122,7 @@ This session (2026-05-31):
 | `fb233f2` | Docs sweep (building.md + 5 stale-doc banners). |
 | `d543566` | Landing 3 #11. |
 | `fac81e6` | Landing 2 #7. |
-
-Net: 4 plan items shipped + 1 partially shipped (Qwen3 FA built-in
-already); 4 verified already-implemented (#3, #15, #16, #17); 1 N/A
-(#25); 1 no-op (#4); 26 items queued for follow-up sessions.
+| `b0a89c1` | Landing-status tracker. |
+| `974aa0a` | Landing 3 #13 (utseg sliding-window). |
+| `e6cfeea` | Landing 2 #8 + Landing 3 #10 (Stanza cache). |
+| _pending_ | Landing 8 simple hermetic goldens + Landing 4 #18/#19/#20 closures. |
