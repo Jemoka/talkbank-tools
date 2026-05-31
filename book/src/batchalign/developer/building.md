@@ -1,172 +1,116 @@
 # Building & Development
 
 **Status:** Current
-**Last updated:** 2026-04-07 06:29 EDT
+**Last updated:** 2026-05-31 18:00 EDT
 
-Development is supported on **Windows, macOS, and Linux**. The instructions below use Unix shell syntax; on Windows, use PowerShell or Git Bash equivalently.
+Development is supported on **Windows, macOS, and Linux**. The instructions
+below use Unix shell syntax; on Windows, use PowerShell or Git Bash
+equivalently.
 
 ## Prerequisites
 
-- **[uv](https://docs.astral.sh/uv/)** -- Python package manager (all platforms). Used for all dependency management and running commands.
-- **Rust (stable)** via [rustup](https://rustup.rs/) (all platforms) -- needed for the Rust CLI and PyO3 extension.
-- **Node.js + npm** -- needed for `bazel build //...` and `bazel build //...-dashboard`, which rebuild the embedded dashboard bundled into the Rust binary.
-- **`cargo-nextest`** -- Required for Rust test runs. Install once with `cargo install cargo-nextest --locked`.
-- **[maturin](https://www.maturin.rs/)** -- Required only if you modify the Rust `batchalign_core` extension.
-- **Python 3.12** for development and current deployment targets. 3.14t/free-threaded work is paused again and is **not** an active install or deployment target. Revisit only when `developer/python-versioning.md` is updated for a newer interpreter line such as 3.15+.
-- **Platform note:** On macOS, `python` and `python3` may not exist outside a venv. Always use `uv run` to execute Python commands, which handles this automatically on all platforms.
+- **[uv](https://docs.astral.sh/uv/)** — Python package manager. Used for all
+  Python dependency management and running the CLI.
+- **Rust ≥ 1.95** via [rustup](https://rustup.rs/) — needed because the
+  workspace lockfile pins `sqlx 0.9` and `sysinfo 0.39`, both of which
+  require recent rustc. `rustup install 1.95.0` then either
+  `RUSTUP_TOOLCHAIN=1.95.0` or `rustup override set 1.95.0`.
+- **Bazel (via the `tools/bazel` wrapper)** — canonical build system. The
+  repo ships a checked-in wrapper, so a separate Bazel install is not
+  required.
+- **`cargo-nextest`** — required for Rust test runs.
+  `cargo install cargo-nextest --locked`.
+- **[maturin](https://www.maturin.rs/)** — only if you modify the
+  `batchalign_core` PyO3 extension.
+- **Node.js + npm** — only if you touch the embedded dashboard
+  (`apps/batchalign/batchalign-gui/`).
+- **Python 3.12** for development and current deployment targets.
+
+This repository is a single monorepo — there is no sibling `batchalign3`
+checkout. The Rust crates live under `crates/batchalign/`, the Python
+package under `python/batchalign/`, and the desktop GUI under
+`apps/batchalign/batchalign-gui/`.
 
 ## Development Install
 
-Batchalign3's Rust crates depend on [`talkbank-tools`](https://github.com/talkbank/talkbank-tools) via local path references. Both repos must be cloned as siblings:
+```bash
+git clone https://github.com/Jemoka/talkbank-tools.git
+cd talkbank-tools
+cd python && uv sync --group dev && cd ..   # provisions python/.venv
+bazel build //...                           # full workspace
+```
+
+For day-to-day iteration, the canonical surfaces are:
+
+- `bazel build //...` — full workspace (Rust + Python wheels + GUI bundle).
+- `bazel test //...` — full test suite (pre-merge gate).
+- `cargo build --release -p batchalign-core --bin emit_proto_schema` —
+  the only Rust binary in `batchalign-core` is the proto schema emitter;
+  the user-facing `batchalign3` CLI is a Python Typer app
+  (`python/pyproject.toml: batchalign3 = "batchalign.cli:app"`).
+
+To run the CLI from the source tree:
 
 ```bash
-git clone https://github.com/talkbank/talkbank-tools.git
-git clone https://github.com/talkbank/batchalign3.git
-cd batchalign3
-make sync
-bazel build //...
+uv run --project python batchalign3 --help
 ```
-
-If you do not need the dashboard build during iteration, you can rebuild just
-the Rust/PyO3 surfaces with `bazel build //...-python` and `bazel build //...-rust`.
-For the fastest contributor loop, `bazel build //...-python` rebuilds only the PyO3
-extension. `bazel build //...-python-full` also copies the pre-built CLI binary into
-`python/batchalign/_bin/` so `uv run batchalign3` uses the packaged binary instead of
-the dev fallback.
-
-The expected directory layout:
-
-```text
-parent/
-├── talkbank-tools/    # CHAT grammar, parser, model, transform crates
-└── batchalign3/       # This repo (Rust CLI + server + Python ML workers)
-```
-
-This creates a `.venv` managed by uv. Never use `pip install` directly.
-
-`make sync` provisions the same built-in engine surface as the base package,
-including Cantonese providers. There is no separate Cantonese-specific dev
-extra path.
 
 ## Running the CLI
 
-In a source checkout, `uv run batchalign3` is still the normal way to invoke
-the installed console script. After `bazel build //...-python`, the Python wrapper
-falls back to the repo CLI when the embedded bridge is intentionally omitted,
-so the fast extension-only rebuild still leaves you with a runnable
-`batchalign3` command. This is the recommended loop while editing command
-semantics, workflow families, or most docs.
-
-For the fastest contributor loop, pair `bazel build //...-python` with one CLI build
-up front:
+The CLI is a Python Typer app distributed via uv:
 
 ```bash
-cargo build -p batchalign-cli
+uv run --project python batchalign3 --help
+uv run --project python batchalign3 transcribe input_dir -o output_dir --lang eng
+uv run --project python batchalign3 morphotag input_dir -o output_dir
+uv run --project python batchalign3 align input_dir -o output_dir
+uv run --project python batchalign3 version       # banner + git SHA + maintainers
 ```
 
-After that, repeated `uv run batchalign3 ...` invocations will use the local
-`target/debug/batchalign3` binary through the wrapper fallback. Reserve
-`uv run` for Python tools such as `pytest`, `mypy`, and `maturin` when you are
-not invoking the CLI.
-
-```bash
-bazel build //...
-./target/debug/batchalign3 --help
-./target/debug/batchalign3 transcribe input_dir -o output_dir --lang eng
-./target/debug/batchalign3 morphotag input_dir -o output_dir
-./target/debug/batchalign3 align input_dir -o output_dir
-
-# Or let Cargo rebuild the Rust binary incrementally for you:
-cargo run -p batchalign-cli -- transcribe input_dir -o output_dir --lang eng
-```
+Internally the CLI dispatches NLP work to the PyO3 `batchalign_core`
+extension (built by maturin) and orchestrates worker processes from
+Python. There is no standalone `batchalign-cli` Rust crate in this
+repository.
 
 ## What to Rebuild After Changes
 
-Use the repo-native build targets so the Rust CLI, the shared `batchalign`
-crate, and the `batchalign_core` extension stay in sync:
-
 | What changed | What to rebuild |
 | --- | --- |
-| Python code only (`batchalign/`) | Nothing; the next worker process picks up the change |
-| Rust CLI / server (`crates/batchalign/`, `crates/batchalign/`) | `cargo build -p batchalign-cli` or `bazel build //...-rust` |
-| Shared chat logic (`crates/batchalign/`) or PyO3 bridge (`crates/batchalign-pyo3/`) | `bazel build //...-python`; for the fastest CLI loop in a source checkout, also build the CLI once (`cargo build -p batchalign-cli` or `bazel build //...-rust`) so the wrapper can fall back to `target/debug/batchalign3` |
-| Command/orchestrator changes (`crates/batchalign/src/commands/`, `compare.rs`, `benchmark.rs`, `transcribe/`, `fa/`, `morphosyntax/`, `command_family.rs`, `text_batch.rs`) | `bazel build //...-rust` and usually `bazel build //...-python` if the CLI bridge surface changed |
-| Cross-cutting or dashboard changes | `bazel build //...` (requires Node.js + npm because it rebuilds the embedded dashboard) |
+| Python code only (`python/batchalign/`) | Nothing; `uv run` picks it up |
+| `crates/batchalign/batchalign-core/` (proto + types) | `bazel build //crates/batchalign/batchalign-core/...` |
+| `crates/batchalign/batchalign-engine/` (PyO3 cdylib) | `bazel build //crates/batchalign/batchalign-engine/...` |
+| `crates/core/talkbank-*` (parser, model, transform) | `bazel build //crates/core/...` |
+| Embedded GUI (`apps/batchalign/batchalign-gui/`) | `bazel build //apps/batchalign/batchalign-gui/...` |
+| Cross-cutting | `bazel build //...` |
 
-## Rebuilding the Rust Extension
-
-The `batchalign_core` Python package is a PyO3 Rust extension built by maturin.
-The repo-native rebuild path is:
-
-```bash
-bazel build //...-python
-```
-
-This rebuilds only the PyO3 worker runtime extension (~320 crates). The pyo3
-crate has no feature gates beyond `extension-module` — no heavy CLI or Rev.AI
-dependencies. In a source checkout, `batchalign/_cli.py` falls back to
-`target/debug/batchalign3` when the packaged binary isn't present.
-
-When you want the CLI binary packaged alongside the extension:
+For the fast PyO3 iteration loop in a source checkout you can also use
+maturin directly:
 
 ```bash
-bazel build //...-python-full
+RUSTUP_TOOLCHAIN=1.95.0 uv run --project python maturin develop \
+    -m crates/batchalign/batchalign-pyo3/Cargo.toml \
+    -F pyo3/extension-module
 ```
 
-That target first builds the Rust CLI binary, copies it to `python/batchalign/_bin/`,
-then rebuilds the extension. Use it when testing the installed-package
-experience locally.
+This rebuilds only the PyO3 worker runtime extension and installs it
+editable into `python/.venv`.
 
 ## CLI Binary Packaging (`python/batchalign/_bin/`)
 
-batchalign3 ships two native artifacts in its wheel:
+batchalign3 ships one native artifact in its wheel:
 
-1. **`batchalign_core.so`** — the PyO3 extension (gives Python access to Rust
-   CHAT parsing, alignment, etc.)
-2. **`python/batchalign/_bin/batchalign3`** — the standalone Rust CLI binary (the
-   server, job runner, and all commands)
+**`batchalign_core.so`** — the PyO3 extension (gives Python access to Rust
+CHAT parsing, alignment, transform, and engine orchestration). Built by
+maturin from `crates/batchalign/batchalign-engine`.
 
-The Python entry point (`batchalign/_cli.py`) locates and execs the native CLI
-binary. It searches three locations in order:
+The `batchalign3` console-script entry point is the Python Typer app
+(`python/pyproject.toml: batchalign3 = "batchalign.cli:app"`); there is
+no separate Rust binary to bundle. NLP work is dispatched into Python
+worker subprocesses; heavy chat/parsing/transform work is offloaded
+through the PyO3 extension.
 
-1. **Packaged binary** at `python/batchalign/_bin/batchalign3` — this is what PyPI
-   users get. The binary is bundled inside the wheel.
-2. **Dev checkout** at `target/{debug,release}/batchalign3` — for developers
-   who built the CLI with `cargo build`.
-3. **Cargo fallback** — execs `cargo run -p batchalign-cli` to compile on the
-   fly.
-
-### Why `_bin/` is gitignored
-
-The binary is a 50+ MB platform-specific build artifact — it must not be
-tracked in git. Instead:
-
-- **Locally:** `bazel build //...-python-full` compiles the CLI and copies it into
-  `python/batchalign/_bin/`. Most developers skip this and rely on the dev-checkout
-  fallback (`target/debug/batchalign3`).
-- **CI:** A dedicated `build-cli` job compiles the CLI binary once (release
-  mode), uploads it as an artifact, and each Python-version wheel build
-  downloads it into `python/batchalign/_bin/` before maturin packages it.
-- **Release:** The release workflow builds platform-specific CLI binaries
-  (macOS ARM + Intel, Linux x86 + ARM, Windows x86) and packages each into
-  the corresponding wheel.
-
-### Maturin include directive
-
-`pyproject.toml` tells maturin to include the binary in the wheel:
-
-```toml
-[tool.maturin]
-include = [
-    { path = "python/batchalign/_bin/batchalign3", format = "wheel" },
-    { path = "python/batchalign/_bin/batchalign3.exe", format = "wheel" },
-]
-```
-
-If the binary doesn't exist at build time, maturin silently skips it — the
-wheel still builds but `batchalign3 --help` will fail at runtime with
-"CLI binary not found." This is why CI must build and copy the binary
-**before** running `uv build --wheel`.
+(Franklin's fork ships a standalone Rust `batchalign3` binary at
+`python/batchalign/_bin/batchalign3`; we deliberately don't.)
 
 ## Where Command Logic Should Live
 

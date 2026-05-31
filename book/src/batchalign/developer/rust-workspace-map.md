@@ -1,6 +1,18 @@
 # Rust Workspace Map
 
 **Status:** Current
+
+> **⚠️ STALE: imported from Franklin's batchalign3 fork.**
+> Commands referencing `batchalign-cli`, `bazel build //...-rust`,
+> `bazel build //...-python`, `bazel build //...-python-full`, or
+> `bazel build //...-dashboard` do **not** apply to this repo. The
+> Rust crates here are `batchalign-core` and `batchalign-engine`;
+> the user-facing `batchalign3` is a Python Typer CLI invoked via
+> `uv run --project python batchalign3`. Treat sections below that
+> rely on those commands as background reading from the upstream
+> fork until this file is rewritten. See
+> [`developer/building.md`](./building.md) for the canonical
+> build/test surface.
 **Last updated:** 2026-04-30 21:15 EDT
 
 The Batchalign code lives inside the `talkbank-tools` Cargo workspace
