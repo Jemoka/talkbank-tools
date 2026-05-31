@@ -1,0 +1,4 @@
+"""Error specs exposed for hermetic test consumption."""
+package(default_visibility = ["//visibility:public"])
+
+exports_files(glob(["*.md"]))

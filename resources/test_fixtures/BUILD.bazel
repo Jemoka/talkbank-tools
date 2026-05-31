@@ -1,0 +1,14 @@
+"""Vendored test fixtures (parity invariants, etc).
+
+Pure data — no build steps; just filegroups for tests to depend on.
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "parity_fixtures",
+    srcs = glob(
+        ["parity/*.cha", "parity/*.wav", "parity/*.json"],
+        allow_empty = True,
+    ),
+)

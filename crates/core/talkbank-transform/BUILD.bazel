@@ -24,6 +24,13 @@ load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
+# Hermetic Python tests under //python/batchalign:pytest read this JSON
+# directly (Landing 3 #16 NUM2LANG guard); expose it explicitly so the
+# py_test can depend on it without crossing into a subpackage.
+exports_files([
+    "data/num2lang.json",
+])
+
 rust_library(
     name = "talkbank_transform",
     srcs = glob(["src/**/*.rs"]),

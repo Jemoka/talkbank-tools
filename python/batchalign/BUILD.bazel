@@ -88,6 +88,17 @@ py_test(
     srcs = glob(["tests/**/*.py"]) + ["_pytest_runner.py"],
     main = "_pytest_runner.py",
     args = ["python/batchalign/tests", "-q"],
+    # Vendored parity fixtures used by `test_golden_fixtures.py`. Must
+    # be in runfiles for the test to find them — without this they were
+    # silently skipped on every CI run (the earlier copy lived in a
+    # developer-local `talkbank-alignment/` directory). Same for the
+    # Rust NUM2LANG table + the E316 spec, both probed by the hermetic
+    # Landing 3 #16/#17 guards.
+    data = [
+        "//resources/test_fixtures:parity_fixtures",
+        "//crates/core/talkbank-transform:data/num2lang.json",
+        "//resources/spec/errors:E316_angle_bracket_in_mor_stem.md",
+    ],
     # Same package-collision tolerance as `:batchalign` — heavy ML extras
     # ship overlapping benign data paths (e.g. `audmath/docs/index.rst`).
     # Many pypi packages ship overlapping benign `docs/` / `tests/`

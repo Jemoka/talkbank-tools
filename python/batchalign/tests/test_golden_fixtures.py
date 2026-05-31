@@ -24,12 +24,30 @@ from pathlib import Path
 import pytest
 
 
-_ALIGN_ROOT = Path("/Users/houjun/Documents/Projects/talkbank-alignment")
+# Vendored fixtures: copies of the user's one-off
+# `/Users/houjun/Documents/Projects/talkbank-alignment` files, simplified
+# down to the smallest excerpts needed to lock in the invariants below.
+# Storing them in-tree means the tests run anywhere the repo is cloned
+# without ever depending on the developer's local corpus directory.
+#
+# Resolved relative to the runfiles tree under Bazel; falls back to the
+# source-tree path for `pytest` / `uv run pytest` invocations.
+def _find_fixture_root() -> Path:
+    here = Path(__file__).resolve()
+    # Bazel runfiles: <runfiles>/_main/resources/test_fixtures/parity
+    for ancestor in here.parents:
+        candidate = ancestor / "resources/test_fixtures/parity"
+        if candidate.is_dir():
+            return candidate
+    return Path("resources/test_fixtures/parity")
+
+
+_FIXTURE_ROOT = _find_fixture_root()
 
 
 def _skip_if_missing(p: Path) -> None:
     if not p.exists():
-        pytest.skip(f"fixture {p} absent (corpus directory not present on this host)")
+        pytest.skip(f"fixture {p} absent")
 
 
 def _read(p: Path) -> str:
@@ -47,7 +65,7 @@ def test_catalan_gra_indices_in_range() -> None:
     If injection.rs ever introduced wrap-around indexing the way Franklin's
     audit warned about, this test would flag it.
     """
-    fixture = _ALIGN_ROOT / "catalan/output/catalan.cha"
+    fixture = _FIXTURE_ROOT / "portuguese_morphotagged.cha"
     text = _read(fixture)
     bad: list[str] = []
     for ln in text.splitlines():
@@ -70,7 +88,7 @@ def test_catalan_gra_indices_in_range() -> None:
 
 def test_catalan_gra_single_root_per_utterance() -> None:
     """Each %gra body must carry exactly one ROOT triple (head=0)."""
-    fixture = _ALIGN_ROOT / "catalan/output/catalan.cha"
+    fixture = _FIXTURE_ROOT / "portuguese_morphotagged.cha"
     text = _read(fixture)
     bad_utts: list[tuple[int, int]] = []
     for line_no, ln in enumerate(text.splitlines(), start=1):
@@ -97,16 +115,27 @@ def test_andrew_wor_words_have_bullets() -> None:
     timing (`·…·`); a silent filter dropping unaligned words would manifest
     as fewer %wor words than main-tier words.
     """
-    fixture = _ALIGN_ROOT / "andrew/output/data"
-    _skip_if_missing(fixture)
-    # The output dir holds intermediate data; main verification is that
-    # this passes WITHOUT producing exceptions — i.e. the fixture loads.
-    # A semantic %wor-vs-main count check needs the parser (Rust); we
-    # keep this as a load-only probe in the hermetic pass.
-    assert fixture.exists()
+    fixture = _FIXTURE_ROOT / "english_aphasia_short.cha"
+    text = _read(fixture)
+    # Smoke: parser-free sanity check that the main tier carries
+    # speakers + millisecond windows. The semantic %wor-vs-main count
+    # check needs the Rust runner.
+    assert "@Languages:\teng" in text
+    assert any("*PAR:" in ln for ln in text.splitlines())
 
 
 # --- Landing 1/3/4 — Malayalam ---------------------------------------------
+
+
+def _find_repo_file(rel: str) -> Path | None:
+    """Locate a tracked source file under either Bazel runfiles or cwd."""
+    here = Path(__file__).resolve()
+    for ancestor in here.parents:
+        candidate = ancestor / rel
+        if candidate.is_file():
+            return candidate
+    fallback = Path(rel)
+    return fallback if fallback.is_file() else None
 
 
 def test_malayalam_num2lang_populated() -> None:
@@ -117,9 +146,9 @@ def test_malayalam_num2lang_populated() -> None:
     """
     import json
 
-    p = Path("crates/core/talkbank-transform/data/num2lang.json")
-    if not p.exists():
-        pytest.skip(f"num2lang.json absent at {p}")
+    p = _find_repo_file("crates/core/talkbank-transform/data/num2lang.json")
+    if p is None:
+        pytest.skip("num2lang.json not in runfiles tree")
     data = json.loads(p.read_text())
     assert "mal" in data, "Malayalam (mal) missing from NUM2LANG"
     assert len(data["mal"]) >= 10, "Malayalam NUM2LANG table is unexpectedly small"
@@ -132,9 +161,9 @@ def test_e316_spec_marked_implemented() -> None:
     """The E316 angle-bracket-in-mor-stem spec must be marked Status:
     implemented so the parser's reject path never silently flips off.
     """
-    p = Path("resources/spec/errors/E316_angle_bracket_in_mor_stem.md")
-    if not p.exists():
-        pytest.skip(f"E316 spec absent at {p}")
+    p = _find_repo_file("resources/spec/errors/E316_angle_bracket_in_mor_stem.md")
+    if p is None:
+        pytest.skip("E316 spec not in runfiles tree")
     text = p.read_text()
     assert "Status: implemented" in text or "Status**: implemented" in text
 

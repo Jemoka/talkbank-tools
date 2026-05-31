@@ -1,0 +1,43 @@
+@UTF8
+@Window:	360_258_626_1383_-1_-1_1022_0_1022_0
+@Begin
+@Languages:	por
+@Participants:	MOT Mother, MAR Mother
+@Options:	multi
+@ID:	por|change_me_later|MOT|||||Mother|||
+@ID:	por|change_me_later|MAR|||||Mother|||
+*MOT:	a menina (.) assustada (.) saiu a correr da casa como um raio (.)
+	perseguida pelo lobo (.) ao mesmo tempo que gritava (.) não me
+	apanhas (.) lobo-mau .
+%mor:	det|o-Def-Art noun|menina&Fem verb|assustar-Part
+	verb|sair-Fin-Ind-3-Past sconj|a verb|correr-Inf
+	adp|de~det|o-Def-Art noun|casa&Fem adp|como det|um-Ind-Art
+	noun|raio&Masc verb|perseguir-Part adp|por~det|o-Def-Art
+	noun|lobo&Masc adp|a~det|o-Def-Art adj|mesmo-Pos-S-1 noun|tempo&Masc
+	sconj|que verb|gritar-Fin-Ind-3-Imp adv|não pron|eu-Prs-Acc-S1
+	verb|apanhar-Fin-Ind-1-Pres noun|lobo-mau&Masc .
+%gra:	1|2|DET 2|4|NSUBJ 3|2|ACL 4|26|ROOT 5|6|MARK 6|4|XCOMP 7|9|CASE
+	8|9|DET 9|6|OBL 10|12|CASE 11|12|DET 12|6|OBL 13|12|ACL 14|16|CASE
+	15|16|DET 16|13|OBL-AGENT 17|20|CASE 18|20|DET 19|20|AMOD 20|13|OBL
+	21|22|MARK 22|12|ACL-RELCL 23|25|ADVMOD 24|25|OBJ 25|22|CCOMP
+	26|25|OBJ 27|4|PUNCT
+*MOT:	tantos Inês já viste ?
+%mor:	det|tanto-Def-Ind noun|Inês&Masc adv|já verb|vistir-Fin-Ind-3-Past
+	?
+%gra:	1|2|DET 2|4|NSUBJ 3|4|ADVMOD 4|4|ROOT 5|4|PUNCT
+*MAR:	+" olha (.) não podes fazer isso (.) vai procurar outra coisa
+	p(a)ra tu comeres porque uh os passarinhos <são> [/] são daquela [/]
+	daquela ave e tu não podes comê-los (.) . 
+%mor:	verb|olhar-Fin-Ind-1-Pres adv|não verb|poder-Fin-Ind-1-Pres
+	verb|fazer-Inf pron|isso-Dem-Acc-S1 aux|ir-Fin-Ind-3-Pres
+	verb|procurar-Inf det|outro-Def-Ind noun|coisa&Fem sconj|para
+	pron|tu-Prs-Acc-S2 verb|comer-Fin-Ind-2-Pres sconj|porque x|uh
+	det|o-Def-Art noun|passarinho&Masc-Plur aux|ser-Fin-Plur-Ind-3-Pres
+	adp|de~det|aquele-Def-Dem noun|ave&Fem cconj|e pron|tu-Prs-Nom-S1
+	adv|não verb|poder-Fin-Ind-1-Pres verb|comêr-Inf .
+%gra:	1|25|ROOT 2|4|ADVMOD 3|1|CCOMP 4|3|XCOMP 5|4|OBJ 6|7|AUX 7|1|CCOMP
+	8|9|DET 9|7|OBJ 10|12|MARK 11|12|NSUBJ 12|7|ADVCL 13|20|MARK
+	14|20|ADVMOD 15|16|DET 16|20|NSUBJ 17|20|COP 18|20|CASE 19|20|DET
+	20|12|CONJ 21|25|CC 22|24|NSUBJ 23|25|ADVMOD 24|20|CONJ 25|24|XCOMP
+	26|1|PUNCT
+@End
