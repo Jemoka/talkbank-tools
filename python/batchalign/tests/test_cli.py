@@ -50,7 +50,7 @@ def test_transcribe_exposes_all_ba2_asr_engines():
     help_text = _help("transcribe")
     for engine in ("rev", "whisperx", "whisper", "openai", "vllm"):
         assert engine in help_text, f"transcribe --engine missing {engine}"
-    assert "--language" in help_text
+    assert "--lang" in help_text
     assert "--engine" in help_text
 
 
@@ -80,30 +80,31 @@ def test_asr_engine_enum_members():
 
 
 # ---------------------------------------------------------------------------
-# `transcribe --language` is required and ISO-639-3 only.
+# `transcribe --lang` is required and ISO-639-3 only.
 # ---------------------------------------------------------------------------
 
 
 def test_transcribe_language_is_required(tmp_path):
-    """No `--language` → typer rejects before any backend is constructed."""
+    """No `--lang` → typer rejects before any backend is constructed."""
+    import re
     media = tmp_path / "a.wav"
     media.write_bytes(b"")  # path needs to exist for typer.Argument(exists=True)
     runner = CliRunner()
     result = runner.invoke(app, ["transcribe", "--engine", "rev", str(media)])
     assert result.exit_code != 0
     out = (result.output or "") + (result.stderr or "")
-    # Typer's required-option message is "Missing option" — accept either
-    # that or our explicit ISO-639-3 hint elsewhere in the output.
-    assert "language" in out.lower()
+    # Rich splits "--lang" across ANSI escapes; strip them first.
+    out = re.sub(r"\x1b\[[0-9;]*m", "", out)
+    assert "--lang" in out
 
 
 def test_transcribe_rejects_alpha_2_language(tmp_path, monkeypatch):
-    """`--language en` → BadParameter naming ISO-639-3."""
+    """`--lang en` → BadParameter naming ISO-639-3."""
     media = tmp_path / "a.wav"
     media.write_bytes(b"")
     runner = CliRunner()
     result = runner.invoke(app, [
-        "transcribe", "--engine", "rev", "--language", "en", str(media),
+        "transcribe", "--engine", "rev", "--lang", "en", str(media),
     ])
     assert result.exit_code != 0
     out = (result.output or "") + (result.stderr or "")
@@ -111,12 +112,12 @@ def test_transcribe_rejects_alpha_2_language(tmp_path, monkeypatch):
 
 
 def test_transcribe_rejects_auto_language(tmp_path):
-    """`--language auto` is gone; users must pick a real code."""
+    """`--lang auto` is gone; users must pick a real code."""
     media = tmp_path / "a.wav"
     media.write_bytes(b"")
     runner = CliRunner()
     result = runner.invoke(app, [
-        "transcribe", "--engine", "rev", "--language", "auto", str(media),
+        "transcribe", "--engine", "rev", "--lang", "auto", str(media),
     ])
     assert result.exit_code != 0
 
@@ -124,7 +125,7 @@ def test_transcribe_rejects_auto_language(tmp_path):
 def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
     tmp_path, monkeypatch,
 ):
-    """`--language eng --engine rev` → RevAI receives a LanguageCode("eng",...).
+    """`--lang eng --engine rev` → RevAI receives a LanguageCode("eng",...).
 
     Mock RevAI to avoid touching the rev_ai SDK, capture the kwargs.
     """
@@ -164,7 +165,7 @@ def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
 
     runner = CliRunner()
     result = runner.invoke(app, [
-        "transcribe", "--engine", "rev", "--language", "eng", str(media),
+        "transcribe", "--engine", "rev", "--lang", "eng", str(media),
     ])
     # The pipeline returns empty outcomes → exit_code 0, no failures.
     assert result.exit_code == 0, result.output

@@ -69,9 +69,9 @@ def register(app: typer.Typer) -> None:
             AsrEngine.rev, "--engine", case_sensitive=False,
             help="ASR engine: rev | whisperx | whisper | openai | vllm.",
         ),
-        language: str = typer.Option(
+        lang: str = typer.Option(
             ...,
-            "--language",
+            "--lang",
             help="ISO-639-3 alpha_3 code: eng, cmn, yue, spa, … (Required.)",
         ),
         model: str | None = typer.Option(None, "--model", help="ASR model id (engine-specific default if omitted)."),
@@ -100,13 +100,13 @@ def register(app: typer.Typer) -> None:
         # Validate the language string at the CLI boundary so failures
         # surface before the heavy backend constructors run.
         try:
-            lang = LanguageCode.from_str(language)
+            lang_code = LanguageCode.from_str(lang)
         except ValueError as exc:
-            raise typer.BadParameter(str(exc), param_hint="--language") from exc
+            raise typer.BadParameter(str(exc), param_hint="--lang") from exc
 
         with Interface.open(
             command="transcribe",
-            params={"engine": engine.value, "asr": model or _DEFAULT_MODEL.get(engine, ""), "lang": lang.alpha_3, "diarize": diarize},
+            params={"engine": engine.value, "asr": model or _DEFAULT_MODEL.get(engine, ""), "lang": lang_code.alpha_3, "diarize": diarize},
             output=out,
             verbosity=opts.verbosity,
             plain=opts.plain,
@@ -114,7 +114,7 @@ def register(app: typer.Typer) -> None:
         ) as ui:
             device = "cpu" if force_cpu else None
             asr_backend, rev_diarizes = _build_asr(
-                ba, engine, model, lang, vllm_url, num_speakers, device
+                ba, engine, model, lang_code, vllm_url, num_speakers, device
             )
             # Rev does its own diarization; for the Whisper family add Pyannote
             # when --diarize is requested.
@@ -126,7 +126,7 @@ def register(app: typer.Typer) -> None:
             # stream (rev, chatwhisper, …) when a segmenter model exists.
             utseg_backend: Any = None
             if segment:
-                utseg_backend = _build_utseg(ba, lang, engine)
+                utseg_backend = _build_utseg(ba, lang_code, engine)
             pipeline = ba.recipes.transcribe(
                 asr_backend=asr_backend,
                 speaker_backend=speaker_backend,
