@@ -58,6 +58,47 @@ _MOR_PUNCT = [",", "‡", "„"]
 _STRIP_PUNCT = _ENDING_PUNCT + _MOR_PUNCT
 
 
+# Sliding-window parameters for long-passage BERT inference. Tuned so a
+# single chunk produces ~480 word-piece tokens at WordPiece-3 ratio,
+# safely under BERT's 512 limit, with a 32-word overlap that the
+# de-duplication logic can stitch.
+_BERT_CHUNK_WORDS = 400
+_BERT_CHUNK_OVERLAP = 32
+
+
+def chunk_words_for_bert(
+    words: list[str],
+    *,
+    chunk_size: int = _BERT_CHUNK_WORDS,
+    overlap: int = _BERT_CHUNK_OVERLAP,
+) -> list[tuple[int, list[str]]]:
+    """Slice `words` into overlapping chunks for BERT inference.
+
+    Returns a list of (start_index_in_original_words, chunk_words).
+    When `len(words) <= chunk_size`, the original list is returned as a
+    single chunk anchored at index 0. The overlap exists so the
+    classifier sees enough left-context at each chunk boundary; the
+    stitching step dedupes overlapping words by original index.
+    """
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    if overlap < 0 or overlap >= chunk_size:
+        raise ValueError("overlap must be in [0, chunk_size)")
+    if len(words) <= chunk_size:
+        return [(0, list(words))]
+    step = chunk_size - overlap
+    chunks: list[tuple[int, list[str]]] = []
+    start = 0
+    n = len(words)
+    while start < n:
+        end = min(start + chunk_size, n)
+        chunks.append((start, list(words[start:end])))
+        if end == n:
+            break
+        start += step
+    return chunks
+
+
 class BertUtteranceModel:
     """TalkBank CHATUtterance BERT segmenter — faithful port of BA2.
 
@@ -65,6 +106,13 @@ class BertUtteranceModel:
     +exclamation / +comma; reconstructs the passage with that punctuation;
     then `sent_tokenize`s into utterances. Deterministic (argmax), CPU-friendly,
     needs no audio — which is why it ports cleanly across environments.
+
+    Long passages are sliced into overlapping word-chunks (`chunk_words_for_
+    bert`) so the BERT 512-token window never overflows. Each chunk is
+    classified independently; the per-word action choices are merged back
+    using the original word index (latest-write wins inside the overlap
+    region, which preserves boundary punctuation contributed by the
+    chunk that owns the right context).
 
     Port of `batchalign2/batchalign/models/utterance/infer.py`.
     """
@@ -82,34 +130,52 @@ class BertUtteranceModel:
         self.device = device
         self.model.eval()
 
-    def __call__(self, passage: str) -> list[str]:
+    def _infer_chunk(self, chunk: list[str]) -> list[int]:
+        """Run BERT over one word-chunk; return per-word action labels."""
         import torch  # type: ignore[import-not-found]
-        import nltk  # type: ignore[import-not-found]
-        from nltk import sent_tokenize  # type: ignore[import-not-found]
-
-        passage = passage.lower().replace(".", "").replace(",", "")
-        input_tokenized = passage.split(" ")
 
         tokd = self.tokenizer(
-            [input_tokenized], return_tensors="pt", is_split_into_words=True
+            [chunk], return_tensors="pt", is_split_into_words=True
         ).to(self.device)
         res = self.model(**tokd).logits
         classified_targets = torch.argmax(res, dim=2).cpu()
 
-        res_toks: list[str] = []
+        actions: list[int] = []
         prev_word_idx = None
         wids = tokd.word_ids(0)
         for indx, elem in enumerate(wids):
             if elem is None or elem == prev_word_idx:
                 continue
             prev_word_idx = elem
-            action = classified_targets[0][indx]
-            w = input_tokenized[elem]
+            actions.append(int(classified_targets[0][indx]))
+        return actions
 
-            will_action = bool(indx < len(wids) - 2 and classified_targets[0][indx + 1] > 0)
+    def __call__(self, passage: str) -> list[str]:
+        import nltk  # type: ignore[import-not-found]
+        from nltk import sent_tokenize  # type: ignore[import-not-found]
+
+        passage = passage.lower().replace(".", "").replace(",", "")
+        input_tokenized = passage.split(" ")
+
+        # Sliding-window inference for long passages (>_BERT_CHUNK_WORDS).
+        actions: list[int] = [0] * len(input_tokenized)
+        for chunk_start, chunk_words in chunk_words_for_bert(input_tokenized):
+            chunk_actions = self._infer_chunk(chunk_words)
+            for i, act in enumerate(chunk_actions):
+                idx = chunk_start + i
+                if idx < len(actions):
+                    # Latest write wins; the right-most chunk that
+                    # covers `idx` has the best right-context.
+                    actions[idx] = act
+
+        res_toks: list[str] = []
+        for i, w in enumerate(input_tokenized):
+            action = actions[i]
+            next_action = actions[i + 1] if i + 1 < len(actions) else 0
+            will_action = bool(i < len(actions) - 1 and next_action > 0)
             if not will_action:
                 if action == 1:
-                    w = w[0].upper() + w[1:]
+                    w = w[0].upper() + w[1:] if w else w
                 elif action == 2:
                     w = w + "."
                 elif action == 3:
