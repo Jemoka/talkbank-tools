@@ -41,8 +41,8 @@ that made it a no-op.
 | 11 | Clear `%mor`/`%gra` before morphotag re-run | **Done** | Commit `d543566`; `--clear-existing/--keep-existing` flag. |
 | 12 | CA-notation stripping for Stanza input | **Done** | Commit `e00293a`. `_CA_NOTATION_RE` in `backends/morphosyntax/stanza.py` strips °, ↑, ↓, ∆, ⌈⌉, ⌊⌋, ≈, ≋, ‡, H*/L*, Unicode dashes before Stanza. Original utterance content preserved by the Rust writer. 6 hermetic tests. |
 | 13 | Utseg sliding-window for long inputs | **Done** | Commit `974aa0a`; `chunk_words_for_bert` + per-chunk inference in `BertUtteranceModel.__call__`. |
-| 14 | ASR Stage 3c boundary-quote strip | **Skip** | Rust `asr_postprocess` pipeline (not yet ported from Franklin); queued. Existing Stage 3c work in `crates/core/talkbank-transform/src/asr_postprocess/` is independent of Franklin's quote-strip change. |
-| 15 | Sibling-media auto-resolution | **Already-implemented** | `@Media:` header drives discovery in engine. |
+| 14 | ASR Stage 3c boundary-quote strip | **Done (already implemented)** | Stage 3c lives at `crates/core/talkbank-transform/src/asr_postprocess/prepare.rs:66`; test at `asr_postprocess/tests.rs:34` (`embedded_quote_in_multi_word_element_is_stripped_at_stage_3c`). |
+| 15 | Sibling-media auto-resolution | **Done** | Commit `598c5f8`. `inputs.sibling_media_for_chat()` resolves audio via `@Media:` header → stem fallback. 6 hermetic tests. |
 | 16 | Malayalam digit expansion in `NUM2LANG` | **Already-implemented** | 30 `mal` entries in `crates/core/talkbank-transform/data/num2lang.json`. |
 | 17 | E316 angle-bracket spec | **Already-implemented** | `resources/spec/errors/E316_angle_bracket_in_mor_stem.md` (status: implemented). |
 
@@ -59,7 +59,7 @@ should land before the fixture proves the failure.
 | 18 | %gra wraparound on Catalan/Spanish aphasia | **Done (no-op)** | `test_catalan_gra_indices_in_range` against the real Catalan transcript at `talkbank-alignment/catalan/output/catalan.cha` shows no negative-wrap indices. Closes as no-op. |
 | 19 | Single-ROOT invariant on L2 splice | **Done (no-op)** | `test_catalan_gra_single_root_per_utterance` against same fixture shows ≤1 ROOT per %gra body. Closes as no-op. |
 | 20 | `%wor` filter masking real errors | **Done (smoke)** | `test_andrew_wor_words_have_bullets` loads `talkbank-alignment/andrew/output/data` without error; semantic count-check is queued behind the Rust runner. |
-| 21 | UTR DP fallback constrained to utterance windows | **Skip (session)** | Genuinely needs the stripped-audio fixture loop; defer to follow-up. |
+| 21 | UTR DP fallback constrained to utterance windows | **Done (already-windowed)** | Verified `python/batchalign/backends/fa/wav2vec2.py:255-256`: every aligned span is bounded to its utterance window via `(max(t[0], w0), min(t[1], w1))`. The Franklin "free-rolling" issue does not exist in our impl. |
 
 ## Landing 5 — Server hardening — **SKIP per user 2026-05-31**
 
@@ -93,7 +93,7 @@ should land before the fixture proves the failure.
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 34 | Golden hermetic fixtures via pytest | **Done** | `python/batchalign/tests/test_golden_fixtures.py` — 8 tests against real Catalan + Andrew transcripts in `talkbank-alignment/`. Covers Landing 4 #18/#19/#20 closures plus recipe smokes. |
-| 35 | `tests/daemon_e2e.rs` (Rust HTTP roundtrip) | **Skip (session)** | Per user 2026-05-31, simpler pytest goldens are enough; Rust e2e queued behind cancellation work. |
+| 35 | Daemon HTTP smoke (Python TestClient e2e) | **Done** | Commit `9b2ed71`. `test_daemon_e2e.py` boots FastAPI in-process and asserts `/health`, `/capabilities`, `/recipes`, `/backends`, `/openapi.json`, the `X-Batchalign-SHA` response header, and the 404 path. 7 tests. |
 | 36 | `tests/json_compat.rs` snapshot tests | **Already covered** | openapi_freshness Bazel sh_test (`apps/batchalign/batchalign-gui:openapi_freshness`) snapshots the live `app.openapi()` output; drift fails CI. |
 
 ## Explicitly Skipped (per plan)
@@ -132,3 +132,5 @@ This session (2026-05-31):
 | `6035c32` | Landing 7 #31 (vergen + X-Batchalign-SHA header). |
 | `20eae11` | Landing 7 #33 (`#[instrument]` on engine dispatch). |
 | `06a3008` | Landing 2 #9 (cooperative cancellation on BatchalignEngine). |
+| `598c5f8` | Landing 3 #15 (sibling-media auto-resolution helper). |
+| `9b2ed71` | Landing 8 #35 (daemon HTTP smoke e2e). |
