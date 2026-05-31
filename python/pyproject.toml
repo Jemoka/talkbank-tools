@@ -51,6 +51,10 @@ dependencies = [
     # output. Always present in the wheel; the generated module imports
     # `pydantic.BaseModel` / `pydantic.Base64Bytes` / `pydantic.Field`.
     "pydantic>=2",
+    # `batchalign.lang.LanguageCode` imports `pycountry` unconditionally
+    # at module import; the wheel smoke test on a clean Python 3.10 env
+    # otherwise ImportErrors before any user code runs.
+    "pycountry",
 ]
 
 # Optional dependency groups. A user pulling in heavy ML stacks opts in

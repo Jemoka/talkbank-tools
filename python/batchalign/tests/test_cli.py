@@ -165,7 +165,11 @@ def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
 
     runner = CliRunner()
     result = runner.invoke(app, [
-        "transcribe", "--engine", "rev", "--lang", "eng", str(media),
+        # `--no-segment` keeps CHATUtteranceBackend (which would fetch
+        # talkbank/CHATUtterance-en at runtime) out of the path so the
+        # test runs hermetically without network/HF cache permissions.
+        "transcribe", "--engine", "rev", "--lang", "eng",
+        "--no-segment", str(media),
     ])
     # The pipeline returns empty outcomes → exit_code 0, no failures.
     assert result.exit_code == 0, result.output
