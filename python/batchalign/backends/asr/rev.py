@@ -22,6 +22,7 @@ from typing import Any
 
 from batchalign.backends.base import ASR, Speaker, BatchPolicy
 from batchalign import config
+from batchalign.lang import LanguageCode
 
 
 class RevAI(ASR, Speaker):
@@ -31,7 +32,7 @@ class RevAI(ASR, Speaker):
         self,
         api_key: str | None = None,
         *,
-        language: str | None = None,
+        language: LanguageCode,
         num_speakers: int = 2,
         poll_interval_s: float = 5.0,
         timeout_s: float = 3600.0,
@@ -46,9 +47,11 @@ class RevAI(ASR, Speaker):
         self._poll = poll_interval_s
         self._timeout = timeout_s
         self._num_speakers = num_speakers
-        # Rev.AI language code (BA2 maps ISO-639-3 → -1, zho→cmn). `None`/"auto"
-        # lets Rev pick its default (English).
-        self._language = _rev_lang(language)
+        # Rev.AI's `language=` field is ISO-639-1 alpha_2, with one
+        # vendor quirk: Mandarin is `cmn`, not `zh`. The resolver
+        # gave us alpha_2 (or alpha_3 if no alpha_2 exists, e.g.
+        # `yue` for Cantonese — Rev accepts that as-is).
+        self._language = _rev_code(language)
         self._policy = BatchPolicy.one()
 
     @property
@@ -178,29 +181,19 @@ class RevAI(ASR, Speaker):
         return self._client.get_transcript_json(job.id)
 
 
-def _rev_lang(code: str | None) -> str | None:
-    """Map a CHAT/ISO language code to Rev.AI's code (BA2's mapping).
+def _rev_code(lang: LanguageCode) -> str:
+    """Resolved `LanguageCode` → Rev.AI's expected language code.
 
-    `None`/"auto" → `None` (Rev defaults to English). ISO-639-3 is mapped to
-    -1 via pycountry; Mandarin (`zho`/`zh`) becomes `cmn`, which is what Rev
-    expects (BA2 `asr/rev.py`).
+    Rev's API uses ISO-639-1 alpha_2; both `zho` (Chinese
+    macrolanguage) and `cmn` (Mandarin) get sent as `cmn` because
+    that's how Rev names Mandarin. Otherwise pass alpha_2 if known,
+    falling back to alpha_3 (Cantonese / minority languages with no
+    alpha_2 are sent as alpha_3, which Rev accepts for the ones it
+    supports).
     """
-    if not code or code == "auto":
-        return None
-    c = code.strip().lower()
-    if c in ("zho", "zh", "cmn", "zh-hans", "zh-hant"):
+    if lang.alpha_3 in ("zho", "cmn"):
         return "cmn"
-    if len(c) <= 2:
-        return c
-    try:
-        import pycountry  # type: ignore[import-not-found]
-
-        lang = pycountry.languages.get(alpha_3=c)
-        if lang is not None and getattr(lang, "alpha_2", None):
-            return lang.alpha_2
-    except Exception:
-        pass
-    return c
+    return lang.alpha_2_or_3
 
 
 # ---------------------------------------------------------------------------

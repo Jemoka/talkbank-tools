@@ -12,16 +12,22 @@ import wave
 from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
+from batchalign.lang import LanguageCode
 
 
 class VllmAsrBackend(ASR):
-    """ASR via a vLLM server exposing Whisper through the OpenAI audio API."""
+    """ASR via a vLLM server exposing Whisper through the OpenAI audio API.
+
+    The OpenAI Audio API requires ISO-639-1 alpha_2 for `language=`.
+    Languages with no alpha_2 (e.g. `yue`) are rejected at
+    construction time with a clear error.
+    """
 
     def __init__(
         self,
         *,
         model: str = "openai/whisper-large-v3",
-        language: str | None = None,
+        language: LanguageCode,
         base_url: str = "http://localhost:8000/v1",
         api_key: str = "EMPTY",
         batch_size: int = 32,
@@ -29,10 +35,17 @@ class VllmAsrBackend(ASR):
     ) -> None:
         from openai import OpenAI  # type: ignore[import-not-found]
 
+        if language.alpha_2 is None:
+            raise ValueError(
+                f"VllmAsrBackend / OpenAI audio API requires ISO-639-1 "
+                f"alpha_2 for `language`, but {language.alpha_3!r} "
+                f"({language.name}) has none. Pick a language with an "
+                f"alpha_2 code, or use a different ASR engine "
+                f"(e.g. funaudio for Cantonese)."
+            )
         self._client = OpenAI(base_url=base_url, api_key=api_key)
         self._model = model
-        # Fallback language for when the runner ships `Auto`.
-        self._language = None if language in (None, "auto") else language
+        self._language = language.alpha_2
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
@@ -64,8 +77,7 @@ class VllmAsrBackend(ASR):
                 if item.language.kind == "code" and item.language.value
                 else self._language
             )
-            if lang:
-                kwargs["language"] = lang
+            kwargs["language"] = lang
             resp = self._client.audio.transcriptions.create(**kwargs)
             outputs.append(asr_from_openai(resp, item.source_id, AsrOutput, AsrSegment, AsrWord))
         return outputs

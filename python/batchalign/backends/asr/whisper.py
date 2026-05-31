@@ -18,16 +18,23 @@ from __future__ import annotations
 from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
+from batchalign.lang import LanguageCode
 
 
 class WhisperBackend(ASR):
-    """Local Whisper ASR backend (single task)."""
+    """Local Whisper ASR backend (single task).
+
+    HF Whisper's `generate_kwargs["language"]` accepts the English
+    language name (`"English"`, `"Spanish"`) — that's what
+    pycountry's `.name` gives us. BA2 ground truth:
+    `batchalign2/batchalign/pipelines/asr/whisper.py:36-45`.
+    """
 
     def __init__(
         self,
         model: str = "openai/whisper-large-v3",
         *,
-        language: str | None = None,
+        language: LanguageCode,
         batch_size: int = 32,
         batch_window_ms: int = 50,
         device: str | None = None,
@@ -47,10 +54,11 @@ class WhisperBackend(ASR):
             **kwargs,
         )
         self._model = model
-        # Fallback language when the per-call input ships `Auto` (the runner
-        # always does); lets the CLI pin `--language`. `None`/"auto" means
-        # let Whisper auto-detect.
-        self._language = None if language in (None, "auto") else language
+        # HF Whisper wants the English language name in its
+        # `generate_kwargs["language"]`. The runner always ships `Auto`
+        # at call time, so this constructor-pinned value is what
+        # actually reaches the model.
+        self._language = language.name
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property

@@ -34,12 +34,13 @@ import re
 from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
+from batchalign.lang import LanguageCode
 
 # BA2 model resolution (models/resolve.py). English is the finetuned pairing;
 # others fall back to base Whisper + (where present) a CHATUtterance model.
+# Keyed by ISO-639-3.
 _WHISPER_RESOLVE = {
     "eng": ("talkbank/CHATWhisper-en", "openai/whisper-large-v2"),
-    "en": ("talkbank/CHATWhisper-en", "openai/whisper-large-v2"),
     "yue": ("alvanlii/whisper-small-cantonese", "alvanlii/whisper-small-cantonese"),
 }
 # Cantonese decode config (BA2 infer_asr.py): no timestamps token + DTW
@@ -49,9 +50,7 @@ _CANTONESE_ALIGNMENT_HEADS = [
 ]
 _UTTERANCE_RESOLVE = {
     "eng": "talkbank/CHATUtterance-en",
-    "en": "talkbank/CHATUtterance-en",
     "zho": "talkbank/CHATUtterance-zh_CN",
-    "zh": "talkbank/CHATUtterance-zh_CN",
 }
 
 _ENDING_PUNCT = [".", "?", "!"]
@@ -130,46 +129,23 @@ class BertUtteranceModel:
             return sent_tokenize(final_passage)
 
 
-# ISO-639 (-1/-3) → Whisper language NAME, for the languages we actually pin.
-# BA2 derives these from pycountry; we hardcode the common set so the language
-# is ALWAYS forced even when pycountry is absent (without a forced language the
-# finetuned CHATWhisper model auto-detects and decodes garbage).
-_WHISPER_LANG_NAME = {
-    "eng": "English", "en": "English",
-    "spa": "Spanish", "es": "Spanish",
-    "zho": "Chinese", "zh": "Chinese", "zh-hans": "Chinese", "cmn": "Chinese",
-    "yue": "Cantonese", "zh-hant": "Cantonese",
-    "jpn": "Japanese", "ja": "Japanese",
-    "fra": "French", "fr": "French",
-    "deu": "German", "de": "German",
-    "ita": "Italian", "it": "Italian",
-    "por": "Portuguese", "pt": "Portuguese",
-    "nld": "Dutch", "nl": "Dutch",
-    "kor": "Korean", "ko": "Korean",
+# Whisper sometimes calls Mandarin "Chinese" rather than pycountry's
+# "Mandarin Chinese" / "Chinese"; the model's tokenizer accepts both,
+# but BA2 standardized on "Chinese" — keep that override for parity.
+_WHISPER_NAME_OVERRIDE = {
+    "cmn": "Chinese",
+    "zho": "Chinese",
 }
 
 
-def _whisper_language_name(lang: str) -> str | None:
-    """Whisper language NAME for a CHAT/ISO code (BA2 `WhisperEngine`).
+def _whisper_language_name(lang: LanguageCode) -> str:
+    """Whisper language NAME for a resolved `LanguageCode`.
 
-    Uses a static map for the common languages (so the language is forced even
-    without pycountry — unforced, the English-finetuned model decodes garbage),
-    falling back to pycountry for anything else. Returns None when unknown so
-    Whisper auto-detects.
+    Pycountry's `.name` is the right answer for almost every language
+    (HF Whisper's tokenizer recognizes them all). The override above
+    keeps Mandarin/Chinese spelled "Chinese" to match BA2.
     """
-    c = lang.lower()
-    if c in _WHISPER_LANG_NAME:
-        return _WHISPER_LANG_NAME[c]
-    try:
-        import pycountry  # type: ignore[import-not-found]
-
-        alpha3 = c if len(c) == 3 else None
-        rec = pycountry.languages.get(alpha_3=alpha3) if alpha3 else pycountry.languages.get(alpha_2=c)
-        if rec is not None and getattr(rec, "name", None):
-            return rec.name
-    except Exception:
-        pass
-    return None
+    return _WHISPER_NAME_OVERRIDE.get(lang.alpha_3, lang.name)
 
 
 class BertCantoneseUtteranceModel:
@@ -353,7 +329,7 @@ class ChatWhisperBackend(ASR):
     def __init__(
         self,
         *,
-        lang: str = "eng",
+        language: LanguageCode,
         device: str | None = None,
         batch_size: int = 1,
         batch_window_ms: int = 0,
@@ -368,15 +344,21 @@ class ChatWhisperBackend(ASR):
         from batchalign.backends.asr._torch_audio import disable_torchcodec
 
         disable_torchcodec()
-        model, base = _WHISPER_RESOLVE.get(lang, ("openai/whisper-large-v3", "openai/whisper-large-v3"))
-        self._lang = lang
+        # Model dispatch is keyed on alpha_3 (TalkBank's finetuned
+        # CHATWhisper checkpoints are language-specific); the per-call
+        # `language=` kwarg uses the Whisper-style English name.
+        model, base = _WHISPER_RESOLVE.get(
+            language.alpha_3,
+            ("openai/whisper-large-v3", "openai/whisper-large-v3"),
+        )
+        self._lang = language.alpha_3
         self._model_id = model
 
-        # BA2 forces the transcription language by NAME (pycountry: eng →
-        # "English"); without it Whisper auto-detects and can decode garbage.
-        self._whisper_lang = _whisper_language_name(lang)
+        # BA2 forces the transcription language by NAME (eng → "English");
+        # without it Whisper auto-detects and can decode garbage.
+        self._whisper_lang = _whisper_language_name(language)
         # BA2 decode config (infer_asr.py): discourage repetition, cache on.
-        self._cantonese = lang == "yue"
+        self._cantonese = language.alpha_3 == "yue"
         config = GenerationConfig.from_pretrained(base)
         config.no_repeat_ngram_size = 4
         config.use_cache = True
@@ -446,8 +428,7 @@ class ChatWhisperBackend(ASR):
         }
         if not self._cantonese:
             gen_kwargs["task"] = "transcribe"
-            if self._whisper_lang:
-                gen_kwargs["language"] = self._whisper_lang
+            gen_kwargs["language"] = self._whisper_lang
         # Segment-level timestamps (BA2 uses `return_timestamps=True`; the
         # word-level mode breaks decoding for the finetuned CHATWhisper model).
         # We only need the TEXT — the CHATUtterance UtSeg stage segments it and

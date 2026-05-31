@@ -25,6 +25,7 @@ from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
 from batchalign import config
+from batchalign.lang import LanguageCode
 
 # BA2's Cantonese surface-form fixups (tencent.py:replace_cantonese_words).
 _CANTONESE_WORD_REPLACEMENTS = {
@@ -47,7 +48,7 @@ class TencentAsrBackend(ASR):
     def __init__(
         self,
         *,
-        lang: str = "eng",
+        language: LanguageCode,
         num_speakers: int = 2,
         batch_size: int = 1,
         batch_window_ms: int = 0,
@@ -68,15 +69,13 @@ class TencentAsrBackend(ASR):
                 f"under [asr] in ~/.batchalign.ini (missing {e})."
             ) from e
 
-        self._lang_code = lang
+        # Tencent embeds the language in the engine-model-type string
+        # `16k_<code>` (where `<code>` is alpha_2 or the 3-letter
+        # vendor code for Cantonese / Min / Hakka / Wu). The Chinese
+        # macrolanguage and its variants all route to `16k_zh_large`.
+        self._lang_code = language.alpha_3
         self._num_speakers = num_speakers
-        if lang == "yue":
-            self._lang = "yue"
-        else:
-            import pycountry  # type: ignore[import-not-found]
-
-            rec = pycountry.languages.get(alpha_3=lang)
-            self._lang = rec.alpha_2 if rec is not None else lang
+        self._lang = language.alpha_2_or_3
 
         cos_config = CosConfig(
             Region=self._region, SecretId=self._id, SecretKey=self._key,
@@ -150,7 +149,9 @@ class TencentAsrBackend(ASR):
 
             req = models.CreateRecTaskRequest()
             req.EngineModelType = (
-                "16k_zh_large" if self._lang in _ZH_LARGE_LANGS else f"16k_{self._lang}"
+                "16k_zh_large"
+                if self._lang_code in _ZH_LARGE_LANGS
+                else f"16k_{self._lang}"
             )
             req.ResTextFormat = 1
             req.SpeakerDiarization = 1
@@ -182,7 +183,7 @@ class TencentAsrBackend(ASR):
             words: list[Any] = []
             for w in detail.Words:
                 word = w.Word
-                if self._lang == "yue":
+                if self._lang_code == "yue":
                     word = self._replace_cantonese(cc.convert(word))
                 words.append(
                     AsrWord(

@@ -172,6 +172,18 @@ def build_backend(spec: BackendSpec | dict[str, Any]) -> Backend:
     for k, v in raw_kwargs.items():
         if _is_backend_spec_dict(v):
             resolved[k] = build_backend(v)
+        elif k == "language" and isinstance(v, str):
+            # ASR backends accept a typed `LanguageCode`, not a raw
+            # string. JSON clients pass an ISO-639-3 alpha_3 code
+            # (`eng`, `cmn`, `yue`); resolve once here.
+            from batchalign.lang import LanguageCode
+
+            try:
+                resolved[k] = LanguageCode.from_str(v)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400, detail=str(exc)
+                ) from exc
         else:
             resolved[k] = v
 

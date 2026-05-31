@@ -6,6 +6,11 @@ reachable — Rev.AI, WhisperX, HF Whisper, OpenAI Whisper, and a vLLM-served
 Whisper (preferred for local GPU/Metal boxes). Language is propagated to the
 chosen backend (the kernel ships `Auto`, so the backend's `language=` pin is
 what actually reaches the model).
+
+Language convention: users always type an ISO-639-3 alpha_3 code
+(`eng`, `cmn`, `yue`, `spa`, …). The CLI validates eagerly via
+`batchalign.lang.LanguageCode`; each backend receives the resolved
+record and reads whichever form its vendor SDK needs.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from typing import Any
 
 import typer
 
+from ..lang import LanguageCode
 from ._common import collect_media_inputs, write_outcomes
 from ._options import cli_options
 from .tui import Interface, Task
@@ -63,7 +69,11 @@ def register(app: typer.Typer) -> None:
             AsrEngine.whisperx, "--engine", case_sensitive=False,
             help="ASR engine: rev | whisperx | whisper | openai | vllm.",
         ),
-        language: str = typer.Option("auto", "--language", help="Language code or 'auto'."),
+        language: str = typer.Option(
+            ...,
+            "--language",
+            help="ISO-639-3 alpha_3 code: eng, cmn, yue, spa, … (Required.)",
+        ),
         model: str | None = typer.Option(None, "--model", help="ASR model id (engine-specific default if omitted)."),
         diarize: bool = typer.Option(False, "--diarize/--no-diarize", help="Run speaker diarization (ignored for rev, which diarizes itself)."),
         num_speakers: int = typer.Option(2, "--num-speakers", "-n", help="Expected speaker count (diarization hint)."),
@@ -87,9 +97,16 @@ def register(app: typer.Typer) -> None:
 
         opts = cli_options(ctx)
 
+        # Validate the language string at the CLI boundary so failures
+        # surface before the heavy backend constructors run.
+        try:
+            lang = LanguageCode.from_str(language)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc), param_hint="--language") from exc
+
         with Interface.open(
             command="transcribe",
-            params={"engine": engine.value, "asr": model or _DEFAULT_MODEL.get(engine, ""), "lang": language, "diarize": diarize},
+            params={"engine": engine.value, "asr": model or _DEFAULT_MODEL.get(engine, ""), "lang": lang.alpha_3, "diarize": diarize},
             output=out,
             verbosity=opts.verbosity,
             plain=opts.plain,
@@ -97,7 +114,7 @@ def register(app: typer.Typer) -> None:
         ) as ui:
             device = "cpu" if force_cpu else None
             asr_backend, rev_diarizes = _build_asr(
-                ba, engine, model, language, vllm_url, num_speakers, device
+                ba, engine, model, lang, vllm_url, num_speakers, device
             )
             # Rev does its own diarization; for the Whisper family add Pyannote
             # when --diarize is requested.
@@ -109,7 +126,7 @@ def register(app: typer.Typer) -> None:
             # stream (rev, chatwhisper, …) when a segmenter model exists.
             utseg_backend: Any = None
             if segment:
-                utseg_backend = _build_utseg(ba, language, engine)
+                utseg_backend = _build_utseg(ba, lang, engine)
             pipeline = ba.recipes.transcribe(
                 asr_backend=asr_backend,
                 speaker_backend=speaker_backend,
@@ -124,71 +141,73 @@ def register(app: typer.Typer) -> None:
         raise typer.Exit(code=ui.exit_code)
 
 
-def _build_asr(ba: Any, engine: AsrEngine, model: str | None, language: str, vllm_url: str, num_speakers: int = 2, device: str | None = None):
-    """Construct the ASR backend for `engine`. Returns (backend, rev_diarizes)."""
+def _build_asr(
+    ba: Any,
+    engine: AsrEngine,
+    model: str | None,
+    lang: LanguageCode,
+    vllm_url: str,
+    num_speakers: int = 2,
+    device: str | None = None,
+):
+    """Construct the ASR backend for `engine`. Returns (backend, rev_diarizes).
+
+    Every backend takes the resolved `LanguageCode` directly. Each
+    one's constructor pulls whichever form (`alpha_2`, `alpha_3`, or
+    `name`) its underlying SDK expects.
+    """
     m = model or _DEFAULT_MODEL.get(engine)
     if engine is AsrEngine.rev:
-        return ba.RevAI(language=language, num_speakers=num_speakers), True
+        return ba.RevAI(language=lang, num_speakers=num_speakers), True
     if engine is AsrEngine.whisperx:
-        return ba.WhisperXBackend(model=m, language=None if language == "auto" else language, device=device), False
+        return ba.WhisperXBackend(model=m, language=lang, device=device), False
     if engine is AsrEngine.whisper:
-        return ba.WhisperBackend(model=m, language=language, device=device), False
+        return ba.WhisperBackend(model=m, language=lang, device=device), False
     if engine is AsrEngine.chatwhisper:
-        # CHATWhisper resolves its own model per language. Emits raw ASR words;
-        # the CHATUtterance UtSeg pairing handles segmentation.
-        return ba.ChatWhisperBackend(lang="eng" if language in ("auto", "en") else language, device=device), False
+        return ba.ChatWhisperBackend(language=lang, device=device), False
     if engine is AsrEngine.openai:
-        return ba.OpenAIWhisperBackend(model=m, language=language, device=device), False
+        return ba.OpenAIWhisperBackend(model=m, language=lang, device=device), False
     if engine is AsrEngine.vllm:
-        return ba.VllmAsrBackend(model=m, language=language, base_url=vllm_url), False
+        return ba.VllmAsrBackend(model=m, language=lang, base_url=vllm_url), False
     if engine is AsrEngine.funaudio:
-        # FunASR SenseVoiceSmall (yue) / paraformer-zh; emits raw ASR text, the
-        # CHATUtterance UtSeg pairing segments (Cantonese BERT for yue).
-        lang = "yue" if language in ("auto", "yue", "zh-hant") else language
         return ba.FunAudioBackend(
-            model=m or "FunAudioLLM/SenseVoiceSmall", lang=lang, device=device
+            model=m or "FunAudioLLM/SenseVoiceSmall",
+            language=lang,
+            device=device,
         ), False
     if engine is AsrEngine.tencent:
         # Tencent Cloud does its own diarization; the UtSeg pairing still applies.
-        lang = "yue" if language in ("yue", "zh-hant") else (
-            "eng" if language in ("auto", "en") else language
-        )
-        return ba.TencentAsrBackend(lang=lang, num_speakers=num_speakers), True
+        return ba.TencentAsrBackend(language=lang, num_speakers=num_speakers), True
     if engine is AsrEngine.qwen3:
         # Qwen3-ASR (Alibaba); single-speaker output (no diarization). tbtbt
         # pins device default to CPU on Apple Silicon (MPS degraded on 1.7B);
         # --force-cpu honors that explicitly.
-        lang = "yue" if language in ("auto", "yue", "zh-hant") else language
-        # ISO-639-1 → -3 for Mandarin and English (Qwen3-ASR labels are
-        # resolved from ISO-639-3 internally).
-        if lang in ("zh", "zh-hans", "cmn"):
-            lang = "zho"
-        elif lang == "en":
-            lang = "eng"
         return ba.Qwen3AsrBackend(
-            lang=lang, model_id=m or "Qwen/Qwen3-ASR-1.7B",
+            language=lang, model_id=m or "Qwen/Qwen3-ASR-1.7B",
             device=device or "cpu",
         ), False
     raise typer.BadParameter(f"unknown engine: {engine}")
 
 
-# CLI language → CHATUtterance resolve key (BA2 only ships en/zh/yue models).
-_UTSEG_LANG = {
-    "auto": "eng", "en": "eng", "eng": "eng",
-    "zh": "zho", "zho": "zho", "zh-hans": "zho", "cmn": "zho",
-    "yue": "yue", "zh-hant": "yue",
+# CHATUtterance only ships segmenter models for English, Chinese, and
+# Cantonese — keyed by ISO-639-3.
+_UTSEG_LANG_3 = {
+    "eng": "eng",
+    "cmn": "zho",   # Mandarin → Chinese segmenter
+    "zho": "zho",
+    "yue": "yue",
 }
 
 
-def _build_utseg(ba: Any, language: str, engine: AsrEngine | None = None):
-    """Build the CHATUtterance segmenter for `language`, or None if BA2 ships
+def _build_utseg(ba: Any, lang: LanguageCode, engine: AsrEngine | None = None):
+    """Build the CHATUtterance segmenter for `lang`, or None if BA2 ships
     no utterance model for it (then ASR segments stand as utterances).
 
     BA2's FunAudioEngine always segments with `BertCantoneseUtteranceModel`
     — even when the ASR model is `funasr/paraformer-zh` (Mandarin). Mirror
     that quirk so paraformer-zh BA3 output is byte-identical to BA2's.
     """
-    key = _UTSEG_LANG.get(language.lower())
+    key = _UTSEG_LANG_3.get(lang.alpha_3)
     if key is None:
         return None
     try:

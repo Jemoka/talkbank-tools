@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
+from batchalign.lang import LanguageCode
 
 # BA2's Cantonese surface-form fixups (funaudio.py:replace_cantonese_words).
 _CANTONESE_WORD_REPLACEMENTS = {
@@ -54,15 +55,18 @@ class FunAudioBackend(ASR):
         self,
         *,
         model: str = "FunAudioLLM/SenseVoiceSmall",
-        lang: str = "yue",
+        language: LanguageCode,
         device: str | None = None,
         batch_size: int = 1,
         batch_window_ms: int = 0,
     ) -> None:
         from funasr import AutoModel  # type: ignore[import-not-found]
 
+        # FunASR's `language=` kwarg takes 3-letter codes directly
+        # (`yue`, `eng`, `cmn`, …); BA2 ground truth:
+        # `batchalign2/batchalign/pipelines/asr/funaudio.py:65,146`.
         self._model_id = model
-        self._lang = lang
+        self._lang = language.alpha_3
         self._is_paraformer = "paraformer" in model
         dev = device or "cpu"
         # Mirror BA2's AutoModel construction exactly for each model family.

@@ -22,34 +22,26 @@ from __future__ import annotations
 from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
+from batchalign.lang import LanguageCode
 
-# ISO-639-3 → Qwen3-ASR `language=` parameter label. Qwen wants
-# English-language names ("English", "Cantonese", "Spanish", …); pycountry
-# already produces those from the ISO-639-3 code. Two adjustments are
-# applied after the lookup to cover known model-side mismatches:
+# Qwen3-ASR's `language=` kwarg expects an English language name
+# ("English", "Cantonese", "Spanish", …). Pycountry's `.name` gets us
+# most of the way; two model-side mismatches need overrides:
 #
 # * "Yue Chinese" → "Cantonese" — pycountry's name is the linguistic
-#   classification; Qwen accepts the colloquial label and silently falls
-#   back to auto-detect on the academic form (tbtbt's docstring).
-# * any name containing "greek" → "Greek" — pycountry yields "Modern
-#   Greek (1453-)" for `ell`/`gre`, which Qwen doesn't recognize.
-#
-# This matches BA2's whisper.py and tbtbt's _qwen_common.py post-processing.
-def _resolve_qwen_language(lang: str) -> str:
-    import pycountry  # type: ignore[import-not-found]
+#   classification; Qwen accepts the colloquial label and silently
+#   falls back to auto-detect on the academic form (tbtbt docstring).
+# * "Modern Greek (1453-)" → "Greek" — pycountry's verbose form,
+#   which Qwen doesn't recognize.
+_QWEN_NAME_OVERRIDE = {
+    "yue": "Cantonese",
+    "ell": "Greek",
+    "gre": "Greek",
+}
 
-    rec = pycountry.languages.get(alpha_3=lang)
-    if rec is None:
-        raise ValueError(
-            f"Qwen3-ASR has no language label for ISO-639-3 {lang!r}: "
-            f"pycountry could not resolve the code"
-        )
-    name: str = rec.name
-    if name == "Yue Chinese":
-        name = "Cantonese"
-    if "greek" in name.lower():
-        name = "Greek"
-    return name
+
+def _qwen_language_name(lang: LanguageCode) -> str:
+    return _QWEN_NAME_OVERRIDE.get(lang.alpha_3, lang.name)
 
 
 class Qwen3AsrBackend(ASR):
@@ -58,7 +50,7 @@ class Qwen3AsrBackend(ASR):
     def __init__(
         self,
         *,
-        lang: str = "yue",
+        language: LanguageCode,
         model_id: str = "Qwen/Qwen3-ASR-1.7B",
         # Word-level timing requires a separately-loaded Qwen3 forced
         # aligner. The canonical companion checkpoint is
@@ -75,11 +67,11 @@ class Qwen3AsrBackend(ASR):
         import torch  # type: ignore[import-not-found]
         from qwen_asr import Qwen3ASRModel  # type: ignore[import-not-found]
 
-        self._lang = lang
+        self._lang = language.alpha_3
         self._model_id = model_id
         self._device = device
 
-        self._qwen_language = _resolve_qwen_language(lang)
+        self._qwen_language = _qwen_language_name(language)
 
         if device == "cuda":
             dtype = torch.bfloat16

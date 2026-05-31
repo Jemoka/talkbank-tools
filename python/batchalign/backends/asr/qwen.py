@@ -23,6 +23,7 @@ from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
 from batchalign import config
+from batchalign.lang import LanguageCode
 
 
 _DEFAULT_PROMPT = "Transcribe the speech."
@@ -37,6 +38,7 @@ class QwenAsrBackend(ASR):
         self,
         model: str | None = None,
         *,
+        language: LanguageCode,
         device: str | None = None,
         prompt: str = _DEFAULT_PROMPT,
         batch_size: int = 1,
@@ -57,6 +59,7 @@ class QwenAsrBackend(ASR):
 
             self._delegate = VllmAsrBackend(
                 model=configured_model,
+                language=language,
                 base_url=base_url,
                 api_key=creds.get("api_key", "EMPTY"),
             )

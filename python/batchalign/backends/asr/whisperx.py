@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from batchalign.backends.base import ASR, FA, BatchPolicy
+from batchalign.lang import LanguageCode
 
 
 _CHUNK_S = 60.0
@@ -33,7 +34,7 @@ class WhisperXBackend(ASR, FA):
         self,
         model: str = "large-v2",
         *,
-        language: str | None = None,
+        language: LanguageCode,
         device: str | None = None,
         compute_type: str = "float16",
         batch_size: int = 16,
@@ -57,7 +58,11 @@ class WhisperXBackend(ASR, FA):
         self._device = device
         self._compute_type = compute_type
         self._model_id = model
-        self._language = language
+        # WhisperX uses ISO-639-1 alpha_2 for both `transcribe(language=...)`
+        # and `load_align_model(language_code=...)`. `yue` has no alpha_2,
+        # so we fall through to alpha_3 (BA2 parity:
+        # batchalign2/batchalign/pipelines/asr/whisperx.py:50-64).
+        self._language = language.alpha_2_or_3
         self._chunk_s = chunk_length_s
         self._asr_model = whisperx.load_model(model, device, compute_type=compute_type)
         # Align models are language-specific; cache per language.
@@ -114,7 +119,7 @@ class WhisperXBackend(ASR, FA):
     def _language_for(self, item: Any, fallback: str | None = None) -> str:
         if item.language.kind == "code" and item.language.value:
             return item.language.value
-        return fallback or self._language or "en"
+        return fallback or self._language
 
     def _run_asr(self, item: Any) -> Any:
         from batchalign._core.proto import AsrOutput, AsrSegment, AsrWord

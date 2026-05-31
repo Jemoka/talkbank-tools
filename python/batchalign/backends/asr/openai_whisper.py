@@ -13,6 +13,7 @@ import tempfile
 from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
+from batchalign.lang import LanguageCode
 
 
 class OpenAIWhisperBackend(ASR):
@@ -21,13 +22,18 @@ class OpenAIWhisperBackend(ASR):
     Default model is ``"turbo"`` (the latest speed/quality preset
     shipped with openai-whisper >= 20240930). Word-level timestamps
     come from ``model.transcribe(..., word_timestamps=True)``.
+
+    The package's `transcribe(language=...)` expects the English
+    language name (`"English"`, `"Spanish"`) — same convention as HF
+    Whisper. BA2 ground truth:
+    `batchalign2/batchalign/pipelines/asr/oai_whisper.py:41-48`.
     """
 
     def __init__(
         self,
         model: str = "turbo",
         *,
-        language: str | None = None,
+        language: LanguageCode,
         device: str | None = None,
         batch_size: int = 1,
         batch_window_ms: int = 0,
@@ -36,8 +42,9 @@ class OpenAIWhisperBackend(ASR):
 
         self._model = whisper.load_model(model, device=device)
         self._model_id = model
-        # Fallback language for when the runner ships `Auto` (it always does).
-        self._language = None if language in (None, "auto") else language
+        # The runner ships `Auto` per-call; this constructor-pinned
+        # name is the one the package actually receives.
+        self._language = language.name
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
