@@ -30,7 +30,12 @@ class PyannoteBackend(Speaker, UtSeg):
 
     def __init__(
         self,
-        model: str = "pyannote/speaker-diarization-3.1",
+        # Default to TalkBank's vendored fork (`talkbank/dia-fork`,
+        # mirrors BA2 `pipelines/diarization/pyannote.py:51`). That
+        # model is publicly accessible — no HF token required, which
+        # matches what most batchalign deployments expect. Override
+        # via `model=` for the gated upstream pyannote-3.1 weights.
+        model: str = "talkbank/dia-fork",
         *,
         hf_token: str | None = None,
         batch_size: int = 1,
@@ -38,8 +43,27 @@ class PyannoteBackend(Speaker, UtSeg):
     ) -> None:
         from pyannote.audio import Pipeline  # type: ignore[import-not-found]
 
+        # Token resolution order:
+        #   1. explicit `hf_token=` argument
+        #   2. `[auth] hf_token` in ~/.batchalign.ini
+        #   3. huggingface_hub's auto-resolved token
+        #      (~/.cache/huggingface/token or HF_TOKEN env)
         token = hf_token if hf_token is not None else config.get_api_key("hf")
-        self._pipeline = Pipeline.from_pretrained(model, use_auth_token=token)
+        if token is None:
+            try:
+                from huggingface_hub import HfFolder  # type: ignore[import-not-found]
+
+                token = HfFolder.get_token()
+            except Exception:
+                token = None
+
+        # pyannote.audio renamed `use_auth_token` → `token` between 3.1
+        # and 3.3 and removed the old keyword. Pass `token=` if available,
+        # fall back to `use_auth_token=` for older installations.
+        try:
+            self._pipeline = Pipeline.from_pretrained(model, token=token)
+        except TypeError:
+            self._pipeline = Pipeline.from_pretrained(model, use_auth_token=token)
         self._model = model
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
