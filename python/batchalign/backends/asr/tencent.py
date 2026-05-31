@@ -36,7 +36,7 @@ _CANTONESE_WORD_REPLACEMENTS = {
     "較剪": "鉸剪", "吵": "嘈", "衝涼": "沖涼", "分鍾": "分鐘", "重復": "重複",
 }
 # Tencent's large Chinese model covers these (BA2 tencent.py).
-_ZH_LARGE_LANGS = {"zho", "yue", "wuu", "nan", "hak"}
+_ZH_LARGE_LANGS = {"zho", "cmn", "yue", "wuu", "nan", "hak"}
 _POLL_INTERVAL_S = 15
 _DONE_STATUS = {2, 3}
 _FAILED_STATUS = {3, "3"}
