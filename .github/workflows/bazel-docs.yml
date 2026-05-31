@@ -7,10 +7,12 @@ on:
     branches: [main]
     paths:
       - "book/**"
+      - "bazel/book/**"
       - ".github/workflows/bazel-docs.yml"
   pull_request:
     paths:
       - "book/**"
+      - "bazel/book/**"
       - ".github/workflows/bazel-docs.yml"
 
 concurrency:
