@@ -61,6 +61,29 @@ def collect_media_inputs(folder: Path) -> tuple[list[Any], Path]:
     return inputs, _root_for(folder)
 
 
+def safe_resolve(path: Path | str, root: Path | str) -> Path:
+    """Resolve `path` and verify it stays within `root`.
+
+    Prevents path-traversal attacks where a symlink, `..` segment, or
+    absolute-path override would lead a writer outside the directory the
+    user intended (e.g. paths-mode where a daemon resolves user-supplied
+    relative paths against a `media_paths_root`).
+
+    Raises `typer.BadParameter` on any escape attempt. Returns the
+    resolved absolute path on success.
+    """
+    p = Path(path).expanduser().resolve()
+    r = Path(root).expanduser().resolve()
+    try:
+        p.relative_to(r)
+    except ValueError as exc:
+        raise typer.BadParameter(
+            f"path {p} escapes root {r}; refusing to operate outside the "
+            "configured root",
+        ) from exc
+    return p
+
+
 def write_outcomes(
     outcomes: list[Any],
     root: Path,
@@ -74,6 +97,11 @@ def write_outcomes(
     rewrites the source's suffix (transcribe: `.wav` → `.cha`). When
     `out_dir` is given, the source's relative path under `root` is mirrored
     under `out_dir`, with the same suffix rule applied.
+
+    When `out_dir` is given, the resolved target is verified to stay under
+    `out_dir` via `safe_resolve` — guards against symlinked source paths
+    that would otherwise land outputs outside the user's chosen output
+    directory.
     """
     for outcome in outcomes:
         src_str = getattr(outcome, "source_id", None)
@@ -87,6 +115,9 @@ def write_outcomes(
             if output_suffix:
                 rel = rel.with_suffix(output_suffix)
             target = out_dir / rel
+            # Ensure the symlink-resolved target stays under out_dir.
+            target.parent.mkdir(parents=True, exist_ok=True)
+            safe_resolve(target.parent, out_dir.resolve())
         target.parent.mkdir(parents=True, exist_ok=True)
         outcome.write(str(target))
 
@@ -111,6 +142,7 @@ __all__ = [
     "MEDIA_EXTENSIONS",
     "collect_chat_inputs",
     "collect_media_inputs",
+    "safe_resolve",
     "write_outcomes",
     "require_api_key",
 ]

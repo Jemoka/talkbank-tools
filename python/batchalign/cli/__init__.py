@@ -22,7 +22,7 @@ import typer
 
 from . import _logging
 from ._options import CLIOptions, cli_options
-from . import align, compare, daemon, morphotag, transcribe, translate, utseg
+from . import align, compare, daemon, morphotag, transcribe, translate, utseg, version
 
 app = typer.Typer(
     name="batchalign3",
@@ -82,6 +82,7 @@ _COMMAND_MODULES = [
     translate,
     utseg,
     compare,
+    version,
     daemon,  # HTTP daemon for the desktop GUI; ships via the [api] extra
     # coref,
     # opensmile,
