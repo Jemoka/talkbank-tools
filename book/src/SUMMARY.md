@@ -225,106 +225,106 @@
 
 # VS Code — Getting Started
 
-- [Installation](apps/vscode-extension/getting-started/installation.md)
-- [Your First CHAT File](apps/vscode-extension/getting-started/first-file.md)
-- [Quick Reference](apps/vscode-extension/getting-started/quick-reference.md)
+- [Installation](vscode/getting-started/installation.md)
+- [Your First CHAT File](vscode/getting-started/first-file.md)
+- [Quick Reference](vscode/getting-started/quick-reference.md)
 
 # VS Code — Editing
 
-- [Syntax Highlighting](apps/vscode-extension/editing/syntax-highlighting.md)
-- [Real-Time Validation](apps/vscode-extension/editing/validation.md)
-- [Quick Fixes](apps/vscode-extension/editing/quick-fixes.md)
-- [Code Completion & Snippets](apps/vscode-extension/editing/completion.md)
-- [Special Characters](apps/vscode-extension/editing/special-characters.md)
-- [Participant Editor](apps/vscode-extension/editing/participant-editor.md)
+- [Syntax Highlighting](vscode/editing/syntax-highlighting.md)
+- [Real-Time Validation](vscode/editing/validation.md)
+- [Quick Fixes](vscode/editing/quick-fixes.md)
+- [Code Completion & Snippets](vscode/editing/completion.md)
+- [Special Characters](vscode/editing/special-characters.md)
+- [Participant Editor](vscode/editing/participant-editor.md)
 
 # VS Code — Navigation
 
-- [Document Symbols](apps/vscode-extension/navigation/symbols.md)
-- [Go to Definition](apps/vscode-extension/navigation/go-to-definition.md)
-- [Cross-Tier Alignment](apps/vscode-extension/navigation/alignment.md)
-- [Dependency Graphs](apps/vscode-extension/navigation/dependency-graphs.md)
-- [Speaker Filtering](apps/vscode-extension/navigation/speaker-filtering.md)
-- [Scoped Find](apps/vscode-extension/navigation/scoped-find.md)
+- [Document Symbols](vscode/navigation/symbols.md)
+- [Go to Definition](vscode/navigation/go-to-definition.md)
+- [Cross-Tier Alignment](vscode/navigation/alignment.md)
+- [Dependency Graphs](vscode/navigation/dependency-graphs.md)
+- [Speaker Filtering](vscode/navigation/speaker-filtering.md)
+- [Scoped Find](vscode/navigation/scoped-find.md)
 
 # VS Code — Media & Transcription
 
-- [Media Playback](apps/vscode-extension/media/playback.md)
-- [Waveform Visualization](apps/vscode-extension/media/waveform.md)
-- [Walker Mode](apps/vscode-extension/media/walker.md)
-- [Transcription Mode](apps/vscode-extension/media/transcription.md)
-- [Media Resolution](apps/vscode-extension/media/resolution.md)
+- [Media Playback](vscode/media/playback.md)
+- [Waveform Visualization](vscode/media/waveform.md)
+- [Walker Mode](vscode/media/walker.md)
+- [Transcription Mode](vscode/media/transcription.md)
+- [Media Resolution](vscode/media/resolution.md)
 
 # VS Code — Analysis
 
-- [Running CLAN Commands](apps/vscode-extension/analysis/running-commands.md)
-- [Profiling Commands](apps/vscode-extension/analysis/profiling.md)
-- [Frequency & Distribution](apps/vscode-extension/analysis/frequency.md)
-- [Assessment Tools](apps/vscode-extension/analysis/assessment.md)
-- [Command Reference](apps/vscode-extension/analysis/command-reference.md)
+- [Running CLAN Commands](vscode/analysis/running-commands.md)
+- [Profiling Commands](vscode/analysis/profiling.md)
+- [Frequency & Distribution](vscode/analysis/frequency.md)
+- [Assessment Tools](vscode/analysis/assessment.md)
+- [Command Reference](vscode/analysis/command-reference.md)
 
 # VS Code — Review Mode
 
-- [Overview](apps/vscode-extension/review/overview.md)
-- [Tutorial: Reviewing Aligned Files](apps/vscode-extension/review/tutorial.md)
-- [Rating Utterances](apps/vscode-extension/review/rating.md)
-- [Interactive Bullet Correction](apps/vscode-extension/review/correction.md)
-- [Harvesting Results](apps/vscode-extension/review/harvesting.md)
+- [Overview](vscode/review/overview.md)
+- [Tutorial: Reviewing Aligned Files](vscode/review/tutorial.md)
+- [Rating Utterances](vscode/review/rating.md)
+- [Interactive Bullet Correction](vscode/review/correction.md)
+- [Harvesting Results](vscode/review/harvesting.md)
 
 # VS Code — Coder Mode
 
-- [Overview](apps/vscode-extension/coder/overview.md)
-- [Codes Files (.cut)](apps/vscode-extension/coder/codes-files.md)
-- [Coding Workflow](apps/vscode-extension/coder/workflow.md)
+- [Overview](vscode/coder/overview.md)
+- [Codes Files (.cut)](vscode/coder/codes-files.md)
+- [Coding Workflow](vscode/coder/workflow.md)
 
 # VS Code — Workflows
 
-- [Corpus Validation](apps/vscode-extension/workflows/corpus-validation.md)
-- [Transcription from Audio](apps/vscode-extension/workflows/transcription.md)
-- [Post-Alignment Review](apps/vscode-extension/workflows/post-alignment-review.md)
-- [Batch Processing](apps/vscode-extension/workflows/batch-processing.md)
+- [Corpus Validation](vscode/workflows/corpus-validation.md)
+- [Transcription from Audio](vscode/workflows/transcription.md)
+- [Post-Alignment Review](vscode/workflows/post-alignment-review.md)
+- [Batch Processing](vscode/workflows/batch-processing.md)
 
 # VS Code — Configuration
 
-- [Settings Reference](apps/vscode-extension/configuration/settings.md)
-- [Keyboard Shortcuts](apps/vscode-extension/configuration/keyboard-shortcuts.md)
-- [Cache Management](apps/vscode-extension/configuration/cache.md)
+- [Settings Reference](vscode/configuration/settings.md)
+- [Keyboard Shortcuts](vscode/configuration/keyboard-shortcuts.md)
+- [Cache Management](vscode/configuration/cache.md)
 
 # VS Code — Troubleshooting
 
-- [Common Issues](apps/vscode-extension/troubleshooting/common-issues.md)
-- [LSP Connection](apps/vscode-extension/troubleshooting/lsp.md)
-- [Media Not Found](apps/vscode-extension/troubleshooting/media.md)
+- [Common Issues](vscode/troubleshooting/common-issues.md)
+- [LSP Connection](vscode/troubleshooting/lsp.md)
+- [Media Not Found](vscode/troubleshooting/media.md)
 
 ---
 
 # VS Code — For Developers
 
-- [Architecture](apps/vscode-extension/developer/architecture.md)
-- [LSP Protocol](apps/vscode-extension/developer/lsp-protocol.md)
-- [Adding Features](apps/vscode-extension/developer/adding-features.md)
-- [Custom Commands](apps/vscode-extension/developer/custom-commands.md)
-- [Testing](apps/vscode-extension/developer/testing.md)
-- [Releasing](apps/vscode-extension/developer/releasing.md)
-- [CLAN Feature Parity](apps/vscode-extension/developer/clan-parity.md)
+- [Architecture](vscode/developer/architecture.md)
+- [LSP Protocol](vscode/developer/lsp-protocol.md)
+- [Adding Features](vscode/developer/adding-features.md)
+- [Custom Commands](vscode/developer/custom-commands.md)
+- [Testing](vscode/developer/testing.md)
+- [Releasing](vscode/developer/releasing.md)
+- [CLAN Feature Parity](vscode/developer/clan-parity.md)
 
 ---
 
 # VS Code — Reference
 
-- [Alignment Index Spaces](apps/vscode-extension/reference/alignment-indices.md)
-- [RPC Contracts](apps/vscode-extension/reference/rpc-contracts.md)
-- [Webview Message Contracts](apps/vscode-extension/reference/webview-contracts.md)
-- [Command Catalog](apps/vscode-extension/reference/commands.md)
+- [Alignment Index Spaces](vscode/reference/alignment-indices.md)
+- [RPC Contracts](vscode/reference/rpc-contracts.md)
+- [Webview Message Contracts](vscode/reference/webview-contracts.md)
+- [Command Catalog](vscode/reference/commands.md)
 
 ---
 
 # VS Code — Design Decisions (ADRs)
 
-- [ADR-001: LSP over Embedded Parser](apps/vscode-extension/design/adr-001-lsp-over-embedded-parser.md)
-- [ADR-002: Effect-based Command Runtime](apps/vscode-extension/design/adr-002-effect-runtime.md)
-- [ADR-003: Webview Panels over TreeView](apps/vscode-extension/design/adr-003-webview-panels-over-treeview.md)
-- [ADR-004: Bundled LSP Binary](apps/vscode-extension/design/adr-004-bundled-lsp-binary.md)
+- [ADR-001: LSP over Embedded Parser](vscode/design/adr-001-lsp-over-embedded-parser.md)
+- [ADR-002: Effect-based Command Runtime](vscode/design/adr-002-effect-runtime.md)
+- [ADR-003: Webview Panels over TreeView](vscode/design/adr-003-webview-panels-over-treeview.md)
+- [ADR-004: Bundled LSP Binary](vscode/design/adr-004-bundled-lsp-binary.md)
 
 # CHAT Format
 
