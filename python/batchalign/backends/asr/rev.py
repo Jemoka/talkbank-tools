@@ -282,6 +282,10 @@ def _segments_from_rev(
         # is no BERT model AND Rev gave us sentence punctuation.
         if use_bert or not has_sentence_punct:
             # Raw monologue → one segment (BERT segmenter handles the rest).
+            # Rev tags `<silence>`, `<noise>`, etc. as type=text with the
+            # angle-bracket marker as the value; those must be filtered or
+            # the CHAT parser rejects them as unparseable main-tier
+            # content (parity bug found 2026-05-31 vs BA2 utils.py:185).
             words = [
                 AsrWord(
                     text=el.get("value", "").strip(),
@@ -290,7 +294,9 @@ def _segments_from_rev(
                     confidence=el.get("confidence"),
                 )
                 for el in elements
-                if el.get("type") == "text" and el.get("value", "").strip()
+                if el.get("type") == "text"
+                and (val := el.get("value", "").strip())
+                and not (val.startswith("<") and val.endswith(">"))
             ]
             if not words:
                 continue
@@ -334,7 +340,13 @@ def _segments_from_rev(
                 elif value:  # comma etc. — keep inline
                     sentence.append(AsrWord(text=value, start_ms=0, end_ms=0, confidence=None))
                 continue
-            if etype == "text" and value:
+            # Reject Rev's `<silence>` / `<noise>` markers (BA2 utils.py:185
+            # strips them with the same regex predicate).
+            if (
+                etype == "text"
+                and value
+                and not (value.startswith("<") and value.endswith(">"))
+            ):
                 sentence.append(
                     AsrWord(
                         text=value,
