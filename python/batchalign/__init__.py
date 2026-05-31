@@ -10,6 +10,10 @@ The public surface re-exports two layers:
 2. Python-side backends, recipes, and CLI helpers.
 
 See `spec2.md` §16 for the canonical surface map.
+
+For an end-user overview of the CLI surface and install extras, see
+`python/batchalign/README.md`. For the BA3 cutover plan + per-landing
+status, see `book/src/batchalign/developer/landing-status.md`.
 """
 
 from __future__ import annotations
