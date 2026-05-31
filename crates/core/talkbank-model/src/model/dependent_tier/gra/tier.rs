@@ -383,7 +383,16 @@ fn has_any_cycle(relations: &[GrammaticalRelation]) -> bool {
 }
 
 fn is_valid_root_relation(rel: &GrammaticalRelation) -> bool {
-    rel.relation.as_str().eq_ignore_ascii_case("ROOT") && (rel.head == 0 || rel.head == rel.index)
+    // UD convention varies on what to put in ROOT's head field:
+    //   - CoNLL-U / BA3 → head = 0
+    //   - BA2 / our morphotag → head = self (rel.head == rel.index)
+    //   - Some Stanza outputs route ROOT through another word's index
+    //     (e.g. `1|4|ROOT` for "how are you today" where Stanza picked
+    //     `how` as ROOT but its head field references `today`)
+    // All three forms are validly-marked ROOTs in CHAT corpora. The
+    // cycle detector treats any of them as a terminator so a
+    // morphotagged file from any fork round-trips through our parser.
+    rel.relation.as_str().eq_ignore_ascii_case("ROOT")
 }
 
 impl WriteChat for GraTier {
