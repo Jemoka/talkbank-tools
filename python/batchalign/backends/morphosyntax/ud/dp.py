@@ -188,11 +188,53 @@ def _hirschberg(reference: Sequence[ReferenceTarget],
     return left_alignment + right_alignment
 
 
+def _try_rust_align(payload_seq, reference_seq, match_fn):
+    """Attempt the Rust dp_align fast path; return None if unavailable.
+
+    The Rust implementation is the canonical aligner (`crates/core/
+    talkbank-transform/src/dp_align/mod.rs`) and is wired into the PyO3
+    extension as `batchalign._core.dp_align` (Landing 1 #1).
+    """
+    # The Rust dispatcher only handles default `==` and case-insensitive
+    # equality; custom Python match_fn callbacks fall back to the in-
+    # process Hirschberg below (preserves API compatibility).
+    if match_fn is not None and match_fn.__qualname__ != "<lambda>":
+        return None
+    try:
+        from batchalign._core import dp_align as _rust_dp_align  # type: ignore[attr-defined]
+    except (ImportError, AttributeError):
+        return None
+    payload_keys = [str(p.key) for p in payload_seq]
+    reference_keys = [str(r.key) for r in reference_seq]
+    raw = _rust_dp_align(payload_keys, reference_keys, False)
+    out: list[Any] = []
+    for entry in raw:
+        kind = entry["type"]
+        if kind == "match":
+            p = payload_seq[entry["payload_idx"]]
+            r = reference_seq[entry["reference_idx"]]
+            out.append(Match(key=entry["key"], payload=p.payload, reference_payload=r.payload))
+        elif kind == "extra_payload":
+            p = payload_seq[entry["payload_idx"]]
+            out.append(Extra(key=entry["key"], extra_type=ExtraType.PAYLOAD, payload=p.payload))
+        elif kind == "extra_reference":
+            r = reference_seq[entry["reference_idx"]]
+            out.append(Extra(key=entry["key"], extra_type=ExtraType.REFERENCE, payload=r.payload))
+    return out
+
+
 def align(source_payload_sequence,
           target_reference_sequence,
           tqdm=True,
           match_fn=lambda x,y: x==y):
-    """Align two sequences with a Hirschberg-based edit-distance aligner."""
+    """Align two sequences via the Rust Hirschberg DP (preferred) or the
+    in-process fallback (when the PyO3 extension isn't built / when the
+    caller passes a custom match function).
+
+    The Rust path is the canonical implementation (Landing 1 #1); this
+    Python file is now a thin shim that adapts the caller's
+    PayloadTarget/ReferenceTarget envelope to the Rust binding.
+    """
 
     use_tqdm = bool(tqdm)
     progress = None
@@ -206,6 +248,18 @@ def align(source_payload_sequence,
     else:
         payload_seq, reference_seq = __serialize_arr(source_payload_sequence,
                                                     target_reference_sequence)
+
+    # Hirschberg empty-sequence edge case (Landing 1 #1) — return Extra-
+    # only output without recursing.
+    if not payload_seq:
+        return [Extra(r.key, ExtraType.REFERENCE, r.payload) for r in reference_seq]
+    if not reference_seq:
+        return [Extra(p.key, ExtraType.PAYLOAD, p.payload) for p in payload_seq]
+
+    # Rust fast path.
+    rust_result = _try_rust_align(payload_seq, reference_seq, match_fn)
+    if rust_result is not None:
+        return rust_result
 
     if use_tqdm and len(payload_seq) and len(reference_seq):
         try:

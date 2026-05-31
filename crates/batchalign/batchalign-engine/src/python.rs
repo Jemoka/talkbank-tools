@@ -10,6 +10,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
 use crate::cache::{nuke_cache, CachePolicy, CacheSpec};
+use crate::dp_py::dp_align;
 use crate::native_backends::PyCompareBackend;
 use crate::pipeline::Pipeline;
 
@@ -23,6 +24,7 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<CachePolicy>()?;
     m.add_class::<PyCompareBackend>()?;
     m.add_function(wrap_pyfunction!(nuke_cache, m)?)?;
+    m.add_function(wrap_pyfunction!(dp_align, m)?)?;
 
     // Core types (Task, BAValue, MediaInput, BatchPolicy, ProgressEvent,
     // ProgressKind, SourceId, ...). The core crate owns the registration so

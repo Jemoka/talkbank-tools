@@ -17,6 +17,8 @@ pub mod progress_sink;
 pub mod py_outcome;
 
 #[cfg(feature = "extension-module")]
+pub mod dp_py;
+#[cfg(feature = "extension-module")]
 pub mod python;
 
 pub use cache::{Cache, CachePolicy, CacheSpec, default_cache_path, nuke_cache};
