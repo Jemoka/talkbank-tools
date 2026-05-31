@@ -1016,8 +1016,7 @@
     ]
   },
   "config": {
-    "allow_server_paths": false,
-    "workdir": "/Users/houjun/.cache/batchalign-api"
+    "allow_server_paths": false
   },
   "endpoints": {
     "job_cancel": {
