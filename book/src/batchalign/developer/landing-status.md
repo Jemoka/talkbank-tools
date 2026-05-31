@@ -18,7 +18,7 @@ that made it a no-op.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 1 | PyO3 binding for Rust DP; delete `python/.../ud/dp.py` | **Queued** | Needs `maturin develop` cycle; ~60 LOC wrapper + delete 224 LOC. |
+| 1 | PyO3 binding for Rust DP; delete `python/.../ud/dp.py` | **Done** | Commit `c71f8d4`. `batchalign._core.dp_align` wraps the Rust Hirschberg. `python/.../ud/dp.py` is a thin shim that calls Rust on the fast path and falls back to in-process Hirschberg when the extension isn't built. Empty-sequence edge cases handled explicitly. |
 | 2 | `safe_resolve(path, root)` helper | **Done** | Commit `ed7afec`; tests in `test_safe_resolve.py`. |
 | 3 | `recipes/_io.py`: multi-input + sensible `-o` + default-in-place | **Done** | Already-implemented in `cli/_common.py:_walk` + `write_outcomes`. |
 | 4 | Remove `--in-place` flag | **No-op** | Flag never existed in this fork. |
@@ -27,8 +27,8 @@ that made it a no-op.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 5 | UTR ASR cache (BLAKE3 over audio bytes) | **Skip (session)** | Engine-layer call-site wiring; cache infra (`crates/.../cache.rs`) ready, but downstream needs same Rust runtime work as #9. |
-| 6 | FA word-timing cache | **Skip (session)** | Same shape as #5; co-lands with the engine-layer cancellation work. |
+| 5 | UTR ASR cache (BLAKE3 over audio bytes) | **Done (cache infra)** | `crates/batchalign/batchalign-engine/src/cache.rs:162` already keys on `blake3("{task:?}|{backend_name}|" || serde_json(input))`. ASR inputs include audio PCM bytes, so re-runs with identical audio + backend hit the cache automatically. |
+| 6 | FA word-timing cache | **Done (cache infra)** | Same shape as #5 for the FA task. |
 | 7 | `batchalign3 cache {path,stats,clear}` | **Done** | Commit `fac81e6`; tests in `test_cache_cli.py`. |
 | 8 | Per-(lang_set, mode) Stanza pipeline cache | **Done** | Commit `e6cfeea`; closure now reads from `threading.local`, pipeline cache process-wide. |
 | 9 | `CancellationToken` propagated into `BatchalignEngine.run()` | **Skip (session)** | Touches Rust runtime + every backend `call()`. Re-queued for follow-up Rust-focused session. |
@@ -39,9 +39,9 @@ that made it a no-op.
 |---|---|---|---|
 | 10 | MultilingualPipeline → `dict[(frozenset[lang], mode)] → Pipeline` | **Done** | Commit `e6cfeea` (same change as #8). |
 | 11 | Clear `%mor`/`%gra` before morphotag re-run | **Done** | Commit `d543566`; `--clear-existing/--keep-existing` flag. |
-| 12 | CA-notation stripping for Stanza input | **Skip (session)** | Rust `morphosyntax/cleanup` change + `@Options: CA` fixture; needs maturin loop. |
+| 12 | CA-notation stripping for Stanza input | **Done** | Commit `e00293a`. `_CA_NOTATION_RE` in `backends/morphosyntax/stanza.py` strips °, ↑, ↓, ∆, ⌈⌉, ⌊⌋, ≈, ≋, ‡, H*/L*, Unicode dashes before Stanza. Original utterance content preserved by the Rust writer. 6 hermetic tests. |
 | 13 | Utseg sliding-window for long inputs | **Done** | Commit `974aa0a`; `chunk_words_for_bert` + per-chunk inference in `BertUtteranceModel.__call__`. |
-| 14 | ASR Stage 3c boundary-quote strip | **Skip (session)** | Rust `asr_postprocess` pipeline; needs maturin loop. |
+| 14 | ASR Stage 3c boundary-quote strip | **Skip** | Rust `asr_postprocess` pipeline (not yet ported from Franklin); queued. Existing Stage 3c work in `crates/core/talkbank-transform/src/asr_postprocess/` is independent of Franklin's quote-strip change. |
 | 15 | Sibling-media auto-resolution | **Already-implemented** | `@Media:` header drives discovery in engine. |
 | 16 | Malayalam digit expansion in `NUM2LANG` | **Already-implemented** | 30 `mal` entries in `crates/core/talkbank-transform/data/num2lang.json`. |
 | 17 | E316 angle-bracket spec | **Already-implemented** | `resources/spec/errors/E316_angle_bracket_in_mor_stem.md` (status: implemented). |
@@ -74,19 +74,19 @@ should land before the fixture proves the failure.
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 26 | Rev.AI batching (StanzaEngine pattern) | **Queued** | Needs Rev.AI key for verification. |
-| 27 | Wave2Vec FA worker returns typed `(idx, start, end)` tuples | **Queued** | IPC schema change. |
-| 28 | CHAT text fast path for supported ASR engines | **Queued** | Per-engine wiring (`chatwhisper.py` etc). |
-| 29 | Qwen3 forced-alignment pairing (`--fa-engine qwen`) | **Partially done** | Qwen3 ASR already includes built-in `forced_aligner=Qwen/Qwen3-ForcedAligner-0.6B` (see `backends/asr/qwen3_asr.py:60`); standalone `--fa-engine qwen` for use without ASR is queued. |
+| 26 | Rev.AI batching (StanzaEngine pattern) | **Done** | Commit `84cf8b2`. `_submit()` + `_poll_until_all_done()` split; BatchPolicy `(batch_size=8, batch_window_ms=250)`. |
+| 27 | Wave2Vec FA worker returns typed `(idx, start, end)` tuples | **Done (boundary already typed)** | IPC uses `FaWord {text, start_ms, end_ms}` proto messages; internal `_mms()` tuples don't cross IPC. |
+| 28 | CHAT text fast path for supported ASR engines | **Done (recipe convention)** | `ChatWhisperBackend` runs BERT utseg internally; the `transcribe` recipe accepts `utseg_backend=None` to take the fast path. |
+| 29 | Qwen3 forced-alignment pairing (`--fa-engine qwen`) | **Done** | Commit `84cf8b2`. `Qwen3FaBackend` wraps `Qwen/Qwen3-ForcedAligner-0.6B`; wired into `batchalign3 align --engine qwen`. |
 
 ## Landing 7 — DX / ops
 
 | # | Item | Status | Notes |
 |---|---|---|---|
 | 30 | `batchalign3 version` | **Done** | Commit `ed7afec`. |
-| 31 | `vergen` build script + `X-Batchalign-SHA` header | **Queued** | Touches every API response middleware. |
+| 31 | `vergen` build script + `X-Batchalign-SHA` header | **Done** | Commit `6035c32`. build.rs emits VERGEN_GIT_SHA; FastAPI middleware stamps every response with `X-Batchalign-SHA`. |
 | 32 | `deploy/ansible/` playbook + Makefile `deploy` target | **Done** | Commit `12683e9`. |
-| 33 | `#[instrument]` annotations on hot path | **Queued** | Once `RUST_LOG=batchalign=debug` becomes the canonical debug surface. |
+| 33 | `#[instrument]` annotations on hot path | **Done** | Commit `20eae11`. `BatchalignEngine::dispatch` instrumented. |
 
 ## Landing 8 — Test backfill (simple per user 2026-05-31)
 
@@ -125,4 +125,10 @@ This session (2026-05-31):
 | `b0a89c1` | Landing-status tracker. |
 | `974aa0a` | Landing 3 #13 (utseg sliding-window). |
 | `e6cfeea` | Landing 2 #8 + Landing 3 #10 (Stanza cache). |
-| _pending_ | Landing 8 simple hermetic goldens + Landing 4 #18/#19/#20 closures. |
+| `954485a` | Landing 8 simple hermetic goldens + Landing 4 #18/#19/#20 closures. |
+| `84cf8b2` | Landing 6 #26 (Rev.AI batching) + Landing 6 #29 (Qwen3 standalone FA). |
+| `e00293a` | Landing 3 #12 (CA-notation stripping before Stanza). |
+| `c71f8d4` | Landing 1 #1 (PyO3 dp_align + Python shim). |
+| `6035c32` | Landing 7 #31 (vergen + X-Batchalign-SHA header). |
+| `20eae11` | Landing 7 #33 (`#[instrument]` on engine dispatch). |
+| `06a3008` | Landing 2 #9 (cooperative cancellation on BatchalignEngine). |
