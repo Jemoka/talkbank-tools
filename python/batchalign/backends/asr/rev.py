@@ -36,6 +36,8 @@ class RevAI(ASR, Speaker):
         num_speakers: int = 2,
         poll_interval_s: float = 5.0,
         timeout_s: float = 3600.0,
+        batch_size: int = 8,
+        batch_window_ms: int = 250,
     ) -> None:
         key = api_key if api_key is not None else config.get_api_key("revai")
         if not key:
@@ -52,7 +54,10 @@ class RevAI(ASR, Speaker):
         # gave us alpha_2 (or alpha_3 if no alpha_2 exists, e.g.
         # `yue` for Cantonese — Rev accepts that as-is).
         self._language = _rev_code(language)
-        self._policy = BatchPolicy.one()
+        # Submit-then-poll batching: stage all jobs first, then poll in
+        # parallel so per-job latency is bounded by max(submission times)
+        # + max(transcription times) instead of summed serially.
+        self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
     def name(self) -> str:
@@ -83,12 +88,26 @@ class RevAI(ASR, Speaker):
                 "to ~/.batchalign.ini."
             )
 
-        # Submit each unique source_id exactly once; project results.
-        responses: dict[str, dict[str, Any]] = {}
+        # Submit each unique source_id exactly once, then poll all in
+        # parallel (Stanza-batching parity per the BA3 cutover plan).
+        # Submission is cheap (one HTTP POST per file); the long wait is
+        # Rev's server-side transcription. Polling sequentially after
+        # batch-submission keeps each poll cycle covering every in-flight
+        # job, so total wall time ≈ max(transcription_time) + small poll
+        # overhead instead of sum(per-job transcription_time).
+        unique_items: list[Any] = []
+        seen: set[str] = set()
         for item in batch:
-            if item.source_id in responses:
+            if item.source_id in seen:
                 continue
-            responses[item.source_id] = self._submit_and_wait(item.source_id, item.audio)
+            seen.add(item.source_id)
+            unique_items.append(item)
+
+        job_ids = {
+            it.source_id: self._submit(it.source_id, it.audio)
+            for it in unique_items
+        }
+        responses: dict[str, dict[str, Any]] = self._poll_until_all_done(job_ids)
 
         outputs: list[Any] = []
         for item in batch:
@@ -117,25 +136,17 @@ class RevAI(ASR, Speaker):
 
     # ----- HTTP submission ----------------------------------------------
 
-    def _submit_and_wait(self, source_id: Any, audio: Any) -> dict[str, Any]:
-        """Upload the audio, poll until ``transcribed``, return parsed JSON.
+    def _submit(self, source_id: Any, audio: Any) -> str:
+        """Upload the audio, return the Rev job ID (no polling).
 
-        Uploads the ORIGINAL media file when `source_id` is a real path (Rev
-        gets byte-identical audio to what BA2 sends, so the transcript is the
-        same); otherwise stages a WAV from the decoded PCM. Re-encoding PCM
-        can perturb Rev's output on tone-sensitive audio (e.g. Mandarin), so
-        the original-file path is the parity path.
-
-        Submit options mirror BA2's `RevEngine`: pass `language`, and (only for
-        en/es, which Rev allows) `speakers_count` + `skip_postprocessing`
-        (True for en/fr, where BA2 re-segments with CHATUtterance).
+        Splits the old _submit_and_wait so a whole batch can be uploaded
+        before any polling starts (batch ASR per the BA3 cutover plan).
+        Upload semantics unchanged from the original.
         """
         import os
         import tempfile
         from pathlib import Path
-        from rev_ai import JobStatus  # type: ignore[import-not-found]
 
-        # Prefer the original media file (byte-identical to BA2's upload).
         orig = str(source_id) if source_id is not None else ""
         tmp_path = ""
         if orig and Path(orig).is_file():
@@ -147,16 +158,11 @@ class RevAI(ASR, Speaker):
                 tmp_path = tmp.name
             upload_path = tmp_path
 
-        # Mirror BA2's conditional submit: `speakers_count` (and
-        # `skip_postprocessing`) are only accepted by Rev for en/es/fr/pt, and
-        # BA2 only sets them when the language contains "en" or "es". For other
-        # languages (cmn, yue, …) it sends just `language`.
         submit_kwargs: dict[str, Any] = {"metadata": "batchalign"}
         if self._language:
             submit_kwargs["language"] = self._language
             if "en" in self._language or "es" in self._language:
                 submit_kwargs["speakers_count"] = self._num_speakers
-                # Skip Rev's own postproc only where BA2 re-segments (en/fr).
                 submit_kwargs["skip_postprocessing"] = self._language in ("en", "fr")
         try:
             job = self._client.submit_job_local_file(upload_path, **submit_kwargs)
@@ -166,19 +172,43 @@ class RevAI(ASR, Speaker):
                     os.unlink(tmp_path)
                 except OSError:
                     pass
+        return str(job.id)
 
+    def _poll_until_all_done(self, job_ids: dict[str, str]) -> dict[str, dict[str, Any]]:
+        """Poll all submitted jobs in parallel until each is TRANSCRIBED.
+
+        Maintains a `pending` dict; each poll cycle checks every job once
+        and harvests any that completed. Total wall time ≈
+        max(per-job transcription time) instead of the sum.
+        """
+        from rev_ai import JobStatus  # type: ignore[import-not-found]
+
+        pending = dict(job_ids)  # source_id -> job_id
+        results: dict[str, dict[str, Any]] = {}
         deadline = time.monotonic() + self._timeout
-        while True:
-            details = self._client.get_job_details(job.id)
-            status = getattr(details, "status", None)
-            if status == JobStatus.TRANSCRIBED:
+        while pending:
+            for source_id, job_id in list(pending.items()):
+                details = self._client.get_job_details(job_id)
+                status = getattr(details, "status", None)
+                if status == JobStatus.TRANSCRIBED:
+                    results[source_id] = self._client.get_transcript_json(job_id)
+                    del pending[source_id]
+                elif status == JobStatus.FAILED:
+                    raise RuntimeError(f"Rev.AI job {job_id} failed: {details!r}")
+            if not pending:
                 break
-            if status == JobStatus.FAILED:
-                raise RuntimeError(f"Rev.AI job {job.id} failed: {details!r}")
             if time.monotonic() > deadline:
-                raise TimeoutError(f"Rev.AI job {job.id} did not finish in {self._timeout}s")
+                raise TimeoutError(
+                    f"Rev.AI jobs did not finish in {self._timeout}s: "
+                    f"still-pending={list(pending.values())}"
+                )
             time.sleep(self._poll)
-        return self._client.get_transcript_json(job.id)
+        return results
+
+    def _submit_and_wait(self, source_id: Any, audio: Any) -> dict[str, Any]:
+        """Single-job backwards-compat shim (calls _submit + _poll_until_all_done)."""
+        job_id = self._submit(source_id, audio)
+        return self._poll_until_all_done({str(source_id): job_id})[str(source_id)]
 
 
 def _rev_code(lang: LanguageCode) -> str:

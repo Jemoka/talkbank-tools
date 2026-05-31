@@ -82,6 +82,7 @@ from batchalign.backends import (  # noqa: E402
     Wav2Vec2FaBackend,
     WhisperFaBackend,
     WhisperXFaBackend,
+    Qwen3FaBackend,
     # Morphosyntax / speaker / utterance-seg / translate.
     StanzaBackend,
     PyannoteBackend,
@@ -140,6 +141,7 @@ __all__ = [
     "Wav2Vec2FaBackend",
     "WhisperFaBackend",
     "WhisperXFaBackend",
+    "Qwen3FaBackend",
     # morphosyntax / speaker / utseg / translate
     "StanzaBackend",
     "PyannoteBackend",

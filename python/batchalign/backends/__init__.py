@@ -39,7 +39,7 @@ from batchalign.backends.asr import (
     WhisperBackend,
     WhisperXBackend,
 )
-from batchalign.backends.fa import Wav2Vec2FaBackend, WhisperFaBackend, WhisperXFaBackend
+from batchalign.backends.fa import Wav2Vec2FaBackend, WhisperFaBackend, WhisperXFaBackend, Qwen3FaBackend
 from batchalign.backends.morphosyntax import StanzaBackend
 from batchalign.backends.speaker import PyannoteBackend
 from batchalign.backends.translate import (
@@ -81,6 +81,7 @@ __all__ = [
     "Wav2Vec2FaBackend",
     "WhisperFaBackend",
     "WhisperXFaBackend",
+    "Qwen3FaBackend",
     # Morphosyntax
     "StanzaBackend",
     # Speaker

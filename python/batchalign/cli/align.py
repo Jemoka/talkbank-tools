@@ -31,6 +31,7 @@ class FaEngine(str, Enum):
     wav2vec = "wav2vec"        # torchaudio MMS_FA (BA2 --wav2vec)
     whisper_fa = "whisper_fa"  # Whisper cross-attention DTW (BA2 --whisper_fa)
     whisperx = "whisperx"      # WhisperX (no BA2 oracle on this box)
+    qwen = "qwen"              # Qwen3-ForcedAligner-0.6B (BA3 cutover Landing 6 #29)
 
 
 def register(app: typer.Typer) -> None:
@@ -81,6 +82,12 @@ def register(app: typer.Typer) -> None:
             elif engine is FaEngine.whisper_fa:
                 # Whisper cross-attention DTW aligner (BA2 --whisper_fa).
                 fa_backend = ba.WhisperFaBackend(model=model, device=device)
+            elif engine is FaEngine.qwen:
+                # Qwen3 ForcedAligner standalone (no ASR pass).
+                fa_backend = ba.Qwen3FaBackend(
+                    model_id=model or "Qwen/Qwen3-ForcedAligner-0.6B",
+                    device=device or "cpu",
+                )
             else:
                 fa_backend = ba.WhisperXFaBackend(model=model or "large-v2")
             pipeline = ba.recipes.align(fa_backend=fa_backend)
