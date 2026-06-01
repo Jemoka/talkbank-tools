@@ -81,10 +81,12 @@ class Qwen3FaBackend(FA):
         return self._policy
 
     def call(self, batch: list[Any]) -> list[Any]:
+        import numpy as np  # type: ignore[import-not-found]
         from batchalign._core.proto import (
+            AsrSegment,
+            AsrWord,
             FaInput,
             FaOutput,
-            FaWord,
         )
 
         outputs: list[Any] = []
@@ -93,37 +95,79 @@ class Qwen3FaBackend(FA):
                 raise TypeError(
                     f"Qwen3FaBackend does not handle: {type(item).__name__}"
                 )
-            # Each FaInput carries the per-segment reference text and the
-            # audio chunk. Pass to the aligner.
-            spans = self._align_segment(item)
-            outputs.append(FaOutput(source_id=item.source_id, words=spans))
+            aligned_utts = self._align_item(item, np, AsrSegment, AsrWord)
+            outputs.append(FaOutput(source_id=item.source_id, utterances=aligned_utts))
         return outputs
 
-    def _align_segment(self, item: Any) -> list[Any]:
-        """Run the Qwen3 forced aligner on one FaInput; return FaWord list."""
-        from batchalign._core.proto import FaWord
+    def _align_item(
+        self,
+        item: Any,
+        np: Any,
+        AsrSegment: type,
+        AsrWord: type,
+    ) -> list[Any]:
+        """Run Qwen3's forced aligner once per utterance, return refined `AsrSegment`s.
 
-        words = [w for w in getattr(item, "words", []) if w]
-        if not words:
+        The qwen_asr `forced_aligner.align(audio=..., reference=...)` API
+        returns a list of `ForcedAlignItem`s with `.text`, `.start` (s),
+        `.end` (s) per reference word.
+        """
+        if not item.utterances:
             return []
-        reference = " ".join(words)
-        # The qwen_asr `align` method signature, per
-        # `qwen_asr/forced_aligner.py`, returns a list of
-        # ForcedAlignItem objects with .text, .start (s), .end (s).
-        aligned = self._model.forced_aligner.align(
-            audio=item.audio,
-            reference=reference,
-        )
-        out: list[Any] = []
-        for ali in aligned:
-            out.append(
-                FaWord(
-                    text=ali.text,
-                    start_ms=int(round(ali.start * 1000)),
-                    end_ms=int(round(ali.end * 1000)),
+        wave = np.frombuffer(item.audio.pcm_f32le, dtype=np.float32).copy()
+        sr = int(item.audio.sample_rate)
+        aligned: list[Any] = []
+        for utt in item.utterances:
+            words = [w for w in utt.words if w.text]
+            w0 = int(getattr(utt, "start_ms", 0) or 0)
+            w1 = int(getattr(utt, "end_ms", 0) or 0)
+            if not words or w1 <= w0:
+                aligned.append(
+                    AsrSegment(
+                        start_ms=w0, end_ms=w1, text=utt.text,
+                        speaker=getattr(utt, "speaker", None), words=utt.words,
+                    )
+                )
+                continue
+            lo = int(w0 * sr / 1000)
+            hi = int(w1 * sr / 1000)
+            chunk = wave[lo:hi]
+            reference = " ".join(w.text for w in words)
+            try:
+                results = self._model.forced_aligner.align(
+                    audio=chunk, reference=reference,
+                )
+            except Exception:
+                aligned.append(
+                    AsrSegment(
+                        start_ms=w0, end_ms=w1, text=utt.text,
+                        speaker=getattr(utt, "speaker", None), words=utt.words,
+                    )
+                )
+                continue
+            out_words: list[Any] = []
+            for w, ali in zip(words, results):
+                s = w0 + int(round(ali.start * 1000))
+                e = w0 + int(round(ali.end * 1000))
+                # Bound to utterance window (matches Wav2Vec2 behavior).
+                s = max(s, w0)
+                e = min(e, w1)
+                if s >= e:
+                    s, e = 0, 0
+                out_words.append(
+                    AsrWord(text=w.text, start_ms=s, end_ms=e, confidence=None)
+                )
+            timed = [w for w in out_words if w.end_ms > 0]
+            aligned.append(
+                AsrSegment(
+                    start_ms=timed[0].start_ms if timed else w0,
+                    end_ms=timed[-1].end_ms if timed else w1,
+                    text=utt.text,
+                    speaker=getattr(utt, "speaker", None),
+                    words=out_words,
                 )
             )
-        return out
+        return aligned
 
 
 __all__ = ["Qwen3FaBackend"]
