@@ -157,10 +157,15 @@ fn build_chat_from_asr(
         });
     }
 
+    // Emit `@Media: <source_id>, audio` so downstream consumers
+    // (BA2's align, third-party tools) can resolve the audio file.
+    // BA3 + our align resolve by filename stem regardless, but BA2's
+    // align refuses input without an explicit `@Media:` tier.
+    // Bug #11 fix (parity test 2026-05-31).
     let desc = TranscriptDescription {
         langs: vec![lang_code],
         participants,
-        media_name: None,
+        media_name: Some(source_id.as_str().to_string()),
         media_type: Some("audio".to_string()),
         utterances,
         write_wor: false,
