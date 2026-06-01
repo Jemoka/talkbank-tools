@@ -242,6 +242,10 @@ fn build_chat_from_utterances(
         })
         .collect();
 
+    // Preserve @Media on the rebuilt CHAT — UtSeg fires AFTER ASR, and
+    // ASR sets media_name = source_id stem (Bug #11 / commit 850c87d).
+    // Without forwarding it here, the rebuilt CHAT loses the @Media line
+    // and downstream BA2 align refuses to consume our output.
     let desc = TranscriptDescription {
         langs: if langs.is_empty() {
             vec!["eng".to_string()]
@@ -249,7 +253,7 @@ fn build_chat_from_utterances(
             langs.to_vec()
         },
         participants,
-        media_name: None,
+        media_name: Some(source_id.as_str().to_string()),
         media_type: Some("audio".to_string()),
         utterances,
         write_wor: false,
