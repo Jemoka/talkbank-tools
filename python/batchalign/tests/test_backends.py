@@ -144,8 +144,6 @@ def test_concrete_backend_classes_importable():
         PyannoteBackend,
         GoogleTranslateBackend,
         RevAI,
-        VllmAsrBackend,
-        VllmTranslateBackend,
         TencentAsrBackend,
         AliyunAsrBackend,
         FunAudioBackend,
@@ -158,8 +156,6 @@ def test_concrete_backend_classes_importable():
         PyannoteBackend,
         GoogleTranslateBackend,
         RevAI,
-        VllmAsrBackend,
-        VllmTranslateBackend,
         TencentAsrBackend,
         AliyunAsrBackend,
         FunAudioBackend,
@@ -175,13 +171,6 @@ def test_whisper_declared_tasks_via_class_mro():
     from batchalign.backends import WhisperBackend
     assert issubclass(WhisperBackend, ASR)
     assert not issubclass(WhisperBackend, FA)
-
-
-def test_whisperx_declared_tasks_via_class_mro():
-    # WhisperX provides both ASR and forced alignment in one engine.
-    from batchalign.backends import WhisperXBackend
-    assert issubclass(WhisperXBackend, ASR)
-    assert issubclass(WhisperXBackend, FA)
 
 
 def test_stanza_declared_tasks_via_class_mro():

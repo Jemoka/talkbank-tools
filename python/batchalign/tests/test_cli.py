@@ -45,10 +45,12 @@ def _help(cmd: str) -> str:
 
 
 def test_transcribe_exposes_all_ba2_asr_engines():
-    # parity.md: every engine BA2 supported must be reachable. The transcribe
-    # CLI must offer rev / whisperx / whisper / openai, plus the vLLM path.
+    # parity.md: every engine BA2 supported must be reachable. The
+    # transcribe CLI must offer rev / whisper / openai (whisperx + vllm
+    # were dropped; the cloud engines plus chatwhisper / funaudio /
+    # qwen3 cover the remaining surface).
     help_text = _help("transcribe")
-    for engine in ("rev", "whisperx", "whisper", "openai", "vllm"):
+    for engine in ("rev", "whisper", "openai"):
         assert engine in help_text, f"transcribe --engine missing {engine}"
     assert "--lang" in help_text
     assert "--engine" in help_text
@@ -57,7 +59,7 @@ def test_transcribe_exposes_all_ba2_asr_engines():
 def test_align_exposes_fa_engines():
     help_text = _help("align")
     assert "--engine" in help_text
-    for engine in ("wav2vec", "whisperx"):
+    for engine in ("wav2vec", "whisper_fa", "qwen"):
         assert engine in help_text, f"align --engine missing {engine}"
 
 
@@ -74,7 +76,7 @@ def test_asr_engine_enum_members():
     from batchalign.cli.transcribe import AsrEngine
 
     assert {e.value for e in AsrEngine} == {
-        "rev", "whisperx", "whisper", "chatwhisper", "openai", "vllm",
+        "rev", "whisper", "chatwhisper", "openai",
         "funaudio", "tencent", "qwen3",
     }
 
@@ -164,12 +166,24 @@ def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
     media.write_bytes(b"")
 
     runner = CliRunner()
+    # Patch CHATUtteranceBackend with a no-op too — transcribe ALWAYS
+    # segments now (the `--no-segment` flag was removed; the recipe
+    # only skips the segmenter when the engine self-segments, which
+    # rev does not). Without this stub the test would try to fetch
+    # `talkbank/CHATUtterance-en` from HF at runtime.
+    class FakeUtseg:
+        def __init__(self, *a, **kw): pass
+        @property
+        def name(self): return "fake-utseg"
+        @property
+        def batch_policy(self):
+            from batchalign.backends.base import BatchPolicy
+            return BatchPolicy.one()
+        def call(self, batch): return []
+    monkeypatch.setattr(ba, "CHATUtteranceBackend", FakeUtseg)
+
     result = runner.invoke(app, [
-        # `--no-segment` keeps CHATUtteranceBackend (which would fetch
-        # talkbank/CHATUtterance-en at runtime) out of the path so the
-        # test runs hermetically without network/HF cache permissions.
-        "transcribe", "--engine", "rev", "--lang", "eng",
-        "--no-segment", str(media),
+        "transcribe", "--engine", "rev", "--lang", "eng", str(media),
     ])
     # The pipeline returns empty outcomes → exit_code 0, no failures.
     assert result.exit_code == 0, result.output

@@ -28,25 +28,28 @@ from .tui import Interface, Task
 
 
 class AsrEngine(str, Enum):
-    """ASR engine selection (BA2 parity set + vLLM)."""
+    """ASR engine selection (BA2 parity set)."""
 
     rev = "rev"            # Rev.AI cloud (ASR + its own diarization)
-    whisperx = "whisperx"  # WhisperX (faster-whisper + alignment)
     whisper = "whisper"    # HF transformers Whisper
     chatwhisper = "chatwhisper"  # TalkBank CHATWhisper + BERT utterance segmenter (BA2 default)
     openai = "openai"      # openai-whisper package
-    vllm = "vllm"          # vLLM-served Whisper via the OpenAI audio API
     funaudio = "funaudio"  # FunASR SenseVoiceSmall / paraformer-zh (BA2 FunAudioEngine)
     tencent = "tencent"    # Tencent Cloud ASR (BA2 TencentEngine)
     qwen3 = "qwen3"        # Qwen3-ASR (Alibaba open-weight; tbtbt parity)
 
 
+# Engines that ship internal sentence segmentation — skip CHATUtterance
+# BERT pairing for these, since they'd double-segment the output. Currently
+# only ChatWhisper qualifies (BertUtteranceModel runs inside the ASR loop).
+def _engine_self_segments(engine: AsrEngine) -> bool:
+    return engine is AsrEngine.chatwhisper
+
+
 # Sensible per-engine default models (BA2's defaults where they exist).
 _DEFAULT_MODEL = {
-    AsrEngine.whisperx: "large-v2",
     AsrEngine.whisper: "openai/whisper-large-v3",
     AsrEngine.openai: "turbo",
-    AsrEngine.vllm: "openai/whisper-large-v3",
     AsrEngine.funaudio: "FunAudioLLM/SenseVoiceSmall",
     AsrEngine.qwen3: "Qwen/Qwen3-ASR-1.7B",
 }
@@ -67,7 +70,7 @@ def register(app: typer.Typer) -> None:
         ),
         engine: AsrEngine = typer.Option(
             AsrEngine.rev, "--engine", case_sensitive=False,
-            help="ASR engine: rev | whisperx | whisper | openai | vllm.",
+            help="ASR engine: rev | whisper | chatwhisper | openai | funaudio | tencent | qwen3.",
         ),
         lang: str = typer.Option(
             ...,
@@ -77,11 +80,6 @@ def register(app: typer.Typer) -> None:
         model: str | None = typer.Option(None, "--model", help="ASR model id (engine-specific default if omitted)."),
         diarize: bool = typer.Option(False, "--diarize/--no-diarize", help="Run speaker diarization (ignored for rev, which diarizes itself)."),
         num_speakers: int = typer.Option(2, "--num-speakers", "-n", help="Expected speaker count (diarization hint)."),
-        vllm_url: str = typer.Option("http://localhost:8000/v1", "--vllm-url", help="Base URL for the vLLM OpenAI-compatible server (engine=vllm)."),
-        segment: bool = typer.Option(
-            True, "--segment/--no-segment",
-            help="Run BA2's CHATUtterance BERT utterance segmentation after ASR.",
-        ),
         force_cpu: bool = typer.Option(
             False, "--force-cpu",
             help="Run the ASR model on CPU (BA2's --force-cpu). Needed on Apple "
@@ -114,18 +112,20 @@ def register(app: typer.Typer) -> None:
         ) as ui:
             device = "cpu" if force_cpu else None
             asr_backend, rev_diarizes = _build_asr(
-                ba, engine, model, lang_code, vllm_url, num_speakers, device
+                ba, engine, model, lang_code, num_speakers, device
             )
             # Rev does its own diarization; for the Whisper family add Pyannote
             # when --diarize is requested.
             speaker_backend: Any = None
             if diarize and not rev_diarizes:
                 speaker_backend = ba.PyannoteBackend()
-            # BA2 pairing: ASR → CHATUtterance BERT segmentation + disfluency/
-            # retrace cleanup, applied uniformly to every ASR engine's word
-            # stream (rev, chatwhisper, …) when a segmenter model exists.
+            # Always pair the ASR with the BA2 CHATUtterance BERT
+            # segmenter — every transcribe path must produce one
+            # utterance per sentence. ChatWhisper does segmentation
+            # internally; for it we leave utseg_backend=None so the
+            # recipe takes the fast path.
             utseg_backend: Any = None
-            if segment:
+            if not _engine_self_segments(engine):
                 utseg_backend = _build_utseg(ba, lang_code, engine)
             pipeline = ba.recipes.transcribe(
                 asr_backend=asr_backend,
@@ -146,7 +146,6 @@ def _build_asr(
     engine: AsrEngine,
     model: str | None,
     lang: LanguageCode,
-    vllm_url: str,
     num_speakers: int = 2,
     device: str | None = None,
 ):
@@ -159,16 +158,12 @@ def _build_asr(
     m = model or _DEFAULT_MODEL.get(engine)
     if engine is AsrEngine.rev:
         return ba.RevAI(language=lang, num_speakers=num_speakers), True
-    if engine is AsrEngine.whisperx:
-        return ba.WhisperXBackend(model=m, language=lang, device=device), False
     if engine is AsrEngine.whisper:
         return ba.WhisperBackend(model=m, language=lang, device=device), False
     if engine is AsrEngine.chatwhisper:
         return ba.ChatWhisperBackend(language=lang, device=device), False
     if engine is AsrEngine.openai:
         return ba.OpenAIWhisperBackend(model=m, language=lang, device=device), False
-    if engine is AsrEngine.vllm:
-        return ba.VllmAsrBackend(model=m, language=lang, base_url=vllm_url), False
     if engine is AsrEngine.funaudio:
         return ba.FunAudioBackend(
             model=m or "FunAudioLLM/SenseVoiceSmall",

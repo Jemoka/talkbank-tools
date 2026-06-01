@@ -17,7 +17,6 @@ class TranslateEngine(str, Enum):
     """Translation backend selection (tbtbt-parity superset)."""
 
     google = "google"        # Google Cloud Translate / googletrans free fallback
-    vllm = "vllm"            # OpenAI-compatible vLLM endpoint
     nllb = "nllb"            # facebook/nllb-200-distilled-1.3B local model
     tencent = "tencent"      # Tencent Cloud TMT (TextTranslate); does NOT support yue
     aliyun = "aliyun"        # Aliyun MT General; supports yue first-class
@@ -61,8 +60,6 @@ def register(app: typer.Typer) -> None:
             backend: Any
             if engine is TranslateEngine.google:
                 backend = ba.GoogleTranslateBackend(target=target)
-            elif engine is TranslateEngine.vllm:
-                backend = ba.VllmTranslateBackend(target=target)
             elif engine is TranslateEngine.nllb:
                 backend = ba.NllbTranslateBackend(target=target)
             elif engine is TranslateEngine.tencent:

@@ -72,9 +72,7 @@ from batchalign.backends import (  # noqa: E402
     # plus the Chinese/Cantonese cloud + local engines).
     WhisperBackend,
     ChatWhisperBackend,
-    WhisperXBackend,
     OpenAIWhisperBackend,
-    VllmAsrBackend,
     RevAI,
     AliyunAsrBackend,
     FunAsrBackend,
@@ -85,7 +83,6 @@ from batchalign.backends import (  # noqa: E402
     # Forced alignment.
     Wav2Vec2FaBackend,
     WhisperFaBackend,
-    WhisperXFaBackend,
     Qwen3FaBackend,
     # Morphosyntax / speaker / utterance-seg / translate.
     StanzaBackend,
@@ -93,7 +90,6 @@ from batchalign.backends import (  # noqa: E402
     CantoneseWordSegBackend,
     CHATUtteranceBackend,
     GoogleTranslateBackend,
-    VllmTranslateBackend,
     NllbTranslateBackend,
     TencentTmtBackend,
     AliyunTranslateBackend,
@@ -131,9 +127,7 @@ __all__ = [
     # concrete backends — ASR
     "WhisperBackend",
     "ChatWhisperBackend",
-    "WhisperXBackend",
     "OpenAIWhisperBackend",
-    "VllmAsrBackend",
     "RevAI",
     "AliyunAsrBackend",
     "FunAsrBackend",
@@ -144,7 +138,6 @@ __all__ = [
     # FA
     "Wav2Vec2FaBackend",
     "WhisperFaBackend",
-    "WhisperXFaBackend",
     "Qwen3FaBackend",
     # morphosyntax / speaker / utseg / translate
     "StanzaBackend",
@@ -152,7 +145,6 @@ __all__ = [
     "CantoneseWordSegBackend",
     "CHATUtteranceBackend",
     "GoogleTranslateBackend",
-    "VllmTranslateBackend",
     "NllbTranslateBackend",
     "TencentTmtBackend",
     "AliyunTranslateBackend",

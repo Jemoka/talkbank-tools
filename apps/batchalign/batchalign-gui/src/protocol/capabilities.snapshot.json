@@ -348,7 +348,7 @@
       "kwargs": [
         {
           "annotation": "'str'",
-          "default": "'pyannote/speaker-diarization-3.1'",
+          "default": "'talkbank/dia-fork'",
           "name": "model",
           "required": false
         },
@@ -663,96 +663,6 @@
         "Translate"
       ]
     },
-    "VllmAsrBackend": {
-      "doc": "ASR via a vLLM server exposing Whisper through the OpenAI audio API.\n\nThe OpenAI Audio API requires ISO-639-1 alpha_2 for `language=`.\nLanguages with no alpha_2 (e.g. `yue`) are rejected at\nconstruction time with a clear error.",
-      "kwargs": [
-        {
-          "annotation": "'str'",
-          "default": "'openai/whisper-large-v3'",
-          "name": "model",
-          "required": false
-        },
-        {
-          "annotation": "'LanguageCode'",
-          "default": null,
-          "name": "language",
-          "required": true
-        },
-        {
-          "annotation": "'str'",
-          "default": "'http://localhost:8000/v1'",
-          "name": "base_url",
-          "required": false
-        },
-        {
-          "annotation": "'str'",
-          "default": "'EMPTY'",
-          "name": "api_key",
-          "required": false
-        },
-        {
-          "annotation": "'int'",
-          "default": "32",
-          "name": "batch_size",
-          "required": false
-        },
-        {
-          "annotation": "'int'",
-          "default": "50",
-          "name": "batch_window_ms",
-          "required": false
-        }
-      ],
-      "module": "batchalign.backends.asr.vllm",
-      "tasks": [
-        "ASR"
-      ]
-    },
-    "VllmTranslateBackend": {
-      "doc": "Translation via a vLLM-served chat model with an OpenAI-compatible API.",
-      "kwargs": [
-        {
-          "annotation": "'str'",
-          "default": "'eng'",
-          "name": "target",
-          "required": false
-        },
-        {
-          "annotation": "'str'",
-          "default": "'Qwen/Qwen2.5-7B-Instruct'",
-          "name": "model",
-          "required": false
-        },
-        {
-          "annotation": "'str'",
-          "default": "'http://localhost:8000/v1'",
-          "name": "base_url",
-          "required": false
-        },
-        {
-          "annotation": "'str'",
-          "default": "'EMPTY'",
-          "name": "api_key",
-          "required": false
-        },
-        {
-          "annotation": "'int'",
-          "default": "16",
-          "name": "batch_size",
-          "required": false
-        },
-        {
-          "annotation": "'int'",
-          "default": "50",
-          "name": "batch_window_ms",
-          "required": false
-        }
-      ],
-      "module": "batchalign.backends.translate.vllm",
-      "tasks": [
-        "Translate"
-      ]
-    },
     "Wav2Vec2FaBackend": {
       "doc": "Forced alignment via torchaudio MMS_FA (BA2's `--wav2vec`).",
       "kwargs": [
@@ -863,110 +773,6 @@
       "tasks": [
         "FA"
       ]
-    },
-    "WhisperXBackend": {
-      "doc": "Local WhisperX backend providing both ASR and FA.\n\nThe same loaded model serves both tasks: ``call()`` dispatches on\nthe input variant. Alignment uses ``whisperx.load_align_model`` for\nthe requested language and ``whisperx.align`` against the segments\n(either freshly transcribed for ASR, or pre-existing for FA).",
-      "kwargs": [
-        {
-          "annotation": "'str'",
-          "default": "'large-v2'",
-          "name": "model",
-          "required": false
-        },
-        {
-          "annotation": "'LanguageCode'",
-          "default": null,
-          "name": "language",
-          "required": true
-        },
-        {
-          "annotation": "'str | None'",
-          "default": "None",
-          "name": "device",
-          "required": false
-        },
-        {
-          "annotation": "'str'",
-          "default": "'float16'",
-          "name": "compute_type",
-          "required": false
-        },
-        {
-          "annotation": "'int'",
-          "default": "16",
-          "name": "batch_size",
-          "required": false
-        },
-        {
-          "annotation": "'int'",
-          "default": "50",
-          "name": "batch_window_ms",
-          "required": false
-        },
-        {
-          "annotation": "'float'",
-          "default": "60.0",
-          "name": "chunk_length_s",
-          "required": false
-        }
-      ],
-      "module": "batchalign.backends.asr.whisperx",
-      "tasks": [
-        "ASR",
-        "FA"
-      ]
-    },
-    "WhisperXFaBackend": {
-      "doc": "Local WhisperX backend providing both ASR and FA.\n\nThe same loaded model serves both tasks: ``call()`` dispatches on\nthe input variant. Alignment uses ``whisperx.load_align_model`` for\nthe requested language and ``whisperx.align`` against the segments\n(either freshly transcribed for ASR, or pre-existing for FA).",
-      "kwargs": [
-        {
-          "annotation": "'str'",
-          "default": "'large-v2'",
-          "name": "model",
-          "required": false
-        },
-        {
-          "annotation": "'LanguageCode'",
-          "default": null,
-          "name": "language",
-          "required": true
-        },
-        {
-          "annotation": "'str | None'",
-          "default": "None",
-          "name": "device",
-          "required": false
-        },
-        {
-          "annotation": "'str'",
-          "default": "'float16'",
-          "name": "compute_type",
-          "required": false
-        },
-        {
-          "annotation": "'int'",
-          "default": "16",
-          "name": "batch_size",
-          "required": false
-        },
-        {
-          "annotation": "'int'",
-          "default": "50",
-          "name": "batch_window_ms",
-          "required": false
-        },
-        {
-          "annotation": "'float'",
-          "default": "60.0",
-          "name": "chunk_length_s",
-          "required": false
-        }
-      ],
-      "module": "batchalign.backends.asr.whisperx",
-      "tasks": [
-        "ASR",
-        "FA"
-      ]
     }
   },
   "backends_by_task": {
@@ -980,19 +786,14 @@
       "QwenAsrBackend",
       "RevAI",
       "TencentAsrBackend",
-      "VllmAsrBackend",
-      "WhisperBackend",
-      "WhisperXBackend",
-      "WhisperXFaBackend"
+      "WhisperBackend"
     ],
     "AVQI": [],
     "Coref": [],
     "FA": [
       "Qwen3FaBackend",
       "Wav2Vec2FaBackend",
-      "WhisperFaBackend",
-      "WhisperXBackend",
-      "WhisperXFaBackend"
+      "WhisperFaBackend"
     ],
     "Morphosyntax": [
       "StanzaBackend"
@@ -1006,8 +807,7 @@
       "AliyunTranslateBackend",
       "GoogleTranslateBackend",
       "NllbTranslateBackend",
-      "TencentTmtBackend",
-      "VllmTranslateBackend"
+      "TencentTmtBackend"
     ],
     "UtSeg": [
       "CHATUtteranceBackend",

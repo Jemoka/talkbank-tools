@@ -8,9 +8,7 @@ from __future__ import annotations
 
 from batchalign.backends.asr.whisper import WhisperBackend
 from batchalign.backends.asr.chatwhisper import ChatWhisperBackend
-from batchalign.backends.asr.whisperx import WhisperXBackend
 from batchalign.backends.asr.rev import RevAI
-from batchalign.backends.asr.vllm import VllmAsrBackend
 from batchalign.backends.asr.openai_whisper import OpenAIWhisperBackend
 from batchalign.backends.asr.qwen import QwenAsrBackend
 from batchalign.backends.asr.tencent import TencentAsrBackend
@@ -22,9 +20,7 @@ from batchalign.backends.asr.qwen3_asr import Qwen3AsrBackend
 __all__ = [
     "WhisperBackend",
     "ChatWhisperBackend",
-    "WhisperXBackend",
     "RevAI",
-    "VllmAsrBackend",
     "OpenAIWhisperBackend",
     "QwenAsrBackend",
     "TencentAsrBackend",
