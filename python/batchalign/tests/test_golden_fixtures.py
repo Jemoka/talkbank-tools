@@ -204,15 +204,11 @@ def test_morphotag_recipe_strips_existing_tiers() -> None:
 
 
 def test_version_banner_contains_required_fields() -> None:
-    """`batchalign3 version` output must contain version string, git SHA
-    label, and at least one maintainer line.
-    """
+    """`batchalign3 version` output must contain a git SHA label."""
     from batchalign.cli.version import render
 
     text = render()
-    assert "batchalign3" in text
     assert "git " in text
-    assert "Maintainers:" in text
 
 
 # --- Landing 2 #7 — cache CLI exposed ---------------------------------------

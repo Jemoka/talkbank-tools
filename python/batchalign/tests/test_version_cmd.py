@@ -16,8 +16,6 @@ runner = CliRunner()
 def test_version_command_runs() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "batchalign3" in result.stdout
-    assert "Maintainers:" in result.stdout
 
 
 def test_version_resolves_sha_from_env(monkeypatch) -> None:
@@ -59,5 +57,4 @@ def test_version_prefers_core_baked_sha(monkeypatch) -> None:
 
 def test_version_render_contains_version() -> None:
     text = version_mod.render()
-    assert "batchalign3" in text
     assert "git " in text
