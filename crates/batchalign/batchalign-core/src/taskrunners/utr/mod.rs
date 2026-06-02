@@ -1,9 +1,34 @@
-//! `UtrTaskRunner` — Utterance Timing Recovery.
+//! `UtrTaskRunner` — Utterance Timing Recovery: pre-pass for FA on
+//! fully-untimed CHATs.
 //!
-//! UTR runs an ASR-shaped backend over the whole audio, then Hirschberg-
-//! aligns the CHAT word stream against the ASR token stream to inject
-//! per-utterance bullet timings on transcripts that arrived without any.
-//! It is a pre-pass for FA on hand-authored or post-edited transcripts.
+//! Decodes the transcript's sibling audio via `crate::utils::prepare_pcm`,
+//! dispatches a `TaskInput::Utr` (a serde-transparent newtype over
+//! `AsrInput`) to whichever ASR backend has opted into the `UTR` marker,
+//! converts the returned `AsrOutput` segments to a flat
+//! `Vec<AsrTimingToken>` stream (with a 20 ms zero-duration filter), and
+//! runs a Hirschberg-DP strategy (`GlobalUtr` or `TwoPassOverlapUtr`,
+//! auto-picked by CA / `+<` marker presence) to inject
+//! `BulletSource::Utr` utterance bullets on every untimed utterance.
+//! Decision provenance is emitted as `%xalign` dependent tiers.
+//!
+//! Behavioural parity targets the tbtbt UTR stack:
+//! - Strategy core: `tbtbt/crates/batchalign/src/chat_ops/fa/utr.rs`
+//!   (GlobalUtr — flatten + exact-subseq fast path + Hirschberg fallback +
+//!   monotonicity post-pass).
+//! - Overlap-aware variant: `chat_ops/fa/utr/two_pass.rs` +
+//!   `chat_ops/fa/utr/overlap_markers.rs` (TwoPassOverlapUtr — excludes
+//!   `+<` / `⌊`-bearing utterances from pass 1, recovers their timing in
+//!   pass 2 via predecessor-window adaptive search).
+//! - Token preparation: `runner/dispatch/utr.rs::asr_response_to_utr_tokens`
+//!   (20 ms zero-duration filter — Whisper's DTW grid produces them for
+//!   short backchannels and they break the DP).
+//!
+//! The Hirschberg DP itself is the shared
+//! `talkbank_transform::dp_align::align` (same Hirschberg implementation
+//! tbtbt uses); we did not port tbtbt's local copy. Sample-rate
+//! normalization to 16 kHz mono happens at the audio-prep boundary
+//! (`utils::prepare_pcm`) so every UTR backend sees the same waveform
+//! shape FA receives.
 //!
 //! ## Pipeline shape
 //!
@@ -15,13 +40,11 @@
 //!    ones. This makes `Task::Fa::requires() = &[…, Task::Utr]` safe
 //!    for any pipeline.
 //! 2. **Resolve audio.** Reuses the same sibling-audio fallback FA uses.
-//! 3. **Dispatch.** Sends `TaskInput::Utr(UtrInput)` (a serde-transparent
-//!    newtype over `AsrInput`) to the registered UTR backend. Python ASR
-//!    backends opt into UTR by adding the `UTR` marker mixin; their
-//!    `call(batch)` sees an `AsrInput`-shaped payload and runs unchanged.
-//! 4. **Convert to timing tokens.** Flattens `AsrOutput.segments` into a
-//!    single `Vec<AsrTimingToken>` and filters zero-duration tokens at
-//!    20ms resolution (parity with tbtbt's `asr_response_to_utr_tokens`).
+//! 3. **Dispatch.** Sends `TaskInput::Utr(UtrInput)` to the registered
+//!    UTR backend. Python ASR backends opt in by adding the `UTR` marker
+//!    mixin; their `call(batch)` sees an `AsrInput`-shaped payload and
+//!    runs unchanged.
+//! 4. **Convert to timing tokens** with the 20 ms zero-duration filter.
 //! 5. **Strategy.** `select_strategy(chat, None)` picks GlobalUtr or
 //!    TwoPassOverlap based on CA / `+<` markers.
 //! 6. **Inject bullets** via `Bullet::utr_hint` so downstream FA
@@ -29,7 +52,9 @@
 //! 7. **Audit.** Writes `%xalign` dependent tiers for zero-duration-
 //!    skipped and unmatched utterances via
 //!    `talkbank_transform::decisions::inject_decision_tiers`.
-//! 8. **Stamp provenance.**
+//! 8. **Clear `, unlinked`** from the `@Media` header — UTR just injected
+//!    bullets so the E544-mandated `unlinked` status is now stale.
+//! 9. **Stamp provenance** with the registered UTR backend name.
 
 pub mod extraction;
 pub mod overlap_markers;
@@ -53,7 +78,9 @@ use crate::base::TaskInput;
 use crate::base::{Dispatcher, TaskRunner};
 use crate::proto::asr::{AsrInput, AsrOptions, AsrOutput, LanguageSpec};
 use crate::proto::utr::UtrInput;
-use crate::utils::{BAError, BAResult, MediaInput, SourceId, prepare_pcm, stamp_provenance};
+use crate::utils::{
+    BAError, BAResult, MediaInput, SourceId, clear_media_unlinked, prepare_pcm, stamp_provenance,
+};
 use async_trait::async_trait;
 use smol_str::SmolStr;
 use std::path::Path;
@@ -214,6 +241,10 @@ impl TaskRunner for UtrTaskRunner {
         }
 
         progress.finish();
+
+        // We just injected bullets — clear `, unlinked` from any
+        // `@Media` header so the now-linked state is reflected on disk.
+        clear_media_unlinked(&mut chat.ast_mut().lines.0);
 
         let engine = dispatcher.engine_name(Task::Utr);
         stamp_provenance(&mut chat.ast_mut().lines.0, engine.as_deref());

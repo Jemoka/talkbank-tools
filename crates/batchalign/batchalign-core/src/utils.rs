@@ -423,6 +423,32 @@ pub const PROVENANCE_PREFIX: &str = "batchalign3 ";
 /// The git SHA is baked at compile time via `option_env!`. The Bazel path
 /// goes through `BATCHALIGN_GIT_SHA`; cargo via `VERGEN_GIT_SHA`. Falls back
 /// to `"unknown"` when neither is set (test runs, IDE checks).
+/// Clear the `unlinked` status from any `@Media` header in the file.
+///
+/// CHAT requires an explicit linkage-status flag (`, unlinked` /
+/// `, missing` / `, notrans`) on an `@Media` header when the file has no
+/// timing evidence — see error E544 in `talkbank-model`'s validator. A
+/// transcript begins life as `@Media: foo, audio, unlinked`; once a
+/// pipeline stage (UTR, FA) actually injects bullets, the `unlinked`
+/// marker is stale and would cause downstream tools to ignore the now-
+/// recovered timing. Stage runners call this at the end of a successful
+/// run so the output advertises its newly linked state.
+///
+/// Other status values (`missing`, `notrans`) are left alone — those
+/// describe the audio file's availability, not the timing state.
+pub fn clear_media_unlinked(lines: &mut [talkbank_model::Line]) {
+    use talkbank_model::Line;
+    use talkbank_model::model::{Header, MediaStatus};
+    for line in lines.iter_mut() {
+        if let Line::Header { header, .. } = line
+            && let Header::Media(m) = header.as_mut()
+            && m.status == Some(MediaStatus::Unlinked)
+        {
+            m.status = None;
+        }
+    }
+}
+
 pub fn stamp_provenance(lines: &mut Vec<talkbank_model::Line>, engine: Option<&str>) {
     use talkbank_model::Line;
     use talkbank_model::model::{BulletContent, Header};

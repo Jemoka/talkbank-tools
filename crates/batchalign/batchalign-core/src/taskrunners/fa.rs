@@ -28,7 +28,8 @@ use crate::base::{Dispatcher, TaskRunner};
 use crate::proto::asr::{AsrSegment, AsrWord, LanguageSpec};
 use crate::proto::fa::{FaInput, FaOutput};
 use crate::utils::{
-    BAError, BAResult, MediaInput, SourceId, SpeakerLabel, prepare_pcm, stamp_provenance,
+    BAError, BAResult, MediaInput, SourceId, SpeakerLabel, clear_media_unlinked, prepare_pcm,
+    stamp_provenance,
 };
 use async_trait::async_trait;
 use smol_str::SmolStr;
@@ -143,6 +144,12 @@ impl TaskRunner for FaTaskRunner {
         // accrete one `@Comment` per invocation.
         let engine = dispatcher.engine_name(Task::Fa);
         stamp_provenance(&mut chat.ast_mut().lines.0, engine.as_deref());
+
+        // FA just injected bullets — if the input was tagged `, unlinked`
+        // (the E544-required marker for transcripts with no timing), that
+        // tag is now stale. Drop it so the output advertises its newly-
+        // linked state and downstream tools honour the timing.
+        clear_media_unlinked(&mut chat.ast_mut().lines.0);
 
         sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Fa));
         Ok(())
