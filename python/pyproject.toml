@@ -63,7 +63,6 @@ dependencies = [
 [project.optional-dependencies]
 # `nltk` powers the CHATUtterance BERT segmenter's sentence split (BA2 parity).
 whisper      = ["transformers>=4.57,<5", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8", "openai-whisper", "pycountry", "num2words"]
-vllm         = ["openai>=1.0", "librosa>=0.10"]
 stanza       = ["stanza>=1.12", "transformers>=4.57,<5"]
 pyannote     = ["pyannote.audio>=3.0", "onnxruntime>=1.16"]
 revai        = ["rev-ai"]
@@ -82,7 +81,6 @@ api          = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "sse-starlette>=2.0
 all = [
     "transformers>=4.57,<5", "torch>=2.0", "torchaudio>=2.0", "nltk>=3.8",
     "openai-whisper", "pycountry", "num2words",
-    "openai>=1.0", "librosa>=0.10",
     "stanza>=1.12",
     "pyannote.audio>=3.0", "onnxruntime>=1.16",
     "rev-ai",
