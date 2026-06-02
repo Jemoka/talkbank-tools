@@ -18,7 +18,7 @@ region with:
   - one bar per pushed file, pre-registered in WAIT state.
 
 As `ProgressEvent`s flow in we mutate each bar's status column
-(wait / run / ok / fail / skip) and its (completed, total) counts.
+(wait / run / done / fail / skip) and its (completed, total) counts.
 Bars stay visible after the run so the final state of every file is
 on screen. The summary block prints once below, with failure
 details + hints. **No scrolling completion log** — that would
@@ -63,7 +63,7 @@ _log = logging.getLogger("batchalign.cli.tui")
 
 
 # Column widths — kept here so plain mode and the summary line up.
-_W_STATE = 4    # "ok  " / "fail" / "skip" / "wait" / "run "
+_W_STATE = 4    # "done" / "fail" / "skip" / "wait" / "run "
 _W_LABEL = 44   # filename column
 _W_STAGE = 8    # current stage label
 _W_TIME = 8
@@ -120,7 +120,7 @@ class Interface:
         self._pipeline: Any = None
         self._opened = False
         # Plain-mode bookkeeping: which (source_id, kind) lines have we
-        # already emitted, to avoid duplicate `start` / `ok` rows.
+        # already emitted, to avoid duplicate `start` / `done` rows.
         self._plain_started: set[str] = set()
         self._plain_completed: set[str] = set()
         # Sources we've already credited toward the overall completed
@@ -467,12 +467,12 @@ class Interface:
         if self.plain:
             self.console.print()
             self.console.print(
-                f"done   ok={ok} fail={fail} skip={skip}  {_fmt_elapsed(elapsed)}"
+                f"done   done={ok} fail={fail} skip={skip}  {_fmt_elapsed(elapsed)}"
             )
         else:
             self.console.print()
             self.console.print(
-                f"done · [green]ok {ok}[/] · [red]fail {fail}[/] · "
+                f"done · [green]done {ok}[/] · [red]fail {fail}[/] · "
                 f"[blue]skip {skip}[/] · {_fmt_elapsed(elapsed)}"
             )
 

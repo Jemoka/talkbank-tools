@@ -7,7 +7,7 @@ build-backend = "maturin"
 
 [project]
 name = "batchalign"
-version = "0.9.0-alpha.1"
+version = "0.9.0-alpha.2"
 description = "TalkBank CHAT processing pipeline"
 readme = "batchalign/README.md"
 license = "BSD-3-Clause"

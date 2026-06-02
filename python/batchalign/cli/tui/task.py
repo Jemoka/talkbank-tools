@@ -23,7 +23,7 @@ from typing import Any
 class TaskState(Enum):
     WAIT = "WAIT"
     RUN = "RUN"
-    OK = "OK"
+    OK = "DONE"
     FAIL = "FAIL"
     SKIP = "SKIP"
 
