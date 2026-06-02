@@ -42,9 +42,18 @@ def register(app: typer.Typer) -> None:
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
+            # `--language` is the typer-side ISO-2 alias; the backend pin
+            # uses ISO-3. The model registry covers eng/yue (BA2 parity);
+            # extend `_UTTERANCE_RESOLVE` in `chatutterance.py` if more
+            # languages are added.
+            lang3 = {"en": "eng", "yue": "yue", "zh-yue": "yue"}.get(language, language)
+            # `stanza_fallback` is a recipe knob currently inert for the
+            # BERT/CHATUtterance backend — the flag stays in the typer
+            # surface for forward compat with a future stanza-based
+            # fallback path.
+            _ = stanza_fallback
             pipeline = ba.recipes.utseg(
-                utseg_backend=ba.PyannoteBackend(),
-                stanza_fallback=stanza_fallback,
+                utseg_backend=ba.CHATUtteranceBackend(lang=lang3),
             )
             inputs, root = collect_chat_inputs(folder)
             for inp in inputs:
