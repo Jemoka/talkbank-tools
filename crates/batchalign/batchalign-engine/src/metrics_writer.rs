@@ -6,9 +6,8 @@
 //! directly. No polars dep here; downstream tooling can still re-read the
 //! file with polars or pandas.
 //!
-//! Picks file extension per `MetricsKind` (`opensmile.csv`, `avqi.csv`,
-//! `compare.csv`, `benchmark.csv`, `metrics.csv`). The given `path` is the
-//! base; we re-extension it.
+//! Picks file extension per `MetricsKind` (`compare.csv`, `benchmark.csv`,
+//! `metrics.csv`). The given `path` is the base; we re-extension it.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -30,8 +29,6 @@ fn json_cell(v: &JsonValue) -> String {
 /// File extension picker per metrics kind. Mirrors the spec exactly.
 fn extension_for(kind: MetricsKind) -> &'static str {
     match kind {
-        MetricsKind::Opensmile => "opensmile.csv",
-        MetricsKind::Avqi => "avqi.csv",
         MetricsKind::Compare => "compare.csv",
         MetricsKind::Benchmark => "benchmark.csv",
         MetricsKind::Custom => "metrics.csv",

@@ -66,7 +66,7 @@ class AliyunTranslateBackend(Translate):
     ) -> None:
         from aliyunsdkcore.client import AcsClient  # type: ignore[import-not-found]
 
-        creds = config.get_provider("aliyun")
+        creds = config.get_provider("aliyun", interactive=True)
         try:
             ak_id = creds["ak_id"]
             ak_secret = creds["ak_secret"]
@@ -96,7 +96,7 @@ class AliyunTranslateBackend(Translate):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from aliyunsdkalimt.request.v20181012.TranslateGeneralRequest import (  # type: ignore[import-not-found]
             TranslateGeneralRequest,
         )

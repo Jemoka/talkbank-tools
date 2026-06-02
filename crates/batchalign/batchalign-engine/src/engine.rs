@@ -10,7 +10,9 @@ use std::sync::{Arc, RwLock};
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use batchalign_core::base::Dispatcher;
-use batchalign_core::{BAError, BAResult, Backend, Task, TaskInput, TaskOutput};
+use batchalign_core::{
+    BAError, BAResult, Backend, BackendProgress, NullBackendProgress, Task, TaskInput, TaskOutput,
+};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::backend_impl::BackendImpl;
@@ -51,6 +53,10 @@ pub struct BatchalignEngine {
     /// dispatch. `RwLock` gives us "many readers, infrequent writers". The
     /// inner HashMap holds `Sender` clones; cheap to copy out before await.
     routes: RwLock<HashMap<Task, mpsc::UnboundedSender<BatchItem>>>,
+    /// Backend display name for each registered task. Read at runtime by
+    /// runners that want to stamp provenance into generated artifacts
+    /// (e.g. ASR's `@Comment` header). Populated alongside `routes`.
+    backend_names: RwLock<HashMap<Task, String>>,
     cache: Arc<Cache>,
     config: EngineConfig,
     /// Cooperative cancellation flag (Landing 2 #9). When set, `dispatch`
@@ -70,6 +76,7 @@ impl BatchalignEngine {
     pub fn with_config(cache: Arc<Cache>, config: EngineConfig) -> Self {
         Self {
             routes: RwLock::new(HashMap::new()),
+            backend_names: RwLock::new(HashMap::new()),
             cache,
             config,
             cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -119,10 +126,15 @@ impl BatchalignEngine {
             .routes
             .write()
             .map_err(|_| anyhow!("engine routes lock poisoned"))?;
+        let mut names = self
+            .backend_names
+            .write()
+            .map_err(|_| anyhow!("engine backend_names lock poisoned"))?;
         for task in tasks {
             if routes.insert(task, tx.clone()).is_some() {
                 bail!("two backends declared for {task:?} (second: {name})");
             }
+            names.insert(task, name.clone());
         }
         Ok(())
     }
@@ -143,14 +155,33 @@ impl BatchalignEngine {
     ///   * the batcher dropped the reply mid-flight.
     #[tracing::instrument(skip(self, input), fields(task = ?input.task()))]
     pub async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
-        // Cooperative cancellation check (Landing 2 #9). Polling at
-        // dispatch entry is enough for task-sized work; long-running
-        // backends should poll `self.cancellation()` themselves.
+        // Delegate to the progress-threading entry point with a
+        // no-op progress channel — keeps the routing logic in one place.
+        self.dispatch_inner(input, Arc::new(NullBackendProgress) as Arc<dyn BackendProgress>)
+            .await
+    }
+
+    /// Like [`dispatch`] but ships a backend-side progress handle with
+    /// the request. The handle is delivered to the backend's
+    /// `call_with_progress` and may be invoked as the backend processes
+    /// the input. See [`BackendProgress`] for the contract.
+    pub async fn dispatch_with_progress(
+        &self,
+        input: TaskInput,
+        progress: Arc<dyn BackendProgress>,
+    ) -> BAResult<TaskOutput> {
+        self.dispatch_inner(input, progress).await
+    }
+
+    async fn dispatch_inner(
+        &self,
+        input: TaskInput,
+        progress: Arc<dyn BackendProgress>,
+    ) -> BAResult<TaskOutput> {
         if self.is_cancelled() {
             return Err(BAError::Worker("engine cancelled".into()));
         }
         let task = input.task();
-        // Clone the sender out so we don't hold the lock across `.await`.
         let tx = {
             let routes = self
                 .routes
@@ -162,7 +193,12 @@ impl BatchalignEngine {
                 .ok_or_else(|| BAError::Worker(format!("no backend registered for {task:?}")))?
         };
         let (reply, rx) = oneshot::channel();
-        tx.send(BatchItem { input, reply }).map_err(|_| {
+        tx.send(BatchItem {
+            input,
+            reply,
+            progress,
+        })
+        .map_err(|_| {
             BAError::Worker(format!(
                 "engine batcher for {task:?} is gone (engine shut down?)"
             ))
@@ -192,5 +228,17 @@ impl BatchalignEngine {
 impl Dispatcher for BatchalignEngine {
     async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
         BatchalignEngine::dispatch(self, input).await
+    }
+
+    async fn dispatch_with_progress(
+        &self,
+        input: TaskInput,
+        progress: Arc<dyn BackendProgress>,
+    ) -> BAResult<TaskOutput> {
+        BatchalignEngine::dispatch_with_progress(self, input, progress).await
+    }
+
+    fn engine_name(&self, task: Task) -> Option<String> {
+        self.backend_names.read().ok()?.get(&task).cloned()
     }
 }

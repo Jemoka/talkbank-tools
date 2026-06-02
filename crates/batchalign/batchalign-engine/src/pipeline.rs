@@ -192,11 +192,48 @@ impl Pipeline {
 
         // Release the GIL while the runtime drives async work; runners that
         // need it reacquire via `Python::attach`.
+        //
+        // SIGINT cooperation. While we're inside `py.detach`, Python's signal
+        // handler can't run (the eval loop only services handlers when the
+        // GIL is held on the main thread). A user pressing Ctrl-C would
+        // otherwise see *nothing* happen until every in-flight backend call
+        // and every queued input finished — which on a multi-file run with
+        // an 8-wide semaphore can take many minutes.
+        //
+        // To fix this we run a watchdog alongside the actual work that
+        // periodically reacquires the GIL and asks CPython "did a signal
+        // come in?". On `KeyboardInterrupt` we flip the engine's
+        // cooperative-cancel flag. New dispatches return `Cancelled`
+        // immediately; the run loop then drains quickly. This doesn't kill
+        // already-running backends (they finish their current call) but
+        // stops *queuing* new work, which is the slowness the user feels.
         let outcomes = py.detach(|| {
-            inner
-                .runtime
-                .clone()
-                .block_on(async move { run_inner(inner, bavalues, sink).await })
+            let rt = inner.runtime.clone();
+            let engine = inner.engine.clone();
+            rt.block_on(async move {
+                let work = run_inner(inner, bavalues, sink);
+                tokio::pin!(work);
+                let mut interval =
+                    tokio::time::interval(std::time::Duration::from_millis(100));
+                interval.tick().await; // skip the immediate first tick
+                loop {
+                    tokio::select! {
+                        outcomes = &mut work => return outcomes,
+                        _ = interval.tick() => {
+                            let interrupted = Python::attach(|py| {
+                                py.check_signals().is_err()
+                            });
+                            if interrupted {
+                                engine.cancel();
+                                // Don't break — let `work` finish unwinding
+                                // so already-running tasks get their proper
+                                // `BAValue::Failed` and the sink emits the
+                                // closing events.
+                            }
+                        }
+                    }
+                }
+            })
         });
         Ok(outcomes
             .into_iter()
@@ -204,9 +241,13 @@ impl Pipeline {
             .collect())
     }
 
-    /// Best-effort cancel.
+    /// Best-effort cancel. Cooperative — flips the engine's cancel flag so
+    /// `dispatch` returns `Cancelled` for any new work. Already-running
+    /// backend calls are not interrupted (the engine has no way to abort
+    /// a `spawn_blocking` task that's inside Python code or a subprocess).
+    /// `Drop` does the harder teardown (`engine.shutdown`).
     fn cancel(&self) {
-        self.inner.engine.shutdown();
+        self.inner.engine.cancel();
     }
 }
 
@@ -402,7 +443,7 @@ async fn run_inner(
                     };
                 }
             };
-            run_one(me, value, sink.as_ref()).await
+            run_one(me, value, sink).await
         }
     });
     futures::future::join_all(futures).await
@@ -411,13 +452,13 @@ async fn run_inner(
 async fn run_one(
     inner: Arc<PipelineInner>,
     mut value: BAValue,
-    sink: &dyn ProgressSink,
+    sink: Arc<dyn ProgressSink>,
 ) -> BAValue {
     for &task in &inner.order {
         if value.is_failed() {
             return value;
         }
-        value = try_step(inner.clone(), task, value, sink).await;
+        value = try_step(inner.clone(), task, value, sink.clone()).await;
     }
     let sid = value.source_id();
     sink.emit(ProgressEvent {
@@ -435,7 +476,7 @@ async fn try_step(
     inner: Arc<PipelineInner>,
     task: Task,
     mut value: BAValue,
-    sink: &dyn ProgressSink,
+    sink: Arc<dyn ProgressSink>,
 ) -> BAValue {
     let source_id = value.source_id();
     sink.emit(ProgressEvent {
@@ -458,7 +499,7 @@ async fn try_step(
         }
     };
     let engine: &dyn batchalign_core::base::Dispatcher = inner.engine.as_ref();
-    let result = runner.apply(&mut value, engine, sink).await;
+    let result = runner.apply(&mut value, engine, sink.clone()).await;
 
     match result {
         Ok(()) => {

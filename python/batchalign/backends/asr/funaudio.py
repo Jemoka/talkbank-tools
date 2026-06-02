@@ -112,7 +112,7 @@ class FunAudioBackend(ASR):
             lambda m: _CANTONESE_WORD_REPLACEMENTS.get(m.group(0), m.group(0)), text
         )
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from batchalign._core.proto import AsrInput, AsrOutput
 
         outputs: list[Any] = []

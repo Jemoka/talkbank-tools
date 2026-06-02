@@ -3,6 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::TranslateInput,
 //! TranslateOutput`. !!!
 
+use crate::cache::{hash_serialized, CacheKey};
 use crate::proto::asr::LanguageSpec;
 use crate::register_proto_schema;
 use crate::utils::SourceId;
@@ -21,6 +22,27 @@ pub struct TranslateInput {
     pub source: LanguageSpec,
     /// Target language ISO-639-3 code (e.g. `"eng"`).
     pub target: SmolStr,
+}
+
+impl CacheKey for TranslateInput {
+    /// Excludes `source_id`. Same utterance list + source/target language
+    /// pair → same key.
+    fn hash(&self, hasher: &mut blake3::Hasher) {
+        #[derive(Serialize)]
+        struct K<'a> {
+            utterances: &'a [String],
+            source: &'a LanguageSpec,
+            target: &'a SmolStr,
+        }
+        hash_serialized(
+            &K {
+                utterances: &self.utterances,
+                source: &self.source,
+                target: &self.target,
+            },
+            hasher,
+        );
+    }
 }
 
 /// Output: translations, index-aligned with input utterances.

@@ -105,8 +105,6 @@ _MARKER_ABCS = {
     ba_backends.Morphosyntax,
     ba_backends.Translate,
     ba_backends.Coref,
-    ba_backends.OpenSmile,
-    ba_backends.AVQI,
     Backend,
 }
 

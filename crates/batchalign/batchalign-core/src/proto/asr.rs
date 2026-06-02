@@ -6,6 +6,7 @@
 //! Edits MUST happen in both places. Tests in
 //! `tests/proto_parity.rs` pin existence only.
 
+use crate::cache::{hash_serialized, CacheKey};
 use crate::register_proto_schema;
 use crate::utils::SourceId;
 use crate::utils::{PreparedAudio, SpeakerLabel};
@@ -90,6 +91,28 @@ pub struct AsrInput {
     pub language: LanguageSpec,
     /// Backend tunables.
     pub options: AsrOptions,
+}
+
+impl CacheKey for AsrInput {
+    /// Excludes `source_id`. Identical audio + language + options collapses
+    /// to one entry regardless of which media file or pipeline run it came
+    /// from.
+    fn hash(&self, hasher: &mut blake3::Hasher) {
+        #[derive(Serialize)]
+        struct K<'a> {
+            audio: &'a PreparedAudio,
+            language: &'a LanguageSpec,
+            options: &'a AsrOptions,
+        }
+        hash_serialized(
+            &K {
+                audio: &self.audio,
+                language: &self.language,
+                options: &self.options,
+            },
+            hasher,
+        );
+    }
 }
 
 /// What an ASR backend returns.

@@ -320,8 +320,6 @@ Look at the `capabilities` list. If the command you need is missing:
    - `transcribe` needs `openai-whisper`
    - `translate` needs `googletrans`
    - `morphotag`, `utseg`, `coref` need `stanza`
-   - `opensmile` needs `opensmile`
-   - `avqi` needs `parselmouth` and `torchaudio`
 
    All of these are included in the base `batchalign3` package, including the
    Cantonese providers.

@@ -23,18 +23,15 @@
 //! `isinstance`-check directly.
 
 pub mod asr;
-pub mod avqi;
 pub mod compare;
 pub mod coref;
 pub mod fa;
 pub mod morphosyntax;
-pub mod opensmile;
 pub mod speaker;
 pub mod translate;
 pub mod utseg;
 
 pub use asr::{AsrInput, AsrOptions, AsrOutput, AsrSegment, AsrWord, LanguageSpec};
-pub use avqi::{AvqiInput, AvqiOutput};
 pub use compare::{CompareInput, CompareMetrics, CompareMetricsPos, CompareOutput};
 pub use coref::{CorefInput, CorefOutput};
 pub use fa::{FaInput, FaOutput};
@@ -42,7 +39,6 @@ pub use morphosyntax::{
     GraTerminator, MorphosyntaxInput, MorphosyntaxOutput, MorphosyntaxToken, MorphosyntaxUnit,
     MorphosyntaxUtterance,
 };
-pub use opensmile::{OpenSmileInput, OpenSmileOutput};
 pub use speaker::{Diarization, DiarizationSegment, SpeakerInput, SpeakerOutput};
 pub use translate::{TranslateInput, TranslateOutput};
 pub use utseg::{UtSegInput, UtSegOutput, UtteranceSpan};

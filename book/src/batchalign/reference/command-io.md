@@ -32,8 +32,6 @@ batchalign3 <command> PATH [PATH ...] [-o OUTPUT_DIR] [--file-list FILE] [--in-p
 
 Exceptions:
 
-- `batchalign3 opensmile INPUT_DIR OUTPUT_DIR`
-- `batchalign3 avqi INPUT_DIR OUTPUT_DIR`
 
 For legacy readability, the tables below still use `IN_DIR`/`OUT_DIR` shorthand.
 Interpret `IN_DIR` as "input path set" in current CLI usage.
@@ -326,7 +324,6 @@ Rust layer first rather than adding logic in CLI dispatch.
 
 ---
 
-### 10. opensmile
 
 **Purpose:** Extract acoustic features from audio files.
 
@@ -334,15 +331,12 @@ Rust layer first rather than adding logic in CLI dispatch.
 |--------|-----------|---------------------|
 | **Input files** | `.mp3`, `.mp4`, `.wav` files in `INPUT_DIR` | Media filenames only; the server must resolve the audio on its own filesystem |
 | **Extensions filter** | `["mp3", "mp4", "wav"]` | Same |
-| **Output** | `.opensmile.csv` files (NOT `.cha`) | Same `.opensmile.csv` files returned to the client, which writes them locally |
-| **Mutation** | **Never mutates input.** Creates new `.opensmile.csv` files in `OUT_DIR`. | Same |
 | **Key options** | `--feature-set` (eGeMAPSv02, etc.), `--lang` | All passed |
 
 **Special output:** This is the only command that produces non-CHAT output.
 
 ---
 
-### 11. avqi
 
 **Purpose:** Calculate Acoustic Voice Quality Index from paired `.cs`/`.sv`
 audio files.
@@ -350,19 +344,13 @@ audio files.
 | Aspect | Local CLI | Explicit remote `--server` |
 |--------|-----------|---------------------|
 | **Input files** | Paired `.cs.*` and `.sv.*` audio files in input paths | Media filenames only; the server must resolve the partner files on its own filesystem |
-| **Output** | `.avqi.txt` with metrics per file pair | Same `.avqi.txt` files returned to the client, which writes them locally |
-| **Mutation** | **Never mutates input.** Creates new `.avqi.txt` files. | Same |
 
-**Current routing note:** when `auto_daemon` is enabled (the default), `avqi`
 prefers the local daemon and ignores explicit `--server`. Explicit remote
 `--server` is only used when that daemon path is disabled or unavailable.
 
-**Current syntax note:** `opensmile` and `avqi` do not use the shared `PATHS` /
 `-o` command form. Their CLI syntax is positional:
 
 ```bash
-batchalign3 opensmile INPUT_DIR OUTPUT_DIR
-batchalign3 avqi INPUT_DIR OUTPUT_DIR
 ```
 
 ---
@@ -390,8 +378,6 @@ audio files referenced by `align` are read but never modified.
 |---------|-------|----------------|
 | **transcribe** | Audio files (`.mp3`/`.mp4`/`.wav`) | New `.cha` files |
 | **benchmark** | Audio files | New `.cha` files with eval metrics |
-| **opensmile** | Audio files | New `.opensmile.csv` files |
-| **avqi** | Paired `.cs`/`.sv` audio | New `.avqi.txt` files |
 
 These commands never touch the input files. The output always has a
 different extension or name than the input.
@@ -405,7 +391,6 @@ the local-daemon path the CLI uses paths mode and no file contents cross
 the process boundary for any command listed here; see
 [Submission Modes](#submission-modes-paths_modetrue-vs-paths_modefalse).
 
-| Direction | Text/CHAT commands (morphotag, compare, ...) | Explicit remote audio commands (`align`, `transcribe`, `opensmile`, ...) |
 |-----------|----------------------------------------------|----------------------------------------------------|
 | **Client → Server** | Full `.cha` text (~2KB each) | `.cha` text for `align`, or media filenames for media-input commands |
 | **Server → Client** | Processed `.cha` text | Processed outputs returned over HTTP and written locally by the client |
@@ -456,13 +441,11 @@ Remote submissions always use content mode.
 | `align` | `PathsModeAudio` | Forced alignment needs audio paths the server can open |
 | `transcribe` / `transcribe_s` | `PathsModeAudio` | ASR runs on server-visible media files |
 | `benchmark` | `PathsModeAudio` | Composite of transcribe + compare over server-visible media |
-| `avqi` | `PathsModeAudio` | Reads paired `.cs`/`.sv` audio directly from the filesystem |
 | `morphotag` | `PathsModeText` | Server-side runner reads CHAT input from `source_paths` |
 | `utseg` | `PathsModeText` | Same runner as morphotag |
 | `translate` | `PathsModeText` | Same runner as morphotag |
 | `coref` | `PathsModeText` | Same runner as morphotag |
 | `compare` | `PathsModeText` | Reads main `.cha` + gold `.cha` pair by path |
-| `opensmile` | `ContentOnly` | Intentional: kept on content mode this round |
 
 Earlier in the project, only the five audio-first commands opted
 in. Text-command local submissions were forced onto content mode, which
@@ -510,7 +493,6 @@ sequenceDiagram
         Runner->>Runner: read_to_string(source_paths[i])
         Runner->>Runner: write outputs to output_paths[i]
         Note over CLI,Runner: CLI does not download results;<br/>outputs land directly on shared FS.
-    else Remote --server (or opensmile)
         Gate-->>CLI: paths_mode = false
         CLI->>Content: classify_files + FilePayload {filename, content}
         Content-->>CLI: JobSubmission { paths_mode=false,<br/>files=[FilePayload{..}], media_files=[..] }
@@ -576,6 +558,4 @@ filter dummy CHAT locally.
 | translate | Full | Full | Full | |
 | coref | Full | Full | Full | |
 | benchmark | Full | Full | Full | Prefers the local daemon when `auto_daemon` is enabled; explicit `--server` stays the fallback if the daemon path is unavailable |
-| opensmile | Full | Full | Full | Special CSV output handling on both sides |
 | compare | Full | Full | Full | Gold file resolved locally or server-side |
-| avqi | Full (local) | Full (local) | Full | Prefers the local daemon when `auto_daemon` is enabled; explicit `--server` stays the fallback if the daemon path is unavailable |

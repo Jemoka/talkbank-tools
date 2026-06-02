@@ -23,7 +23,7 @@ impl TaskRunner for CorefTaskRunner {
         &self,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
-        sink: &dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BAResult<()> {
         let chat = match value {
             BAValue::Chat(c) => c,
@@ -53,7 +53,7 @@ impl TaskRunner for CorefTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Coref(input)).await?;
         let output: CorefOutput = output_raw.try_into()?;
 
-        inject_coref_tiers(chat, &output.annotations, sink)?;
+        inject_coref_tiers(chat, &output.annotations, &*sink)?;
 
         sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Coref));
         Ok(())

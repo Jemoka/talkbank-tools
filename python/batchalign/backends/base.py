@@ -52,8 +52,6 @@ except ImportError:
         Translate = "Translate"
         Coref = "Coref"
         Compare = "Compare"
-        OpenSmile = "OpenSmile"
-        Avqi = "Avqi"
 
     class BatchPolicy:  # type: ignore[no-redef]
         """Fallback `BatchPolicy` used when `batchalign._core` is not built."""
@@ -109,12 +107,32 @@ class Backend(ABC):
         atomic-call backends like Rev.AI use `BatchPolicy.one()`."""
 
     @abstractmethod
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         """Run inference on a batch of `TaskInput` variants.
 
         Output at index `i` MUST correspond to input at index `i` and
         carry the matching output variant. Backends pattern-match on the
         input variant type to dispatch internally.
+
+        ``progress`` is an optional callable supplied by the Rust engine
+        (``ScaledProgress`` on the runner side). Backends with an internal
+        loop — audio-chunk grouping in FA, multi-stage ASR decoding, etc. —
+        SHOULD invoke ``progress(completed, total)`` at meaningful
+        increments so the per-file progress bar advances inside the
+        single bulk call. The wrapper rescales those ticks into the
+        outer runner's bar (see ``crates/batchalign/batchalign-core/
+        src/base.rs::ScaledProgress``).
+
+        Backends with nothing useful to report just ignore the parameter.
+        ``progress`` may be ``None`` when the runner doesn't supply one
+        (legacy ``dispatch`` path); guard with ``if progress: progress(...)``.
+
+        Do NOT stash ``progress`` past the return of ``call`` — the
+        callable's lifetime is bounded by the dispatch.
+
+        Extra ``**_kwargs`` is a forward-compat hatch: future runner
+        features may pass additional keyword args, and base behaviour is
+        to ignore unknown names rather than break the call.
         """
 
 
@@ -154,14 +172,6 @@ class Coref(Backend):
     """Marker: this backend handles `Task.Coref` inputs."""
 
 
-class OpenSmile(Backend):
-    """Marker: this backend handles `Task.OpenSmile` inputs."""
-
-
-class AVQI(Backend):
-    """Marker: this backend handles `Task.Avqi` inputs."""
-
-
 # ---------------------------------------------------------------------------
 # MRO introspection: map marker ABC -> Task variant.
 # ---------------------------------------------------------------------------
@@ -174,8 +184,6 @@ _TASK_BY_ABC: dict[type, Task] = {
     Morphosyntax: Task.Morphosyntax,
     Translate: Task.Translate,
     Coref: Task.Coref,
-    OpenSmile: Task.OpenSmile,
-    AVQI: Task.Avqi,
 }
 
 
@@ -198,8 +206,6 @@ __all__ = [
     "Morphosyntax",
     "Translate",
     "Coref",
-    "OpenSmile",
-    "AVQI",
     "Task",
     "BatchPolicy",
     "declared_tasks",

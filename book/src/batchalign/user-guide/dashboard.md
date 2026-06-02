@@ -143,7 +143,6 @@ Shows the three worker profiles and their current state:
 ### IO Profile (emerald)
 - Lightweight API/library calls (translation, audio analysis)
 - Usually 1 process per language
-- Commands served: translate, opensmile, avqi
 
 ### Warmup Status
 If the server is still loading models on startup, a blue spinner shows

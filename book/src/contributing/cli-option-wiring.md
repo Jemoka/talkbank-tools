@@ -167,18 +167,15 @@ Rev.AI path versus the worker-backed ASR backends.
 | `--wor` / `--nowor` | `BenchmarkOptions.wor` | `extract_benchmark_dispatch_params` → `BenchmarkDispatchPlan.base_options.write_wor` | Wired — gates `%wor` tier generation on the benchmark's transcription output. Default omit (BA2 parity). |
 | `--merge-abbrev` | `BenchmarkOptions.merge_abbrev` | `extract_benchmark_dispatch_params` → `BenchmarkDispatchPlan.should_merge_abbrev` | Wired |
 
-## `opensmile`
 
 | CLI Flag | CommandOptions Field | Dispatch Consumer | Status |
 |---|---|---|---|
-| `--feature-set SET` | `OpensmileOptions.feature_set` | `extract_opensmile_dispatch_params` → `MediaAnalysisDispatchPlan::Opensmile` → `dispatch_opensmile_attempt` | Wired |
 
 ## `translate`, `coref`, `utseg`, `compare`
 
 These commands have only `--merge-abbrev` as a command-specific option, which is
 wired through `BatchedInferDispatchPlan.should_merge_abbrev`.
 
-## `avqi`
 
 No command-specific options (only global options).
 

@@ -29,7 +29,6 @@ This determines which parse mode is used at pipeline entry.
 | translate | None | %xtra | Adds translation tier |
 | utseg | None | (restructures utterances) | Splits/merges utterance boundaries |
 | transcribe | N/A (generates from audio) | All | Creates fresh CHAT |
-| opensmile | N/A (media only) | N/A (CSV output) | Analysis only |
 
 ## Why morphotag clears before processing
 

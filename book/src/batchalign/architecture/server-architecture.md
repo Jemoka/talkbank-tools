@@ -264,7 +264,6 @@ in this order:
 
 Special cases:
 
-- `transcribe`, `transcribe_s`, `benchmark`, and `avqi` prefer local-daemon
   dispatch when `auto_daemon` is enabled; if that daemon path is unavailable,
   the router still falls back to the explicit `--server`
 - explicit `--server` always stays on content mode, even for `localhost`
@@ -311,7 +310,6 @@ Additional safeguards:
 | Command class | Routing behavior |
 |---|---|
 | `morphotag`, `align`, `translate`, `utseg`, `coref`, `compare` | Explicit single `--server`, local daemon, auto-detected loopback server, or direct local fallback |
-| `transcribe`, `transcribe_s`, `benchmark`, `avqi` | Prefer local daemon when `auto_daemon` is enabled; if it is unavailable, fall back to explicit single `--server`, then loopback server, then direct local |
 
 The current mixed-runtime sidecar idea remains only partially wired: the daemon
 lifecycle helpers still exist, but dispatch does not yet auto-select a sidecar
@@ -335,7 +333,6 @@ For text-only commands, the server owns the full CHAT lifecycle — no CHAT text
 | align | infer (per-file, per-group) | Stateless audio/text alignment inference |
 | transcribe, transcribe_s | infer (per-file audio) | Raw ASR inference feeding a Rust-owned pipeline |
 | benchmark | infer (per-file audio + compare) | Raw ASR inference feeding Rust transcribe + compare |
-| opensmile, avqi | infer (per-file media V2) | Rust-owned prepared-audio media analysis over typed worker requests |
 
 There is no standalone CLI `speaker` command in batchalign3, matching
 batchalign2. Speaker diarization remains a worker capability used to support

@@ -157,7 +157,6 @@ flowchart TD
     profile{"WorkerProfile"}
     gpu["SharedGpuWorker\n1 process, ThreadPoolExecutor\n(ASR + FA + Speaker models)"]
     stanza["WorkerGroup\nN processes, exclusive checkout\n(Stanza NLP models)"]
-    io["WorkerGroup\n1 process, exclusive checkout\n(Translation, OpenSMILE, AVQI)"]
     t1["Thread 1: FA file A"]
     t2["Thread 2: FA file B"]
     t3["Thread 3: ASR file C"]
@@ -305,7 +304,6 @@ The same principle shows up across the command surface:
     Rust: typed command options and per-file infer dispatch
     Rust core: WER computation exposed through `batchalign_core`
     Python package: optional convenience wrapper only, not worker infer logic
-- `opensmile` / `avqi`:
   - Jan 9 / Feb 9 BA2: Python feature-analysis commands with local library calls
   - current BA3:
     Rust: typed command options and prepared-audio V2 dispatch

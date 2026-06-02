@@ -67,8 +67,6 @@ stanza       = ["stanza>=1.12", "transformers>=4.57,<5"]
 pyannote     = ["pyannote.audio>=3.0", "onnxruntime>=1.16"]
 revai        = ["rev-ai"]
 cantonese    = ["pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "tencentcloud-sdk-python-tmt", "aliyun-python-sdk-core>=2.13", "aliyun-python-sdk-alimt", "funasr==1.3.1", "opencc", "cos-python-sdk-v5"]
-opensmile    = ["opensmile>=2.5"]
-avqi         = ["praat-parselmouth>=0.4.6"]
 translate    = ["googletrans"]
 qwen3        = ["qwen-asr", "transformers>=4.57,<5", "torch>=2.0"]
 nllb         = ["transformers>=4.57,<5", "torch>=2.0", "sentencepiece"]
@@ -85,8 +83,6 @@ all = [
     "pyannote.audio>=3.0", "onnxruntime>=1.16",
     "rev-ai",
     "pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "tencentcloud-sdk-python-tmt", "aliyun-python-sdk-core>=2.13", "aliyun-python-sdk-alimt", "funasr==1.3.1", "opencc", "cos-python-sdk-v5",
-    "opensmile>=2.5",
-    "praat-parselmouth>=0.4.6",
     "googletrans",
     "qwen-asr",
     "sentencepiece",
@@ -186,7 +182,7 @@ pyapp = "0.27.0"     # https://crates.io/crates/pyapp -- consumed by
 # `runtime` mirrors `[project] dependencies` + the lazily-imported
 # optional groups that batchalign actually wires for the Bazel-run path
 # (stanza + its transformers tagger). Other extras (whisper / pyannote
-# / vllm / rev-ai / opensmile / avqi / translate / cantonese) only
+# / vllm / rev-ai / translate / cantonese) only
 # matter to wheel consumers; they live in `[project.optional-dependencies]`
 # above and reach the wheel via maturin's pyproject.toml reader.
 runtime = [

@@ -11,7 +11,7 @@
 //! See `spec2.md` §10.
 
 use crate::base::Task;
-use crate::base::{TaskInput, TaskOutput};
+use crate::base::{BackendProgress, NullBackendProgress, TaskInput, TaskOutput};
 use crate::utils::BAResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -59,7 +59,38 @@ pub trait Backend: Send + Sync {
     fn batch_policy(&self) -> BatchPolicy;
     /// Process a same-batch slice; output length must equal input length and
     /// index alignment must be preserved.
-    fn call(&self, batch: Vec<TaskInput>) -> BAResult<Vec<TaskOutput>>;
+    ///
+    /// Backends that want to report intra-call progress should override
+    /// [`call_with_progress`] instead and leave this delegating shim alone.
+    fn call(&self, batch: Vec<TaskInput>) -> BAResult<Vec<TaskOutput>> {
+        // Legacy entry: synthesizes a no-op progress channel and routes
+        // through the new entry point. Both default impls forward to
+        // each other; concrete backends MUST override at least one of
+        // them (otherwise infinite recursion — caught at first dispatch).
+        self.call_with_progress(batch, std::sync::Arc::new(NullBackendProgress))
+    }
+
+    /// Process a batch and let the backend optionally report intra-call
+    /// progress via `progress.tick(completed, total)`.
+    ///
+    /// The handle is owned (an `Arc`) so the implementation can clone it
+    /// into a Python callable or any other longer-lived bridge without
+    /// fighting the borrow checker.
+    ///
+    /// Backends with no meaningful sub-progress can ignore `progress`
+    /// (the default forwards to `call` and discards the handle).
+    ///
+    /// The composition contract with [`crate::base::ScaledProgress`] is:
+    /// the runner has already advanced the outer step via `start_step()`
+    /// before issuing this call; the backend may freely tick within
+    /// `[0, total]` and the wrapper rescales those into the outer bar.
+    fn call_with_progress(
+        &self,
+        batch: Vec<TaskInput>,
+        _progress: std::sync::Arc<dyn BackendProgress>,
+    ) -> BAResult<Vec<TaskOutput>> {
+        self.call(batch)
+    }
 }
 
 /// Batching policy. Engine-side batcher loops use these to bound how long it

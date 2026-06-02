@@ -210,7 +210,7 @@ def test_version_banner_contains_required_fields() -> None:
     from batchalign.cli.version import render
 
     text = render()
-    assert "batchalign3 v" in text
+    assert "batchalign3" in text
     assert "git " in text
     assert "Maintainers:" in text
 

@@ -56,7 +56,7 @@ class Wav2Vec2FaBackend(FA):
         model: str | None = None,
         *,
         device: str | None = None,
-        batch_size: int = 1,
+        batch_size: int = 2,
         batch_window_ms: int = 0,
     ) -> None:
         import torch  # type: ignore[import-not-found]
@@ -80,16 +80,21 @@ class Wav2Vec2FaBackend(FA):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(
+        self, batch: list[Any], *, progress: Any = None, **_kwargs: Any
+    ) -> list[Any]:
         from batchalign._core.proto import FaInput, FaOutput
 
+        # `progress(completed, total)` is forwarded into `_align_one` so
+        # the per-audio-group loop can tick. Per the ABC, this is the
+        # meaningful intra-call granularity for FA (chunks ≤ _GROUP_MS).
         outputs: list[Any] = []
         for item in batch:
             if not isinstance(item, FaInput):
                 raise TypeError(
                     f"Wav2Vec2FaBackend does not handle input type: {type(item).__name__}"
                 )
-            outputs.append(self._align_one(item, FaOutput))
+            outputs.append(self._align_one(item, FaOutput, progress=progress))
         return outputs
 
     # ----- internals -----------------------------------------------------
@@ -138,7 +143,7 @@ class Wav2Vec2FaBackend(FA):
             out.append((w, (s, e)))
         return out
 
-    def _align_one(self, item: Any, FaOutput: type) -> Any:
+    def _align_one(self, item: Any, FaOutput: type, *, progress: Any = None) -> Any:
         import numpy as np  # type: ignore[import-not-found]
         import torch  # type: ignore[import-not-found]
         from batchalign._core.proto import AsrSegment, AsrWord
@@ -146,10 +151,18 @@ class Wav2Vec2FaBackend(FA):
         if not item.utterances:
             return FaOutput(source_id=item.source_id, utterances=[])
 
+        import torchaudio.functional as AF  # type: ignore[import-not-found]
+
         wave = torch.from_numpy(
             np.frombuffer(item.audio.pcm_f32le, dtype=np.float32).copy()
         )
-        sr = int(item.audio.sample_rate)
+        src_sr = int(item.audio.sample_rate)
+        # MMS_FA is a 16 kHz model. The Rust audio-prep keeps the file's
+        # native rate, so resample once here — without this, time conversion
+        # below (which uses `self._sr = 16000`) is off by `src_sr / 16000`.
+        if src_sr != self._sr:
+            wave = AF.resample(wave, src_sr, self._sr)
+        sr = self._sr
 
         # Flatten utterance words into (uidx, widx, text), tracking each
         # utterance's window. Words carry their utterance's window time.
@@ -182,8 +195,14 @@ class Wav2Vec2FaBackend(FA):
         if group:
             groups.append(group)
 
-        for grp in groups:
+        n_groups = len(groups)
+        for group_idx, grp in enumerate(groups):
+            # Per-group progress tick — drives the per-file bar inside
+            # the single bulk dispatch. Ticks AFTER the group is aligned
+            # so the bar reflects completed work, not started work.
             if not grp:
+                if progress is not None:
+                    progress(group_idx + 1, n_groups)
                 continue
             g_start = windows[grp[0][0]][0]
             g_end = windows[grp[-1][0]][1]
@@ -228,6 +247,8 @@ class Wav2Vec2FaBackend(FA):
                         int(round(t[0] + g_start)),
                         int(round(t[1] + g_start)),
                     )
+            if progress is not None:
+                progress(group_idx + 1, n_groups)
 
         # Build output utterances, applying BA2's post-correction (bump each
         # word's end to the next word's start, bound by the utterance window).

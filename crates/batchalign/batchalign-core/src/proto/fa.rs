@@ -2,6 +2,7 @@
 //!
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::FaInput, FaOutput`. !!!
 
+use crate::cache::{hash_serialized, CacheKey};
 use crate::proto::asr::{AsrSegment, LanguageSpec};
 use crate::register_proto_schema;
 use crate::utils::PreparedAudio;
@@ -22,6 +23,27 @@ pub struct FaInput {
     pub utterances: Vec<AsrSegment>,
     /// Language hint, frequently `LanguageSpec::PerFile`.
     pub language: LanguageSpec,
+}
+
+impl CacheKey for FaInput {
+    /// Excludes `source_id`. Same audio + same utterance text/bounds +
+    /// same language must hash to the same key.
+    fn hash(&self, hasher: &mut blake3::Hasher) {
+        #[derive(Serialize)]
+        struct K<'a> {
+            audio: &'a PreparedAudio,
+            utterances: &'a [AsrSegment],
+            language: &'a LanguageSpec,
+        }
+        hash_serialized(
+            &K {
+                audio: &self.audio,
+                utterances: &self.utterances,
+                language: &self.language,
+            },
+            hasher,
+        );
+    }
 }
 
 /// Output: same utterances, with refined `words[*].start_ms / end_ms`.

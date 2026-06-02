@@ -39,7 +39,6 @@ format.  Typical workflows include:
   and `%gra` tiers) using Stanford Stanza.
 - **Translating** non-English transcripts to English.
 - **Segmenting** unsegmented text into utterances.
-- **Extracting** acoustic features (OpenSMILE, AVQI) from speech recordings.
 
 ## Key features
 

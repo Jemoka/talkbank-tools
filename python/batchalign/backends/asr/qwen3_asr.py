@@ -22,26 +22,8 @@ from __future__ import annotations
 from typing import Any
 
 from batchalign.backends.base import ASR, BatchPolicy
+from batchalign.backends._qwen_lang import qwen_language_name
 from batchalign.lang import LanguageCode
-
-# Qwen3-ASR's `language=` kwarg expects an English language name
-# ("English", "Cantonese", "Spanish", …). Pycountry's `.name` gets us
-# most of the way; two model-side mismatches need overrides:
-#
-# * "Yue Chinese" → "Cantonese" — pycountry's name is the linguistic
-#   classification; Qwen accepts the colloquial label and silently
-#   falls back to auto-detect on the academic form (tbtbt docstring).
-# * "Modern Greek (1453-)" → "Greek" — pycountry's verbose form,
-#   which Qwen doesn't recognize.
-_QWEN_NAME_OVERRIDE = {
-    "yue": "Cantonese",
-    "ell": "Greek",
-    "gre": "Greek",
-}
-
-
-def _qwen_language_name(lang: LanguageCode) -> str:
-    return _QWEN_NAME_OVERRIDE.get(lang.alpha_3, lang.name)
 
 
 class Qwen3AsrBackend(ASR):
@@ -71,7 +53,7 @@ class Qwen3AsrBackend(ASR):
         self._model_id = model_id
         self._device = device
 
-        self._qwen_language = _qwen_language_name(language)
+        self._qwen_language = qwen_language_name(language)
 
         if device == "cuda":
             dtype = torch.bfloat16
@@ -110,7 +92,7 @@ class Qwen3AsrBackend(ASR):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from batchalign._core.proto import AsrInput, AsrOutput
 
         outputs: list[Any] = []

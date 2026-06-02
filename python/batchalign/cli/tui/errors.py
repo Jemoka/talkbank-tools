@@ -32,19 +32,57 @@ from rich.text import Text
 _PARSE_PATH = re.compile(r"parse\s+(/[^:\n]+):", re.IGNORECASE)
 _BYTE_SPAN  = re.compile(r"bytes\s+(\d+)\s*\.\.\s*(\d+)")
 _LINE_COL   = re.compile(r"line\s+(\d+),\s*column\s+(\d+)", re.IGNORECASE)
-_ERROR_CODE = re.compile(r"error\[(E\d+)\]:\s*(.*?)\s*\(", re.IGNORECASE | re.DOTALL)
+# Match `error[E###]: <headline> (bytes A..B)` up to the *byte span* paren,
+# not the first `(`. The headline frequently contains a quoted `(` itself
+# (e.g. `Unparsable content on main tier: '('`), and the older `.*?\s*\(`
+# pattern stopped on that, producing truncated headlines like
+# `Unparsable content on main tier: '`. Anchoring on `\(bytes` is the only
+# unambiguous delimiter between headline and span.
+_ERROR_CODE = re.compile(
+    r"error\[(E\d+)\]:\s*(.*?)\s*\(bytes\s+\d+",
+    re.IGNORECASE | re.DOTALL,
+)
+# Iterate every error entry in a multi-error parse message. Captures
+# (code, headline, start, end) for each — the renderer stacks one caret
+# block per match.
+_ERROR_ENTRY = re.compile(
+    r"error\[(E\d+)\]:\s*(.*?)\s*\(bytes\s+(\d+)\s*\.\.\s*(\d+)\)",
+    re.IGNORECASE | re.DOTALL,
+)
 _PY_PREFIX  = re.compile(r"^[A-Za-z_]\w*(?:Error|Exception)\s*:\s*", re.IGNORECASE)
+
+# Matches one bullet line from a multi-error summary (see
+# `crates/batchalign/batchalign-core/src/taskrunners/morphosyntax.rs::
+# format_alignment_errors`). The Rust runner emits multi-line messages
+# of the form:
+#
+#   morphosyntax produced N misaligned tier(s):
+#     error[E705]: <headline> (bytes A..B)
+#     error[E706]: <headline> (bytes C..D)
+#
+# We detect this shape so the renderer can print one line per error
+# (instead of letting Rich soft-wrap the whole blob into a paragraph).
+_MULTI_ERROR_BULLET = re.compile(
+    r"^\s*error\[(E\d+)\]:\s*(.*?)\s*\(bytes\s+(\d+)\s*\.\.\s*(\d+)\)\s*$"
+)
 
 
 def render_error(error: str | None) -> RenderableType:
     """Best-effort renderable for `error`.
 
-    Returns a Rich `Group` for parse errors that we can locate in the
-    source; otherwise returns a normalised one-line string suitable
-    for `console.print`.
+    Tries in order:
+      1. **CHAT parse error with byte span** → caret block (see
+         `_try_parse_error`).
+      2. **Multi-error summary** (e.g. a batch of `%mor` alignment
+         failures from the morphosyntax runner) → one bullet per error,
+         no soft-wrap (see `_try_multi_error_block`).
+      3. **Anything else** → collapsed one-liner.
     """
     msg = error or "<no message>"
     rendered = _try_parse_error(msg)
+    if rendered is not None:
+        return rendered
+    rendered = _try_multi_error_block(msg)
     if rendered is not None:
         return rendered
     return _normalise_one_line(msg)
@@ -57,10 +95,78 @@ def is_rich(rendered: Any) -> bool:
 
 # ---------------------------------------------------------------------------
 
+def _try_multi_error_block(error: str) -> RenderableType | None:
+    """Detect and render a multi-error summary as a clean bullet list.
+
+    Triggers when the message has at least two lines that match the
+    `error[E###]: ... (bytes A..B)` bullet shape. Returns a Rich
+    `Group` of one styled line per bullet — short codes get a hint of
+    colour, byte spans stay dim, the headline is plain. Crucially,
+    each line is rendered with `no_wrap=True` so a long headline gets
+    elided with an ellipsis instead of word-wrapping into a paragraph
+    and destroying the column alignment.
+    """
+    raw_lines = error.splitlines()
+    if len(raw_lines) < 2:
+        return None
+
+    # First line is the header ("morphosyntax produced N misaligned
+    # tiers:") and the remainder are bullets. We don't require the
+    # exact header text — any preamble line followed by ≥2 bullets is
+    # enough to engage the multi-error renderer.
+    bullets: list[tuple[str, str, str, str]] = []  # (code, headline, start, end)
+    preamble = ""
+    for i, line in enumerate(raw_lines):
+        m = _MULTI_ERROR_BULLET.match(line)
+        if m is not None:
+            bullets.append((m.group(1), m.group(2), m.group(3), m.group(4)))
+        elif not bullets and not preamble:
+            preamble = line.strip()
+
+    if len(bullets) < 2:
+        return None
+
+    out: list[RenderableType] = []
+    if preamble:
+        # Strip a Python-class envelope ("ValueError: morphosyntax produced …")
+        # so the preamble reads like a sentence.
+        cleaned = _PY_PREFIX.sub("", preamble).strip()
+        # Trim the trailing colon — the bullets ARE the list, so a
+        # bare "morphosyntax produced 3 misaligned tiers" reads better
+        # than "...tiers:" followed by indented items.
+        cleaned = cleaned.rstrip(":").strip()
+        if cleaned:
+            out.append(Text(cleaned, style="bold red"))
+
+    for code, headline, start, end in bullets:
+        line = Text(no_wrap=True, overflow="ellipsis")
+        line.append("    ")
+        line.append(code, style="bold yellow")
+        line.append("  ")
+        line.append(headline)
+        line.append(f"  bytes {start}..{end}", style="dim")
+        out.append(line)
+
+    return Group(*out)
+
+
 def _try_parse_error(error: str) -> RenderableType | None:
+    """Render a CHAT parse failure as a stacked set of caret blocks.
+
+    Handles the two shapes the engine emits today:
+
+    - Single error: `parse <path>: CHAT parse error: error[E###]: ... (bytes A..B)`
+    - Multiple errors in one message (one of `parse_and_validate`'s
+      common failure modes): the same prefix, then a flat run of
+      `error[E###]: ... (bytes A..B)` entries.
+
+    Each entry gets its own caret block; the file path is shown once
+    as a dim header (basename + `(line:col, …)`) rather than once per
+    entry, to keep the summary tight when 5+ errors come back from one
+    file.
+    """
     path_m = _PARSE_PATH.search(error)
-    span_m = _BYTE_SPAN.search(error)
-    if path_m is None or span_m is None:
+    if path_m is None:
         return None
     path = Path(path_m.group(1).strip())
     if not path.is_file():
@@ -70,57 +176,70 @@ def _try_parse_error(error: str) -> RenderableType | None:
     except OSError:
         return None
 
-    start_byte = int(span_m.group(1))
-    end_byte = int(span_m.group(2))
-
-    # Spans from Rust are half-open `[start, end)`. The last byte IN
-    # the span is `end - 1`; using `end` directly puts us on the line
-    # after the span whenever the trailing byte is a newline, which
-    # makes the renderer incorrectly tag a single-line span as
-    # multi-line.
-    last_byte = max(start_byte, end_byte - 1)
-
-    # Prefer line/column from the error if present (parse-phase errors
-    # have it); else compute from byte offsets (validation-phase errors).
-    lc_m = _LINE_COL.search(error)
-    if lc_m is not None:
-        start_line = int(lc_m.group(1))
-        start_col  = int(lc_m.group(2))
-        end_line, end_col_inclusive = _byte_to_line_col(text, last_byte)
-        end_col = end_col_inclusive + 1
-    else:
-        start_line, start_col = _byte_to_line_col(text, start_byte)
-        end_line, end_col_inclusive = _byte_to_line_col(text, last_byte)
-        end_col = end_col_inclusive + 1
-
-    lines = text.splitlines()
-    if not (1 <= start_line <= len(lines)):
+    entries = list(_ERROR_ENTRY.finditer(error))
+    if not entries:
         return None
 
-    code_m = _ERROR_CODE.search(error)
-    code = code_m.group(1) if code_m else "?"
-    msg  = (code_m.group(2).strip() if code_m else _normalise_one_line(error))
+    lines = text.splitlines()
 
-    return _render_caret_block(
-        path=path,
-        start_line=start_line, start_col=start_col,
-        end_line=end_line,     end_col=end_col,
-        lines=lines, code=code, msg=msg,
-    )
+    # Prefer parser-supplied (line, column) when present — the first error
+    # in a parse-phase failure usually carries one. Computed from the byte
+    # offset otherwise; same fallback the old single-error path used.
+    lc_m = _LINE_COL.search(error)
+
+    blocks: list[RenderableType] = []
+    for i, m in enumerate(entries):
+        code = m.group(1)
+        msg = m.group(2).strip()
+        start_byte = int(m.group(3))
+        end_byte = int(m.group(4))
+        last_byte = max(start_byte, end_byte - 1)
+
+        if i == 0 and lc_m is not None:
+            start_line = int(lc_m.group(1))
+            start_col = int(lc_m.group(2))
+        else:
+            start_line, start_col = _byte_to_line_col(text, start_byte)
+        end_line, end_col_inclusive = _byte_to_line_col(text, last_byte)
+        end_col = end_col_inclusive + 1
+
+        if not (1 <= start_line <= len(lines)):
+            continue
+
+        if i > 0:
+            blocks.append(Text(""))  # spacer between stacked blocks
+        blocks.append(
+            _render_caret_block(
+                start_line=start_line, start_col=start_col,
+                end_line=end_line, end_col=end_col,
+                lines=lines, code=code, msg=msg,
+            )
+        )
+
+    if not blocks:
+        return None
+
+    # The failure-row label ("fail  eifersucht.cha") already names the
+    # file, so we deliberately do NOT add a basename header here — that
+    # would repeat the same name one line below itself.
+    return Group(*blocks)
 
 
 def _render_caret_block(
-    *, path: Path, start_line: int, start_col: int,
+    *, start_line: int, start_col: int,
     end_line: int, end_col: int, lines: list[str],
     code: str, msg: str,
 ) -> RenderableType:
-    """Build a `Group` with: header, file:line:col, one line of prior
-    context, the offending line, and a caret marker below it.
+    """Build a `Group` with: header, one line of prior context, the
+    offending line, and a caret marker below it.
+
+    The file path is rendered ONCE by the caller (above the stack of
+    blocks) — repeating it per block would make a 5-error summary
+    unreadable.
     """
     out: list[RenderableType] = []
     out.append(Text(f"error[{code}]: {msg}", style="bold red"))
-    out.append(Text(f"{path}:{start_line}:{start_col}", style="dim"))
-    out.append(Text(""))  # spacer
+    out.append(Text(f"  at line {start_line}, column {start_col}", style="dim"))
 
     # One line of prior context (when available) for orientation.
     if start_line >= 2:

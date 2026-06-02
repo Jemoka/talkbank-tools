@@ -333,11 +333,9 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
         .with_context(|| "audio_prep: codec init")?;
 
     let sample_rate = track.codec_params.sample_rate.unwrap_or(16_000);
-    let channels = track
-        .codec_params
-        .channels
-        .map(|c| c.count() as u16)
-        .unwrap_or(1);
+    // Source channel count is informational only — we downmix to mono below
+    // (BA2 parity: `torch.mean(audio.transpose(0,1), dim=1)` in
+    // `batchalign2/batchalign/models/wave2vec/infer_fa.py`).
 
     let mut pcm_f32: Vec<f32> = Vec::new();
     loop {
@@ -364,8 +362,28 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
         let decoded = decoder.decode(&packet).context("audio_prep: decode")?;
         let mut buf: AudioBuffer<f32> = decoded.make_equivalent();
         decoded.convert(&mut buf);
-        for plane in buf.planes().planes() {
-            pcm_f32.extend_from_slice(plane);
+        // Downmix to mono: every consumer (FA/ASR backends) treats
+        // `pcm_f32le` as a single-channel waveform indexed by
+        // `(time_ms * sample_rate / 1000)`. Concatenating planar channels
+        // (`[L_all, R_all]`) would double the effective length and shift
+        // every utterance window. Average across planes per frame.
+        let planes_holder = buf.planes();
+        let planes = planes_holder.planes();
+        if planes.is_empty() {
+            continue;
+        }
+        let frames = planes[0].len();
+        if planes.len() == 1 {
+            pcm_f32.extend_from_slice(planes[0]);
+        } else {
+            let n = planes.len() as f32;
+            for i in 0..frames {
+                let mut acc = 0.0f32;
+                for plane in planes {
+                    acc += plane[i];
+                }
+                pcm_f32.push(acc / n);
+            }
         }
     }
 
@@ -374,11 +392,9 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
         pcm_bytes.extend_from_slice(&sample.to_le_bytes());
     }
 
-    let frame_count = if channels == 0 {
-        pcm_f32.len() as u64
-    } else {
-        pcm_f32.len() as u64 / channels as u64
-    };
+    // pcm_f32 is now mono; downstream `channels` is the post-downmix value.
+    let channels: u16 = 1;
+    let frame_count = pcm_f32.len() as u64;
 
     Ok(PreparedAudio {
         pcm_f32le: pcm_bytes,
@@ -386,4 +402,58 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
         channels,
         frame_count,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Provenance stamp (BA version + engine name on a `@Comment` header)
+// ---------------------------------------------------------------------------
+
+/// Prefix every provenance `@Comment` starts with. Used to detect and replace
+/// a prior stamp on retag so reruns don't accrete a comment per invocation.
+pub const PROVENANCE_PREFIX: &str = "batchalign3 ";
+
+/// Insert (or refresh) a `@Comment: batchalign3 <sha> | engine: <name>` header
+/// just before the first utterance.
+///
+/// Used by both `AsrTaskRunner` (stamps a freshly-built CHAT) and
+/// `FaTaskRunner` (re-stamps an existing CHAT). Any prior comment starting
+/// with [`PROVENANCE_PREFIX`] is removed first, so retagging the same file
+/// doesn't accrete duplicates.
+///
+/// The git SHA is baked at compile time via `option_env!`. The Bazel path
+/// goes through `BATCHALIGN_GIT_SHA`; cargo via `VERGEN_GIT_SHA`. Falls back
+/// to `"unknown"` when neither is set (test runs, IDE checks).
+pub fn stamp_provenance(lines: &mut Vec<talkbank_model::Line>, engine: Option<&str>) {
+    use talkbank_model::Line;
+    use talkbank_model::model::{BulletContent, Header};
+
+    let sha = option_env!("VERGEN_GIT_SHA")
+        .or(option_env!("BATCHALIGN_GIT_SHA"))
+        .unwrap_or("unknown");
+    let stamp = match engine {
+        Some(name) => format!("{PROVENANCE_PREFIX}{sha} | engine: {name}"),
+        None => format!("{PROVENANCE_PREFIX}{sha}"),
+    };
+
+    lines.retain(|l| match l.as_header() {
+        Some(Header::Comment { content }) => {
+            !content.to_chat_string().starts_with(PROVENANCE_PREFIX)
+        }
+        _ => true,
+    });
+
+    let comment = Line::header(Header::Comment {
+        content: BulletContent::from_text(stamp),
+    });
+    let insert_at = lines
+        .iter()
+        .position(Line::is_utterance)
+        .unwrap_or_else(|| {
+            // No utterances: place before `@End`, or append if no `@End`.
+            lines
+                .iter()
+                .rposition(|l| matches!(l.as_header(), Some(Header::End)))
+                .unwrap_or(lines.len())
+        });
+    lines.insert(insert_at, comment);
 }

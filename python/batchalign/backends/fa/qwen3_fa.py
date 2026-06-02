@@ -8,24 +8,53 @@ asks the Qwen3 aligner for word-level timestamps relative to the audio.
 This is the standalone counterpart to the FA already wired in
 `backends/asr/qwen3_asr.py` (where the aligner runs as part of ASR).
 
-API key resolution: none; the Qwen weights are HuggingFace models, no
-service auth required.
+API surface (verified against the installed `qwen_asr` package):
 
-Implementation notes:
+  Qwen3ForcedAligner.align(audio, text, language) -> List[ForcedAlignResult]
 
-- The Qwen3 ForcedAligner accepts a text reference + audio; for each
-  reference word it emits `(start_ms, end_ms)`. We pass the CHAT main
-  tier text as the reference, mirroring how `Wav2Vec2FaBackend` does
-  it.
-- Per `qwen3_asr.py:79-87`, MPS produces degraded outputs on the 1.7B
-  model; default to CPU and warn on MPS.
+* `audio` accepts `str` (path/url/base64) or `(np.ndarray, sr)` tuples.
+  qwen_asr's `normalize_audio_input` downmixes to mono + resamples to
+  16 kHz internally, so we hand it `(chunk, native_sr)` and let it do
+  the work — no pre-resampling on our side.
+* `text` is the reference transcript (joined main-tier word surfaces).
+* `language` is an English language name ("English", "Cantonese", …).
+  We resolve `FaInput.language` (a `LanguageSpec` filled by
+  `FaTaskRunner` from the CHAT's `@Languages:` header) through
+  `pycountry` via `LanguageCode.from_str` and map to a Qwen name via
+  the shared `qwen_language_name` helper (`backends/_qwen_lang.py`).
+  Falls back to English when the spec is unresolved (`PerFile` /
+  `Auto`) — the same fallback `FaTaskRunner` implicitly uses when the
+  header is absent.
+
+Each `ForcedAlignResult` carries `.items: List[ForcedAlignItem]` whose
+`.start_time` / `.end_time` are in seconds.
+
+Per `qwen3_asr.py` MPS guidance, default to CPU and warn on MPS.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from batchalign.backends._qwen_lang import qwen_language_name
 from batchalign.backends.base import FA, BatchPolicy
+from batchalign.lang import LanguageCode
+
+
+def _resolve_language(item_language: Any) -> str:
+    """Map a `FaInput.language` (LanguageSpec) to a Qwen language name.
+
+    `LanguageSpec` is a discriminated union (`LanguageSpecAuto` /
+    `LanguageSpecCode` / `LanguageSpecPerFile`). Only `Code` carries a
+    resolved ISO-639-3 — CHAT transcripts always use 3-letter codes, so
+    the Rust `FaTaskRunner` resolves `@Languages:` to `Code(...)` when
+    the header is present. The other two variants mean "no header" or
+    "let the backend pick"; both fall back to English here.
+    """
+    kind = getattr(item_language, "kind", None)
+    if kind == "code":
+        return qwen_language_name(LanguageCode.from_str(item_language.value))
+    return "English"
 
 
 class Qwen3FaBackend(FA):
@@ -80,7 +109,7 @@ class Qwen3FaBackend(FA):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         import numpy as np  # type: ignore[import-not-found]
         from batchalign._core.proto import (
             AsrSegment,
@@ -108,14 +137,15 @@ class Qwen3FaBackend(FA):
     ) -> list[Any]:
         """Run Qwen3's forced aligner once per utterance, return refined `AsrSegment`s.
 
-        The qwen_asr `forced_aligner.align(audio=..., reference=...)` API
-        returns a list of `ForcedAlignItem`s with `.text`, `.start` (s),
-        `.end` (s) per reference word.
+        Calls `forced_aligner.align(audio=(chunk, sr), text=reference,
+        language=name)` per utterance and reads `results[0].items[i].
+        {start_time, end_time}` (seconds) for each reference word.
         """
         if not item.utterances:
             return []
         wave = np.frombuffer(item.audio.pcm_f32le, dtype=np.float32).copy()
         sr = int(item.audio.sample_rate)
+        language = _resolve_language(item.language)
         aligned: list[Any] = []
         for utt in item.utterances:
             words = [w for w in utt.words if w.text]
@@ -130,12 +160,24 @@ class Qwen3FaBackend(FA):
                 )
                 continue
             lo = int(w0 * sr / 1000)
-            hi = int(w1 * sr / 1000)
+            hi = min(int(w1 * sr / 1000), wave.shape[0])
+            if hi <= lo:
+                aligned.append(
+                    AsrSegment(
+                        start_ms=w0, end_ms=w1, text=utt.text,
+                        speaker=getattr(utt, "speaker", None), words=utt.words,
+                    )
+                )
+                continue
             chunk = wave[lo:hi]
             reference = " ".join(w.text for w in words)
             try:
+                # qwen_asr resamples + downmixes the `(chunk, sr)` tuple
+                # internally — no pre-processing required on our side.
                 results = self._model.forced_aligner.align(
-                    audio=chunk, reference=reference,
+                    audio=(chunk, sr),
+                    text=reference,
+                    language=language,
                 )
             except Exception:
                 aligned.append(
@@ -145,10 +187,12 @@ class Qwen3FaBackend(FA):
                     )
                 )
                 continue
+
+            items = list(getattr(results[0], "items", [])) if results else []
             out_words: list[Any] = []
-            for w, ali in zip(words, results):
-                s = w0 + int(round(ali.start * 1000))
-                e = w0 + int(round(ali.end * 1000))
+            for w, ali in zip(words, items):
+                s = w0 + int(round(float(ali.start_time) * 1000))
+                e = w0 + int(round(float(ali.end_time) * 1000))
                 # Bound to utterance window (matches Wav2Vec2 behavior).
                 s = max(s, w0)
                 e = min(e, w1)
@@ -156,6 +200,12 @@ class Qwen3FaBackend(FA):
                     s, e = 0, 0
                 out_words.append(
                     AsrWord(text=w.text, start_ms=s, end_ms=e, confidence=None)
+                )
+            # If qwen returned fewer items than words, the trailing words
+            # stay untimed (BA2 parity for `(0, 0)` rendering).
+            for w in words[len(items):]:
+                out_words.append(
+                    AsrWord(text=w.text, start_ms=0, end_ms=0, confidence=None)
                 )
             timed = [w for w in out_words if w.end_ms > 0]
             aligned.append(

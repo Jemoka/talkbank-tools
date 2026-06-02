@@ -128,34 +128,6 @@
       "required": [
         "kind"
       ]
-    },
-    {
-      "description": "Raw openSMILE result.",
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "const": "opensmile_result"
-        }
-      },
-      "$ref": "#/$defs/OpenSmileResultV2",
-      "required": [
-        "kind"
-      ]
-    },
-    {
-      "description": "Raw AVQI result.",
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "const": "avqi_result"
-        }
-      },
-      "$ref": "#/$defs/AvqiResultV2",
-      "required": [
-        "kind"
-      ]
     }
   ],
   "$defs": {
@@ -244,78 +216,6 @@
       "required": [
         "speaker",
         "elements"
-      ]
-    },
-    "AvqiResultV2": {
-      "description": "Raw AVQI output returned by the model host.",
-      "type": "object",
-      "properties": {
-        "avqi": {
-          "description": "AVQI score.",
-          "type": "number",
-          "format": "double"
-        },
-        "cpps": {
-          "description": "Cepstral Peak Prominence Smoothed.",
-          "type": "number",
-          "format": "double"
-        },
-        "cs_file": {
-          "description": "Continuous-speech file label echoed by the worker.",
-          "type": "string"
-        },
-        "error": {
-          "description": "Optional runtime error detail.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "hnr": {
-          "description": "Harmonics-to-noise ratio.",
-          "type": "number",
-          "format": "double"
-        },
-        "shimmer_local": {
-          "description": "Local shimmer percentage.",
-          "type": "number",
-          "format": "double"
-        },
-        "shimmer_local_db": {
-          "description": "Local shimmer in dB.",
-          "type": "number",
-          "format": "double"
-        },
-        "slope": {
-          "description": "LTAS slope.",
-          "type": "number",
-          "format": "double"
-        },
-        "success": {
-          "description": "Whether the runtime succeeded.",
-          "type": "boolean"
-        },
-        "sv_file": {
-          "description": "Sustained-vowel file label echoed by the worker.",
-          "type": "string"
-        },
-        "tilt": {
-          "description": "LTAS tilt.",
-          "type": "number",
-          "format": "double"
-        }
-      },
-      "required": [
-        "avqi",
-        "cpps",
-        "hnr",
-        "shimmer_local",
-        "shimmer_local_db",
-        "slope",
-        "tilt",
-        "cs_file",
-        "sv_file",
-        "success"
       ]
     },
     "CorefAnnotationV2": {
@@ -469,7 +369,7 @@
       ]
     },
     "LanguageCode3": {
-      "description": "3-letter ISO 639-3 language code (e.g. `\"eng\"`, `\"spa\"`).\n\nConstruction validates that the value is exactly 3 ASCII alphabetic\ncharacters, lowercased. Sentinel values like `\"auto\"` are rejected — use\n[`LanguageSpec`] at boundaries where auto-detection is meaningful.",
+      "description": "3-letter ISO 639-3 language code (e.g. `\"eng\"`, `\"spa\"`).\n\nConstruction validates that the value is exactly 3 ASCII alphabetic\ncharacters, lowercased. Sentinel values like `\"auto\"` are rejected \u2014 use\n[`LanguageSpec`] at boundaries where auto-detection is meaningful.",
       "type": "string"
     },
     "MonologueAsrResultV2": {
@@ -528,67 +428,6 @@
       },
       "required": [
         "items"
-      ]
-    },
-    "OpenSmileResultV2": {
-      "description": "Raw openSMILE output returned by the model host.",
-      "type": "object",
-      "properties": {
-        "audio_file": {
-          "description": "Source audio identifier echoed by the worker.",
-          "type": "string"
-        },
-        "duration_segments": {
-          "description": "Number of result rows/segments.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "error": {
-          "description": "Optional runtime error detail.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "feature_level": {
-          "description": "Requested feature-level name.",
-          "type": "string"
-        },
-        "feature_set": {
-          "description": "Requested feature-set name.",
-          "type": "string"
-        },
-        "num_features": {
-          "description": "Number of extracted feature columns.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "rows": {
-          "description": "Tabular feature rows keyed by feature name.",
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "number",
-              "format": "double"
-            }
-          }
-        },
-        "success": {
-          "description": "Whether the underlying runtime succeeded.",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "feature_set",
-        "feature_level",
-        "num_features",
-        "duration_segments",
-        "audio_file",
-        "rows",
-        "success"
       ]
     },
     "SpeakerResultV2": {

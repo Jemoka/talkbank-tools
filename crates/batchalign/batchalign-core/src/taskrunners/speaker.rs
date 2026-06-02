@@ -24,7 +24,7 @@ impl TaskRunner for SpeakerTaskRunner {
         &self,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
-        sink: &dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BAResult<()> {
         let chat = match value {
             BAValue::Chat(c) => c,
@@ -61,7 +61,7 @@ impl TaskRunner for SpeakerTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Speaker(input)).await?;
         let output: SpeakerOutput = output_raw.try_into()?;
 
-        relabel_utterances_by_diarization(chat, &output, sink)?;
+        relabel_utterances_by_diarization(chat, &output, &*sink)?;
 
         sink.emit(ProgressEvent::stage_injected(
             chat.source_id(),

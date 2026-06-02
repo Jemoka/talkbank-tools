@@ -472,7 +472,7 @@ class ChatWhisperBackend(ASR):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from batchalign._core.proto import AsrInput, AsrOutput
 
         outputs: list[Any] = []

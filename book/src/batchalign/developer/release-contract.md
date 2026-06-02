@@ -18,7 +18,6 @@ These surfaces will have committed APIs at 1.0. Breaking changes will follow
 semver after that point.
 
 - **CLI (`batchalign3`)** -- transcribe, align, morphotag, utseg, translate,
-  coref, opensmile, avqi.
 - **Python package (`batchalign3` on PyPI)** -- CLI entry point plus the
   `batchalign_core` Rust extension module.
 - **Local server mode (`batchalign3 serve`)** -- single-machine job execution

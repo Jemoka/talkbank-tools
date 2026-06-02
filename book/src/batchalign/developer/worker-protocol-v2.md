@@ -336,8 +336,6 @@ InferenceTask =
   Asr
   ForcedAlignment
   Speaker
-  Opensmile
-  Avqi
 ```
 
 > **Removed 2026-04-26: `ExpandNumbers`.** Number expansion was migrated
@@ -468,7 +466,6 @@ Current implementation status:
   live worker dispatch table
 - batchalign3 continues the batchalign2 product surface here: diarization is a
   capability used by `transcribe_s`, not a standalone CLI `speaker` command
-- `opensmile` and `avqi` now use the same `execute_v2(...)` envelope family with
   Rust-owned prepared-audio attachments and dedicated Rust request builders
 
 ### Morphosyntax, Utseg, Translate, Coref

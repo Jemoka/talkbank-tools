@@ -44,7 +44,6 @@ runtime — never via callbacks from Python.
 | `worker_protocol.rs` | IPC message dispatch (health, capabilities, infer, execute_v2) |
 | `worker_asr_exec.rs` | ASR execution (Whisper, Cantonese providers) |
 | `worker_fa_exec.rs` | Forced alignment execution |
-| `worker_media_exec.rs` | Speaker diarization, OpenSMILE, AVQI |
 | `worker_text_results.rs` | Text task normalization + `align_tokens` |
 | `worker_artifacts.rs` | Prepared artifact loading from IPC attachments |
 | `cantonese_asr_bridge.rs` | Cantonese provider projection + normalization |
@@ -67,8 +66,6 @@ the source under `crates/batchalign-pyo3/src/`.
 | `execute_asr_request_v2(...)` | Load prepared audio, call Whisper / Cantonese provider |
 | `execute_forced_alignment_request_v2(...)` | Load prepared audio + text, call FA model |
 | `execute_speaker_request_v2(...)` | Load prepared audio, call pyannote / NeMo |
-| `execute_opensmile_request_v2(...)` | Load prepared audio, extract acoustic features |
-| `execute_avqi_request_v2(...)` | Load paired audio, calculate voice quality |
 | `normalize_text_task_result(...)` | Reshape `BatchInferResponse` → typed V2 results |
 
 ### Utilities

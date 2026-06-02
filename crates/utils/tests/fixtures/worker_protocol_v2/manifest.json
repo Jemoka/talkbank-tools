@@ -69,14 +69,6 @@
       "file": "execute_request_speaker_nemo_prepared_audio.json"
     },
     {
-      "schema": "execute_request",
-      "file": "execute_request_opensmile_prepared_audio.json"
-    },
-    {
-      "schema": "execute_request",
-      "file": "execute_request_avqi_prepared_audio.json"
-    },
-    {
       "schema": "execute_response",
       "file": "execute_response_asr_success.json"
     },
@@ -115,14 +107,6 @@
     {
       "schema": "execute_response",
       "file": "execute_response_speaker_segments.json"
-    },
-    {
-      "schema": "execute_response",
-      "file": "execute_response_opensmile_success.json"
-    },
-    {
-      "schema": "execute_response",
-      "file": "execute_response_avqi_success.json"
     },
     {
       "schema": "progress_event",

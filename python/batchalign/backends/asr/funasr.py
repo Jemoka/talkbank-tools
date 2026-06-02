@@ -41,7 +41,7 @@ class FunAsrBackend(ASR):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         import numpy as np  # type: ignore[import-not-found]
         from batchalign._core.proto import AsrInput, AsrOutput, AsrSegment, AsrWord
 

@@ -42,7 +42,7 @@ impl TaskRunner for CompareTaskRunner {
         &self,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
-        sink: &dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BAResult<()> {
         let sid = value.source_id();
         sink.emit(ProgressEvent::stage_started(&sid, Task::Compare));

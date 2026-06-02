@@ -32,13 +32,11 @@ from batchalign._core import (  # type: ignore[attr-defined]
 
 # Backend trait + marker ABCs (pure Python).
 from batchalign.backends.base import (
-    AVQI,
     ASR,
     Backend,
     Coref,
     FA,
     Morphosyntax,
-    OpenSmile,
     Speaker,
     Translate,
     UtSeg,
@@ -69,7 +67,5 @@ __all__ = [
     "Morphosyntax",
     "Translate",
     "Coref",
-    "OpenSmile",
-    "AVQI",
     "declared_tasks",
 ]

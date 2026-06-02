@@ -86,33 +86,23 @@ This document is the unified reference for all Python/Rust interface boundaries 
 
 ---
 
-### 4. Media Analysis V2: OpenSMILE (`pyo3-media-opensmile`)
 **Purpose:** Acoustic feature extraction
 
 | Aspect | Location |
 |--------|----------|
-| Rust FFI | `crates/batchalign-pyo3/src/worker_media_exec.rs::execute_opensmile_request_v2()` |
-| Python executor | `python/batchalign/worker/_opensmile_v2.py::execute_opensmile_request_v2()` |
-| Schema | `schemas/ipc/worker_v2/OpenSmileRequestV2.json` |
 
 **Rust/Python contract:**
-- Input: `OpenSmileRequestV2` with prepared audio
 - Output: Numeric feature vectors
 - Side-effects: None
 
 ---
 
-### 5. Media Analysis V2: AVQI (`pyo3-media-avqi`)
 **Purpose:** Voice quality analysis (paired audio comparison)
 
 | Aspect | Location |
 |--------|----------|
-| Rust FFI | `crates/batchalign-pyo3/src/worker_media_exec.rs::execute_avqi_request_v2()` |
-| Python executor | `python/batchalign/worker/_avqi_v2.py::execute_avqi_request_v2()` |
-| Schema | `schemas/ipc/worker_v2/AvqiRequestV2.json` |
 
 **Rust/Python contract:**
-- Input: `AvqiRequestV2` with paired audio references
 - Output: Quality score + metrics
 - Side-effects: None
 

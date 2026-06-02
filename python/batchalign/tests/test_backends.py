@@ -13,8 +13,6 @@ from batchalign.backends.base import (
     Morphosyntax,
     Translate,
     Coref,
-    OpenSmile,
-    AVQI,
     BatchPolicy,
     Task,
     declared_tasks,
@@ -55,7 +53,7 @@ class _StubMorpho(_StubBackend, Morphosyntax):
 
 
 class _StubEverything(
-    _StubBackend, ASR, FA, Speaker, UtSeg, Morphosyntax, Translate, Coref, OpenSmile, AVQI
+    _StubBackend, ASR, FA, Speaker, UtSeg, Morphosyntax, Translate, Coref
 ):
     pass
 
@@ -95,8 +93,6 @@ def test_every_marker():
         Task.Morphosyntax,
         Task.Translate,
         Task.Coref,
-        Task.OpenSmile,
-        Task.Avqi,
     }
 
 

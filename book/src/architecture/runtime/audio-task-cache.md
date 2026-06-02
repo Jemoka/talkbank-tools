@@ -337,8 +337,6 @@ lookups but still stores results for future use.
 - **Speaker diarization** — depends on full audio context.
 - **Coreference** — document-level (not per-utterance); results
   depend on full document context.
-- **OpenSMILE features** — fast enough to recompute.
-- **AVQI scores** — fast enough to recompute.
 
 ## Media Conversion Cache
 

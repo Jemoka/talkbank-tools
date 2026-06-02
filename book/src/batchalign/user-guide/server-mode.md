@@ -14,7 +14,6 @@ direct local execution.
 
 - With `--server URL`, the CLI submits supported jobs to that server in content
   mode.
-- `transcribe`, `transcribe_s`, `benchmark`, and `avqi` prefer the local daemon
   when `auto_daemon` is enabled. In that case the CLI tries to reuse or start a
   loopback daemon first; if that local daemon path is unavailable, it falls back
   to the explicit `--server` target.
@@ -25,7 +24,6 @@ direct local execution.
   execution.
 - Local-daemon and auto-detected loopback-server paths use shared-filesystem
   `paths_mode` for local-audio commands such as `align`, `transcribe`,
-  `benchmark`, `opensmile`, and `avqi`. Explicit `--server` always stays on
   content mode, even when the URL is `localhost`.
 - This matters most on Apple CPU-only hosts: repeated `align` / `transcribe` /
   `benchmark` runs are much faster when warm workers are preserved behind a

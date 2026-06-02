@@ -7,12 +7,10 @@
 
 use crate::metrics::MetricsArtifact;
 use crate::proto::asr::{AsrInput, AsrOutput};
-use crate::proto::avqi::{AvqiInput, AvqiOutput};
 use crate::proto::compare::{CompareInput, CompareOutput};
 use crate::proto::coref::{CorefInput, CorefOutput};
 use crate::proto::fa::{FaInput, FaOutput};
 use crate::proto::morphosyntax::{MorphosyntaxInput, MorphosyntaxOutput};
-use crate::proto::opensmile::{OpenSmileInput, OpenSmileOutput};
 use crate::proto::speaker::{SpeakerInput, SpeakerOutput};
 use crate::proto::translate::{TranslateInput, TranslateOutput};
 use crate::proto::utseg::{UtSegInput, UtSegOutput};
@@ -57,17 +55,13 @@ pub enum Task {
     Coref,
     /// Pure-AST diff against a gold-standard transcript.
     Compare,
-    /// openSMILE acoustic feature extraction.
-    OpenSmile,
-    /// AVQI acoustic voice quality index.
-    Avqi,
 }
 
 impl Task {
     /// The upstream tasks this stage requires in the DAG.
     pub const fn requires(self) -> &'static [Task] {
         match self {
-            Task::Asr | Task::Speaker | Task::OpenSmile | Task::Avqi => &[],
+            Task::Asr | Task::Speaker => &[],
             Task::UtSeg => &[Task::Asr],
             Task::Fa => &[Task::UtSeg],
             Task::Morphosyntax => &[Task::UtSeg],
@@ -88,13 +82,11 @@ impl Task {
             Task::Translate => "translate",
             Task::Coref => "coref",
             Task::Compare => "compare",
-            Task::OpenSmile => "opensmile",
-            Task::Avqi => "avqi",
         }
     }
 
     /// Every variant — useful for iteration in tests and codegen.
-    pub const ALL: [Task; 10] = [
+    pub const ALL: [Task; 8] = [
         Task::Asr,
         Task::Fa,
         Task::Speaker,
@@ -103,8 +95,6 @@ impl Task {
         Task::Translate,
         Task::Coref,
         Task::Compare,
-        Task::OpenSmile,
-        Task::Avqi,
     ];
 }
 
@@ -133,6 +123,14 @@ macro_rules! union_input_output {
             /// Borrow the source-id carried inside the variant.
             pub fn source_id(&self) -> &SourceId {
                 match self { $( TaskInput::$variant(i) => &i.source_id, )* }
+            }
+        }
+
+        impl $crate::cache::CacheKey for TaskInput {
+            fn hash(&self, hasher: &mut ::blake3::Hasher) {
+                match self {
+                    $( TaskInput::$variant(i) => i.hash(hasher), )*
+                }
             }
         }
 
@@ -173,8 +171,6 @@ union_input_output! {
         Morphosyntax(MorphosyntaxInput) => Morphosyntax,
         Translate(TranslateInput) => Translate,
         Coref(CorefInput) => Coref,
-        OpenSmile(OpenSmileInput) => OpenSmile,
-        Avqi(AvqiInput) => Avqi,
         Compare(CompareInput) => Compare,
     }
     output {
@@ -185,8 +181,6 @@ union_input_output! {
         Morphosyntax(MorphosyntaxOutput),
         Translate(TranslateOutput),
         Coref(CorefOutput),
-        OpenSmile(OpenSmileOutput),
-        Avqi(AvqiOutput),
         Compare(CompareOutput),
     }
 }
@@ -219,8 +213,6 @@ try_from_output! {
     Morphosyntax(MorphosyntaxOutput),
     Translate(TranslateOutput),
     Coref(CorefOutput),
-    OpenSmile(OpenSmileOutput),
-    Avqi(AvqiOutput),
     Compare(CompareOutput),
 }
 
@@ -242,8 +234,8 @@ pub struct Chat<S = Validated> {
     ast: ChatFile<ModelValidated>,
     source_id: SourceId,
     /// Originating audio reference, threaded through the pipeline so
-    /// downstream stages (FA, speaker, opensmile, avqi) can decode PCM
-    /// without re-parsing `@Media` headers.
+    /// downstream stages (FA, speaker) can decode PCM without re-parsing
+    /// `@Media` headers.
     media: Option<MediaInput>,
     _state: PhantomData<S>,
 }
@@ -290,7 +282,7 @@ impl Chat<Validated> {
         }
     }
 
-    /// Attach an audio source so audio-dependent runners (FA, speaker, opensmile, avqi)
+    /// Attach an audio source so audio-dependent runners (FA, speaker)
     /// can locate the media after the document leaves the ASR stage.
     pub fn with_media(mut self, media: MediaInput) -> Self {
         self.media = Some(media);
@@ -394,7 +386,7 @@ impl Paired {
 /// than one artifact for one source — e.g. Compare returns
 /// `Cons(Chat(annotated), Cons(Metrics(per-pos CSV), Nil))`. The driver
 /// walks the list and writes each variant to its natural file extension
-/// (Chat → `.cha`, Metrics → `.compare.csv` / `.avqi.csv` / etc.).
+/// (Chat → `.cha`, Metrics → `.compare.csv` / etc.).
 #[derive(Debug)]
 pub enum BAValue {
     /// A reference to media on disk (the typical pipeline input).
@@ -403,7 +395,7 @@ pub enum BAValue {
     Chat(Chat<Validated>),
     /// Compare input: a main CHAT and a gold reference CHAT.
     Paired(Paired),
-    /// Terminal metrics (openSMILE, AVQI, compare summaries, …).
+    /// Terminal metrics (compare summaries, benchmarks, …).
     Metrics(MetricsArtifact),
     /// Lisp-style list cell. Tasks that emit multiple artifacts return a
     /// chain of these terminated by `Nil`.
@@ -513,8 +505,6 @@ impl BAValue {
 fn metrics_extension(kind: crate::metrics::MetricsKind) -> &'static str {
     use crate::metrics::MetricsKind;
     match kind {
-        MetricsKind::Opensmile => "opensmile.csv",
-        MetricsKind::Avqi => "avqi.csv",
         MetricsKind::Compare => "compare.csv",
         MetricsKind::Benchmark => "benchmark.csv",
         MetricsKind::Custom => "metrics.csv",
@@ -709,6 +699,191 @@ impl ProgressSink for NullSink {
 }
 
 // ---------------------------------------------------------------------------
+// Backend-side progress: composable per-stage progress reporting
+// ---------------------------------------------------------------------------
+//
+// Two layers report progress for a single stage:
+//
+//   * The *runner* (outer loop) — e.g. the morphosyntax runner dispatches
+//     once per utterance; it knows the total utterance count up-front.
+//   * The *backend* (inner loop) — e.g. the wav2vec2 FA backend slices
+//     audio into ~15 s groups inside a single `call()`; only the backend
+//     knows how many groups there are, and that count varies per call.
+//
+// We compose them into a single `(completed, total)` event stream via
+// `ScaledProgress`. The trick is a fixed denominator (`SCALE` below):
+// every outer step contributes exactly `SCALE` units regardless of how
+// many inner ticks the backend emits, so the bar's `total` stays constant
+// at `outer_total * SCALE` for the whole stage. Without this, the
+// denominator would change every step (`outer * inner_total_of_this_call`)
+// and ETA estimators / cached-max-total renderers would jitter — see the
+// design discussion that led to this module for the worked example.
+//
+// Backends that don't want to report per-call sub-progress simply never
+// invoke `BackendProgress::tick` — the bar still advances `SCALE` units
+// at each `ScaledProgress::start_step` boundary, matching the previous
+// runner-only ticking behavior.
+
+/// Backend-facing progress channel.
+///
+/// Passed into `Backend::call_with_progress` so a backend can report
+/// intra-call progress (e.g. "finished audio group `i` of `n`") without
+/// having to know about `SourceId`, `Task`, or how the runner is composing
+/// its work. The runner constructs a [`ScaledProgress`] that turns each
+/// `tick(i, n)` into a properly scaled outer `stage_tick`.
+///
+/// Backends that have nothing meaningful to report just never call `tick`.
+/// That is the no-op — no capability flag, no declaration. See
+/// [`NullBackendProgress`] for the trivial implementation handed to
+/// backends when the runner doesn't want per-call ticks.
+pub trait BackendProgress: Send + Sync {
+    /// Report that `completed` of `total` inner units are done.
+    ///
+    /// `completed` MUST be monotonically non-decreasing within a single
+    /// outer step. `total` SHOULD be constant within a step but is allowed
+    /// to vary across steps (the scaling absorbs the variance).
+    fn tick(&self, completed: u64, total: u64);
+}
+
+/// A `BackendProgress` that drops everything. Hand this to backends when
+/// the runner doesn't want per-call sub-progress (e.g. morphosyntax,
+/// where the runner already ticks at outer granularity around its own
+/// per-utterance dispatch loop).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NullBackendProgress;
+
+impl BackendProgress for NullBackendProgress {
+    fn tick(&self, _completed: u64, _total: u64) {}
+}
+
+/// Fixed denominator that every outer step contributes to the rendered
+/// `(completed, total)` event. See module-level comment above for why a
+/// constant denominator is load-bearing (ETA stability, renderer caching).
+pub const PROGRESS_SCALE: u64 = 4;
+
+/// Wraps a [`ProgressSink`] into a [`BackendProgress`] that composes outer
+/// (runner) and inner (backend) progress into a single, monotonically
+/// non-decreasing `(completed, total)` event stream.
+///
+/// Usage from a runner:
+///
+/// ```ignore
+/// let prog = std::sync::Arc::new(ScaledProgress::new(
+///     sink_arc, source_id, Task::Fa, outer_total,
+/// ));
+/// for input in inputs {
+///     prog.start_step();                                       // bar → (k-1)/N
+///     dispatcher
+///         .dispatch_with_progress(input, prog.clone())          // backend may tick
+///         .await?;
+///     // the bar stays monotonic and lands at k/N when the call returns.
+/// }
+/// ```
+///
+/// Properties:
+///
+/// * **Monotonic.** `(k-1)*SCALE + i*SCALE/n` is non-decreasing as long
+///   as the backend's `i/n` is non-decreasing within a step.
+/// * **Backend-silent steps still move the bar.** `start_step` emits
+///   the floor tick `(k-1)/N`, so a non-ticking backend produces N
+///   visible jumps (one per step) — identical to today's
+///   runner-only ticking shape.
+/// * **Variable inner totals across steps.** Each step normalizes to
+///   `[0, SCALE]`, so step 1's 17 groups and step 2's 3 groups don't
+///   distort each other's contribution.
+/// * **No protocol change.** Still `(completed, total)` on the wire.
+///   Sinks and renderers don't need to know scaling happened.
+///
+/// `ScaledProgress` is owned via `Arc` because the inner backend call
+/// runs on a `spawn_blocking` thread (Python backends acquire the GIL)
+/// and the channel between runner and batcher takes ownership of the
+/// progress handle. We hold the outer sink as `Arc<dyn ProgressSink>`
+/// to keep the type `'static` and cheap to clone.
+pub struct ScaledProgress {
+    outer: std::sync::Arc<dyn ProgressSink>,
+    source_id: SourceId,
+    task: Task,
+    outer_total: u64,
+    /// Current 1-indexed outer step; 0 before any `start_step` call.
+    /// `Relaxed` is enough — we publish a counter, not synchronize data;
+    /// a stale read in a backend tick would just bias one tick by one
+    /// step, still monotonic in practice.
+    outer_step: std::sync::atomic::AtomicU64,
+}
+
+impl ScaledProgress {
+    /// Construct a wrapper bound to one `(source_id, task)` pair.
+    pub fn new(
+        outer: std::sync::Arc<dyn ProgressSink>,
+        source_id: SourceId,
+        task: Task,
+        outer_total: u64,
+    ) -> Self {
+        Self {
+            outer,
+            source_id,
+            task,
+            outer_total,
+            outer_step: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
+
+    /// Advance to the next outer step and emit a floor tick.
+    ///
+    /// Call this BEFORE issuing the dispatch for step k. The bar will
+    /// land at `(k-1) * SCALE / outer_total * SCALE`. The bar advances
+    /// further if/when the backend calls `tick` during the dispatch.
+    pub fn start_step(&self) {
+        let k = self
+            .outer_step
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+        // Floor of step k: i=0, n=1 → inner=0 → completed = (k-1)*SCALE.
+        self.emit_scaled(k - 1, 0, 1);
+    }
+
+    /// Emit a final ceiling tick at `outer_total * SCALE / outer_total * SCALE`
+    /// so the bar lands at 100% after the loop finishes.
+    ///
+    /// Call this once after the last dispatch completes. Renderers that
+    /// only track `(completed, total)` ratios need this to see the bar
+    /// reach 100% — `start_step` emits the *floor* of each step, not the
+    /// ceiling of the previous one.
+    pub fn finish(&self) {
+        // Saturate at outer_total — calling `finish` mid-stage is a
+        // misuse but should still produce a sensible 100% bar.
+        let total = self.outer_total;
+        self.emit_scaled(total, 0, 1);
+    }
+
+    /// Emit one (completed, total) event scaled by `PROGRESS_SCALE`.
+    /// `k_minus_1` is the 0-indexed outer step the inner tick belongs to.
+    fn emit_scaled(&self, k_minus_1: u64, i: u64, n: u64) {
+        // Inner ticks at unknown granularity (n=0) collapse to 0
+        // contribution within the step — defensive, the typical n is ≥1.
+        let inner = if n == 0 { 0 } else { i * PROGRESS_SCALE / n };
+        let completed = k_minus_1 * PROGRESS_SCALE + inner;
+        let total = self.outer_total * PROGRESS_SCALE;
+        self.outer
+            .emit(ProgressEvent::stage_tick(&self.source_id, self.task, completed, total));
+    }
+}
+
+impl BackendProgress for ScaledProgress {
+    fn tick(&self, i: u64, n: u64) {
+        // Read (not bump) the current outer step. A backend ticking
+        // before any `start_step` would land at k_minus_1 = -1 in
+        // signed math; we floor at 0 via saturating_sub so a misuse
+        // produces noise, not panic.
+        let k = self
+            .outer_step
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .saturating_sub(1);
+        self.emit_scaled(k, i, n);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // TaskRunner traits + Dispatcher
 // ---------------------------------------------------------------------------
 
@@ -717,12 +892,46 @@ impl ProgressSink for NullSink {
 pub trait Dispatcher: Send + Sync {
     /// Send `input` to its task's batcher and await the typed output.
     async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput>;
+
+    /// Like [`dispatch`] but carries a `BackendProgress` channel the
+    /// backend may use to report intra-call progress (audio groups,
+    /// per-item ticks, …). Default impl ignores the channel and falls
+    /// through to `dispatch`, so legacy implementations stay correct.
+    ///
+    /// The handle is passed by `Arc` (not `&dyn`) because the engine
+    /// implementation ships it across a `spawn_blocking` boundary into
+    /// the backend's call thread. Runners typically construct one
+    /// [`ScaledProgress`] for the whole stage and `clone` the `Arc`
+    /// into each dispatch.
+    async fn dispatch_with_progress(
+        &self,
+        input: TaskInput,
+        _progress: std::sync::Arc<dyn BackendProgress>,
+    ) -> BAResult<TaskOutput> {
+        self.dispatch(input).await
+    }
+
+    /// Name of the backend currently registered to serve `task`, if any.
+    ///
+    /// Runners use this to annotate generated artifacts (e.g. ASR stamps a
+    /// `@Comment: batchalign3 v… | engine: …` header on the CHAT file it
+    /// produces). Default implementation returns `None` for stubs / tests
+    /// that don't carry routing information.
+    fn engine_name(&self, _task: Task) -> Option<String> {
+        None
+    }
 }
 
 /// Typed runner. Runners are *canonical* (one per `Task`) and stateless —
 /// they have no per-invocation config; per-pipeline tunables live on the
 /// backend constructor side, and per-file hints (language) are read off
 /// the chat's `@Languages:` header at dispatch time.
+///
+/// `sink` is an `Arc` (not a borrow) so the runner can hand the same
+/// underlying sink to [`ScaledProgress`], which lives long enough to be
+/// shipped across the engine's `spawn_blocking` boundary. Borrowing
+/// would prevent that — the trait object needs `'static` to cross
+/// thread boundaries inside Tokio.
 #[async_trait]
 pub trait TaskRunner: Send + Sync {
     /// The DAG node this runner services.
@@ -733,7 +942,7 @@ pub trait TaskRunner: Send + Sync {
         &self,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
-        sink: &dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BAResult<()>;
 }
 
@@ -746,7 +955,7 @@ pub trait DynTaskRunner: Send + Sync {
         &'a self,
         value: &'a mut BAValue,
         dispatcher: &'a dyn Dispatcher,
-        sink: &'a dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BoxFuture<'a, BAResult<()>>;
 }
 
@@ -759,7 +968,7 @@ impl<T: TaskRunner + 'static> DynTaskRunner for T {
         &'a self,
         value: &'a mut BAValue,
         dispatcher: &'a dyn Dispatcher,
-        sink: &'a dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BoxFuture<'a, BAResult<()>> {
         Box::pin(async move { <T as TaskRunner>::apply(self, value, dispatcher, sink).await })
     }

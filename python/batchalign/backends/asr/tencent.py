@@ -57,7 +57,7 @@ class TencentAsrBackend(ASR):
         from tencentcloud.asr.v20190614.asr_client import AsrClient  # type: ignore[import-not-found]
         from qcloud_cos import CosConfig, CosS3Client  # type: ignore[import-not-found]
 
-        creds = config.get_provider("tencent")
+        creds = config.get_provider("tencent", interactive=True)
         try:
             self._id = creds["id"]
             self._key = creds["key"]
@@ -98,7 +98,7 @@ class TencentAsrBackend(ASR):
     def _replace_cantonese(word: str) -> str:
         return _CANTONESE_WORD_REPLACEMENTS.get(word, word)
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from batchalign._core.proto import AsrInput, AsrOutput
 
         outputs: list[Any] = []

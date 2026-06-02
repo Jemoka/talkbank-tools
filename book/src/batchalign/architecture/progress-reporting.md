@@ -147,7 +147,6 @@ how many files are in the batch, even though individual files don't advance
 during the inference call. After inference, each file transitions to "Writing"
 with a per-file counter as results are saved to disk.
 
-### opensmile / avqi (media-analysis V2)
 
 | Stage | Label |
 |-------|-------|

@@ -56,9 +56,10 @@ use crate::proto::morphosyntax::{
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
 use smol_str::SmolStr;
+use talkbank_model::ParseError;
 use talkbank_model::Span;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
-use talkbank_model::alignment::{MorGraTerminatorSlot, try_align_mor_gra};
+use talkbank_model::alignment::{MorGraTerminatorSlot, align_main_to_mor, try_align_mor_gra};
 use talkbank_model::model::{
     DependentTier, GraTier, GrammaticalRelation, Mor, MorFeature, MorStem, MorTier, MorWord,
     PosCategory, Terminator,
@@ -76,17 +77,17 @@ impl TaskRunner for MorphosyntaxTaskRunner {
         &self,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
-        sink: &dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BAResult<()> {
         match value {
-            BAValue::Chat(chat) => process_chat(chat, dispatcher, sink).await,
+            BAValue::Chat(chat) => process_chat(chat, dispatcher, sink.clone()).await,
             // `Paired` is what Compare consumes; running morphosyntax over it
             // means tagging both main and gold, so the downstream
             // CompareBackend can lift POS off the `%mor` tier per token.
             BAValue::Paired(p) => {
                 let (main, gold) = p.as_mut_parts();
-                process_chat(main, dispatcher, sink).await?;
-                process_chat(gold, dispatcher, sink).await?;
+                process_chat(main, dispatcher, sink.clone()).await?;
+                process_chat(gold, dispatcher, sink.clone()).await?;
                 Ok(())
             }
             BAValue::Failed { .. } => Ok(()),
@@ -105,10 +106,14 @@ impl TaskRunner for MorphosyntaxTaskRunner {
 async fn process_chat(
     chat: &mut Chat,
     dispatcher: &dyn Dispatcher,
-    sink: &dyn ProgressSink,
+    sink: std::sync::Arc<dyn ProgressSink>,
 ) -> BAResult<()> {
+    use crate::base::ScaledProgress;
+    use std::sync::Arc;
+
     let source_id = chat.source_id().clone();
     sink.emit(ProgressEvent::stage_started(&source_id, Task::Morphosyntax));
+    let t_start = std::time::Instant::now();
 
     let language = resolve_per_file_language(chat);
 
@@ -116,25 +121,42 @@ async fn process_chat(
     // already carry a `%mor:` tier. Pre-tagged utterances are skipped end-to-
     // end (no dispatch, no re-injection) — the existing tier is authoritative.
     // This is the "morphotag is idempotent" contract Compare relies on.
+    let t_phase1 = std::time::Instant::now();
     let per_utt_tokens: Vec<Vec<String>> = chat.ast().utterances().map(extract_tokens).collect();
     let already_tagged: Vec<bool> = chat
         .ast()
         .utterances()
         .map(utterance_has_mor_tier)
         .collect();
+    tracing::info!(
+        target: "batchalign::morphosyntax",
+        sid = %source_id,
+        phase = "extract_tokens",
+        utterances = per_utt_tokens.len(),
+        elapsed_ms = t_phase1.elapsed().as_millis() as u64,
+    );
 
     // Phase 2: dispatch only for utterances missing `%mor`. Track the source
     // utterance index alongside each output so injection can apply them to
     // the right slots while leaving pre-tagged utterances untouched.
     //
-    // After each per-utterance dispatch we emit a `stage_tick` so the
-    // per-file Rich progress bar advances incrementally instead of
-    // sitting at 0 for the entire Stanza pass. `total` excludes
-    // already-tagged utterances — the bar reflects real work to do,
-    // matching BA2's `status_hook` semantics.
+    // Progress: this runner owns the per-utterance loop and the backend
+    // (Stanza) reports nothing — so we drive the outer step via
+    // `ScaledProgress::start_step` and pass the same Arc as the
+    // `BackendProgress` handle to `dispatch_with_progress`. The backend
+    // ignores it; only `start_step` advances the bar. `total_to_tag`
+    // excludes already-tagged utterances — the bar reflects real work
+    // to do, matching BA2's `status_hook` semantics.
     let total_to_tag = already_tagged.iter().filter(|t| !**t).count() as u64;
+    let progress = Arc::new(ScaledProgress::new(
+        sink.clone(),
+        source_id.clone(),
+        Task::Morphosyntax,
+        total_to_tag,
+    ));
+    let progress_dyn: Arc<dyn crate::base::BackendProgress> = progress.clone();
     let mut dispatched: Vec<(usize, MorphosyntaxOutput)> = Vec::new();
-    let mut completed_ticks: u64 = 0;
+    let t_dispatch = std::time::Instant::now();
     for (idx, tokens) in per_utt_tokens.iter().enumerate() {
         if already_tagged[idx] {
             continue;
@@ -151,20 +173,55 @@ async fn process_chat(
             retokenize: false,
             text,
         };
-        let task_out = dispatcher.dispatch(input.into()).await?;
+        progress.start_step();
+        let task_out = dispatcher
+            .dispatch_with_progress(input.into(), progress_dyn.clone())
+            .await?;
         let out: MorphosyntaxOutput = task_out.try_into()?;
         dispatched.push((idx, out));
-        completed_ticks += 1;
-        sink.emit(ProgressEvent::stage_tick(
-            &source_id,
-            Task::Morphosyntax,
-            completed_ticks,
-            total_to_tag,
-        ));
+    }
+    // Final ceiling tick so the bar reaches 100% after the loop.
+    progress.finish();
+
+    tracing::info!(
+        target: "batchalign::morphosyntax",
+        sid = %source_id,
+        phase = "dispatch",
+        dispatched = dispatched.len(),
+        elapsed_ms = t_dispatch.elapsed().as_millis() as u64,
+    );
+
+    // Phase 3: build typed tiers and inject into the utterances we tagged
+    // — but only when main↔`%mor` count agrees. Mismatched utterances are
+    // skipped (no partial `%mor`/`%gra`); the main tier is left untouched
+    // and a per-utterance warning is logged. This is the "skip-per-utt"
+    // contract: one bad utterance doesn't fail the whole file.
+    let t_inject = std::time::Instant::now();
+    let inject_stats = inject_mor_gra_tiers_selective(chat, &dispatched)?;
+    tracing::info!(
+        target: "batchalign::morphosyntax",
+        sid = %source_id,
+        phase = "inject",
+        injected = inject_stats.injected,
+        skipped_mismatch = inject_stats.skipped_count_mismatch,
+        skipped_empty = inject_stats.skipped_empty_output,
+        elapsed_ms = t_inject.elapsed().as_millis() as u64,
+    );
+    if inject_stats.skipped_count_mismatch > 0 {
+        tracing::info!(
+            target: "batchalign::morphosyntax",
+            sid = %source_id,
+            "morphotag: skipped %mor/%gra on {} utterance(s) due to main↔%mor count mismatch",
+            inject_stats.skipped_count_mismatch,
+        );
     }
 
-    // Phase 3: build typed tiers and inject into the utterances we tagged.
-    inject_mor_gra_tiers_selective(chat, &dispatched)?;
+    tracing::info!(
+        target: "batchalign::morphosyntax",
+        sid = %source_id,
+        phase = "total",
+        elapsed_ms = t_start.elapsed().as_millis() as u64,
+    );
 
     sink.emit(ProgressEvent::stage_injected(
         &source_id,
@@ -299,23 +356,53 @@ fn build_tiers(
     Ok(Some((mor_tier, gra_tier)))
 }
 
-/// Build typed `%mor`/`%gra` tiers for the subset of utterances we dispatched
-/// and attach them. `outputs` is the `(utterance_index, output)` list produced
-/// by `process_chat`'s skip-already-tagged loop; utterances absent from the
-/// list keep whatever tiers they already had.
+/// Per-file injection bookkeeping for tracing + telemetry.
+#[derive(Default)]
+struct InjectStats {
+    /// Utterances where `%mor`/`%gra` were committed.
+    injected: usize,
+    /// Backend returned an empty analysis (no tokens / no terminator) —
+    /// matches BA2's "no `%mor` line for a degenerate utterance" behavior.
+    skipped_empty_output: usize,
+    /// Built `(MorTier, GraTier)` candidate did NOT satisfy
+    /// [`align_main_to_mor`] for this utterance (E705/E706/E716). The
+    /// tiers are discarded; the main tier is left untouched. One bad
+    /// utterance no longer fails the whole file.
+    skipped_count_mismatch: usize,
+}
+
+/// Build typed `%mor`/`%gra` tiers for the dispatched utterances and
+/// attach them — but **only** when [`align_main_to_mor`] reports
+/// `is_error_free()` for the candidate tier against the utterance's
+/// main tier.
+///
+/// `align_main_to_mor` is the spec'd validator: it knows the CHAT-manual
+/// rules for fillers / nonwords / retraces / replacements / xxx / yyy / www
+/// via [`Utterance::mor_alignable_word_count`], and it checks E705 / E706
+/// (count) plus E716 (terminator value) in one pass. We use it here
+/// per-utterance as a typed pre-commit gate — never the homemade count
+/// check that loses sight of the domain rules.
+///
+/// Skipping (rather than failing) a mismatched utterance is intentional:
+/// the morphotag pipeline is supposed to be **best-effort per utterance**.
+/// A `%mor` we can't align to its main tier is worse than no `%mor` at
+/// all, but it isn't a reason to abandon the other N-1 utterances in the
+/// file.
 fn inject_mor_gra_tiers_selective(
     chat: &mut Chat,
     outputs: &[(usize, MorphosyntaxOutput)],
-) -> BAResult<()> {
+) -> BAResult<InjectStats> {
     use std::collections::HashMap;
 
+    let source_id = chat.source_id().clone();
     let by_idx: HashMap<usize, &MorphosyntaxOutput> =
         outputs.iter().map(|(i, o)| (*i, o)).collect();
 
-    let mut idx = 0usize;
+    let mut stats = InjectStats::default();
+    let mut utt_idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
         if let Line::Utterance(u) = line {
-            if let Some(out) = by_idx.get(&idx) {
+            if let Some(out) = by_idx.get(&utt_idx) {
                 // The %mor/%gra terminator kind comes from the utterance's own
                 // typed terminator; default to a period when the main tier has
                 // none (BA2's fallback).
@@ -325,15 +412,61 @@ fn inject_mor_gra_tiers_selective(
                     .terminator
                     .clone()
                     .unwrap_or(Terminator::Period { span: Span::DUMMY });
-                if let Some((mor_tier, gra_tier)) = build_tiers(out, terminator)? {
-                    u.dependent_tiers.push(DependentTier::Mor(mor_tier));
-                    u.dependent_tiers.push(DependentTier::Gra(gra_tier));
+                let candidate = build_tiers(out, terminator)?;
+                let Some((mor_tier, gra_tier)) = candidate else {
+                    stats.skipped_empty_output += 1;
+                    utt_idx += 1;
+                    continue;
+                };
+
+                // Pre-commit gate: run the spec'd validator against the
+                // candidate `%mor` for THIS utterance's main tier. If any
+                // diagnostic fires (E705 count too small, E706 too large,
+                // E716 terminator mismatch), drop the tiers on the floor
+                // and leave the main tier untouched — the fork's "no
+                // partial %mor" rule.
+                let alignment = align_main_to_mor(&u.main, &mor_tier);
+                if !alignment.is_error_free() {
+                    log_skipped_alignment(&source_id, utt_idx, &alignment.errors);
+                    stats.skipped_count_mismatch += 1;
+                    utt_idx += 1;
+                    continue;
                 }
+
+                u.dependent_tiers.push(DependentTier::Mor(mor_tier));
+                u.dependent_tiers.push(DependentTier::Gra(gra_tier));
+                stats.injected += 1;
             }
-            idx += 1;
+            utt_idx += 1;
         }
     }
-    Ok(())
+    Ok(stats)
+}
+
+/// Emit a per-utterance warning that downstream tooling can pick up via
+/// the `batchalign::morphosyntax` tracing target. Includes the validator's
+/// own diagnostic code + headline so an operator can scan for E705 / E706
+/// patterns by language.
+fn log_skipped_alignment(
+    source_id: &crate::utils::SourceId,
+    utterance_idx: usize,
+    errors: &[ParseError],
+) {
+    let codes: Vec<&str> = errors.iter().map(|e| e.code.as_str()).collect();
+    let headline = errors
+        .first()
+        .map(|e| e.message.lines().next().unwrap_or("").trim().to_string())
+        .unwrap_or_default();
+    // INFO, not WARN — a per-utterance skip is the runner doing its job
+    // (best-effort tagging), not an operator-actionable condition. The
+    // file-level summary in `process_chat` aggregates the count.
+    tracing::info!(
+        target: "batchalign::morphosyntax",
+        sid = %source_id,
+        utterance = utterance_idx,
+        codes = ?codes,
+        "morphotag: skipped %mor/%gra on utterance {utterance_idx}: {headline}",
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -427,27 +560,39 @@ mod tests {
 
     #[tokio::test]
     async fn emits_per_utterance_progress_ticks() -> BAResult<()> {
+        use crate::base::{PROGRESS_SCALE, ProgressSink};
         let chat = Chat::parse(FIXTURE, SourceId::try_new("fixture")?)?;
         let mut value = BAValue::Chat(chat);
         let dispatcher = RecordingDispatcher::new();
-        let sink = CapturingSink::new();
+        let sink = std::sync::Arc::new(CapturingSink::new());
         MorphosyntaxTaskRunner
-            .apply(&mut value, &dispatcher, &sink)
+            .apply(
+                &mut value,
+                &dispatcher,
+                sink.clone() as std::sync::Arc<dyn ProgressSink>,
+            )
             .await?;
 
         // Pull out only ticks (StageStarted with non-zero total). The
         // initial bare `stage_started(... total=0)` and the final
         // `stage_injected(... total=0)` are gated out.
+        //
+        // With `ScaledProgress`, the per-step bar uses `total =
+        // outer_total * PROGRESS_SCALE` so it stays constant even as
+        // backends report variable inner counts. For 2 outer steps with
+        // no backend ticks, we see start-of-step floors at 0 and 1*SCALE
+        // plus a final ceiling tick from `finish()` at 2*SCALE.
         let evs = sink.events.lock().expect("poisoned");
         let ticks: Vec<(u64, u64)> = evs
             .iter()
             .filter(|e| e.total > 0)
             .map(|e| (e.completed, e.total))
             .collect();
+        let s = PROGRESS_SCALE;
         assert_eq!(
             ticks,
-            vec![(1, 2), (2, 2)],
-            "expected one tick per dispatched utterance with total=2"
+            vec![(0, 2 * s), (1 * s, 2 * s), (2 * s, 2 * s)],
+            "expected scaled floor ticks at start of each step + ceiling on finish"
         );
         Ok(())
     }
@@ -458,7 +603,7 @@ mod tests {
         let mut value = BAValue::Chat(chat);
         let dispatcher = RecordingDispatcher::new();
         MorphosyntaxTaskRunner
-            .apply(&mut value, &dispatcher, &NullSink)
+            .apply(&mut value, &dispatcher, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
             .await?;
 
         // Inputs: one per utterance, language resolved per-file from the
@@ -487,6 +632,160 @@ mod tests {
         Ok(())
     }
 
+    /// Dispatcher that drops the last input token — produces a `%mor` shorter
+    /// than the main tier, the misalignment shape `align_main_to_mor` catches.
+    struct DropLastTokenDispatcher;
+
+    #[async_trait]
+    impl Dispatcher for DropLastTokenDispatcher {
+        async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
+            let m = match input {
+                TaskInput::Morphosyntax(m) => m,
+                other => {
+                    return Err(BAError::Internal(format!("unexpected: {:?}", other.task())));
+                }
+            };
+            let kept: Vec<&String> = m.tokens.iter().take(m.tokens.len().saturating_sub(1)).collect();
+            let tokens: Vec<MorphosyntaxToken> = kept
+                .into_iter()
+                .enumerate()
+                .map(|(i, t)| MorphosyntaxToken {
+                    text: t.clone(),
+                    units: vec![MorphosyntaxUnit {
+                        pos: "noun".to_owned(),
+                        lemma: t.clone(),
+                        features: vec![],
+                        index: (i + 1) as u32,
+                        head: 0,
+                        deprel: "ROOT".to_owned(),
+                    }],
+                })
+                .collect();
+            let n = tokens.len() as u32;
+            Ok(MorphosyntaxOutput {
+                source_id: m.source_id.clone(),
+                utterance_id: m.utterance_id,
+                tokens,
+                terminator: Some(GraTerminator {
+                    index: n + 1,
+                    head: if n == 0 { 0 } else { 1 },
+                    deprel: "PUNCT".to_owned(),
+                }),
+            }
+            .into())
+        }
+    }
+
+    #[tokio::test]
+    async fn skips_misaligned_utterances_without_failing_file() -> BAResult<()> {
+        // FIXTURE has two utterances ("it's red .", "cat dog ."). The
+        // dispatcher drops the last token of each → both candidates fail
+        // `align_main_to_mor`. The runner must NOT fail the file; instead
+        // it skips the tier injection for those utterances and leaves the
+        // main tier untouched. (Strategy #2 from the fork.)
+        let chat = Chat::parse(FIXTURE, SourceId::try_new("fixture")?)?;
+        let mut value = BAValue::Chat(chat);
+        MorphosyntaxTaskRunner
+            .apply(&mut value, &DropLastTokenDispatcher, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
+            .await
+            .expect("misaligned utterances must not fail the file");
+
+        let chat = match value {
+            BAValue::Chat(c) => c,
+            other => panic!("expected Chat, got {}", other.kind()),
+        };
+        let s = chat.to_chat();
+        assert!(!s.contains("%mor:"), "%mor must be skipped on mismatch: {s}");
+        assert!(!s.contains("%gra:"), "%gra must be skipped on mismatch: {s}");
+        // Main tier survives unchanged.
+        assert!(s.contains("*CHI:\tit's red ."), "main tier missing: {s}");
+        assert!(s.contains("*CHI:\tcat dog ."), "main tier missing: {s}");
+        Ok(())
+    }
+
+    /// Dispatcher that drops the last token of *only one* specific
+    /// utterance, leaving the others well-formed. Used to verify the
+    /// runner injects tiers for the good utterance while skipping the
+    /// bad one — partial success, the whole point of skip-per-utt.
+    struct DropLastForUttDispatcher {
+        bad_utt_id: u32,
+    }
+
+    #[async_trait]
+    impl Dispatcher for DropLastForUttDispatcher {
+        async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
+            let m = match input {
+                TaskInput::Morphosyntax(m) => m,
+                other => {
+                    return Err(BAError::Internal(format!("unexpected: {:?}", other.task())));
+                }
+            };
+            let drop_last = m.utterance_id == self.bad_utt_id;
+            let take_n = if drop_last {
+                m.tokens.len().saturating_sub(1)
+            } else {
+                m.tokens.len()
+            };
+            let tokens: Vec<MorphosyntaxToken> = m
+                .tokens
+                .iter()
+                .take(take_n)
+                .enumerate()
+                .map(|(i, t)| MorphosyntaxToken {
+                    text: t.clone(),
+                    units: vec![MorphosyntaxUnit {
+                        pos: "noun".to_owned(),
+                        lemma: t.clone(),
+                        features: vec![],
+                        index: (i + 1) as u32,
+                        head: 0,
+                        deprel: "ROOT".to_owned(),
+                    }],
+                })
+                .collect();
+            let n = tokens.len() as u32;
+            Ok(MorphosyntaxOutput {
+                source_id: m.source_id.clone(),
+                utterance_id: m.utterance_id,
+                tokens,
+                terminator: Some(GraTerminator {
+                    index: n + 1,
+                    head: if n == 0 { 0 } else { 1 },
+                    deprel: "PUNCT".to_owned(),
+                }),
+            }
+            .into())
+        }
+    }
+
+    #[tokio::test]
+    async fn partial_success_one_good_one_bad() -> BAResult<()> {
+        // utt 0 ("it's red") tags cleanly; utt 1 ("cat dog") loses its
+        // last token. The good utterance gets %mor/%gra; the bad one
+        // doesn't. The file succeeds.
+        let chat = Chat::parse(FIXTURE, SourceId::try_new("fixture")?)?;
+        let mut value = BAValue::Chat(chat);
+        MorphosyntaxTaskRunner
+            .apply(
+                &mut value,
+                &DropLastForUttDispatcher { bad_utt_id: 1 },
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
+            .await
+            .expect("partial success must not fail the file");
+
+        let chat = match value {
+            BAValue::Chat(c) => c,
+            other => panic!("expected Chat, got {}", other.kind()),
+        };
+        let s = chat.to_chat();
+        // utt 0 tagged.
+        assert!(s.contains("noun|it"), "good utt should have %mor: {s}");
+        // utt 1 not tagged (no noun|cat would appear — bad utt dropped).
+        assert!(!s.contains("noun|cat"), "bad utt must be skipped: {s}");
+        Ok(())
+    }
+
     #[tokio::test]
     async fn rejects_non_chat_variant() {
         use crate::utils::MediaInput;
@@ -496,7 +795,7 @@ mod tests {
         });
         let dispatcher = RecordingDispatcher::new();
         let err = MorphosyntaxTaskRunner
-            .apply(&mut value, &dispatcher, &NullSink)
+            .apply(&mut value, &dispatcher, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
             .await
             .expect_err("must reject non-Chat or Paired");
         match err {

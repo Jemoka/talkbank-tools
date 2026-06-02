@@ -5,8 +5,6 @@
 
 ## Overview
 
-Batchalign commands that process audio (`align`, `transcribe`, `opensmile`,
-`avqi`, `benchmark`) must resolve a media file for each input. Depending on the
 command, Rust then either prepares typed PCM artifacts for worker-protocol V2
 execution or passes through a normalized media path to a provider-specific
 engine. Container formats that downstream audio libraries cannot read —
@@ -162,7 +160,6 @@ resolution and **before** the audio path is passed to Python workers:
 | FA (align) | `runner/dispatch/fa_pipeline.rs` | Before audio identity + FA inference |
 | Transcribe | `runner/dispatch/transcribe_pipeline.rs` | Before ASR inference |
 | Benchmark | `runner/dispatch/benchmark_pipeline.rs:process_one_benchmark_file` | Before Rust benchmark orchestration dispatches ASR |
-| Media analysis | `runner/dispatch/media_analysis_v2.rs` | Before openSMILE/AVQI prepared-audio execution |
 
 ### Error Handling
 

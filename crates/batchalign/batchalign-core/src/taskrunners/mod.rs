@@ -4,12 +4,10 @@
 //! See `spec2.md` §24 for the phasing.
 
 pub mod asr;
-pub mod avqi;
 pub mod compare;
 pub mod coref;
 pub mod fa;
 pub mod morphosyntax;
-pub mod opensmile;
 pub mod speaker;
 pub mod translate;
 pub mod utseg;
@@ -34,7 +32,5 @@ pub fn canonical(task: Task) -> Box<dyn DynTaskRunner> {
         Task::Translate => Box::new(translate::TranslateTaskRunner),
         Task::Coref => Box::new(coref::CorefTaskRunner),
         Task::Compare => Box::new(compare::CompareTaskRunner),
-        Task::OpenSmile => Box::new(opensmile::OpenSmileTaskRunner),
-        Task::Avqi => Box::new(avqi::AvqiTaskRunner),
     }
 }

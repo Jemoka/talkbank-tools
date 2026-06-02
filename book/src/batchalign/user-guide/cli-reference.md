@@ -163,8 +163,6 @@ documentation.
 | --- | --- |
 | [**transcribe**](commands/transcribe.md) | Create `.cha` transcripts from audio via ASR |
 | [**benchmark**](commands/benchmark.md) | Transcribe and evaluate WER against gold `.cha` references |
-| [**opensmile**](commands/opensmile.md) | Extract acoustic features → `.opensmile.csv` (positional I/O) |
-| [**avqi**](commands/avqi.md) | Calculate Acoustic Voice Quality Index from paired `.cs`/`.sv` audio (positional I/O) |
 
 ## Operational commands
 
@@ -298,7 +296,6 @@ batchalign3 bench <COMMAND> <IN_DIR> <OUT_DIR> [--runs N]
 
 Benchmark command execution time across repeated runs. `<COMMAND>` is
 one of: `align`, `transcribe`, `transcribe_s` (with diarization),
-`morphotag`, `translate`, `utseg`, `benchmark`, `opensmile`, `coref`,
 `compare`. Distinct from the `benchmark` top-level command, which
 measures ASR word accuracy.
 

@@ -23,7 +23,6 @@ Contributor rule of thumb: if you are adding new command semantics, start in
 | **Cross-file batch transform** | `utseg`, `translate`, `coref` | Cross-file batching: pool utterances, group by language, dispatch languages concurrently, chunk large language groups across multiple workers | Two-level parallelism: cross-language × intra-language chunking (up to `max_workers_per_key` per language) |
 | **Reference projection** | `compare` | Concurrent files, but with two primary CHAT inputs per file | Main+gold comparison bundle plus AST-first materializers |
 | **Composite workflow** | `benchmark` | Concurrent files (semaphore-bounded by `num_workers`) | Transcribe first, then compare via typed command composition |
-| **Media analysis V2** | `opensmile`, `avqi` | Concurrent files (semaphore-bounded by `num_workers`) | Rust prepares audio, sends typed `execute_v2` requests, Python returns raw analysis payloads |
 
 All workflow families are server-side orchestrated or Rust-owned at the
 request boundary.
@@ -31,7 +30,6 @@ request boundary.
 ## Parallelism Model
 
 All per-file dispatch shapes (`align`, `transcribe`, `benchmark`,
-`morphotag`, `opensmile`, `avqi`) process files **concurrently** using
 supervised `tokio::spawn` tasks bounded by a
 `tokio::sync::Semaphore(num_workers)`. The number of workers is auto-tuned
 based on available memory and CPU cores, or set explicitly with `--workers N`.
@@ -557,12 +555,10 @@ sequenceDiagram
     W-->>Pool: {"ready": true, "pid": N}
 
     Server->>W: capabilities()
-    Note over W: Import-probe each InferTask:<br/>stanza → Morphosyntax, Utseg, Coref ✓<br/>googletrans → Translate ✓<br/>torch+torchaudio → FA ✓<br/>whisper or Rev key → ASR ✓<br/>parselmouth+torchaudio → AVQI ✓<br/>(no opensmile) → OpenSMILE ✗
 
     W-->>Server: CapabilitiesResponse {infer_tasks, engine_versions, commands=[]}
 
     Server->>Server: validate_infer_capability_gate()
-    Note over Server: Rust derives commands from infer tasks:<br/>morphotag needs Morphosyntax ✓<br/>utseg needs Utseg ✓<br/>translate needs Translate ✓<br/>coref needs Coref ✓<br/>align needs FA ✓<br/>opensmile needs OpenSMILE ✗ → excluded
 
     Server->>Server: Build final capabilities list
     Note over Server: /health now advertises:<br/>commands: [morphotag, utseg, translate, coref, align, transcribe, ...]<br/>infer_tasks: [Morphosyntax, Utseg, Translate, Coref, FA, ASR, ...]

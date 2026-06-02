@@ -18,6 +18,19 @@ use crate::pipeline::Pipeline;
 ///
 /// Called from the `#[pymodule]` shim in `lib.rs`.
 pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Install a tracing subscriber driven by `RUST_LOG`/`BATCHALIGN_LOG`
+    // so cache + runner instrumentation is visible from the Python CLI.
+    // try_init is a no-op if a subscriber is already installed.
+    let filter = tracing_subscriber::EnvFilter::try_from_env("BATCHALIGN_LOG")
+        .or_else(|_| tracing_subscriber::EnvFilter::try_from_default_env())
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .with_target(true)
+        .without_time()
+        .try_init();
+
     // Engine-side types.
     m.add_class::<Pipeline>()?;
     m.add_class::<CacheSpec>()?;

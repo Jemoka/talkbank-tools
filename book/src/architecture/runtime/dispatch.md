@@ -68,7 +68,6 @@ orchestration.
 
 ### Local-daemon-preferring commands
 
-`transcribe`, `transcribe_s`, `benchmark`, and `avqi` need
 client-local media discovery or local audio access. If `auto_daemon`
 is enabled and `--server` is also passed for one of these commands,
 the CLI tries the local daemon first and warns only when that reroute
@@ -94,7 +93,6 @@ typed materialization plus validation.
 flowchart TD
     registry["commands/catalog.rs\nreleased command specs"]
     command["commands/*.rs\ncommand-owned wrappers"]
-    perfile["PerFileWorkflow\ntranscribe / transcribe_s / align / morphotag / opensmile / avqi"]
     batched["CrossFileBatchWorkflow\nutseg / translate / coref"]
     projection["ReferenceProjectionWorkflow\ncompare"]
     composite["CompositeWorkflow\nbenchmark = transcribe + compare"]
@@ -114,7 +112,6 @@ flowchart TD
 | Cross-file batch | `utseg`, `translate`, `coref` | Pool utterances across files in one GPU batch |
 | Reference projection | `compare` | Main transcript + gold companion → projected views from typed compare bundle |
 | Composite | `benchmark` (= `transcribe` + `compare`) | Chains existing workflows without reimplementing |
-| Analysis | `opensmile`, `avqi` | Produces metrics / non-CHAT output |
 
 The low-level `speaker` infer task still exists for typed worker
 execution but is not a standalone CLI command; diarization remains
@@ -254,7 +251,6 @@ flowchart TD
 
 `crates/batchalign/src/command_model/`. Single source of truth for
 released command metadata. Replaces per-command macro files
-(`commands/opensmile.rs`, etc.) that declared duplicate constants.
 
 | API | Purpose |
 |---|---|

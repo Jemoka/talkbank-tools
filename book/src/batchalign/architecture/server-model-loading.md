@@ -148,11 +148,9 @@ Same engines as `transcribe` plus:
 
 ---
 
-### `opensmile` (task string: `opensmile`)
 
 | Module | Model | Source | Size | Loaded When | HF Hub |
 |--------|-------|--------|------|-------------|--------|
-| `inference/opensmile.py` | None (C++ feature extraction) | local | negligible | Worker startup | No |
 
 Feature sets: `eGeMAPSv02`, `GeMAPSv01b`, `ComParE_2016`, `eGeMAPSv01b`.
 

@@ -89,7 +89,6 @@ models within a single process:
 |---------|----------|---------------|
 | **GPU** | `align`, `transcribe`, `transcribe_s`, `benchmark` | Whisper, Wave2Vec, and speaker models in one process |
 | **Stanza** | `morphotag`, `utseg`, `coref`, `compare` | Stanza NLP models (POS, constituency, coreference) |
-| **IO** | `translate`, `opensmile`, `avqi` | Lightweight translation and audio analysis |
 
 On large machines, this means running `align` followed by `transcribe` reuses
 the same GPU worker process — the ASR model loaded for transcription stays in
@@ -122,8 +121,6 @@ via `xtask gen-runtime-toml`; shared between Rust and Python at compile/import t
 | `utseg` | 2,000 | Stanza constituency parser |
 | `translate` | 4,000 | Translation model (Seamless M4T or Google) |
 | `coref` | 2,000 | Stanza coreference model |
-| `opensmile` | 500 | Lightweight feature extractor |
-| `avqi` | 1,500 | Voice quality analysis |
 | `compare` | 2,000 | Stanza models (for normalization) |
 
 These are the *thread worker* values (shared-model mode). Process worker values

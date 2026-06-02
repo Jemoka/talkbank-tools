@@ -97,7 +97,7 @@ class GoogleTranslateBackend(Translate):
         # do `GoogleTranslateBackend(target="zho")` without touching the
         # task wiring.
         self._target = target
-        key = api_key if api_key is not None else config.get_api_key("google_translate")
+        key = api_key if api_key is not None else config.get_api_key("google_translate", interactive=True)
         self._client: Any = None
         self._mode: str
         if force_free:
@@ -131,7 +131,7 @@ class GoogleTranslateBackend(Translate):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from batchalign._core.proto import TranslateInput, TranslateOutput
 
         outputs: list[Any] = []

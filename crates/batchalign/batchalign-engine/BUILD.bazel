@@ -1,4 +1,4 @@
-"""batchalign-engine — tokio runtime, batching, redb cache, PyO3 Pipeline.
+"""batchalign-engine — tokio runtime, batching, LMDB cache, PyO3 Pipeline.
 
 Three Bazel artifacts:
 
@@ -46,6 +46,13 @@ rust_library(
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
     deps = all_crate_deps(normal = True) + _INTRA,
+    # Stamp the SHA via rules_rust (sourced from `bazel/stamp.sh` →
+    # stable-status.txt). Surfaces to Python as
+    # `batchalign._core.BATCHALIGN_GIT_SHA` (see `src/python.rs`).
+    rustc_env = {
+        "VERGEN_GIT_SHA": "{STABLE_GIT_HASH}",
+    },
+    stamp = 1,
 )
 
 # Python-loadable cdylib. Renamed to `_core.so` (no ABI tag) — CPython's
@@ -61,6 +68,13 @@ rust_shared_library(
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
     deps = all_crate_deps(normal = True) + _INTRA,
+    # Same SHA stamping as `:_core` above — the cdylib is what Python
+    # actually loads, so this is the path that surfaces the SHA to
+    # `batchalign._core.BATCHALIGN_GIT_SHA` for `version.py` to read.
+    rustc_env = {
+        "VERGEN_GIT_SHA": "{STABLE_GIT_HASH}",
+    },
+    stamp = 1,
     # macOS: tell the linker the libpython symbols will resolve at load
     # time, not link time. `-no_fixup_chains` works around
     # https://github.com/PyO3/pyo3/issues/5035.

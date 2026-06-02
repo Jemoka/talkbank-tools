@@ -1,4 +1,22 @@
 //! `FaTaskRunner` — refines word timings on an existing CHAT against its audio.
+//!
+//! Decodes the transcript's sibling audio via `crate::utils::prepare_pcm`,
+//! builds an `FaInput` whose `utterances` carry the existing main-tier text
+//! plus each utterance's media-bullet window, dispatches the input, and folds
+//! the returned per-word timings back onto each utterance as a typed `%wor`
+//! tier (one `Word` per token, each carrying an inline `\x15start_end\x15`
+//! bullet). The main-tier bullet is refined to span the first-aligned-word
+//! start … last-aligned-word end.
+//!
+//! Behavioral parity targets `batchalign2/batchalign/pipelines/fa/wave2vec_fa.py`
+//! (FA backend = MMS_FA; ~15 s utterance grouping; char-DP remap from
+//! MMS_FA output words back to source words; post-correction that, when the
+//! next item is untimed, extends the end by ~500 ms and bounds by the
+//! utterance window). Sample-rate normalization to 16 kHz mono happens at
+//! the audio-prep boundary (`utils::prepare_pcm`) so every FA backend sees
+//! the same waveform shape BA2's `audio_io.load` produced.
+//!
+//! Per spec2.md §9 and the BA2 `pipelines/fa/` reference.
 
 use crate::base::BAValue;
 use crate::base::Chat;
@@ -9,8 +27,11 @@ use crate::base::TaskInput;
 use crate::base::{Dispatcher, TaskRunner};
 use crate::proto::asr::{AsrSegment, AsrWord, LanguageSpec};
 use crate::proto::fa::{FaInput, FaOutput};
-use crate::utils::{BAError, BAResult, MediaInput, SourceId, SpeakerLabel, prepare_pcm};
+use crate::utils::{
+    BAError, BAResult, MediaInput, SourceId, SpeakerLabel, prepare_pcm, stamp_provenance,
+};
 use async_trait::async_trait;
+use smol_str::SmolStr;
 use std::path::Path;
 use talkbank_model::Line;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
@@ -46,7 +67,7 @@ impl TaskRunner for FaTaskRunner {
         &self,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
-        sink: &dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BAResult<()> {
         let chat = match value {
             BAValue::Chat(c) => c,
@@ -82,18 +103,61 @@ impl TaskRunner for FaTaskRunner {
             source_id: chat.source_id().clone(),
             audio,
             utterances,
-            // FA reads `@Languages:` off the chat anyway; backends that
-            // need a hard-pinned language pull it from their constructor.
-            language: LanguageSpec::PerFile,
+            // Resolve `@Languages:` here so language-aware FA backends
+            // (Qwen3, …) get a concrete code without re-parsing the CHAT.
+            // Language-agnostic backends (MMS_FA, Whisper) simply ignore
+            // this field. Mirrors the morphosyntax runner's pattern
+            // (`taskrunners/morphosyntax.rs::resolve_per_file_language`).
+            language: resolve_per_file_language(chat),
         };
 
-        let output_raw = dispatcher.dispatch(TaskInput::Fa(input)).await?;
+        // Progress: FA dispatches the whole file in one bulk call, so
+        // this runner has no outer loop to tick. Outer total is 1 step;
+        // the FA backend reports per-audio-group ticks (~15s wav2vec /
+        // ~20s whisper chunks) through `progress.tick(i, n)`. The
+        // wrapper rescales those into the 0..SCALE band so the bar
+        // advances inside the single outer step.
+        let source_id = chat.source_id().clone();
+        let progress = std::sync::Arc::new(crate::base::ScaledProgress::new(
+            sink.clone(),
+            source_id.clone(),
+            Task::Fa,
+            1,
+        ));
+        let progress_dyn: std::sync::Arc<dyn crate::base::BackendProgress> = progress.clone();
+        progress.start_step();
+        let output_raw = dispatcher
+            .dispatch_with_progress(TaskInput::Fa(input), progress_dyn)
+            .await?;
         let output: FaOutput = output_raw.try_into()?;
 
-        inject_word_timings(chat, &output.utterances, sink)?;
+        inject_word_timings(chat, &output.utterances)?;
+        // Ceiling tick — FA bar lands at 100% once the call returns and
+        // word timings are injected. A backend that didn't tick still
+        // sees the bar move from 0 → 100 here.
+        progress.finish();
+
+        // Stamp the file with BA version + engine name (parity with
+        // `asr.rs::build_chat_from_asr`'s provenance `@Comment`). The shared
+        // `stamp_provenance` helper dedupes any prior stamp so reruns don't
+        // accrete one `@Comment` per invocation.
+        let engine = dispatcher.engine_name(Task::Fa);
+        stamp_provenance(&mut chat.ast_mut().lines.0, engine.as_deref());
 
         sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Fa));
         Ok(())
+    }
+}
+
+/// Read the chat's `@Languages:` header and emit a concrete `LanguageSpec`.
+/// Falls back to `PerFile` (a no-op marker) when the header is absent so
+/// backends can do their own fallback. Same pattern as
+/// `taskrunners/morphosyntax.rs::resolve_per_file_language`.
+fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
+    if let Some(code) = chat.primary_language() {
+        LanguageSpec::Code(SmolStr::new(code))
+    } else {
+        LanguageSpec::PerFile
     }
 }
 
@@ -145,16 +209,16 @@ fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
 /// `Word` carrying an `inline_bullet` (`\x15start_end\x15` media-time mark) —
 /// and lets the CHAT writer serialize it. No `%wor` text is assembled by hand;
 /// building CHAT by string concatenation is forbidden (see `CLAUDE.md`).
-fn inject_word_timings(
-    chat: &mut Chat,
-    aligned: &[AsrSegment],
-    sink: &dyn ProgressSink,
-) -> BAResult<()> {
+///
+/// Progress: this is a fast post-processing loop that runs after the
+/// (slow) FA backend call returns. It no longer emits ticks — the
+/// runner's `ScaledProgress` reflects the actual alignment work via
+/// backend-side ticks during the dispatch, not the trailing
+/// in-memory tier-attachment loop.
+fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> {
     use talkbank_model::DependentTier;
     use talkbank_model::model::{Bullet, WorTier, Word};
 
-    let source_id = chat.source_id().clone();
-    let total = aligned.len() as u64;
     let mut idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
         let Line::Utterance(u) = line else { continue };
@@ -181,18 +245,18 @@ fn inject_word_timings(
             // Carry the utterance's own terminator onto `%wor` (BA2 parity);
             // the typed writer renders the bullets and the terminator.
             let wor = WorTier::from_words(words).with_terminator(u.main.content.terminator.clone());
+            // Retag semantics: if FA was already run (or the source CHAT
+            // shipped a `%wor:` tier), drop the old one so we don't end up
+            // with two `%wor:` lines per utterance. BA2 mutates word timings
+            // in place; the typed-tier equivalent is replace-not-append.
+            u.dependent_tiers
+                .retain(|t| !matches!(t, DependentTier::Wor(_)));
             u.dependent_tiers.push(DependentTier::Wor(wor));
             // BA2 refines the main-tier utterance bullet to span the aligned
             // words (first word start … last word end).
             u.main.content.bullet = Some(Bullet::new(seg.start_ms, seg.end_ms));
         }
         idx += 1;
-        sink.emit(ProgressEvent::stage_tick(
-            &source_id,
-            Task::Fa,
-            idx as u64,
-            total,
-        ));
     }
     if idx != aligned.len() {
         return Err(BAError::Internal(format!(

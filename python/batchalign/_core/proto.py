@@ -65,12 +65,6 @@ from batchalign._core._proto_generated import (  # noqa: F401
     # Coref
     CorefInput,
     CorefOutput,
-    # openSMILE
-    OpenSmileInput,
-    OpenSmileOutput,
-    # AVQI
-    AvqiInput,
-    AvqiOutput,
     # Compare
     CompareInput,
     CompareMetrics,
@@ -116,8 +110,6 @@ _TAG_TO_INPUT: dict[str, type] = {
     "Morphosyntax": MorphosyntaxInput,
     "Translate": TranslateInput,
     "Coref": CorefInput,
-    "OpenSmile": OpenSmileInput,
-    "Avqi": AvqiInput,
     "Compare": CompareInput,
 }
 
@@ -129,8 +121,6 @@ _OUTPUT_TO_TAG: dict[type, str] = {
     MorphosyntaxOutput: "Morphosyntax",
     TranslateOutput: "Translate",
     CorefOutput: "Coref",
-    OpenSmileOutput: "OpenSmile",
-    AvqiOutput: "Avqi",
     CompareOutput: "Compare",
 }
 

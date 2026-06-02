@@ -16,6 +16,7 @@ use crate::base::{ProgressEvent, ProgressSink};
 use crate::proto::asr::{AsrInput, AsrOutput, LanguageSpec};
 use crate::utils::SourceId;
 use crate::utils::SpeakerLabel;
+use crate::utils::stamp_provenance;
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
 use std::collections::BTreeMap;
@@ -34,7 +35,7 @@ impl TaskRunner for AsrTaskRunner {
         &self,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
-        sink: &dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BAResult<()> {
         let media = match value {
             BAValue::Media(m) => m.clone(),
@@ -63,8 +64,9 @@ impl TaskRunner for AsrTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Asr(input)).await?;
         let output: AsrOutput = output_raw.try_into()?;
 
-        let chat =
-            build_chat_from_asr(&media.source_id, &language, &output)?.with_media(media.clone());
+        let engine = dispatcher.engine_name(Task::Asr);
+        let chat = build_chat_from_asr(&media.source_id, &language, &output, engine.as_deref())?
+            .with_media(media.clone());
         *value = BAValue::Chat(chat);
 
         sink.emit(ProgressEvent::stage_injected(&media.source_id, Task::Asr));
@@ -84,6 +86,7 @@ fn build_chat_from_asr(
     source_id: &SourceId,
     language: &LanguageSpec,
     output: &AsrOutput,
+    engine: Option<&str>,
 ) -> BAResult<Chat> {
     use talkbank_model::ErrorCollector;
     use talkbank_transform::build_chat::{
@@ -171,7 +174,16 @@ fn build_chat_from_asr(
         write_wor: false,
     };
 
-    let chat_file = build_chat(&desc).map_err(|e| BAError::Internal(format!("build_chat: {e}")))?;
+    let mut chat_file =
+        build_chat(&desc).map_err(|e| BAError::Internal(format!("build_chat: {e}")))?;
+
+    // Stamp provenance as a `@Comment` header: BA version + engine name.
+    // Inserted just before the first utterance so it sits at the tail of the
+    // header block — visible to anyone reading the file, ignored by the
+    // alignment / mor / wor stages downstream. Shared with `FaTaskRunner`
+    // via `utils::stamp_provenance`.
+    stamp_provenance(&mut chat_file.lines.0, engine);
+
     let collector = ErrorCollector::new();
     let validated = chat_file.validate_into(&collector, None);
     Ok(Chat::from_validated_ast(validated, source_id.clone()))
@@ -260,13 +272,25 @@ mod tests {
                 fake_segment("spk_1", "general kenobi", 1000, 2200),
             ],
         };
-        let chat =
-            build_chat_from_asr(&sid, &LanguageSpec::Code("eng".into()), &out).expect("chat");
+        let chat = build_chat_from_asr(
+            &sid,
+            &LanguageSpec::Code("eng".into()),
+            &out,
+            Some("WhisperBackend"),
+        )
+        .expect("chat");
         let text = chat.to_chat();
         assert!(text.contains("@Languages:\teng"));
         assert!(text.contains("@Participants:"));
         assert!(text.contains("*PAR0:\thello there ."));
         assert!(text.contains("*PAR1:\tgeneral kenobi ."));
+        // Provenance stamp: BA version + engine name.
+        assert!(
+            text.contains("@Comment:")
+                && text.contains("batchalign3 ")
+                && text.contains("WhisperBackend"),
+            "expected provenance @Comment in:\n{text}"
+        );
     }
 
     #[tokio::test]
@@ -296,7 +320,7 @@ mod tests {
         };
         let runner = AsrTaskRunner;
         runner
-            .apply(&mut value, &disp, &NullSink)
+            .apply(&mut value, &disp, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
             .await
             .expect("apply ok");
         match value {

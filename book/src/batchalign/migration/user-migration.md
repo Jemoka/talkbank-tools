@@ -56,8 +56,6 @@ that were not yet first-class there:
 | `coref` | `coref` | same purpose; public in BA3, still English-only, and still local-oriented |
 | `utseg` | `utseg` | same |
 | `benchmark` | `benchmark` | same high-level goal |
-| `opensmile` | `opensmile` | same high-level goal |
-| `avqi` | `avqi` | same high-level goal |
 | _(none)_ | `compare` | Added to BA2 master post-Feb 9; present in both current BA2 and BA3 |
 | `setup` | `setup` | still initializes local config |
 | `version` | `version` | still available |
@@ -222,7 +220,6 @@ for the three-state framing):
   - current BA3: dispatch distinguishes commands that prefer the local daemon
     from commands that can target a remote server directly. The set that
     prefers local-daemon execution is `transcribe`, `transcribe_s`,
-    `benchmark`, and `avqi`; for these, an explicit `--server` flag is
     ignored in favor of the local daemon. (See `command_prefers_local_daemon`
     in `crates/batchalign/src/cli/dispatch/mod.rs`.) A separate sidecar
     daemon profile exists in `cli/daemon.rs` for transcribe workloads that
@@ -357,8 +354,6 @@ For users, the practical current-state rule is:
 | `utseg` | same Python constituency + DP alignment algorithm, with cache/lazy-load cleanup | Python returns raw trees; Rust computes assignments and mutates CHAT directly |
 | `coref` | essentially same document-level Python+DP remap path | Python returns structured chains; Rust injects sparse `%xcoref` and enforces output policy |
 | `benchmark` | runtime/dispatch and benchmarking UX improve, but still Python-owned command flow | Rust now owns benchmark orchestration end to end; Python only contributes raw ASR inference when needed, and current BA3 still honors `--wor` / `--nowor` |
-| `opensmile` | mostly lazy-load/runtime cleanup | still pure feature extraction, but now behind typed prepared-audio V2 contracts with explicit non-CHAT output handling |
-| `avqi` | mostly lazy-load/runtime cleanup | still pure AVQI computation, but now behind typed prepared-audio V2 contracts and explicit paired-audio inputs |
 
 ## 4) Multilingual and language-specific changes users will notice
 
@@ -413,13 +408,10 @@ more predictably than the older Python-monolithic paths. The same separation
 also explains why `benchmark` is easier to reason about in BA3: Rust owns the
 composed workflow boundary instead of hiding it inside Python dispatch glue.
 
-### Media-analysis commands (`opensmile`, `avqi`)
 
 These are lighter migration targets than the CHAT-processing commands above.
 For most users the command lines did not change:
 
-- `opensmile input_dir output_dir` is still the shape
-- `avqi input_dir output_dir` is still the shape
 - feature-set and language options are preserved
 
 The important durable differences are operational rather than algorithmic:
@@ -427,11 +419,9 @@ The important durable differences are operational rather than algorithmic:
 - BA3 runs them behind typed prepared-audio V2 worker contracts
 - failures surface through job/log tooling instead of ad hoc `.error.txt`
   hunting during server/daemon runs
-- `avqi` no longer needs on-disk temporary mono WAV files
 
 One user-visible migration note does matter for scripting:
 
-- `opensmile` CSV output is now row-oriented (feature names as columns) rather
   than the transposed BA2 dataframe export shape (feature names as rows)
 
 ## 5) Migration checklist for existing users
@@ -455,7 +445,6 @@ One user-visible migration note does matter for scripting:
    port it to subprocess calls into `batchalign3`. There is no
    public Python API in BA3 — see
    [No Python API](../user-guide/python-api.md).
-6. If you have automation around `opensmile` CSV post-processing,
    check whether it assumed the old BA2 transposed CSV layout and
    update it for BA3's row-oriented output.
 7. Adopt `jobs` / `logs` / `cache` operational commands for

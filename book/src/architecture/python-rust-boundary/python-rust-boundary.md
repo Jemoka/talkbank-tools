@@ -76,7 +76,6 @@ flowchart TD
     cmd -->|"morphotag, utseg,\ntranslate, coref, compare"| allchat
     cmd -->|"transcribe,\ntranscribe_s"| transcribe
     cmd -->|benchmark| benchmark
-    cmd -->|"opensmile,\navqi"| media
     allchat -->|yes| infer
     allchat -->|"yes (align)"| fainfer
     allchat -->|no| fail
@@ -262,7 +261,6 @@ lib.rs                  module registration (~80 lines)
 worker_protocol.rs      IPC message dispatch
 worker_asr_exec.rs      ASR execution (Whisper, Cantonese providers)
 worker_fa_exec.rs       forced-alignment execution
-worker_media_exec.rs    speaker diarization, OpenSMILE, AVQI
 worker_text_results.rs  text task normalization + align_tokens
 worker_artifacts.rs     prepared-artifact loading from IPC
 cantonese_asr_bridge.rs Cantonese provider projection + normalization
@@ -279,8 +277,6 @@ calls the Python ML model, and returns raw results:
 | `execute_asr_request_v2` | ASR | PCM audio bytes | Run Whisper / Cantonese provider |
 | `execute_forced_alignment_request_v2` | FA | PCM audio + word JSON | Run Whisper / Wave2Vec FA |
 | `execute_speaker_request_v2` | Speaker | PCM audio bytes | Run pyannote / NeMo |
-| `execute_opensmile_request_v2` | OpenSMILE | PCM audio bytes | Extract acoustic features |
-| `execute_avqi_request_v2` | AVQI | Paired audio bytes | Calculate voice quality |
 | `normalize_text_task_result` | Text tasks | n/a | Reshape `BatchInferResponse` → V2 types |
 
 ### Cantonese provider bridges
@@ -321,7 +317,6 @@ Python model invocation.
 | `_execute_v2.py` | Typed V2 execute router for prepared-audio and prepared-text tasks |
 | `_text_v2.py` | Thin batched text-task V2 host; Rust owns text-task batch-result shaping |
 | `_artifact_inputs_v2.py` | Thin Python wrapper over Rust-owned prepared-artifact lookup, descriptor validation, file-slice reads |
-| `_asr_v2.py` / `_fa_v2.py` / `_speaker_v2.py` / `_opensmile_v2.py` / `_avqi_v2.py` | Thin Python wrappers over Rust-owned executor control planes |
 | `_types_v2.py` | Pydantic models mirroring V2 wire format |
 | `_protocol.py` | Stdio JSON-lines serving loop |
 | `_protocol_ops.py` | Thin Python wrapper over Rust-owned stdio op dispatch |
@@ -341,8 +336,6 @@ Python model invocation.
 | `fa.py` | audio+words → raw word-level timings |
 | `asr.py` | audio path / prepared waveform → raw ASR payloads |
 | `speaker.py` | prepared waveform → raw speaker diarization segments |
-| `opensmile.py` | prepared waveform → raw acoustic feature rows |
-| `avqi.py` | paired prepared waveforms → raw voice quality metrics |
 | `benchmark.py` | Thin convenience wrapper over `batchalign_core.wer_metrics()` |
 
 Each is a pure inference function — no CHAT parsing, no text
@@ -380,8 +373,6 @@ to be advertised:
 | `translate` | `googletrans` | `"googletrans-v1"` |
 | `fa` | `torch`, `torchaudio` | `"whisper"` |
 | `asr` | `whisper` or a configured Rev.AI key | `"whisper"` or `"rev"` |
-| `opensmile` | `opensmile` | `"opensmile"` |
-| `avqi` | `parselmouth`, `torchaudio` | `"praat"` |
 | `speaker` | `pyannote.audio` | `"pyannote"` |
 
 Rev.AI-backed server-mode transcription and Rev-backed UTR are
@@ -408,7 +399,6 @@ user-facing diarization surface is `transcribe_s` / `--diarize`.
 {
   "commands": [],
   "infer_tasks": ["morphosyntax", "utseg", "translate", "coref", "fa",
-                  "asr", "opensmile", "avqi", "speaker"],
   "engine_versions": {
     "morphosyntax": "1.9.2",
     "utseg": "1.9.2",

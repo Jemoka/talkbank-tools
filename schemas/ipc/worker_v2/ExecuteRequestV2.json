@@ -183,24 +183,6 @@
         "input"
       ]
     },
-    "AvqiRequestV2": {
-      "description": "V2 AVQI request payload.",
-      "type": "object",
-      "properties": {
-        "cs_audio_ref_id": {
-          "description": "Reference to the prepared continuous-speech audio attachment.",
-          "$ref": "#/$defs/WorkerArtifactIdV2"
-        },
-        "sv_audio_ref_id": {
-          "description": "Reference to the prepared sustained-vowel audio attachment.",
-          "$ref": "#/$defs/WorkerArtifactIdV2"
-        }
-      },
-      "required": [
-        "cs_audio_ref_id",
-        "sv_audio_ref_id"
-      ]
-    },
     "ByteLengthV2": {
       "description": "Byte length inside a prepared artifact file.",
       "type": "integer",
@@ -356,16 +338,6 @@
           "description": "Speaker diarization.",
           "type": "string",
           "const": "speaker"
-        },
-        {
-          "description": "OpenSMILE feature extraction.",
-          "type": "string",
-          "const": "opensmile"
-        },
-        {
-          "description": "AVQI feature extraction.",
-          "type": "string",
-          "const": "avqi"
         }
       ]
     },
@@ -387,7 +359,7 @@
       ]
     },
     "LanguageCode3": {
-      "description": "3-letter ISO 639-3 language code (e.g. `\"eng\"`, `\"spa\"`).\n\nConstruction validates that the value is exactly 3 ASCII alphabetic\ncharacters, lowercased. Sentinel values like `\"auto\"` are rejected — use\n[`LanguageSpec`] at boundaries where auto-detection is meaningful.",
+      "description": "3-letter ISO 639-3 language code (e.g. `\"eng\"`, `\"spa\"`).\n\nConstruction validates that the value is exactly 3 ASCII alphabetic\ncharacters, lowercased. Sentinel values like `\"auto\"` are rejected \u2014 use\n[`LanguageSpec`] at boundaries where auto-detection is meaningful.",
       "type": "string"
     },
     "MorphosyntaxRequestV2": {
@@ -425,29 +397,6 @@
       "type": "integer",
       "format": "uint32",
       "minimum": 0
-    },
-    "OpenSmileRequestV2": {
-      "description": "V2 openSMILE request payload.",
-      "type": "object",
-      "properties": {
-        "audio_ref_id": {
-          "description": "Reference to the prepared audio attachment.",
-          "$ref": "#/$defs/WorkerArtifactIdV2"
-        },
-        "feature_level": {
-          "description": "Requested openSMILE feature-level name.",
-          "type": "string"
-        },
-        "feature_set": {
-          "description": "Requested openSMILE feature-set name.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "audio_ref_id",
-        "feature_set",
-        "feature_level"
-      ]
     },
     "PreparedAudioEncodingV2": {
       "description": "PCM encoding used for prepared audio artifacts.",
@@ -773,34 +722,6 @@
             }
           },
           "$ref": "#/$defs/SpeakerRequestV2",
-          "required": [
-            "kind"
-          ]
-        },
-        {
-          "description": "OpenSMILE request.",
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "opensmile"
-            }
-          },
-          "$ref": "#/$defs/OpenSmileRequestV2",
-          "required": [
-            "kind"
-          ]
-        },
-        {
-          "description": "AVQI request.",
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string",
-              "const": "avqi"
-            }
-          },
-          "$ref": "#/$defs/AvqiRequestV2",
           "required": [
             "kind"
           ]

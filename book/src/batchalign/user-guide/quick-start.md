@@ -126,7 +126,6 @@ batchalign3 --server http://yourserver:8000 morphotag ~/corpus/ -o ~/tagged/
 batchalign3 --server http://yourserver:8000 align ~/corpus/ -o ~/aligned/
 ```
 
-`transcribe`, `transcribe_s`, `benchmark`, and `avqi` always prefer
 the local daemon and ignore `--server` (see `command_prefers_local_daemon`
 in `crates/batchalign/src/cli/dispatch/mod.rs`). The remaining text and
 analysis commands (`morphotag`, `align`, `compare`, etc.) honor explicit

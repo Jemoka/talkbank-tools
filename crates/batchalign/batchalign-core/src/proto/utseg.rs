@@ -3,6 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::UtSegInput,
 //! UtSegOutput, UtteranceSpan`. !!!
 
+use crate::cache::{hash_serialized, CacheKey};
 use crate::proto::asr::{AsrSegment, AsrWord, LanguageSpec};
 use crate::register_proto_schema;
 use crate::utils::SourceId;
@@ -34,6 +35,27 @@ pub struct UtSegInput {
     /// Whether to allow Stanza punctuation fallback if no model is available.
     #[serde(default)]
     pub stanza_fallback: bool,
+}
+
+impl CacheKey for UtSegInput {
+    /// Excludes `source_id`. Same raw segments + language + fallback flag
+    /// hashes to the same key.
+    fn hash(&self, hasher: &mut blake3::Hasher) {
+        #[derive(Serialize)]
+        struct K<'a> {
+            segments: &'a [AsrSegment],
+            language: &'a LanguageSpec,
+            stanza_fallback: bool,
+        }
+        hash_serialized(
+            &K {
+                segments: &self.segments,
+                language: &self.language,
+                stanza_fallback: self.stanza_fallback,
+            },
+            hasher,
+        );
+    }
 }
 
 /// Output: utterance-bounded spans.

@@ -26,7 +26,7 @@ impl TaskRunner for TranslateTaskRunner {
         &self,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
-        sink: &dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BAResult<()> {
         let chat = match value {
             BAValue::Chat(c) => c,
@@ -71,7 +71,7 @@ impl TaskRunner for TranslateTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Translate(input)).await?;
         let output: TranslateOutput = output_raw.try_into()?;
 
-        inject_translation_tiers(chat, &output.utterances, sink)?;
+        inject_translation_tiers(chat, &output.utterances, &*sink)?;
 
         sink.emit(ProgressEvent::stage_injected(
             chat.source_id(),

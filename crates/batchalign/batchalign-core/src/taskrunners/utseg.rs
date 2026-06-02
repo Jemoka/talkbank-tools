@@ -36,7 +36,7 @@ impl TaskRunner for UtSegTaskRunner {
         &self,
         value: &mut BAValue,
         dispatcher: &dyn Dispatcher,
-        sink: &dyn ProgressSink,
+        sink: std::sync::Arc<dyn ProgressSink>,
     ) -> BAResult<()> {
         let chat = match value {
             BAValue::Chat(c) => c,
@@ -321,7 +321,7 @@ mod tests {
             }]),
         };
         UtSegTaskRunner
-            .apply(&mut value, &disp, &NullSink)
+            .apply(&mut value, &disp, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
             .await
             .expect("apply");
         let BAValue::Chat(c) = value else {

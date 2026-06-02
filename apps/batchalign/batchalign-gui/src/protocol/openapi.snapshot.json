@@ -36,41 +36,6 @@
         "title": "AlignRequest",
         "type": "object"
       },
-      "AvqiRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "avqi_backend": {
-            "$ref": "#/components/schemas/BackendSpec"
-          },
-          "inputs": {
-            "description": "One or more inputs to process.",
-            "items": {
-              "$ref": "#/components/schemas/InputSpec"
-            },
-            "title": "Inputs",
-            "type": "array"
-          },
-          "pipeline_opts": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Forwarded to Pipeline(...).",
-            "title": "Pipeline Opts"
-          }
-        },
-        "required": [
-          "avqi_backend",
-          "inputs"
-        ],
-        "title": "AvqiRequest",
-        "type": "object"
-      },
       "BackendSpec": {
         "additionalProperties": false,
         "description": "Discriminated JSON for a backend.\n\nThe set of valid ``kind`` strings is the set of names in\n:data:`BACKEND_CLASSES`. ``kwargs`` is forwarded straight to the\nconstructor; we validate it against ``inspect.signature`` at\nmaterialization (not at request-parse) so nested backend kwargs\n(e.g. ``stanza_fallback``) can themselves be ``BackendSpec``.",
@@ -326,41 +291,6 @@
           "inputs"
         ],
         "title": "MorphotagRequest",
-        "type": "object"
-      },
-      "OpensmileRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "inputs": {
-            "description": "One or more inputs to process.",
-            "items": {
-              "$ref": "#/components/schemas/InputSpec"
-            },
-            "title": "Inputs",
-            "type": "array"
-          },
-          "opensmile_backend": {
-            "$ref": "#/components/schemas/BackendSpec"
-          },
-          "pipeline_opts": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Forwarded to Pipeline(...).",
-            "title": "Pipeline Opts"
-          }
-        },
-        "required": [
-          "opensmile_backend",
-          "inputs"
-        ],
-        "title": "OpensmileRequest",
         "type": "object"
       },
       "TranscribeRequest": {
@@ -819,49 +749,6 @@
         "summary": "Run Align"
       }
     },
-    "/recipes/avqi": {
-      "post": {
-        "description": "Acoustic Voice Quality Index extraction.",
-        "operationId": "run_avqi_recipes_avqi_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AvqiRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Run Avqi Recipes Avqi Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Run Avqi"
-      }
-    },
     "/recipes/compare": {
       "post": {
         "description": "Gold/main transcript comparison.\n\nWires ``[Morphosyntax, Compare]``. Morphosyntax runs on both sides of\nthe ``Paired`` (the runner short-circuits per-utterance if `%mor:` is\nalready present), so the compare backend can lift POS off the `%mor`\ntier to populate ``%xsmor``.\n\n``compare_backend`` defaults to the native Rust\n``batchalign._core.CompareBackend``. ``stanza_backend`` is required\nfor `%xsmor` to carry real POS tags.",
@@ -989,49 +876,6 @@
           }
         },
         "summary": "Run Morphotag"
-      }
-    },
-    "/recipes/opensmile": {
-      "post": {
-        "description": "OpenSMILE acoustic-feature extraction. `feature_set` is a backend\nconstructor arg (`OpenSmileBackend(feature_set=\"eGeMAPSv02\")`).",
-        "operationId": "run_opensmile_recipes_opensmile_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OpensmileRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Run Opensmile Recipes Opensmile Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Run Opensmile"
       }
     },
     "/recipes/transcribe": {

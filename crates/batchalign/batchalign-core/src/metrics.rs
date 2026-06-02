@@ -1,4 +1,4 @@
-//! Metrics artifacts produced by terminal tasks (openSMILE, AVQI, Compare).
+//! Metrics artifacts produced by terminal tasks (Compare, Benchmark).
 //!
 //! The engine crate's `metrics_writer` knows how to render this to CSV/Parquet
 //! via polars. Core stays polars-free: the long-format table is a plain
@@ -17,10 +17,6 @@ use std::collections::BTreeMap;
 /// What kind of metrics this artifact represents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum MetricsKind {
-    /// openSMILE eGeMAPS / ComParE features.
-    Opensmile,
-    /// AVQI acoustic voice quality index.
-    Avqi,
     /// Compare task — long-format table with per-utterance and summary rows.
     Compare,
     /// Benchmark probe row.
@@ -55,7 +51,7 @@ pub struct MetricsTable {
 pub struct MetricsArtifact {
     /// Source identity (same as the input CHAT / media).
     pub source_id: SourceId,
-    /// Producer string: e.g. `"opensmile:eGeMAPSv02"`, `"avqi:v1"`, …
+    /// Producer string: e.g. `"compare:v1"`, `"benchmark:v1"`, …
     pub producer: SmolStr,
     /// Discriminator for write-routing.
     pub kind: MetricsKind,

@@ -58,8 +58,6 @@ def fake_progress_core(monkeypatch):
         Translate = "Translate"
         Coref = "Coref"
         Compare = "Compare"
-        OpenSmile = "OpenSmile"
-        Avqi = "Avqi"
 
     class ProgressKind(enum.Enum):
         StageStarted = "StageStarted"

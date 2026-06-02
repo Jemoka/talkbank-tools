@@ -17,8 +17,6 @@ Batchalign caches **only audio-task results**:
 | Translation (`translate`) | **No** — always recomputed |
 | Coreference (`coref`) | **No** — always recomputed |
 | Speaker diarization | No |
-| OpenSMILE features (`opensmile`) | No |
-| AVQI scores (`avqi`) | No |
 
 The text-NLP cache that previously covered `morphotag`, `utseg`, and
 `translate` was **removed** after a benchmark on a 15,748-file corpus

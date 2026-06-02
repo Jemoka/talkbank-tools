@@ -31,6 +31,16 @@ rust_library(
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
     deps = all_crate_deps(normal = True) + _INTRA,
+    # Bake the workspace SHA in via rules_rust stamping (sourced from
+    # `bazel/stamp.sh` → stable-status.txt). build.rs sets the same env
+    # var on the Cargo path; the two converge at compile time so
+    # `option_env!("VERGEN_GIT_SHA")` resolves under both build systems.
+    # Consumed by `taskrunners::asr` to stamp `@Comment: batchalign3 <sha>
+    # | engine: …` onto generated CHAT files.
+    rustc_env = {
+        "VERGEN_GIT_SHA": "{STABLE_GIT_HASH}",
+    },
+    stamp = 1,
 )
 
 # Schema emitter binary. Consumed by `:proto_schema_json` below as the input

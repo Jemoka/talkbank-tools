@@ -579,14 +579,12 @@ branch remains available only for internal consumers such as benchmark.
 
 ---
 
-## opensmile
 
 Acoustic feature extraction. Rust resolves media, prepares typed audio, and
 sends a live V2 request to the Python worker.
 
 ```mermaid
 flowchart TD
-    start([opensmile invoked]) --> resolve[Resolve audio files]
     resolve --> prep[Rust audio prep\nprepare mono PCM artifact]
     prep --> feature_check{--feature-set?}
     feature_check -->|eGeMAPSv02| egemaps[eGeMAPSv02 features\n88 acoustic descriptors]
@@ -597,14 +595,12 @@ flowchart TD
     compare --> worker
     custom --> worker
 
-    worker[execute_v2(task=\"opensmile\") → Python worker\nExtracts acoustic features from prepared audio]
     worker --> output[Write CSV output\nContent-type: csv]
     output --> done([Output .csv files])
 ```
 
 ---
 
-## avqi
 
 Acoustic Voice Quality Index. Rust resolves paired audio, prepares typed PCM
 artifacts, and sends a live V2 request. Requires paired continuous speech
@@ -612,10 +608,7 @@ artifacts, and sends a live V2 request. Requires paired continuous speech
 
 ```mermaid
 flowchart TD
-    start([avqi invoked]) --> resolve[Resolve paired audio files\n.cs.wav + .sv.wav per speaker]
     resolve --> prep[Rust audio prep\nprepare CS + SV PCM artifacts]
-    prep --> worker[execute_v2(task=\"avqi\") → Python worker\nparselmouth + torchaudio analysis]
-    worker --> output[Write AVQI results\nHarmonics-to-noise ratio, jitter, shimmer, etc.]
     output --> done([Output results])
 ```
 

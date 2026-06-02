@@ -45,7 +45,6 @@ def register(app: typer.Typer) -> None:
             "-o",
             help="Optional output folder; if omitted, each source file is overwritten in place.",
         ),
-        language: str = typer.Option("en", "--language", help="Stanza language code."),
         retokenize: bool = typer.Option(False, "--retokenize/--no-retokenize"),
         clear_existing: bool = typer.Option(
             True,
@@ -63,47 +62,58 @@ def register(app: typer.Typer) -> None:
 
         opts = cli_options(ctx)
 
-        with Interface.open(
-            command="morphotag",
-            params={
-                "lang": language,
-                "retokenize": retokenize,
-                "clear_existing": clear_existing,
-            },
-            output=out,
-            verbosity=opts.verbosity,
-            plain=opts.plain,
-            quiet=opts.quiet,
-        ) as ui:
-            pipeline = ba.recipes.morphotag(
-                stanza_backend=ba.StanzaBackend(lang=language, retokenize=retokenize),
-            )
-            inputs, root = collect_chat_inputs(folder)
+        # Tempdir is created INSIDE the `with Interface.open(...)` block but
+        # cleaned up AFTER it exits. The TUI summary (which may try to read
+        # offending lines out of these staged files for caret-block parse-
+        # error rendering — see `cli/tui/errors.py::_try_parse_error`) runs
+        # in `Interface.__exit__`. Cleaning up in an inner `finally` would
+        # nuke the files before the summary could read them, so any
+        # `error[E###]` line gets degraded to a plain string.
+        tmpdir: Path | None = None
+        try:
+            with Interface.open(
+                command="morphotag",
+                params={
+                    "retokenize": retokenize,
+                    "clear_existing": clear_existing,
+                },
+                output=out,
+                verbosity=opts.verbosity,
+                plain=opts.plain,
+                quiet=opts.quiet,
+            ) as ui:
+                # Language is resolved per-file from each CHAT's `@Languages:`
+                # header by the Rust runner; the backend reads it off each
+                # `MorphosyntaxInput` and loads the matching Stanza pipeline
+                # lazily on first use.
+                pipeline = ba.recipes.morphotag(
+                    stanza_backend=ba.StanzaBackend(retokenize=retokenize),
+                )
+                inputs, root = collect_chat_inputs(folder)
 
-            tmpdir: Path | None = None
-            if clear_existing and inputs:
-                # Stage stripped copies in a temp dir; rewrite each input's
-                # path to point at the staged file. The engine writes back
-                # to the original source via source_id, so this is purely
-                # a pre-processing detour for the parser.
-                tmpdir = Path(tempfile.mkdtemp(prefix="batchalign-morphotag-"))
-                staged: list = []
-                for inp in inputs:
-                    src = Path(inp.path)
-                    stem = src.stem
-                    staged_path = tmpdir / f"{stem}.cha"
-                    _strip_existing_mor_gra(src, staged_path)
-                    inp.path = str(staged_path)
-                    staged.append(inp)
-                inputs = staged
+                if clear_existing and inputs:
+                    # Stage stripped copies in a temp dir; rewrite each input's
+                    # path to point at the staged file. The engine writes back
+                    # to the original source via source_id, so this is purely
+                    # a pre-processing detour for the parser.
+                    tmpdir = Path(tempfile.mkdtemp(prefix="batchalign-morphotag-"))
+                    staged: list = []
+                    for inp in inputs:
+                        src = Path(inp.path)
+                        stem = src.stem
+                        staged_path = tmpdir / f"{stem}.cha"
+                        _strip_existing_mor_gra(src, staged_path)
+                        inp.path = str(staged_path)
+                        staged.append(inp)
+                    inputs = staged
 
-            try:
                 for inp in inputs:
                     ui.push(Task.from_input(inp))
                 outcomes = list(ui.run_pipeline(pipeline, inputs))
                 write_outcomes(outcomes, root, out)
-            finally:
-                if tmpdir is not None:
-                    shutil.rmtree(tmpdir, ignore_errors=True)
+                exit_code = ui.exit_code
+        finally:
+            if tmpdir is not None:
+                shutil.rmtree(tmpdir, ignore_errors=True)
 
-        raise typer.Exit(code=ui.exit_code)
+        raise typer.Exit(code=exit_code)

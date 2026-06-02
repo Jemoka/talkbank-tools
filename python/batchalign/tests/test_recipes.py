@@ -29,8 +29,6 @@ def fake_core(monkeypatch):
         Translate = "Translate"
         Coref = "Coref"
         Compare = "Compare"
-        OpenSmile = "OpenSmile"
-        Avqi = "Avqi"
 
     captured = {}
 
@@ -138,17 +136,3 @@ def test_compare_chains_morphosyntax_then_compare(fake_core):
     assert pipe.backends[1].name == "compare:rust:v2"
 
 
-def test_opensmile(fake_core):
-    Task, Pipeline, _ = fake_core
-    from batchalign import recipes
-
-    pipe = recipes.opensmile(opensmile_backend="o")
-    assert _task_names(pipe) == ["OpenSmile"]
-
-
-def test_avqi(fake_core):
-    Task, Pipeline, _ = fake_core
-    from batchalign import recipes
-
-    pipe = recipes.avqi(avqi_backend="a")
-    assert _task_names(pipe) == ["Avqi"]

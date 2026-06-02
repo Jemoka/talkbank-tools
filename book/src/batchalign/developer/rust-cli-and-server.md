@@ -493,7 +493,6 @@ Route the command to its orchestrator in the appropriate dispatch module under
 - `fa_pipeline.rs` — `dispatch_fa_infer()` for per-file forced alignment
 - `transcribe_pipeline.rs` — `dispatch_transcribe_infer()` for audio-to-CHAT generation
 - `benchmark_pipeline.rs` — `dispatch_benchmark_infer()` for transcribe + compare composition
-- `media_analysis_v2.rs` — `dispatch_media_analysis_v2()` for opensmile/avqi
 
 **Recipe-driven execution (new model):** Compare has been migrated from
 `runner/dispatch/` to the recipe-driven `execution/` kernel. New commands

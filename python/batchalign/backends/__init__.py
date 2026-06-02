@@ -21,8 +21,6 @@ from batchalign.backends.base import (
     Morphosyntax,
     Translate,
     Coref,
-    OpenSmile,
-    AVQI,
     declared_tasks,
 )
 from batchalign.backends.asr import (
@@ -62,8 +60,6 @@ __all__ = [
     "Morphosyntax",
     "Translate",
     "Coref",
-    "OpenSmile",
-    "AVQI",
     "declared_tasks",
     # ASR
     "AliyunAsrBackend",

@@ -9,6 +9,7 @@
 //! backend boundary as CHAT text — the runner re-parses the annotated text
 //! back into a validated AST.
 
+use crate::cache::{hash_serialized, CacheKey};
 use crate::register_proto_schema;
 use crate::utils::SourceId;
 use schemars::JsonSchema;
@@ -23,6 +24,26 @@ pub struct CompareInput {
     pub main_chat: String,
     /// CHAT-serialized gold reference.
     pub gold_chat: String,
+}
+
+impl CacheKey for CompareInput {
+    /// Excludes `source_id`. The result is fully determined by the two
+    /// CHAT payloads, so identical main+gold pairs hit the same entry
+    /// even when supplied under different file names.
+    fn hash(&self, hasher: &mut blake3::Hasher) {
+        #[derive(Serialize)]
+        struct K<'a> {
+            main_chat: &'a str,
+            gold_chat: &'a str,
+        }
+        hash_serialized(
+            &K {
+                main_chat: &self.main_chat,
+                gold_chat: &self.gold_chat,
+            },
+            hasher,
+        );
+    }
 }
 
 /// Output: annotated main + a wide-format metrics row mirroring BA2's

@@ -353,7 +353,6 @@ Same contract as `transcribe` plus evaluation metrics output.
 
 ---
 
-### `opensmile` — Audio Feature Extraction
 
 **Input:** Audio file
 
@@ -364,7 +363,6 @@ No CHAT contract applies.
 
 ---
 
-### `avqi` — Acoustic Voice Quality Index
 
 **Input:** Paired `.cs`/`.sv` audio files
 
@@ -403,8 +401,6 @@ Runner receives file
 | `align` | Level 2 | Audio file exists |
 | `transcribe` | N/A | Audio file exists |
 | `benchmark` | N/A | Audio file exists |
-| `opensmile` | N/A | Audio file exists |
-| `avqi` | N/A | Paired audio exists |
 
 ### Rejection Behavior
 

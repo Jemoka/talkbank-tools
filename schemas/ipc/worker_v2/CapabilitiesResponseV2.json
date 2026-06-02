@@ -70,16 +70,6 @@
           "description": "Speaker diarization.",
           "type": "string",
           "const": "speaker"
-        },
-        {
-          "description": "OpenSMILE feature extraction.",
-          "type": "string",
-          "const": "opensmile"
-        },
-        {
-          "description": "AVQI feature extraction.",
-          "type": "string",
-          "const": "avqi"
         }
       ]
     },

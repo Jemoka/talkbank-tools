@@ -46,7 +46,6 @@ error, not a silent no-op.
 | `--force-cpu` | bool | `False` | Feb 9 only | Wired (no `--no-force-cpu` companion in BA3) |
 | `--shared-models` / `--no-shared-models` | bool | `False` | Feb 9 only | Removed |
 
-All commands except `avqi`, `setup`, and `version` use the `common_options`
 decorator which adds positional `IN_DIR` and `OUT_DIR` arguments (both
 `click.Path(exists=True, file_okay=False)`).
 
@@ -181,9 +180,7 @@ morphosyntax. Current BA3 also exposes `--lang` on `CompareArgs` and carries it
 through compare dispatch. Earlier migration-stage notes flagged this as missing,
 but the current CLI surface and tests cover it.
 
-### `opensmile`
 
-OpenSMILE acoustic feature extraction.
 
 | Flag | Type | Default | Help | BA3 Status |
 |------|------|---------|------|------------|
@@ -193,9 +190,7 @@ OpenSMILE acoustic feature extraction.
 **Note:** Uses its own `input_dir`/`output_dir` positional arguments instead of
 `common_options`.
 
-**Pipeline task:** `"opensmile"`.
 
-### `avqi`
 
 Acoustic Voice Quality Index from paired .cs/.sv audio files.
 
@@ -206,7 +201,6 @@ Acoustic Voice Quality Index from paired .cs/.sv audio files.
 **Note:** Uses its own `input_dir`/`output_dir` positional arguments instead of
 `common_options`.
 
-**Pipeline task:** `"avqi"`.
 
 ---
 
@@ -309,8 +303,6 @@ entry points) has been completely removed. See
 | `utseg` | `"utseg"` | Constituency parse → boundaries |
 | `benchmark` | `"asr"` + `"morphosyntax"` | Transcribe then compare |
 | `compare` | `"morphosyntax"` | Tags both sides before WER |
-| `opensmile` | `"opensmile"` | Feature extraction |
-| `avqi` | `"avqi"` | Voice quality index |
 
 ---
 

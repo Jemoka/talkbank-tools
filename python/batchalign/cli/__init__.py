@@ -57,6 +57,12 @@ def _global(
     verbosity = -1 if quiet else verbose
     _logging.configure(verbosity)
 
+    # Quiet mode must stay silent — disable the interactive credential
+    # prompts that backends opt into via `config.get_*(interactive=True)`.
+    from batchalign import config as _ba_config
+
+    _ba_config.suppress_interactive(quiet)
+
     resolved_plain: bool | None
     if plain and ansi:
         # Explicit conflict — prefer plain (the more conservative).
@@ -86,8 +92,6 @@ _COMMAND_MODULES = [
     cache,
     daemon,  # HTTP daemon for the desktop GUI; ships via the [api] extra
     # coref,
-    # opensmile,
-    # avqi,
 ]
 
 for _mod in _COMMAND_MODULES:

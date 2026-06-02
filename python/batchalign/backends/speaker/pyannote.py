@@ -48,7 +48,7 @@ class PyannoteBackend(Speaker, UtSeg):
         #   2. `[auth] hf_token` in ~/.batchalign.ini
         #   3. huggingface_hub's auto-resolved token
         #      (~/.cache/huggingface/token or HF_TOKEN env)
-        token = hf_token if hf_token is not None else config.get_api_key("hf")
+        token = hf_token if hf_token is not None else config.get_api_key("hf", interactive=True)
         if token is None:
             try:
                 from huggingface_hub import HfFolder  # type: ignore[import-not-found]
@@ -75,7 +75,7 @@ class PyannoteBackend(Speaker, UtSeg):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from batchalign._core.proto import (
             SpeakerInput,
             SpeakerOutput,

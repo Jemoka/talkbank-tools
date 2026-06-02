@@ -4,7 +4,6 @@
 **Last updated:** 2026-04-14 22:09 EDT
 
 Batchalign integrates several third-party NLP libraries — Stanza,
-Whisper, PyCantonese, Pyannote/NeMo, Rev.AI, Apple MPS, OpenSMILE,
 and others. Each is a working piece of software with real bugs,
 surprising edge cases, and version-to-version behavior changes. This
 document explains our policy for dealing with upstream defects and

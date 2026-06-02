@@ -39,7 +39,7 @@ class RevAI(ASR, Speaker):
         batch_size: int = 8,
         batch_window_ms: int = 250,
     ) -> None:
-        key = api_key if api_key is not None else config.get_api_key("revai")
+        key = api_key if api_key is not None else config.get_api_key("revai", interactive=True)
         if not key:
             self._client = None
         else:
@@ -69,7 +69,7 @@ class RevAI(ASR, Speaker):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from batchalign._core.proto import (
             AsrInput,
             AsrOutput,

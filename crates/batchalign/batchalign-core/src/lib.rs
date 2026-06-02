@@ -17,6 +17,7 @@
 
 pub mod backends;
 pub mod base;
+pub mod cache;
 pub mod metrics;
 pub mod proto;
 pub mod taskrunners;
@@ -26,9 +27,11 @@ pub mod utils;
 pub mod python;
 
 pub use backends::{Backend, BackendCallError, BackendMeta, BatchPolicy};
+pub use cache::CacheKey;
 pub use base::{
-    BAValue, Chat, Dispatcher, DynTaskRunner, NotValidated, Paired, ProgressEvent, ProgressKind,
-    ProgressSink, Task, TaskInput, TaskOutput, TaskRunner, Validated,
+    BAValue, BackendProgress, Chat, Dispatcher, DynTaskRunner, NotValidated, NullBackendProgress,
+    NullSink, PROGRESS_SCALE, Paired, ProgressEvent, ProgressKind, ProgressSink, ScaledProgress,
+    Task, TaskInput, TaskOutput, TaskRunner, Validated,
 };
 pub use metrics::{MetricsArtifact, MetricsKind, MetricsRow, MetricsTable};
 pub use utils::{

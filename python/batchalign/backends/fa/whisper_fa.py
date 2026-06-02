@@ -86,16 +86,20 @@ class WhisperFaBackend(FA):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(
+        self, batch: list[Any], *, progress: Any = None, **_kwargs: Any
+    ) -> list[Any]:
         from batchalign._core.proto import FaInput, FaOutput
 
+        # `progress(completed, total)` ticks per ~20 s audio group (see
+        # `_align_one`). Meaningful intra-call granularity for FA.
         outputs: list[Any] = []
         for item in batch:
             if not isinstance(item, FaInput):
                 raise TypeError(
                     f"WhisperFaBackend does not handle input type: {type(item).__name__}"
                 )
-            outputs.append(self._align_one(item, FaOutput))
+            outputs.append(self._align_one(item, FaOutput, progress=progress))
         return outputs
 
     # ----- internals -----------------------------------------------------
@@ -145,7 +149,7 @@ class WhisperFaBackend(FA):
             (self._processor.decode(i), float(j)) for i, j in zip(tokens, jump_times)
         ]
 
-    def _align_one(self, item: Any, FaOutput: type) -> Any:
+    def _align_one(self, item: Any, FaOutput: type, *, progress: Any = None) -> Any:
         import numpy as np  # type: ignore[import-not-found]
         import torch  # type: ignore[import-not-found]
         from batchalign._core.proto import AsrSegment, AsrWord
@@ -153,10 +157,18 @@ class WhisperFaBackend(FA):
         if not item.utterances:
             return FaOutput(source_id=item.source_id, utterances=[])
 
+        import torchaudio.functional as AF  # type: ignore[import-not-found]
+
         wave = torch.from_numpy(
             np.frombuffer(item.audio.pcm_f32le, dtype=np.float32).copy()
         )
-        sr = int(item.audio.sample_rate)
+        src_sr = int(item.audio.sample_rate)
+        # Whisper feature extractor is told `sampling_rate=self._sr` (16 kHz)
+        # below — passing audio at the native rate would silently feed
+        # mis-rated samples to the model. Resample once at the boundary.
+        if src_sr != self._sr:
+            wave = AF.resample(wave, src_sr, self._sr)
+        sr = self._sr
 
         timings: list[list[Any]] = [[None] * len(u.words) for u in item.utterances]
         windows = [
@@ -183,24 +195,37 @@ class WhisperFaBackend(FA):
         if group:
             groups.append(group)
 
-        for grp in groups:
+        n_groups = len(groups)
+        for group_idx, grp in enumerate(groups):
+            # Per-group progress tick — drives the per-file bar inside
+            # the single bulk dispatch. Emitted at the END of the
+            # iteration (including early-continue paths) so the bar
+            # reflects completed groups regardless of which branch ran.
+            def _tick() -> None:
+                if progress is not None:
+                    progress(group_idx + 1, n_groups)
+
             if not grp:
+                _tick()
                 continue
             g_start = windows[grp[0][0]][0]
             g_end = windows[grp[-1][0]][1]
             lo = int(g_start * sr / 1000)
             hi = min(int(g_end * sr / 1000), wave.shape[0])
             if hi <= lo:
+                _tick()
                 continue
             chunk = wave[lo:hi].cpu().numpy()
 
             src_words = [item.utterances[u].words[w].text for (u, w) in grp]
             transcript = _strip_word(" ".join(src_words).replace("_", " "))
             if not transcript:
+                _tick()
                 continue
             try:
                 res = self._dtw_tokens(chunk, transcript)
             except Exception:
+                _tick()
                 continue
 
             # Char-DP map DTW tokens back to source words (BA2).
@@ -225,6 +250,7 @@ class WhisperFaBackend(FA):
                     t = res_times[elem.payload]
                     start = int(round(t * 1000 + g_start))
                     timings[uidx][widx] = (start, start)
+            _tick()
 
         # Post-correct (BA2 whisper_fa.py:183-224): bump each word's end to the
         # next timed word's start, bound by the utterance window; drop impossible.

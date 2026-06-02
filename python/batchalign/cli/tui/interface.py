@@ -110,6 +110,13 @@ class Interface:
         self._started_at: float = 0.0
         self._sigint_prev: Any = None
         self._interrupted = False
+        self._interrupt_at: float = 0.0
+        # Active pipeline, set by `callbacks_for` / `run_pipeline` so the
+        # SIGINT handler can flip its cooperative-cancel flag. Without
+        # this, Ctrl-C just sets a Python-side flag that doesn't fire
+        # until `pipeline.run` returns — which is exactly the slow-to-die
+        # behavior we want to fix.
+        self._pipeline: Any = None
         self._opened = False
         # Plain-mode bookkeeping: which (source_id, kind) lines have we
         # already emitted, to avoid duplicate `start` / `ok` rows.
@@ -144,6 +151,12 @@ class Interface:
         no_color = "NO_COLOR" in os.environ
         if plain is None:
             plain = not Console().is_terminal
+        # Verbose logging writes to the same stream as the live deck;
+        # the Rich Progress region and spinner end up interleaved with
+        # log lines and corrupt both. Drop to plain mode whenever the
+        # caller asked for verbose output.
+        if verbosity > 0:
+            plain = True
         if console is None:
             if plain:
                 console = Console(
@@ -175,6 +188,18 @@ class Interface:
 
     def tasks(self) -> list[Task]:
         return list(self._tasks.values())
+
+    def attach_pipeline(self, pipeline: Any) -> None:
+        """Tell the interface which pipeline is currently running so the
+        SIGINT handler can call its cooperative `cancel()` method.
+
+        Without this, Ctrl-C only fires *after* `pipeline.run` returns:
+        the Python signal handler can't run while the Rust runtime holds
+        the main thread inside `py.detach`. The Rust side now polls
+        signals itself (see `pipeline.rs::run`), but we still call cancel
+        from Python so any post-block Ctrl-C also takes effect.
+        """
+        self._pipeline = pipeline
 
     def callbacks_for(self, tasks: dict[str, Task]) -> list[tuple[str, Callable]]:
         """Bridge `ProgressEvent`s → `Task` mutations + our refresh hook.
@@ -212,6 +237,7 @@ class Interface:
         and on the returned `BAValue::Failed` (filtered out here).
         """
         self._open_run()
+        self.attach_pipeline(pipeline)
         tasks_by_sid: dict[str, Task] = {}
         ordered_sids: list[str] = []
         for inp in inputs:
@@ -677,8 +703,36 @@ class Interface:
     # ----- SIGINT ---------------------------------------------------------
 
     def _install_sigint(self) -> None:
+        # Two-stage Ctrl-C, because the Rust pipeline holds the main
+        # thread inside `py.detach` for the duration of a run:
+        #
+        #   1st Ctrl-C: mark interrupted, call `pipeline.cancel()` so the
+        #               engine stops dispatching new work, then raise
+        #               KeyboardInterrupt. The raise only takes effect
+        #               once `pipeline.run` returns (Rust polls signals
+        #               itself — see `pipeline.rs` — so that happens
+        #               within ~100 ms after the cancel flag is set + the
+        #               currently-running backend calls finish).
+        #
+        #   2nd Ctrl-C within 2 s: hard exit. `os._exit(130)` skips
+        #               atexit + Python finalization, but the kernel
+        #               sends SIGTERM/HUP to subprocesses in the
+        #               foreground process group, so ffmpeg / whisper /
+        #               stanza children die with us instead of being
+        #               orphaned. This is the escape hatch for when a
+        #               backend has gone unresponsive and won't honor
+        #               cooperative cancel.
         def _handler(signum, frame):  # noqa: ARG001
+            now = time.monotonic()
+            if self._interrupted and (now - self._interrupt_at) < 2.0:
+                # Bypass the live region's atexit ordering — we want to
+                # be gone *now*, not after Rich tries to redraw.
+                os._exit(130)
             self._interrupted = True
+            self._interrupt_at = now
+            if self._pipeline is not None:
+                with suppress(Exception):
+                    self._pipeline.cancel()
             raise KeyboardInterrupt
         try:
             self._sigint_prev = signal.signal(signal.SIGINT, _handler)

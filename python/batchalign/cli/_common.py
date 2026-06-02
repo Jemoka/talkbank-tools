@@ -128,7 +128,7 @@ def require_api_key(provider: str, ini_key: str, env_var: str) -> str:
     The error message names the exact INI key and env var so users can
     immediately fix the configuration.
     """
-    key = _ba_config.get_api_key(provider)
+    key = _ba_config.get_api_key(provider, interactive=True)
     if key:
         return key
     raise typer.BadParameter(

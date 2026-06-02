@@ -26,13 +26,14 @@ talkbank-parser = { path = "../../core/talkbank-parser", version = "0.2.0" }
 talkbank-transform = { path = "../../core/talkbank-transform", version = "0.2.0" }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
-# spec2.md §13 wanted rusqlite for the KV cache, but the monorepo's
-# libsqlite3-sys links-conflict (talkbank-transform pulls sqlx 0.8 which
-# pins a different libsqlite3-sys major than rusqlite 0.34) plus this host's
-# broken macOS SDK for the bundled sqlite3.c build pushed us to a pure-Rust
-# embedded KV store. `redb` is an embedded ACID KV with bytes->bytes keys/values
-# — the perfect shape for our blake3(input) -> serde_json(output) entries.
-redb = "2"
+# Cache backend: LMDB via `heed` (vendored C; cargo + bazel build it
+# automatically through cc-rs). Chosen over redb because redb is
+# single-writer-per-process — the workspace's CLI, TUI, and dashboard
+# all want to share one cache directory and redb errored on the second
+# open. LMDB allows multiple processes to read concurrently (MVCC) and
+# serializes writers via its lock file, so concurrent invocations Just
+# Work without coordination. See `src/cache.rs` for the full story.
+heed = "0.22"
 dirs = "5"
 num_cpus = "1"
 anyhow = "1"
@@ -44,6 +45,7 @@ futures = "0.3"
 blake3 = "1"
 smol_str = { version = "0.3", features = ["serde"] }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 # `abi3` + `abi3-py310` produces a wheel that uses Python's stable C API
 # only, so a single compiled `_core.so` runs on CPython 3.10, 3.11, 3.12,

@@ -16,7 +16,9 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow, bail};
-use batchalign_core::{BAError, BAResult, Backend, BatchPolicy, Task, TaskInput, TaskOutput};
+use batchalign_core::{
+    BAError, BAResult, Backend, BackendProgress, BatchPolicy, Task, TaskInput, TaskOutput,
+};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyList};
 
@@ -144,9 +146,24 @@ impl Backend for BackendImpl {
     }
 
     fn call(&self, batch: Vec<TaskInput>) -> BAResult<Vec<TaskOutput>> {
+        // Always go through the progress-threading entry point — the
+        // batcher uses `call_with_progress`, this `call` exists only
+        // for legacy callers (tests) that don't want a progress channel.
+        Backend::call_with_progress(
+            self,
+            batch,
+            Arc::new(batchalign_core::NullBackendProgress),
+        )
+    }
+
+    fn call_with_progress(
+        &self,
+        batch: Vec<TaskInput>,
+        progress: Arc<dyn BackendProgress>,
+    ) -> BAResult<Vec<TaskOutput>> {
         match self {
-            BackendImpl::Native(b) => b.call(batch),
-            BackendImpl::Python(h) => call_py_backend(h, batch),
+            BackendImpl::Native(b) => b.call_with_progress(batch, progress),
+            BackendImpl::Python(h) => call_py_backend(h, batch, progress),
         }
     }
 }
@@ -163,7 +180,18 @@ impl Backend for BackendImpl {
 /// The round-trip through JSON is the simplest erasure that doesn't pull in
 /// a serde<->python adapter dep. Cost: two json passes per batch dispatch;
 /// dwarfed by the inference cost the call is gating.
-fn call_py_backend(h: &PyBackendHandle, batch: Vec<TaskInput>) -> BAResult<Vec<TaskOutput>> {
+///
+/// The `progress` channel is exposed to Python as a `progress(completed,
+/// total)` keyword-only callable. The pyclass below holds an `Arc` clone
+/// of the trait object so its lifetime is owned, not borrowed; Python
+/// can hold the callable for the duration of `call` without lifetime
+/// gymnastics. Backends MUST drop their reference before returning
+/// (don't stash it across calls).
+fn call_py_backend(
+    h: &PyBackendHandle,
+    batch: Vec<TaskInput>,
+    progress: Arc<dyn BackendProgress>,
+) -> BAResult<Vec<TaskOutput>> {
     let request_json = serde_json::to_string(&batch)
         .map_err(|e| BAError::Worker(format!("serialize TaskInput batch: {e}")))?;
 
@@ -187,10 +215,32 @@ fn call_py_backend(h: &PyBackendHandle, batch: Vec<TaskInput>) -> BAResult<Vec<T
             .and_then(|f| f.call1((tagged_dicts,)))
             .map_err(|e| BAError::Worker(format!("rebuild_tagged_inputs: {e}")))?;
 
+        // Build a Python callable that forwards `progress(completed,
+        // total)` back to the Rust `BackendProgress` via the pyclass
+        // defined below. We clone the Arc so the pyclass owns its own
+        // reference; backends must not stash this callable past their
+        // `call` return.
+        let progress_cb = Py::new(
+            py,
+            PyProgressCallback {
+                progress: progress.clone(),
+            },
+        )
+        .map_err(|e| BAError::Worker(format!("build progress callable: {e}")))?
+        .into_any();
+        // Backends accept `progress` as a keyword argument; passing it
+        // positional would break the legacy `call(self, batch)` shape.
+        // Backends written before this change ignore unknown kwargs via
+        // `**kwargs` in the base ABC.
+        let kwargs = pyo3::types::PyDict::new(py);
+        kwargs
+            .set_item("progress", progress_cb)
+            .map_err(|e| BAError::Worker(format!("set progress kwarg: {e}")))?;
+
         let result = h
             .obj
             .bind(py)
-            .call_method1("call", (py_batch,))
+            .call_method("call", (py_batch,), Some(&kwargs))
             .map_err(|e| BAError::Worker(format!("Backend.call raised: {e}")))?;
 
         // Reverse the rehydration: typed *Output dataclasses -> tagged-dict
@@ -209,6 +259,28 @@ fn call_py_backend(h: &PyBackendHandle, batch: Vec<TaskInput>) -> BAResult<Vec<T
             .map_err(|e| BAError::Worker(format!("deserialize Vec<TaskOutput>: {e}")))?;
         Ok(outputs)
     })
+}
+
+/// Python-side callable that forwards `progress(completed, total)`
+/// invocations back to a Rust [`BackendProgress`] held inside the Arc.
+///
+/// The pyclass owns its `Arc` clone, so its lifetime is decoupled from
+/// the `call_py_backend` stack frame; if a backend (incorrectly) stashes
+/// the callable beyond the call, the Arc keeps the underlying
+/// `BackendProgress` alive — at worst the late ticks emit into a sink
+/// that may have moved on. No UB, just noise. Backends SHOULD drop
+/// their callable reference before returning.
+#[pyclass]
+struct PyProgressCallback {
+    progress: Arc<dyn BackendProgress>,
+}
+
+#[pymethods]
+impl PyProgressCallback {
+    /// `progress(completed, total)` from Python → `BackendProgress::tick`.
+    fn __call__(&self, completed: u64, total: u64) {
+        self.progress.tick(completed, total);
+    }
 }
 
 /// Returned by `Pipeline::py_new` when a non-Backend object is passed.

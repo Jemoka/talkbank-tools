@@ -788,7 +788,6 @@
       "TencentAsrBackend",
       "WhisperBackend"
     ],
-    "AVQI": [],
     "Coref": [],
     "FA": [
       "Qwen3FaBackend",
@@ -798,7 +797,6 @@
     "Morphosyntax": [
       "StanzaBackend"
     ],
-    "OpenSmile": [],
     "Speaker": [
       "PyannoteBackend",
       "RevAI"
@@ -872,21 +870,6 @@
       ],
       "request_schema_ref": "#/components/schemas/AlignRequest"
     },
-    "avqi": {
-      "accepts_pipeline_opts": true,
-      "doc": "Acoustic Voice Quality Index extraction.",
-      "endpoint": "/recipes/avqi",
-      "params": [
-        {
-          "annotation": "'Any'",
-          "default": null,
-          "is_backend": true,
-          "name": "avqi_backend",
-          "required": true
-        }
-      ],
-      "request_schema_ref": "#/components/schemas/AvqiRequest"
-    },
     "compare": {
       "accepts_pipeline_opts": true,
       "doc": "Gold/main transcript comparison.\n\nWires ``[Morphosyntax, Compare]``. Morphosyntax runs on both sides of\nthe ``Paired`` (the runner short-circuits per-utterance if `%mor:` is\nalready present), so the compare backend can lift POS off the `%mor`\ntier to populate ``%xsmor``.\n\n``compare_backend`` defaults to the native Rust\n``batchalign._core.CompareBackend``. ``stanza_backend`` is required\nfor `%xsmor` to carry real POS tags.",
@@ -938,21 +921,6 @@
         }
       ],
       "request_schema_ref": "#/components/schemas/MorphotagRequest"
-    },
-    "opensmile": {
-      "accepts_pipeline_opts": true,
-      "doc": "OpenSMILE acoustic-feature extraction. `feature_set` is a backend\nconstructor arg (`OpenSmileBackend(feature_set=\"eGeMAPSv02\")`).",
-      "endpoint": "/recipes/opensmile",
-      "params": [
-        {
-          "annotation": "'Any'",
-          "default": null,
-          "is_backend": true,
-          "name": "opensmile_backend",
-          "required": true
-        }
-      ],
-      "request_schema_ref": "#/components/schemas/OpensmileRequest"
     },
     "transcribe": {
       "accepts_pipeline_opts": true,

@@ -25,6 +25,7 @@
 //! the upstream tokenization unless `retokenize`), the raw text (for
 //! `retokenize=true`), and the resolved language.
 
+use crate::cache::{hash_serialized, CacheKey};
 use crate::proto::asr::LanguageSpec;
 use crate::register_proto_schema;
 use crate::utils::SourceId;
@@ -140,6 +141,30 @@ pub struct MorphosyntaxInput {
     /// `tokens.join(" ")` when empty).
     #[serde(default)]
     pub text: String,
+}
+
+impl CacheKey for MorphosyntaxInput {
+    /// Excludes `source_id` + `utterance_id` (routing only). Two utterances
+    /// with identical tokens / language / mode collapse to one cache entry,
+    /// no matter which file or slot they came from.
+    fn hash(&self, hasher: &mut blake3::Hasher) {
+        #[derive(Serialize)]
+        struct K<'a> {
+            language: &'a LanguageSpec,
+            tokens: &'a [String],
+            retokenize: bool,
+            text: &'a str,
+        }
+        hash_serialized(
+            &K {
+                language: &self.language,
+                tokens: &self.tokens,
+                retokenize: self.retokenize,
+                text: &self.text,
+            },
+            hasher,
+        );
+    }
 }
 
 /// Per-utterance output from the morphosyntax backend.

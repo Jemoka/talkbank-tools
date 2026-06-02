@@ -3,6 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::SpeakerInput,
 //! SpeakerOutput, Diarization, DiarizationSegment`. !!!
 
+use crate::cache::{hash_serialized, CacheKey};
 use crate::register_proto_schema;
 use crate::utils::SourceId;
 use crate::utils::{PreparedAudio, SpeakerLabel};
@@ -19,6 +20,25 @@ pub struct SpeakerInput {
     /// Hint; 0 = auto.
     #[serde(default)]
     pub num_speakers: u32,
+}
+
+impl CacheKey for SpeakerInput {
+    /// Excludes `source_id`. Same audio + same speaker-count hint hashes
+    /// to the same key across files.
+    fn hash(&self, hasher: &mut blake3::Hasher) {
+        #[derive(Serialize)]
+        struct K<'a> {
+            audio: &'a PreparedAudio,
+            num_speakers: u32,
+        }
+        hash_serialized(
+            &K {
+                audio: &self.audio,
+                num_speakers: self.num_speakers,
+            },
+            hasher,
+        );
+    }
 }
 
 /// One diarized segment.

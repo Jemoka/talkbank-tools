@@ -71,7 +71,7 @@ class TencentTmtBackend(Translate):
         from tencentcloud.common.profile.http_profile import HttpProfile  # type: ignore[import-not-found]
         from tencentcloud.tmt.v20180321.tmt_client import TmtClient  # type: ignore[import-not-found]
 
-        creds = config.get_provider("tencent")
+        creds = config.get_provider("tencent", interactive=True)
         try:
             secret_id = creds["id"]
             secret_key = creds["key"]
@@ -107,7 +107,7 @@ class TencentTmtBackend(Translate):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from tencentcloud.common.exception.tencent_cloud_sdk_exception import (  # type: ignore[import-not-found]
             TencentCloudSDKException,
         )

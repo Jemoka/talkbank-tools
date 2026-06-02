@@ -44,7 +44,7 @@ class QwenAsrBackend(ASR):
         batch_size: int = 1,
         batch_window_ms: int = 0,
     ) -> None:
-        creds = config.get_provider(self._PROVIDER) if hasattr(config, "get_provider") else {}
+        creds = config.get_provider(self._PROVIDER, interactive=True) if hasattr(config, "get_provider") else {}
         base_url = creds.get("base_url", "")
         configured_model = creds.get("model") or model or "Qwen/Qwen2-Audio-7B-Instruct"
 
@@ -89,7 +89,7 @@ class QwenAsrBackend(ASR):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         if self._delegate is not None:
             return self._delegate.call(batch)
 

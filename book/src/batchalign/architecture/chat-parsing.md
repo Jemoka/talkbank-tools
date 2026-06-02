@@ -106,7 +106,6 @@ pipeline.
 | Speaker diarization | `inference/speaker.py` | nemo, pyannote |
 | Utterance segmentation | `inference/utseg.py` | stanza |
 | Translation | `inference/translate.py` | googletrans, seamless |
-| Audio feature extraction | `inference/opensmile.py` | opensmile |
 | Cantonese ASR | `inference/languages/cantonese/` | tencent/aliyun/funasr SDKs |
 
 Each module exports a pure inference entrypoint used by the live V2 worker host

@@ -117,19 +117,6 @@ def compare(
     )
 
 
-def opensmile(*, opensmile_backend: Any, **opts: Any) -> Any:
-    """OpenSMILE acoustic-feature extraction. `feature_set` is a backend
-    constructor arg (`OpenSmileBackend(feature_set="eGeMAPSv02")`)."""
-    Task, Pipeline = _core()
-    return Pipeline(tasks=[Task.OpenSmile], backends=[opensmile_backend], **opts)
-
-
-def avqi(*, avqi_backend: Any, **opts: Any) -> Any:
-    """Acoustic Voice Quality Index extraction."""
-    Task, Pipeline = _core()
-    return Pipeline(tasks=[Task.Avqi], backends=[avqi_backend], **opts)
-
-
 __all__ = [
     "transcribe",
     "align",
@@ -138,6 +125,4 @@ __all__ = [
     "coref",
     "utseg",
     "compare",
-    "opensmile",
-    "avqi",
 ]

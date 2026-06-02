@@ -101,7 +101,6 @@ your case.
 | `declare_reference_projection_command!(...)` | Compare against a reference | `compare` |
 | `declare_forced_alignment_command!(...)` | Forced alignment over transcript/media inputs | `align` |
 | `declare_transcription_command!(...)` | ASR transcription to CHAT | `transcribe`, `transcribe_s` |
-| `declare_media_analysis_command!(...)` | Media/audio feature extraction | `opensmile`, `avqi` |
 | `declare_benchmark_command!(...)` | Composite benchmark orchestration | `benchmark` |
 
 These helpers are backed by family-specific traits in

@@ -21,7 +21,7 @@ class AliyunAsrBackend(ASR):
     _PROVIDER = "aliyun"
 
     def __init__(self, *, poll_interval_s: float = 5.0, timeout_s: float = 3600.0) -> None:
-        creds = config.get_provider(self._PROVIDER)
+        creds = config.get_provider(self._PROVIDER, interactive=True)
         self._ak_id = creds.get("ak_id", "")
         self._ak_secret = creds.get("ak_secret", "")
         self._app_key = creds.get("ak_appkey", "")
@@ -37,7 +37,7 @@ class AliyunAsrBackend(ASR):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any]) -> list[Any]:
+    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from aliyunsdkcore.client import AcsClient  # type: ignore[import-not-found]
         from aliyunsdkcore.request import CommonRequest  # type: ignore[import-not-found]
         from batchalign._core.proto import AsrInput, AsrOutput

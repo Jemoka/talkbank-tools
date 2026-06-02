@@ -66,8 +66,6 @@ from batchalign.backends import (  # noqa: E402
     Morphosyntax,
     Translate,
     Coref,
-    OpenSmile,
-    AVQI,
     # ASR engines (BA2 parity: rev / whisper / whisperx / openai whisper,
     # plus the Chinese/Cantonese cloud + local engines).
     WhisperBackend,
@@ -122,8 +120,6 @@ __all__ = [
     "Morphosyntax",
     "Translate",
     "Coref",
-    "OpenSmile",
-    "AVQI",
     # concrete backends — ASR
     "WhisperBackend",
     "ChatWhisperBackend",
