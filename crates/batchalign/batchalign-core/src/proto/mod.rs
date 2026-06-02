@@ -29,6 +29,7 @@ pub mod fa;
 pub mod morphosyntax;
 pub mod speaker;
 pub mod translate;
+pub mod utr;
 pub mod utseg;
 
 pub use asr::{AsrInput, AsrOptions, AsrOutput, AsrSegment, AsrWord, LanguageSpec};
@@ -41,6 +42,7 @@ pub use morphosyntax::{
 };
 pub use speaker::{Diarization, DiarizationSegment, SpeakerInput, SpeakerOutput};
 pub use translate::{TranslateInput, TranslateOutput};
+pub use utr::{UtrInput, UtrOutput};
 pub use utseg::{UtSegInput, UtSegOutput, UtteranceSpan};
 
 use serde_json::{Map, Value};

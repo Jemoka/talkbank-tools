@@ -20,9 +20,40 @@ from typing import Any
 
 import typer
 
+from ..lang import LanguageCode
 from ._common import collect_chat_inputs, write_outcomes
 from ._options import cli_options
 from .tui import Interface, Task
+
+
+def _infer_lang(folder: Path) -> LanguageCode:
+    """Read the first CHAT file's `@Languages:` header and return its
+    primary language code. Matches the per-file resolution the Rust
+    runners do for FA / Morphosyntax / UTR.
+
+    Used to construct the Rev.AI / Whisper UTR backend, which (unlike
+    Stanza or Qwen3 FA) requires the language at construction time.
+    """
+    files: list[Path]
+    if folder.is_file():
+        files = [folder]
+    else:
+        files = sorted(folder.rglob("*.cha"))
+    for path in files:
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.startswith("@Languages:"):
+                        value = line.split(":", 1)[1].strip()
+                        # First language wins (CHAT lists primary first).
+                        primary = value.replace(",", " ").split()[0]
+                        return LanguageCode.from_str(primary)
+        except OSError:
+            continue
+    raise typer.BadParameter(
+        f"no @Languages: header found in any CHAT under {folder}; "
+        "cannot pick a UTR backend language. Pass --utr-engine off to skip UTR."
+    )
 
 
 class FaEngine(str, Enum):
@@ -31,6 +62,20 @@ class FaEngine(str, Enum):
     wav2vec = "wav2vec"        # torchaudio MMS_FA (BA2 --wav2vec)
     whisper_fa = "whisper_fa"  # Whisper cross-attention DTW (BA2 --whisper_fa)
     qwen = "qwen"              # Qwen3-ForcedAligner-0.6B (BA3 cutover Landing 6 #29)
+
+
+class UtrEngine(str, Enum):
+    """Utterance Timing Recovery backend selection.
+
+    UTR runs an ASR pass over the whole audio and Hirschberg-aligns the
+    CHAT word stream to the resulting tokens to recover utterance bullets
+    on untimed transcripts. The "engine" here is just an ASR backend that
+    has opted into the UTR marker — same backend you'd use for ASR.
+    """
+
+    off = "off"
+    whisper = "whisper"
+    rev = "rev"
 
 
 def register(app: typer.Typer) -> None:
@@ -58,6 +103,19 @@ def register(app: typer.Typer) -> None:
             False, "--force-cpu",
             help="Run the FA model on CPU (BA2's --force-cpu). Needed for whisper_fa "
             "on Apple MPS, where Whisper's bfloat16 attention kernel is unsupported.",
+        ),
+        utr_engine: UtrEngine = typer.Option(
+            UtrEngine.rev, "--utr-engine", case_sensitive=False,
+            help="Utterance Timing Recovery backend: rev | whisper | off. "
+            "When non-off, runs `Task.Utr` before FA to recover utterance "
+            "bullets on fully-untimed CHATs. Automatically skipped when "
+            "*any* utterance already carries a bullet — UTR is intended "
+            "for fully-untimed transcripts only.",
+        ),
+        utr_model: str | None = typer.Option(
+            None, "--utr-model",
+            help="UTR model id (only used when --utr-engine=whisper; default "
+            "is openai/whisper-large-v3 to match BA2's transcribe).",
         ),
     ) -> None:
         """Run forced alignment on existing CHAT files (adds a `%wor` tier)."""
@@ -89,7 +147,29 @@ def register(app: typer.Typer) -> None:
                 )
             else:
                 raise typer.BadParameter(f"unknown engine: {engine}")
-            pipeline = ba.recipes.align(fa_backend=fa_backend)
+
+            utr_backend: Any | None
+            if utr_engine is UtrEngine.off:
+                utr_backend = None
+            else:
+                # Rev.AI / Whisper need the language at construction time
+                # (unlike Stanza / Qwen3 FA, which read it per-call from
+                # the wire input). Infer it from the first CHAT's
+                # @Languages: header — same source the Rust runners use.
+                lang_code = _infer_lang(folder)
+                if utr_engine is UtrEngine.whisper:
+                    utr_backend = ba.WhisperBackend(
+                        model=utr_model or "openai/whisper-large-v3",
+                        language=lang_code,
+                        device=device,
+                    )
+                elif utr_engine is UtrEngine.rev:
+                    # Credentials come from the user's batchalign config.
+                    utr_backend = ba.RevAI(language=lang_code)
+                else:
+                    raise typer.BadParameter(f"unknown UTR engine: {utr_engine}")
+
+            pipeline = ba.recipes.align(fa_backend=fa_backend, utr_backend=utr_backend)
             inputs, root = collect_chat_inputs(folder)
             for inp in inputs:
                 ui.push(Task.from_input(inp))

@@ -58,10 +58,45 @@ def transcribe(
     return Pipeline(tasks=tasks, backends=backends, **opts)
 
 
-def align(*, fa_backend: Any, **opts: Any) -> Any:
-    """Forced alignment only (`Task.Fa`)."""
+def align(
+    *,
+    fa_backend: Any,
+    utr_backend: Any | None = None,
+    **opts: Any,
+) -> Any:
+    """Forced alignment, with optional Utterance Timing Recovery pre-pass.
+
+    When ``utr_backend`` is supplied (any ASR backend that subclasses
+    :class:`batchalign.backends.base.UTR` — Whisper, ChatWhisper, Rev.AI),
+    the pipeline runs ``[Task.Utr, Task.Fa]`` so untimed transcripts have
+    their utterance bullets recovered before FA slices the audio. The UTR
+    runner skips itself when every utterance is already timed, so passing
+    a UTR backend is always safe.
+
+    When ``utr_backend`` is omitted, runs bare FA — appropriate for
+    transcripts that already carry utterance bullets (UtSeg output, hand-
+    timed CHATs, FA reruns).
+    """
     Task, Pipeline = _core()
+    if utr_backend is not None:
+        return Pipeline(
+            tasks=[Task.Utr, Task.Fa],
+            backends=[utr_backend, fa_backend],
+            **opts,
+        )
     return Pipeline(tasks=[Task.Fa], backends=[fa_backend], **opts)
+
+
+def utr(*, utr_backend: Any, **opts: Any) -> Any:
+    """Standalone Utterance Timing Recovery (`Task.Utr`).
+
+    Use this when you want to inject utterance bullets without immediately
+    running FA. The backend is any ASR engine that has opted into
+    :class:`batchalign.backends.base.UTR` via its MRO (Whisper, ChatWhisper,
+    Rev.AI ship with the marker; opt in others by subclassing).
+    """
+    Task, Pipeline = _core()
+    return Pipeline(tasks=[Task.Utr], backends=[utr_backend], **opts)
 
 
 def morphotag(*, stanza_backend: Any, **opts: Any) -> Any:
@@ -124,6 +159,7 @@ def compare(
 __all__ = [
     "transcribe",
     "align",
+    "utr",
     "morphotag",
     "translate",
     "coref",

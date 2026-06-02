@@ -377,8 +377,8 @@ pub enum ReviewLevel {
 ///
 /// Generalizes `fa::review_tiers::inject_review_tiers` to accept any
 /// pipeline's decisions, not just FA repair decisions.
-pub fn inject_decision_tiers(
-    chat_file: &mut ChatFile,
+pub fn inject_decision_tiers<S: talkbank_model::validation::ValidationState>(
+    chat_file: &mut ChatFile<S>,
     decisions: &[DecisionRecord],
     review_level: ReviewLevel,
 ) {
@@ -435,7 +435,9 @@ pub fn inject_decision_tiers(
 /// Called at the top of [`inject_decision_tiers`] and
 /// [`fa::review_tiers::inject_review_tiers`] so that re-running any pipeline
 /// command replaces existing tiers rather than accumulating duplicates.
-pub fn strip_decision_tiers(chat_file: &mut ChatFile) {
+pub fn strip_decision_tiers<S: talkbank_model::validation::ValidationState>(
+    chat_file: &mut ChatFile<S>,
+) {
     for line in &mut chat_file.lines {
         let Line::Utterance(utt) = line else {
             continue;
