@@ -88,9 +88,19 @@ class WhisperBackend(ASR, UTR):
         from batchalign._core.proto import AsrSegment, AsrWord
 
         wave = np.frombuffer(item.audio.pcm_f32le, dtype=np.float32)
-        language = (
-            item.language.value if item.language.kind == "code" else self._language
-        )
+        # HF Whisper expects the English name ("english", "spanish", …),
+        # not the ISO alpha_3 code ("eng", "spa", …). The wire payload
+        # ships `LanguageSpec::Code(alpha_3)` (e.g. from the UTR runner
+        # reading `@Languages: eng`), so we resolve it back through
+        # `LanguageCode` to get the English name. `self._language` is
+        # already the English name from the constructor.
+        if item.language.kind == "code":
+            try:
+                language: str | None = LanguageCode.from_str(item.language.value).name
+            except ValueError:
+                language = self._language
+        else:
+            language = self._language
         gen_kwargs: dict[str, Any] = {}
         if language is not None:
             gen_kwargs["language"] = language

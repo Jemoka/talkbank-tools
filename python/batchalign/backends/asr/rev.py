@@ -141,22 +141,23 @@ class RevAI(ASR, UTR, Speaker):
 
         Splits the old _submit_and_wait so a whole batch can be uploaded
         before any polling starts (batch ASR per the BA3 cutover plan).
-        Upload semantics unchanged from the original.
+
+        Always uploads the in-memory PCM as WAV. We can't shortcut to
+        "upload source_id directly" because source_id may be a CHAT
+        (.cha) file path — that's the case for UTR / align pipelines
+        where source_id identifies the transcript, not the audio. The
+        Rust runner has already decoded the audio to 16kHz mono PCM,
+        so there's no quality loss from re-encoding it as WAV here.
         """
         import os
         import tempfile
-        from pathlib import Path
 
-        orig = str(source_id) if source_id is not None else ""
         tmp_path = ""
-        if orig and Path(orig).is_file():
-            upload_path = orig
-        else:
-            wav_bytes = _pcm_to_wav_bytes(audio)
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                tmp.write(wav_bytes)
-                tmp_path = tmp.name
-            upload_path = tmp_path
+        wav_bytes = _pcm_to_wav_bytes(audio)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp.write(wav_bytes)
+            tmp_path = tmp.name
+        upload_path = tmp_path
 
         submit_kwargs: dict[str, Any] = {"metadata": "batchalign"}
         if self._language:
@@ -194,7 +195,12 @@ class RevAI(ASR, UTR, Speaker):
                     results[source_id] = self._client.get_transcript_json(job_id)
                     del pending[source_id]
                 elif status == JobStatus.FAILED:
-                    raise RuntimeError(f"Rev.AI job {job_id} failed: {details!r}")
+                    failure = getattr(details, "failure", None)
+                    failure_detail = getattr(details, "failure_detail", None)
+                    raise RuntimeError(
+                        f"Rev.AI job {job_id} failed: "
+                        f"failure={failure} failure_detail={failure_detail}"
+                    )
             if not pending:
                 break
             if time.monotonic() > deadline:
