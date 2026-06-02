@@ -10,6 +10,7 @@ pub mod fa;
 pub mod morphosyntax;
 pub mod speaker;
 pub mod translate;
+pub mod utr;
 pub mod utseg;
 
 use crate::base::DynTaskRunner;
@@ -30,6 +31,7 @@ pub fn canonical(task: Task) -> Box<dyn DynTaskRunner> {
         Task::UtSeg => Box::new(utseg::UtSegTaskRunner),
         Task::Morphosyntax => Box::new(morphosyntax::MorphosyntaxTaskRunner),
         Task::Translate => Box::new(translate::TranslateTaskRunner),
+        Task::Utr => Box::new(utr::UtrTaskRunner),
         Task::Coref => Box::new(coref::CorefTaskRunner),
         Task::Compare => Box::new(compare::CompareTaskRunner),
     }

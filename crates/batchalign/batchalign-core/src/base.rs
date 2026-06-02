@@ -13,6 +13,7 @@ use crate::proto::fa::{FaInput, FaOutput};
 use crate::proto::morphosyntax::{MorphosyntaxInput, MorphosyntaxOutput};
 use crate::proto::speaker::{SpeakerInput, SpeakerOutput};
 use crate::proto::translate::{TranslateInput, TranslateOutput};
+use crate::proto::utr::{UtrInput, UtrOutput};
 use crate::proto::utseg::{UtSegInput, UtSegOutput};
 use crate::utils::{BAError, BAResult, MediaInput, SourceId};
 use async_trait::async_trait;
@@ -47,6 +48,12 @@ pub enum Task {
     Speaker,
     /// Utterance segmentation.
     UtSeg,
+    /// Utterance Timing Recovery — runs an ASR-shaped backend to get
+    /// timed tokens, then Hirschberg-aligns the CHAT word stream
+    /// against those tokens to inject per-utterance bullet timings on
+    /// transcripts that arrived without timing. Pre-pass for FA on
+    /// human-authored or hand-edited CHATs.
+    Utr,
     /// Morphosyntactic tagging — adds `%mor` / `%gra` tiers.
     Morphosyntax,
     /// Machine translation.
@@ -63,7 +70,18 @@ impl Task {
         match self {
             Task::Asr | Task::Speaker => &[],
             Task::UtSeg => &[Task::Asr],
-            Task::Fa => &[Task::UtSeg],
+            // UTR has no DAG prerequisites: it operates on a CHAT plus
+            // audio and produces utterance bullets from scratch. It is
+            // safe to include in any pipeline because its taskrunner
+            // skips when every utterance already carries a non-zero
+            // bullet (see `taskrunners/utr.rs`).
+            Task::Utr => &[],
+            // FA needs utterance-level bullets to slice audio; UTR
+            // produces them when missing. Topo-sort orders Utr before
+            // Fa whenever both are declared. (Pipelines starting from
+            // a hand-timed CHAT can omit Utr; pipelines from ASR
+            // already get bullets from UtSeg.)
+            Task::Fa => &[Task::UtSeg, Task::Utr],
             Task::Morphosyntax => &[Task::UtSeg],
             Task::Coref => &[Task::Morphosyntax],
             Task::Translate => &[Task::Morphosyntax],
@@ -78,6 +96,7 @@ impl Task {
             Task::Fa => "fa",
             Task::Speaker => "speaker",
             Task::UtSeg => "utseg",
+            Task::Utr => "utr",
             Task::Morphosyntax => "morphosyntax",
             Task::Translate => "translate",
             Task::Coref => "coref",
@@ -86,11 +105,12 @@ impl Task {
     }
 
     /// Every variant — useful for iteration in tests and codegen.
-    pub const ALL: [Task; 8] = [
+    pub const ALL: [Task; 9] = [
         Task::Asr,
         Task::Fa,
         Task::Speaker,
         Task::UtSeg,
+        Task::Utr,
         Task::Morphosyntax,
         Task::Translate,
         Task::Coref,
@@ -168,6 +188,11 @@ union_input_output! {
         Fa(FaInput) => Fa,
         Speaker(SpeakerInput) => Speaker,
         UtSeg(UtSegInput) => UtSeg,
+        // UTR's payload is serde-transparent over `AsrInput`, so the
+        // wire bytes are AsrInput-shaped. The Rust newtype keeps the
+        // closed-union macro's `From<UtrInput>` impl distinct from
+        // `From<AsrInput>`.
+        Utr(UtrInput) => Utr,
         Morphosyntax(MorphosyntaxInput) => Morphosyntax,
         Translate(TranslateInput) => Translate,
         Coref(CorefInput) => Coref,
@@ -178,6 +203,7 @@ union_input_output! {
         Fa(FaOutput),
         Speaker(SpeakerOutput),
         UtSeg(UtSegOutput),
+        Utr(UtrOutput),
         Morphosyntax(MorphosyntaxOutput),
         Translate(TranslateOutput),
         Coref(CorefOutput),
@@ -210,6 +236,7 @@ try_from_output! {
     Fa(FaOutput),
     Speaker(SpeakerOutput),
     UtSeg(UtSegOutput),
+    Utr(UtrOutput),
     Morphosyntax(MorphosyntaxOutput),
     Translate(TranslateOutput),
     Coref(CorefOutput),
