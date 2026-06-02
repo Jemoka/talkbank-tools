@@ -77,7 +77,7 @@ def test_asr_engine_enum_members():
 
     assert {e.value for e in AsrEngine} == {
         "rev", "whisper", "chatwhisper", "openai",
-        "funaudio", "tencent", "qwen3",
+        "funaudio", "tencent", "qwen3", "aliyun",
     }
 
 
