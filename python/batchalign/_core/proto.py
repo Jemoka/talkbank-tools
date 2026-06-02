@@ -107,6 +107,12 @@ _TAG_TO_INPUT: dict[str, type] = {
     "Fa": FaInput,
     "Speaker": SpeakerInput,
     "UtSeg": UtSegInput,
+    # UTR's wire payload is byte-identical to AsrInput (Rust-side
+    # `UtrInput` is a serde-transparent newtype over `AsrInput`), so we
+    # rehydrate it into the same Python dataclass. Any ASR backend that
+    # has opted into the `UTR` marker handles the resulting `AsrInput`
+    # unchanged.
+    "Utr": AsrInput,
     "Morphosyntax": MorphosyntaxInput,
     "Translate": TranslateInput,
     "Coref": CorefInput,
@@ -139,14 +145,28 @@ def rebuild_tagged_inputs(items: list[dict]) -> list[Any]:
     return out
 
 
-def serialize_tagged_outputs(items: list[Any]) -> list[dict]:
+def serialize_tagged_outputs(
+    items: list[Any], input_tags: list[str] | None = None
+) -> list[dict]:
     """Inverse of `rebuild_tagged_inputs`: take a list of typed `*Output`
-    pydantic instances and emit the tagged-dict shape Rust serde expects on
-    the way back. `model_dump(mode='json')` matches what `serde_json`
-    parses on the Rust side — bytes round-trip as base64 strings, etc."""
+    pydantic instances and emit the tagged-dict shape Rust serde expects.
+
+    When `input_tags` is provided (one per item, in the same order as the
+    inputs that produced them), the output tag is taken from there
+    instead of looked up by Python type. This is how `AsrOutput` returned
+    from a `Task.Utr` dispatch gets serialized back as `{"task": "Utr"}`
+    rather than `{"task": "Asr"}` — UTR's wire payload is identical to
+    ASR's, so type alone can't disambiguate.
+
+    `model_dump(mode='json')` matches what `serde_json` parses on the
+    Rust side — bytes round-trip as base64 strings, etc.
+    """
     out: list[dict] = []
-    for item in items:
-        tag = _OUTPUT_TO_TAG.get(type(item))
+    for i, item in enumerate(items):
+        if input_tags is not None and i < len(input_tags):
+            tag: str | None = input_tags[i]
+        else:
+            tag = _OUTPUT_TO_TAG.get(type(item))
         if tag is None:
             raise TypeError(f"unknown Output type {type(item).__name__}")
         out.append({"task": tag, "data": item.model_dump(mode="json")})

@@ -249,10 +249,27 @@ fn call_py_backend(
             .map_err(|e| BAError::Worker(format!("Backend.call raised: {e}")))?;
 
         // Reverse the rehydration: typed *Output dataclasses -> tagged-dict
-        // JSON -> Vec<TaskOutput>.
+        // JSON -> Vec<TaskOutput>. Pass the original input tags through
+        // so UTR (which shares `AsrOutput` as its Python wire type) gets
+        // serialized back with the `"Utr"` discriminator rather than
+        // being misclassified as `"Asr"`.
+        let input_tags: Vec<&'static str> = batch
+            .iter()
+            .map(|t| match t {
+                TaskInput::Asr(_) => "Asr",
+                TaskInput::Fa(_) => "Fa",
+                TaskInput::Speaker(_) => "Speaker",
+                TaskInput::UtSeg(_) => "UtSeg",
+                TaskInput::Utr(_) => "Utr",
+                TaskInput::Morphosyntax(_) => "Morphosyntax",
+                TaskInput::Translate(_) => "Translate",
+                TaskInput::Coref(_) => "Coref",
+                TaskInput::Compare(_) => "Compare",
+            })
+            .collect();
         let response_tagged = proto_mod
             .getattr("serialize_tagged_outputs")
-            .and_then(|f| f.call1((result,)))
+            .and_then(|f| f.call1((result, input_tags)))
             .map_err(|e| BAError::Worker(format!("serialize_tagged_outputs: {e}")))?;
         let response_str = json_mod
             .getattr("dumps")
