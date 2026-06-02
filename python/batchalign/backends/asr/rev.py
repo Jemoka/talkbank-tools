@@ -20,13 +20,13 @@ import time
 import wave
 from typing import Any
 
-from batchalign.backends.base import ASR, Speaker, BatchPolicy
+from batchalign.backends.base import ASR, UTR, Speaker, BatchPolicy
 from batchalign import config
 from batchalign.lang import LanguageCode
 
 
-class RevAI(ASR, Speaker):
-    """Rev.AI cloud ASR + diarization, atomic-call."""
+class RevAI(ASR, UTR, Speaker):
+    """Rev.AI cloud ASR + diarization, atomic-call. Also serves `Task.Utr`."""
 
     def __init__(
         self,

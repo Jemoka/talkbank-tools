@@ -160,6 +160,22 @@ class UtSeg(Backend):
     """Marker: this backend handles `Task.UtSeg` (utterance segmentation) inputs."""
 
 
+class UTR(Backend):
+    """Marker: this backend handles `Task.Utr` (Utterance Timing Recovery) inputs.
+
+    UTR's wire payload is byte-identical to ASR's — the Rust-side proto
+    `UtrInput` is a serde-transparent newtype over `AsrInput`. So any ASR
+    backend can opt into UTR by adding this marker to its bases:
+
+        class WhisperBackend(ASR, UTR):
+            ...
+
+    No `call()` changes are needed; the backend pattern-matches on the same
+    `AsrInput` dataclass it already handles. The Rust UTR taskrunner runs
+    the Hirschberg strategy over the returned tokens.
+    """
+
+
 class Morphosyntax(Backend):
     """Marker: this backend handles `Task.Morphosyntax` inputs."""
 
@@ -181,6 +197,7 @@ _TASK_BY_ABC: dict[type, Task] = {
     FA: Task.Fa,
     Speaker: Task.Speaker,
     UtSeg: Task.UtSeg,
+    UTR: Task.Utr,
     Morphosyntax: Task.Morphosyntax,
     Translate: Task.Translate,
     Coref: Task.Coref,

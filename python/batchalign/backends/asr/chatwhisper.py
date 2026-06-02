@@ -33,7 +33,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from batchalign.backends.base import ASR, BatchPolicy
+from batchalign.backends.base import ASR, UTR, BatchPolicy
 from batchalign.lang import LanguageCode
 
 # BA2 model resolution (models/resolve.py). English is the finetuned pairing;
@@ -389,8 +389,8 @@ def segment_words(
     return out
 
 
-class ChatWhisperBackend(ASR):
-    """TalkBank CHATWhisper ASR + BERT utterance segmentation (BA2 WhisperEngine)."""
+class ChatWhisperBackend(ASR, UTR):
+    """TalkBank CHATWhisper ASR + BERT utterance segmentation; also serves `Task.Utr`."""
 
     def __init__(
         self,

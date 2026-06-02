@@ -17,12 +17,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from batchalign.backends.base import ASR, BatchPolicy
+from batchalign.backends.base import ASR, UTR, BatchPolicy
 from batchalign.lang import LanguageCode
 
 
-class WhisperBackend(ASR):
-    """Local Whisper ASR backend (single task).
+class WhisperBackend(ASR, UTR):
+    """Local Whisper ASR backend; also serves `Task.Utr`.
 
     HF Whisper's `generate_kwargs["language"]` accepts the English
     language name (`"English"`, `"Spanish"`) — that's what
