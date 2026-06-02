@@ -37,6 +37,7 @@ class AsrEngine(str, Enum):
     funaudio = "funaudio"  # FunASR SenseVoiceSmall / paraformer-zh (BA2 FunAudioEngine)
     tencent = "tencent"    # Tencent Cloud ASR (BA2 TencentEngine)
     qwen3 = "qwen3"        # Qwen3-ASR (Alibaba open-weight; tbtbt parity)
+    aliyun = "aliyun"      # Aliyun NLS Cloud ASR (BA2 AlibabaEngine)
 
 
 # Engines that ship internal sentence segmentation — skip CHATUtterance
@@ -184,6 +185,12 @@ def _build_asr(
             language=lang, model_id=m or "Qwen/Qwen3-ASR-1.7B",
             device=device or "cpu",
         ), False
+    if engine is AsrEngine.aliyun:
+        # Aliyun NLS Cloud (BA2 AlibabaEngine). Language is pinned by the
+        # configured AppKey, not the CLI arg — Aliyun NLS requires a
+        # per-language project. Credentials in ~/.batchalign.ini
+        # (`engine.aliyun.{ak_id,ak_secret,ak_appkey}`).
+        return ba.AliyunAsrBackend(), False
     raise typer.BadParameter(f"unknown engine: {engine}")
 
 
