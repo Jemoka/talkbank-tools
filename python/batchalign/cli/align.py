@@ -73,8 +73,8 @@ def register(app: typer.Typer) -> None:
             help="Run the FA model on CPU (BA2's --force-cpu). Needed for whisper_fa "
             "on Apple MPS, where Whisper's bfloat16 attention kernel is unsupported.",
         ),
-        utr: UtrEngine = typer.Option(
-            UtrEngine.whisper, "--utr", case_sensitive=False,
+        utr_engine: UtrEngine = typer.Option(
+            UtrEngine.whisper, "--utr-engine", case_sensitive=False,
             help="Utterance Timing Recovery backend: whisper | rev | off. "
             "When non-off, runs `Task.Utr` before FA to recover utterance "
             "bullets on untimed CHATs. Skipped automatically when bullets "
@@ -82,8 +82,8 @@ def register(app: typer.Typer) -> None:
         ),
         utr_model: str | None = typer.Option(
             None, "--utr-model",
-            help="UTR model id (only used when --utr=whisper; default is "
-            "openai/whisper-large-v3 to match BA2's transcribe).",
+            help="UTR model id (only used when --utr-engine=whisper; default "
+            "is openai/whisper-large-v3 to match BA2's transcribe).",
         ),
     ) -> None:
         """Run forced alignment on existing CHAT files (adds a `%wor` tier)."""
@@ -117,19 +117,19 @@ def register(app: typer.Typer) -> None:
                 raise typer.BadParameter(f"unknown engine: {engine}")
 
             utr_backend: Any | None
-            if utr is UtrEngine.off:
+            if utr_engine is UtrEngine.off:
                 utr_backend = None
-            elif utr is UtrEngine.whisper:
+            elif utr_engine is UtrEngine.whisper:
                 utr_backend = ba.WhisperBackend(
                     model=utr_model or "openai/whisper-large-v3",
                     device=device,
                 )
-            elif utr is UtrEngine.rev:
+            elif utr_engine is UtrEngine.rev:
                 # Rev.AI subclasses (ASR, UTR, Speaker); credentials come from
                 # the user's batchalign config (same as transcribe).
                 utr_backend = ba.RevAI()
             else:
-                raise typer.BadParameter(f"unknown UTR engine: {utr}")
+                raise typer.BadParameter(f"unknown UTR engine: {utr_engine}")
 
             pipeline = ba.recipes.align(fa_backend=fa_backend, utr_backend=utr_backend)
             inputs, root = collect_chat_inputs(folder)

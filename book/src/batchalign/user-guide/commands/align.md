@@ -1,7 +1,7 @@
 # align
 
 **Status:** Current
-**Last updated:** 2026-05-02 02:30 EDT
+**Last updated:** 2026-06-02 12:41 PDT
 
 Add word-level and utterance-level timestamps to an existing CHAT transcript
 by running forced alignment against the corresponding audio file.

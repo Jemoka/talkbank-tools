@@ -1036,6 +1036,16 @@ mod tests {
     }
 
     #[test]
+    fn fa_requires_utr_for_topological_ordering() {
+        // The pipeline relies on `Task::Fa::requires() = [.., Utr]` to
+        // place UTR before FA when both are declared. Lock that in.
+        assert!(Task::Fa.requires().contains(&Task::Utr));
+        // UTR itself has no DAG prerequisites — it operates on the raw
+        // CHAT and is skip-safe when bullets already exist.
+        assert!(Task::Utr.requires().is_empty());
+    }
+
+    #[test]
     fn requires_targets_are_real_tasks() {
         for t in Task::ALL {
             for r in t.requires() {

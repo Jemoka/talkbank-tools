@@ -515,3 +515,77 @@ pub(super) fn update_utt_range(utt_range: &mut Option<(usize, usize)>, reference
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::base::Chat;
+    use crate::utils::SourceId;
+
+    fn make_tokens(words: &[(&str, u64, u64)]) -> Vec<AsrTimingToken> {
+        words
+            .iter()
+            .map(|(t, s, e)| AsrTimingToken {
+                text: t.to_string(),
+                start_ms: *s,
+                end_ms: *e,
+            })
+            .collect()
+    }
+
+    fn parse_chat(text: &str) -> Chat {
+        let sid = SourceId::try_new("test.cha").unwrap();
+        Chat::parse(text, sid).unwrap()
+    }
+
+    /// All-untimed CHAT + matching ASR tokens → every utterance gets a
+    /// bullet projected from its first/last matched token.
+    #[test]
+    fn global_utr_injects_bullets_on_untimed_utterances() {
+        const CHA: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world .\n*CHI:\tgoodbye now .\n@End\n";
+        let mut chat = parse_chat(CHA);
+        let tokens = make_tokens(&[
+            ("hello", 100, 500),
+            ("world", 600, 1100),
+            ("goodbye", 2000, 2600),
+            ("now", 2700, 3000),
+        ]);
+        let result = inject_utr_timing(chat.ast_mut(), &tokens);
+        assert_eq!(result.injected, 2);
+        assert_eq!(result.skipped, 0);
+        assert_eq!(result.unmatched, 0);
+
+        // Verify both utterances now carry a UTR-hint bullet.
+        let mut bullets = Vec::new();
+        for line in chat.ast().lines.0.iter() {
+            if let Line::Utterance(u) = line {
+                if let Some(b) = u.main.content.bullet.as_ref() {
+                    bullets.push((b.timing.start_ms, b.timing.end_ms));
+                }
+            }
+        }
+        assert_eq!(bullets, vec![(100, 1100), (2000, 3000)]);
+    }
+
+    /// Already-timed CHAT → all utterances skipped, no bullets touched.
+    #[test]
+    fn global_utr_skips_already_timed_utterances() {
+        const CHA: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world . \u{15}100_1100\u{15}\n@End\n";
+        let mut chat = parse_chat(CHA);
+        let tokens = make_tokens(&[("hello", 100, 500), ("world", 600, 1100)]);
+        let result = inject_utr_timing(chat.ast_mut(), &tokens);
+        assert_eq!(result.injected, 0);
+        assert_eq!(result.skipped, 1);
+        assert_eq!(result.unmatched, 0);
+    }
+
+    /// Empty ASR token stream → every untimed utterance counted as unmatched.
+    #[test]
+    fn global_utr_records_unmatched_with_empty_tokens() {
+        const CHA: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
+        let mut chat = parse_chat(CHA);
+        let result = inject_utr_timing(chat.ast_mut(), &[]);
+        assert_eq!(result.injected, 0);
+        assert_eq!(result.unmatched, 1);
+    }
+}
