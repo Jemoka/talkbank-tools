@@ -40,10 +40,13 @@ class AsrEngine(str, Enum):
 
 
 # Engines that ship internal sentence segmentation — skip CHATUtterance
-# BERT pairing for these, since they'd double-segment the output. Currently
-# only ChatWhisper qualifies (BertUtteranceModel runs inside the ASR loop).
+# BERT pairing for these. Currently nothing qualifies: ChatWhisperBackend
+# strips punctuation and emits one raw blob per file, deliberately leaving
+# segmentation to the downstream UtSeg stage (matches BA2's pairing). Kept
+# as a predicate so adding a self-segmenting backend later is one line.
 def _engine_self_segments(engine: AsrEngine) -> bool:
-    return engine is AsrEngine.chatwhisper
+    _ = engine
+    return False
 
 
 # Sensible per-engine default models (BA2's defaults where they exist).
