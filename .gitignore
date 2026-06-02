@@ -100,3 +100,9 @@ apps/batchalign/batchalign-gui/e2e-*.png
 # build, so checking them in just creates merge-conflict churn.
 apps/batchalign/batchalign-gui/src-tauri/gen/
 apps/chatter/chatter-gui/src-tauri/gen/
+
+# Uncommitted parity / analysis drafts (user-private working docs)
+parity.md
+engine-parity-report.draft.md
+ba3_cutover_plan.md
+FRANKLIN_BA3_FEATURE_ANALYSIS.md
