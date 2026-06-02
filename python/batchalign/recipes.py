@@ -91,30 +91,34 @@ def utseg(*, utseg_backend: Any, **opts: Any) -> Any:
 
 def compare(
     *,
-    stanza_backend: Any,
+    stanza_backend: Any | None = None,
     compare_backend: Any = None,
     **opts: Any,
 ) -> Any:
     """Gold/main transcript comparison.
 
-    Wires ``[Morphosyntax, Compare]``. Morphosyntax runs on both sides of
-    the ``Paired`` (the runner short-circuits per-utterance if `%mor:` is
-    already present), so the compare backend can lift POS off the `%mor`
-    tier to populate ``%xsmor``.
+    Wires ``[Morphosyntax, Compare]`` when ``stanza_backend`` is given so
+    POS tags reach the ``%xsmor`` tier (the morphosyntax runner short-
+    circuits per-utterance when ``%mor:`` is already present, so the
+    cost is paid only when needed). With ``stanza_backend=None`` the
+    pipeline collapses to ``[Compare]`` — POS tags are read off any
+    pre-existing ``%mor:`` in the input, or fall back to ``?``.
 
     ``compare_backend`` defaults to the native Rust
-    ``batchalign._core.CompareBackend``. ``stanza_backend`` is required
-    for `%xsmor` to carry real POS tags.
+    ``batchalign._core.backends.CompareBackend``.
     """
     Task, Pipeline = _core()
     if compare_backend is None:
-        from batchalign._core import CompareBackend  # type: ignore[attr-defined]
+        from batchalign._core.backends import CompareBackend  # type: ignore[attr-defined]
         compare_backend = CompareBackend()
-    return Pipeline(
-        tasks=[Task.Morphosyntax, Task.Compare],
-        backends=[stanza_backend, compare_backend],
-        **opts,
-    )
+    tasks = []
+    backends = []
+    if stanza_backend is not None:
+        tasks.append(Task.Morphosyntax)
+        backends.append(stanza_backend)
+    tasks.append(Task.Compare)
+    backends.append(compare_backend)
+    return Pipeline(tasks=tasks, backends=backends, **opts)
 
 
 __all__ = [

@@ -83,6 +83,12 @@ impl TaskRunner for CompareTaskRunner {
         // needs %mor (POS), so this matches BA2 and keeps the document valid.
         strip_gra_tiers(&mut main_chat);
         strip_gra_tiers(&mut gold_chat);
+        // Make compare idempotent in-place: if the main file already carries
+        // %xsrep/%xsmor/%xcmp from a previous compare run, strip them before
+        // we re-inject. Otherwise the new tiers stack on top and the
+        // re-parse trips E401 (duplicate dependent tier).
+        strip_compare_tiers(&mut main_chat);
+        strip_compare_tiers(&mut gold_chat);
         let main_text = main_chat.to_chat();
         let gold_text = gold_chat.to_chat();
         let main_source_id = main_chat.source_id().clone();
@@ -137,6 +143,42 @@ fn strip_gra_tiers(chat: &mut crate::base::Chat) {
         if let Line::Utterance(u) = line {
             u.dependent_tiers
                 .retain(|t| !matches!(t, DependentTier::Gra(_)));
+        }
+    }
+}
+
+/// Strip `%xsrep`, `%xsmor`, and `%xcmp` user-defined tiers and any prior
+/// `@Comment: ba.compare.summary:` headers so a re-run of compare against
+/// an already-annotated file doesn't stack a second copy (which would fail
+/// re-parse with E401 for the tiers, and stack duplicate summary comments
+/// for the header).
+fn strip_compare_tiers(chat: &mut crate::base::Chat) {
+    use talkbank_model::Line;
+    use talkbank_model::model::{BulletContentSegment, DependentTier, Header};
+
+    let is_compare_summary = |header: &Header| -> bool {
+        let Header::Comment { content } = header else {
+            return false;
+        };
+        content.segments.0.iter().any(|seg| {
+            matches!(seg, BulletContentSegment::Text(t) if t.text.trim_start().starts_with("ba.compare.summary:"))
+        })
+    };
+
+    let lines = &mut chat.ast_mut().lines.0;
+    lines.retain(|line| match line {
+        Line::Header { header, .. } => !is_compare_summary(header),
+        _ => true,
+    });
+    for line in lines.iter_mut() {
+        if let Line::Utterance(u) = line {
+            u.dependent_tiers.retain(|t| match t {
+                DependentTier::UserDefined(ud) => {
+                    let label = ud.label.as_str();
+                    label != "xsrep" && label != "xsmor" && label != "xcmp"
+                }
+                _ => true,
+            });
         }
     }
 }
@@ -213,7 +255,7 @@ fn compare_metrics_to_artifact(output: &CompareOutput, source_id: &SourceId) -> 
 
     MetricsArtifact {
         source_id: source_id.clone(),
-        producer: SmolStr::new_static("compare:rust:v2"),
+        producer: SmolStr::new_static("compare:rust:v3.1"),
         kind: MetricsKind::Compare,
         table: MetricsTable {
             schema,

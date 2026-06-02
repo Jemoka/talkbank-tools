@@ -182,6 +182,19 @@ pub fn default_cache_path() -> PathBuf {
     base.join("batchalign").join("cache.lmdb")
 }
 
+/// PyO3 wrapper around [`default_cache_path`].
+///
+/// Exposed so the Python CLI (`batchalign cache path`) can read the
+/// authoritative path from Rust instead of duplicating the layout in
+/// Python and drifting (which is exactly how the stale
+/// `batchaligncache.redb` filename leaked through to users after the
+/// LMDB migration). Returns the path as a `str` — Python-side callers
+/// wrap it back into a `pathlib.Path` if needed.
+#[pyfunction(name = "default_cache_path")]
+pub fn default_cache_path_py() -> String {
+    default_cache_path().to_string_lossy().into_owned()
+}
+
 /// `nuke_cache()` — top-level pyfunction, deletes the default cache.
 ///
 /// Out-of-band reset; doesn't require constructing a Pipeline. LMDB

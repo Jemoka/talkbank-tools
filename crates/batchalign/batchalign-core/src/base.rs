@@ -252,12 +252,20 @@ impl Chat<Validated> {
             // CLI surfaces it directly to the user.
             talkbank_transform::PipelineError::Parse(errs) => BAError::Parse(format!("{errs}")),
             talkbank_transform::PipelineError::Validation(errs) => {
+                // Newline-separate so the Python TUI's `_try_multi_error_block`
+                // renderer (cli/tui/errors.py) can engage — it requires
+                // `splitlines() >= 2` to detect the bullet shape and avoid
+                // collapsing dozens of E### entries onto one line.
+                // Leading `\n` puts every E### entry on its own line so they
+                // all render as bullets; the preamble text supplied by the
+                // caller (e.g. "compare: failed to re-parse annotated_main:")
+                // stays on the first line.
                 let joined = errs
                     .iter()
                     .map(|err| err.to_string())
                     .collect::<Vec<_>>()
-                    .join("; ");
-                BAError::Validation(joined)
+                    .join("\n");
+                BAError::Validation(format!("\n{joined}"))
             }
             other => BAError::Internal(format!("pipeline: {other}")),
         })?;

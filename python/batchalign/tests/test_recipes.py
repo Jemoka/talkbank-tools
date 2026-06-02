@@ -40,14 +40,17 @@ def fake_core(monkeypatch):
             captured["last"] = self
 
     class CompareBackend:
-        """Stand-in for the native Rust `batchalign._core.CompareBackend`."""
-        name = "compare:rust:v2"
+        """Stand-in for `batchalign._core.backends.CompareBackend`."""
+        name = "compare:rust:v3.1"
 
     fake = types.ModuleType("batchalign._core")
     fake.Task = Task
     fake.Pipeline = Pipeline
-    fake.CompareBackend = CompareBackend
+    fake_backends = types.ModuleType("batchalign._core.backends")
+    fake_backends.CompareBackend = CompareBackend
+    fake.backends = fake_backends
     monkeypatch.setitem(sys.modules, "batchalign._core", fake)
+    monkeypatch.setitem(sys.modules, "batchalign._core.backends", fake_backends)
     return Task, Pipeline, captured
 
 
@@ -133,6 +136,6 @@ def test_compare_chains_morphosyntax_then_compare(fake_core):
     assert _task_names(pipe) == ["Morphosyntax", "Compare"]
     assert len(pipe.backends) == 2
     assert pipe.backends[0] == "stanza_fake"
-    assert pipe.backends[1].name == "compare:rust:v2"
+    assert pipe.backends[1].name == "compare:rust:v3.1"
 
 

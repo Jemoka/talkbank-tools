@@ -26,19 +26,42 @@ pub struct FaInput {
 }
 
 impl CacheKey for FaInput {
-    /// Excludes `source_id`. Same audio + same utterance text/bounds +
-    /// same language must hash to the same key.
+    /// Excludes `source_id` AND the utterance time bounds.
+    ///
+    /// The FA runner rewrites each utterance's main-tier bullet to span
+    /// the aligned words after a successful run (see
+    /// `taskrunners/fa.rs::inject_word_timings`), so a second run reads
+    /// the refined bounds back into `AsrSegment.start_ms/end_ms`. If those
+    /// bounds participated in the cache key, every successful run would
+    /// permanently invalidate its own cache entry. They are soft hints to
+    /// the backend's audio-slicer anyway — audio bytes and word texts
+    /// fully determine the alignment.
     fn hash(&self, hasher: &mut blake3::Hasher) {
+        #[derive(Serialize)]
+        struct UttK<'a> {
+            text: &'a str,
+            speaker: Option<&'a str>,
+            words: Vec<&'a str>,
+        }
         #[derive(Serialize)]
         struct K<'a> {
             audio: &'a PreparedAudio,
-            utterances: &'a [AsrSegment],
+            utterances: Vec<UttK<'a>>,
             language: &'a LanguageSpec,
         }
+        let utterances: Vec<UttK<'_>> = self
+            .utterances
+            .iter()
+            .map(|u| UttK {
+                text: u.text.as_str(),
+                speaker: u.speaker.as_ref().map(|s| s.as_str()),
+                words: u.words.iter().map(|w| w.text.as_str()).collect(),
+            })
+            .collect();
         hash_serialized(
             &K {
                 audio: &self.audio,
-                utterances: &self.utterances,
+                utterances,
                 language: &self.language,
             },
             hasher,

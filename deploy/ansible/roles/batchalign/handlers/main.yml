@@ -1,5 +1,0 @@
----
-- name: restart batchalign3
-  ansible.builtin.systemd:
-    name: batchalign3
-    state: restarted

@@ -9,9 +9,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
-use crate::cache::{nuke_cache, CachePolicy, CacheSpec};
+use crate::cache::{default_cache_path_py, nuke_cache, CachePolicy, CacheSpec};
 use crate::dp_py::dp_align;
-use crate::native_backends::PyCompareBackend;
+use crate::native_backends;
 use crate::pipeline::Pipeline;
 
 /// Attach this crate's types + the core crate's types to `m`.
@@ -35,8 +35,11 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Pipeline>()?;
     m.add_class::<CacheSpec>()?;
     m.add_class::<CachePolicy>()?;
-    m.add_class::<PyCompareBackend>()?;
+    // Native backends live under `batchalign._core.backends` — see
+    // `native_backends/mod.rs` for the macro-generated wrappers.
+    native_backends::register(py, m)?;
     m.add_function(wrap_pyfunction!(nuke_cache, m)?)?;
+    m.add_function(wrap_pyfunction!(default_cache_path_py, m)?)?;
     m.add_function(wrap_pyfunction!(dp_align, m)?)?;
     // VERGEN_GIT_SHA baked at compile time (build.rs). Surfaces to
     // `batchalign3 version` and the X-Batchalign-SHA response header.

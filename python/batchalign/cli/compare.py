@@ -93,12 +93,6 @@ def register(app: typer.Typer) -> None:
             "-o",
             help="Optional output folder; if omitted, each transcript is overwritten in place.",
         ),
-        language: str = typer.Option(
-            "en",
-            "--language",
-            "-l",
-            help="Stanza language code for morphosyntax (e.g. 'en', 'es', 'zh').",
-        ),
     ) -> None:
         """Compare each transcript in FOLDER against its gold template.
 
@@ -111,30 +105,27 @@ def register(app: typer.Typer) -> None:
 
         with Interface.open(
             command="compare",
-            params={"lang": language},
+            params={},
             output=out,
             verbosity=opts.verbosity,
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
-            # Try to construct a Stanza backend. If the user hasn't installed
-            # `stanza`, fall back to compare-only — the compare tiers still
-            # populate from the parsed `%mor:` if present.
+            # Language is resolved per-file from each CHAT's `@Languages:`
+            # header by the Rust runner (see morphotag for the same pattern);
+            # the backend reads it off each `MorphosyntaxInput` and loads the
+            # matching Stanza pipeline lazily on first use, so we don't pass
+            # `lang=` here.
             try:
-                stanza = ba.StanzaBackend(lang=language)
-                pipeline = ba.recipes.compare(stanza_backend=stanza)
+                stanza = ba.StanzaBackend()
             except ImportError as exc:
                 _log.warning(
                     "morphosyntax (Stanza) unavailable: %s — compare POS tiers "
                     "will be placeholders. install with: pip install 'batchalign[stanza]'",
                     exc,
                 )
-                from batchalign._core import CompareBackend  # type: ignore[attr-defined]
-                Task_ = ba.Task
-                pipeline = ba.Pipeline(
-                    tasks=[(Task_.Compare, {})],
-                    backends=[CompareBackend()],
-                )
+                stanza = None
+            pipeline = ba.recipes.compare(stanza_backend=stanza)
 
             inputs, root = _pair_folder_with_gold(folder)
             for inp in inputs:

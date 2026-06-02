@@ -185,11 +185,17 @@ pub async fn batcher_loop(
                     to_cache.push((input, output.clone()));
                     let _ = reply.send(Ok(output));
                 }
-                tokio::task::spawn_blocking(move || {
+                let put_handle = tokio::task::spawn_blocking(move || {
                     for (input, output) in to_cache {
                         cache_for_put.put(input.task(), &backend_name_for_put, &input, &output);
                     }
                 });
+                // Await so the put commits before runtime shutdown can
+                // cancel the blocking task. Replies have already been
+                // sent above (line 186), so dispatchers are unblocked;
+                // this only delays the *next* batcher iteration, not
+                // user-visible latency.
+                let _ = put_handle.await;
             }
             Ok(Ok(outputs)) => {
                 let msg = format!(

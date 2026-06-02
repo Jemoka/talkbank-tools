@@ -85,7 +85,6 @@ should land before the fixture proves the failure.
 |---|---|---|---|
 | 30 | `batchalign3 version` | **Done** | Commit `ed7afec`. |
 | 31 | `vergen` build script + `X-Batchalign-SHA` header | **Done** | Commit `6035c32`. build.rs emits VERGEN_GIT_SHA; FastAPI middleware stamps every response with `X-Batchalign-SHA`. |
-| 32 | `deploy/ansible/` playbook + Makefile `deploy` target | **Done** | Commit `12683e9`. |
 | 33 | `#[instrument]` annotations on hot path | **Done** | Commit `20eae11`. `BatchalignEngine::dispatch` instrumented. |
 
 ## Landing 8 — Test backfill (simple per user 2026-05-31)

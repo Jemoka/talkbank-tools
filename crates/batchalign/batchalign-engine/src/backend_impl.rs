@@ -13,6 +13,7 @@
 //! can shape into typed dataclasses. When schema codegen lands (spec
 //! §22.7), we'll revisit the conversion layer.
 
+use std::ffi::CString;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -20,7 +21,9 @@ use batchalign_core::{
     BAError, BAResult, Backend, BackendProgress, BatchPolicy, Task, TaskInput, TaskOutput,
 };
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyList};
+use pyo3::types::{PyAny, PyCapsule, PyList};
+
+use crate::native_backends::NATIVE_ARC_CAPSULE_NAME;
 
 /// Either a Rust-native backend behind an `Arc<dyn Backend>` or a Python
 /// backend held as a `Py<PyAny>` plus pre-introspected metadata.
@@ -44,12 +47,14 @@ pub struct PyBackendHandle {
 impl BackendImpl {
     /// Constructs a `BackendImpl` from any Python-side backend instance.
     ///
-    /// If the object is a Rust-native wrapper (currently
-    /// `batchalign._core.CompareBackend`, recognised via the
-    /// `__batchalign_native__` marker), this unwraps the inner `Arc<dyn
-    /// Backend>` and returns `BackendImpl::Native`, so the engine drives the
-    /// algorithm directly with no GIL acquisition and no JSON round-trip on
-    /// the hot path.
+    /// If the object is a Rust-native wrapper (any class in
+    /// `batchalign._core.backends`, recognised via the
+    /// `__batchalign_native_arc__` PyCapsule), this clones the inner
+    /// `Arc<dyn Backend>` out of the capsule and returns
+    /// `BackendImpl::Native`. The engine then drives the algorithm
+    /// directly with no GIL acquisition and no JSON round-trip on the
+    /// hot path. This is fully generic across native backends — adding
+    /// a new one needs no edits here.
     ///
     /// Otherwise reads `obj.name`, `obj.batch_policy`, and dispatches to
     /// `batchalign.backends.base.declared_tasks(obj)` for the task set
@@ -58,21 +63,21 @@ impl BackendImpl {
         Python::attach(|py| {
             let bound = obj.bind(py);
 
-            // Native-wrapper short circuit: a class exposed by the engine
-            // that holds an `Arc<dyn Backend>` advertises itself via the
-            // `__batchalign_native__` getter. Try each known wrapper type
-            // by `extract::<...>()` so future native backends only need a
-            // case here, not a parallel marker protocol.
-            let is_native = bound
-                .getattr("__batchalign_native__")
-                .and_then(|v| v.extract::<bool>())
-                .unwrap_or(false);
-            if is_native {
-                if let Ok(cmp) = bound.extract::<crate::native_backends::PyCompareBackend>() {
-                            return Ok(BackendImpl::Native(cmp.as_backend()));
+            if let Ok(attr) = bound.getattr("__batchalign_native_arc__") {
+                if let Ok(cap) = attr.cast::<PyCapsule>() {
+                    let expected = CString::new(NATIVE_ARC_CAPSULE_NAME)
+                        .expect("static capsule name");
+                    if let Ok(ptr) = cap.pointer_checked(Some(&expected)) {
+                        // SAFETY: every native wrapper macro publishes a
+                        // capsule with this exact name and an
+                        // `Arc<dyn Backend>` payload (see `native_backend!`).
+                        // `pointer_checked` validated the name, so the
+                        // payload type is what we expect.
+                        let arc_ref: &Arc<dyn Backend> =
+                            unsafe { &*(ptr.as_ptr() as *const Arc<dyn Backend>) };
+                        return Ok(BackendImpl::Native(arc_ref.clone()));
+                    }
                 }
-                    // Unknown native wrapper — fall through to the Python path,
-                // it will still work, just slower.
             }
 
             let name: String = bound

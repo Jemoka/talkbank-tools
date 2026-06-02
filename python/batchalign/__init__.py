@@ -4,7 +4,7 @@ The public surface re-exports two layers:
 
 1. Types and orchestration primitives from the compiled Rust extension
    (`batchalign._core`). If the .so is not built yet (e.g. fresh clone
-   without `maturin develop` run), importing this module emits a
+   without `maturin develop` run), accessing one of these names emits a
    helpful `ImportError` rather than a cryptic missing-symbol failure.
 
 2. Python-side backends, recipes, and CLI helpers.
@@ -14,16 +14,106 @@ See `spec2.md` §16 for the canonical surface map.
 For an end-user overview of the CLI surface and install extras, see
 `python/batchalign/README.md`. For the BA3 cutover plan + per-landing
 status, see `book/src/batchalign/developer/landing-status.md`.
+
+Imports are PEP 562 lazy. The package itself is cheap to import; the
+PyO3 `.so` and the backend re-exports only materialize on first access.
+This keeps `--help`/`--version`/shell-completion paths sub-200ms.
 """
 
 from __future__ import annotations
 
-# ---------------------------------------------------------------------------
-# Core re-exports from the PyO3 extension. We import explicitly so a missing
-# .so produces a single readable diagnostic, not a wall of NameErrors later.
-# ---------------------------------------------------------------------------
-try:
-    from batchalign._core import (  # type: ignore[attr-defined]
+from typing import TYPE_CHECKING, Any
+
+# Map attribute name → source module. Resolved lazily by __getattr__.
+_CORE_NAMES = frozenset({
+    "Task",
+    "Pipeline",
+    "BAValue",
+    "MediaInput",
+    "ChatInput",
+    "PairedInput",
+    "CacheSpec",
+    "CachePolicy",
+    "BatchPolicy",
+    "CompareBackend",
+    "ProgressEvent",
+    "ProgressKind",
+    "nuke_cache",
+    "default_cache_path",
+})
+
+_BACKEND_NAMES = frozenset({
+    "Backend",
+    "ASR",
+    "FA",
+    "Speaker",
+    "UtSeg",
+    "Morphosyntax",
+    "Translate",
+    "Coref",
+    "WhisperBackend",
+    "ChatWhisperBackend",
+    "OpenAIWhisperBackend",
+    "RevAI",
+    "AliyunAsrBackend",
+    "FunAsrBackend",
+    "FunAudioBackend",
+    "QwenAsrBackend",
+    "Qwen3AsrBackend",
+    "TencentAsrBackend",
+    "Wav2Vec2FaBackend",
+    "WhisperFaBackend",
+    "Qwen3FaBackend",
+    "StanzaBackend",
+    "PyannoteBackend",
+    "CantoneseWordSegBackend",
+    "CHATUtteranceBackend",
+    "GoogleTranslateBackend",
+    "NllbTranslateBackend",
+    "TencentTmtBackend",
+    "AliyunTranslateBackend",
+})
+
+_SUBMODULES = frozenset({"recipes", "inputs", "backends", "config"})
+
+
+def __getattr__(name: str) -> Any:
+    if name in _CORE_NAMES:
+        try:
+            from batchalign import _core  # type: ignore[attr-defined]
+        except ImportError as exc:
+            raise ImportError(
+                "batchalign._core (the compiled Rust extension) is not built. "
+                "Run `just batchalign::build` to build it, then re-import. "
+                f"Original error: {exc!r}"
+            ) from exc
+        value = getattr(_core, name)
+        globals()[name] = value
+        return value
+
+    if name in _BACKEND_NAMES:
+        import importlib
+        backends = importlib.import_module("batchalign.backends")
+        value = getattr(backends, name)
+        globals()[name] = value
+        return value
+
+    if name in _SUBMODULES:
+        import importlib
+        value = importlib.import_module(f"batchalign.{name}")
+        globals()[name] = value
+        return value
+
+    raise AttributeError(f"module 'batchalign' has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__)
+
+
+if TYPE_CHECKING:
+    # Make IDE/type-checker happy without forcing the runtime imports.
+    from batchalign._core import (  # noqa: F401
         Task,
         Pipeline,
         BAValue,
@@ -39,64 +129,41 @@ try:
         nuke_cache,
         default_cache_path,
     )
-    _CORE_AVAILABLE = True
-except ImportError as _exc:  # pragma: no cover - exercised only without .so
-    _CORE_IMPORT_ERROR = _exc
-    _CORE_AVAILABLE = False
+    from batchalign.backends import (  # noqa: F401
+        Backend,
+        ASR,
+        FA,
+        Speaker,
+        UtSeg,
+        Morphosyntax,
+        Translate,
+        Coref,
+        WhisperBackend,
+        ChatWhisperBackend,
+        OpenAIWhisperBackend,
+        RevAI,
+        AliyunAsrBackend,
+        FunAsrBackend,
+        FunAudioBackend,
+        QwenAsrBackend,
+        Qwen3AsrBackend,
+        TencentAsrBackend,
+        Wav2Vec2FaBackend,
+        WhisperFaBackend,
+        Qwen3FaBackend,
+        StanzaBackend,
+        PyannoteBackend,
+        CantoneseWordSegBackend,
+        CHATUtteranceBackend,
+        GoogleTranslateBackend,
+        NllbTranslateBackend,
+        TencentTmtBackend,
+        AliyunTranslateBackend,
+    )
+    from batchalign import recipes, inputs  # noqa: F401
 
-    # We deliberately don't shadow names with stubs — calling code should
-    # fail loudly. But we expose a helper for callers that want to probe.
-    def _core_unavailable(*_args, **_kwargs):
-        raise ImportError(
-            "batchalign._core (the compiled Rust extension) is not built. "
-            "Run `cd python && maturin develop` to build it, then re-import. "
-            f"Original error: {_CORE_IMPORT_ERROR!r}"
-        )
-
-# ---------------------------------------------------------------------------
-# Backends re-export. These are pure Python and do not require _core to load,
-# although individual backend constructors will lazy-import their ML deps.
-# ---------------------------------------------------------------------------
-from batchalign.backends import (  # noqa: E402
-    Backend,
-    ASR,
-    FA,
-    Speaker,
-    UtSeg,
-    Morphosyntax,
-    Translate,
-    Coref,
-    # ASR engines (BA2 parity: rev / whisper / whisperx / openai whisper,
-    # plus the Chinese/Cantonese cloud + local engines).
-    WhisperBackend,
-    ChatWhisperBackend,
-    OpenAIWhisperBackend,
-    RevAI,
-    AliyunAsrBackend,
-    FunAsrBackend,
-    FunAudioBackend,
-    QwenAsrBackend,
-    Qwen3AsrBackend,
-    TencentAsrBackend,
-    # Forced alignment.
-    Wav2Vec2FaBackend,
-    WhisperFaBackend,
-    Qwen3FaBackend,
-    # Morphosyntax / speaker / utterance-seg / translate.
-    StanzaBackend,
-    PyannoteBackend,
-    CantoneseWordSegBackend,
-    CHATUtteranceBackend,
-    GoogleTranslateBackend,
-    NllbTranslateBackend,
-    TencentTmtBackend,
-    AliyunTranslateBackend,
-)
-from batchalign import recipes  # noqa: E402
-from batchalign import inputs  # noqa: E402
 
 __all__ = [
-    # _core types
     "Task",
     "Pipeline",
     "BAValue",
@@ -111,7 +178,6 @@ __all__ = [
     "ProgressKind",
     "nuke_cache",
     "default_cache_path",
-    # backend ABCs
     "Backend",
     "ASR",
     "FA",
@@ -120,7 +186,6 @@ __all__ = [
     "Morphosyntax",
     "Translate",
     "Coref",
-    # concrete backends — ASR
     "WhisperBackend",
     "ChatWhisperBackend",
     "OpenAIWhisperBackend",
@@ -131,11 +196,9 @@ __all__ = [
     "QwenAsrBackend",
     "Qwen3AsrBackend",
     "TencentAsrBackend",
-    # FA
     "Wav2Vec2FaBackend",
     "WhisperFaBackend",
     "Qwen3FaBackend",
-    # morphosyntax / speaker / utseg / translate
     "StanzaBackend",
     "PyannoteBackend",
     "CantoneseWordSegBackend",
@@ -144,7 +207,6 @@ __all__ = [
     "NllbTranslateBackend",
     "TencentTmtBackend",
     "AliyunTranslateBackend",
-    # submodules
     "recipes",
     "inputs",
 ]

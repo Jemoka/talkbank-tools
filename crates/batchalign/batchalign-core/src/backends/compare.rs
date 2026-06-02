@@ -15,7 +15,7 @@ use crate::backends::{Backend, BatchPolicy};
 use crate::base::{Task, TaskInput, TaskOutput};
 use crate::proto::compare::{CompareInput, CompareOutput};
 use crate::utils::{BAError, BAResult, SourceId};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_model::validation::Validated as ModelValidated;
 use talkbank_model::{
@@ -42,7 +42,14 @@ impl Default for CompareBackend {
             // backend code, so a `v1 → v1` change with new behaviour will
             // happily serve stale outputs. Manual bumping is the workaround
             // until the cache grows an explicit `code_version` field.
-            name: "compare:rust:v2".to_owned(),
+            // v3.1 (2026-06-02): two-phase compare. Phase 1 keeps the
+            // window/snap/rotation heuristics but only uses them to decide
+            // gold→main utt mapping. Phase 2 re-aligns each main utt's full
+            // conformed token span against the concatenated gold tokens of
+            // every gold utt mapped to it, so leading/trailing main tokens
+            // that fell outside the bag-of-words window show up as `+word`
+            // insertions instead of vanishing.
+            name: "compare:rust:v3.1".to_owned(),
             tasks: vec![Task::Compare],
             // Compare is CPU-bound and runs entirely on the engine thread
             // pool. We allow up-to-32-per-batch but a small window so the
@@ -137,18 +144,20 @@ fn compare_one(input: CompareInput) -> BAResult<CompareOutput> {
         .map(|t| main_words[t.src_idx].pos.as_str())
         .collect();
 
-    let mut per_utt: Vec<UttCmp> = Vec::with_capacity(gold_utt_count);
+    // Phase 1 — mapping pass: for each gold utt, run the existing rough +
+    // snap + rotation + window-levenshtein pipeline solely to decide which
+    // main utt this gold maps to (= the snapped window's majority main utt).
+    // The per-gold cmp built here is intentionally discarded; the final
+    // alignment happens in Phase 2 against the *full* main utt so leading
+    // and trailing main tokens that fell outside the window are captured
+    // as `+word` insertions instead of vanishing.
+    let mut gold_to_main: Vec<Option<usize>> = vec![None; gold_utt_count];
     let mut search_start = 0usize;
     for (gold_utt_idx, g_tokens) in gold_by_utt.iter().enumerate() {
         if g_tokens.is_empty() {
-            per_utt.push(UttCmp::default());
             continue;
         }
         let g_text: Vec<&str> = g_tokens.iter().map(|t| t.text.as_str()).collect();
-        let g_pos: Vec<&str> = g_tokens
-            .iter()
-            .map(|t| gold_words[t.src_idx].pos.as_str())
-            .collect();
         let remaining: &[&str] = &conformed_main_text[search_start..];
         let remaining_utts: &[usize] = &main_utts[search_start..];
 
@@ -158,7 +167,10 @@ fn compare_one(input: CompareInput) -> BAResult<CompareOutput> {
         let mut abs_end = search_start + win_end;
 
         // Phase B: snap to source-utt boundary — trims trailing non-majority
-        // tokens then extends leading bounded by leading REF count.
+        // tokens then extends leading bounded by leading REF count. The
+        // leading-refs extension keeps repeated-token tiebreakers working
+        // correctly across gold utts, so we still want it even though the
+        // final alignment is redone over the full main utt.
         snap_window_to_majority_utt(
             &mut abs_start,
             &mut abs_end,
@@ -168,42 +180,71 @@ fn compare_one(input: CompareInput) -> BAResult<CompareOutput> {
             &g_text,
         );
 
-        // Phase C: cyclic rotation that maximises Levenshtein matches.
-        let mut window_main: Vec<&str> = conformed_main_text[abs_start..abs_end].to_vec();
-        let mut window_main_pos: Vec<&str> = conformed_main_pos[abs_start..abs_end].to_vec();
-        let window_len = window_main.len();
-        if window_len > 1 {
-            let rot = best_rotation(&window_main, &g_text);
-            if rot > 0 {
-                let mut rotated_text = Vec::with_capacity(window_len);
-                rotated_text.extend_from_slice(&window_main[rot..]);
-                rotated_text.extend_from_slice(&window_main[..rot]);
-                window_main = rotated_text;
-                let mut rotated_pos = Vec::with_capacity(window_len);
-                rotated_pos.extend_from_slice(&window_main_pos[rot..]);
-                rotated_pos.extend_from_slice(&window_main_pos[..rot]);
-                window_main_pos = rotated_pos;
+        if abs_end > abs_start {
+            gold_to_main[gold_utt_idx] = Some(majority_value(&main_utts[abs_start..abs_end]));
+        }
+
+        // Advance the cursor to the (snapped) window end so the next gold
+        // utterance starts searching from the right place. This keeps
+        // sequential gold utts from re-consuming earlier main tokens.
+        search_start = abs_end;
+    }
+
+    // Phase 2 — final stitch: per main utt, gather its full conformed token
+    // span and concatenate the gold tokens from every gold utt that mapped
+    // to it (in gold-utt order). One Levenshtein pass over (full main utt,
+    // concatenated gold) yields the alignment for that main utt — leading
+    // and trailing main tokens become `+word` insertions naturally.
+    let mut by_main_gold: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (gi, m_opt) in gold_to_main.iter().enumerate() {
+        if let Some(m) = m_opt {
+            by_main_gold.entry(*m).or_default().push(gi);
+        }
+    }
+
+    let mut per_utt: Vec<UttCmp> = Vec::with_capacity(by_main_gold.len());
+    for (main_idx, gold_idxs) in &by_main_gold {
+        let mut main_toks: Vec<&str> = Vec::new();
+        let mut main_pos_v: Vec<&str> = Vec::new();
+        for (i, tok) in main_conformed.iter().enumerate() {
+            if main_words[tok.src_idx].utt_idx == *main_idx {
+                main_toks.push(tok.text.as_str());
+                main_pos_v.push(conformed_main_pos[i]);
             }
         }
 
-        // Phase D: Levenshtein alignment.
-        let alignment = levenshtein_align(&window_main, &g_text);
-        let mut cmp = build_utt_cmp(&alignment, &window_main, &window_main_pos, &g_text, &g_pos);
+        let mut gold_toks: Vec<&str> = Vec::new();
+        let mut gold_pos_v: Vec<&str> = Vec::new();
+        for &gi in gold_idxs {
+            for t in &gold_by_utt[gi] {
+                gold_toks.push(t.text.as_str());
+                gold_pos_v.push(gold_words[t.src_idx].pos.as_str());
+            }
+        }
 
-        // Phase E: re-append the gold utterance's terminator so the rendered
-        // `%xsrep:` / `%xsmor:` tiers end with `.` / `?` / `!` exactly as
-        // BA2 does. This is BA2's `gold_punct` reinsertion specialised to
-        // the terminator (the only mid-or-end punctuation our corpus has).
-        if let Some(term) = gold_terminators.get(gold_utt_idx).and_then(|t| t.as_ref()) {
-            cmp.tokens
-                .push((term.clone(), TokStatus::Match, TokPos::Punct));
+        let alignment = levenshtein_align(&main_toks, &gold_toks);
+        let mut cmp = build_utt_cmp(
+            &alignment,
+            &main_toks,
+            &main_pos_v,
+            &gold_toks,
+            &gold_pos_v,
+        );
+        cmp.main_utt_idx = Some(*main_idx);
+
+        // Append the terminator from the last gold utt that mapped here so
+        // %xsrep/%xsmor end with `.` / `?` / `!` (matches BA2's gold-punct
+        // reinsertion). With multiple mapped gold utts we deliberately pick
+        // the last one's terminator — that's the natural end-of-sentence
+        // signal for the merged content.
+        if let Some(&last_gi) = gold_idxs.last() {
+            if let Some(term) = gold_terminators.get(last_gi).and_then(|t| t.as_ref()) {
+                cmp.tokens
+                    .push((term.clone(), TokStatus::Match, TokPos::Punct));
+            }
         }
 
         per_utt.push(cmp);
-
-        // Advance the cursor to the (snapped) window end so the next gold
-        // utterance starts searching from the right place.
-        search_start = abs_end;
     }
 
     let summary = summarize(&per_utt);
@@ -300,7 +341,7 @@ fn parse_chat(text: &str) -> BAResult<ChatFile<ModelValidated>> {
                 .iter()
                 .map(|err| err.to_string())
                 .collect::<Vec<_>>()
-                .join("; ");
+                .join("\n");
             BAError::Validation(joined)
         }
         other => BAError::Internal(format!("pipeline: {other}")),
@@ -941,6 +982,12 @@ struct UttCmp {
     matches: u32,
     inserts: u32,
     deletes: u32,
+    /// Index of the main utterance this comparison majority-belongs to.
+    /// `None` when the snapped window was empty (gold utt had no match in
+    /// main). Used by `inject_per_utt_tiers` to attach `%xsrep` / `%xsmor` /
+    /// `%xcmp` to the right main utterance even when main and gold have
+    /// different utterance counts (over- or under-segmentation).
+    main_utt_idx: Option<usize>,
 }
 
 impl UttCmp {
@@ -1050,17 +1097,43 @@ fn summary_json(s: &Summary) -> String {
 /// POS is `"?"` for every token in this port — we don't run morphosyntax
 /// here, and BA2 also falls back to `"?"` when `form.morphology` is empty.
 fn inject_per_utt_tiers(ast: &mut ChatFile<ModelValidated>, per_utt: &[UttCmp]) -> BAResult<()> {
+    // Group per-gold-utt comparisons by the main utterance they majority-
+    // belong to. When main and gold have the same utterance count this is
+    // a trivial 1:1 mapping; when batchalign over- or under-segmented main
+    // relative to gold it can be many-to-one (two gold utts both snap to
+    // one main utt) or zero (a main utt no gold window covers). Merging
+    // many-to-one preserves the information; the zero case correctly
+    // leaves the main utt without tiers.
+    let mut by_main: HashMap<usize, UttCmp> = HashMap::new();
+    for cmp in per_utt {
+        let Some(main_idx) = cmp.main_utt_idx else {
+            continue;
+        };
+        if cmp.tokens.is_empty() {
+            continue;
+        }
+        by_main
+            .entry(main_idx)
+            .and_modify(|existing| {
+                existing.tokens.extend(cmp.tokens.iter().cloned());
+                existing.matches += cmp.matches;
+                existing.inserts += cmp.inserts;
+                existing.deletes += cmp.deletes;
+            })
+            .or_insert_with(|| cmp.clone());
+    }
+
     let mut idx = 0usize;
     for line in ast.lines.iter_mut() {
         if let Line::Utterance(u) = line {
-            if let Some(cmp) = per_utt.get(idx) {
-                if !cmp.tokens.is_empty() {
-                    push_user_tier(u, "xsrep", &serialize_xsrep(cmp))?;
-                    push_user_tier(u, "xsmor", &serialize_xsmor(cmp))?;
-                    // Extra inline-accuracy summary tier (not in BA2 but
-                    // useful as a per-utterance glance metric).
-                    push_user_tier(u, "xcmp", &serialize_xcmp(cmp))?;
-                }
+            if let Some(cmp) = by_main.get(&idx)
+                && !cmp.tokens.is_empty()
+            {
+                push_user_tier(u, "xsrep", &serialize_xsrep(cmp))?;
+                push_user_tier(u, "xsmor", &serialize_xsmor(cmp))?;
+                // Extra inline-accuracy summary tier (not in BA2 but
+                // useful as a per-utterance glance metric).
+                push_user_tier(u, "xcmp", &serialize_xcmp(cmp))?;
             }
             idx += 1;
         }

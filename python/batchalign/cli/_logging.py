@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import warnings
 
 from rich.logging import RichHandler
@@ -108,17 +109,25 @@ def configure(verbosity: int) -> None:
 
 
 def _silence_transformers(verbosity: int) -> None:
-    """Transformers has its own logging gate alongside stdlib logging."""
+    """Transformers has its own logging gate alongside stdlib logging.
+
+    Set the `TRANSFORMERS_VERBOSITY` env var rather than importing
+    `transformers` here — importing it costs ~3s, and lightweight
+    commands (`cache --help`, `version`, top-level `--help`) never
+    need it loaded. Transformers reads this env var during its own
+    import, so the silencing still applies whenever a backend later
+    pulls it in. If it's already been imported (e.g. inside a long-
+    running daemon process), apply the runtime knob too.
+    """
     if verbosity >= 2:
         return
-    try:
-        import transformers  # type: ignore[import-not-found]
-    except ImportError:
-        return
-    try:
-        transformers.logging.set_verbosity_error()
-    except Exception:  # noqa: BLE001
-        pass
+    os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+    mod = sys.modules.get("transformers")
+    if mod is not None:
+        try:
+            mod.logging.set_verbosity_error()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _silence_warnings(verbosity: int) -> None:

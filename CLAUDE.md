@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Last modified:** 2026-05-06 13:34 EDT
+**Last modified:** 2026-06-02 12:14 PDT
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -52,6 +52,31 @@ Unified TalkBank CHAT toolchain: tree-sitter grammar, Rust crates (parsing, data
 **Supported platforms:** Windows, macOS, and Linux. All code must build and run correctly on all three platforms. CI tests on Ubuntu; release builds target all three (macOS ARM + Intel, Linux x86 + ARM, Windows x86).
 
 Data flows: **spec** (source of truth) → **grammar** (`grammar/`) → **crates** (parsers, model, transform, clan, cli, lsp).
+
+## Build/Run Gold Path: Bazel + `just`, Never Maturin Directly
+
+**The gold path for building and running anything in this repo is Bazel,
+or the `justfile` recipes that alias into Bazel.** Do not be tempted by
+the surface directory layout (`python/pyproject.toml`, `python/.venv`,
+`maturin develop`, `uv run …`) — those exist because maturin/PEP-517
+expect them, but they are not the supported entry points. Reaching for
+`maturin develop` or `uv pip install` directly will fight the Bazel
+build graph (missing generated `_proto_generated.py`, stale `.so`,
+broken proto regen, etc.).
+
+Use:
+- `just batchalign::build` — build the engine + Python wheel via Bazel.
+- `just batchalign::cli <args>` — run `batchalign` with the freshly
+  built wheel, with cwd handling correct for path arguments.
+- `just batchalign::pytest`, `just batchalign::test`, `just batchalign::lint` —
+  same idea for tests / mypy / ruff.
+- `just chatter::…`, `just clan::…`, etc. — analogous for other products.
+
+**Debug vs release.** Default to debug (the `build` recipes accept
+`profile="debug"`). Only pass `release` when you actually need release
+performance for a large-scale run — for inline iteration, debug builds
+recompile fast and don't burn time on opt. `cargo run`/`cargo build`
+without `--release` is debug; `just …::build debug` is debug.
 
 ## Running in Development
 
