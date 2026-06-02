@@ -74,11 +74,12 @@ def register(app: typer.Typer) -> None:
             "on Apple MPS, where Whisper's bfloat16 attention kernel is unsupported.",
         ),
         utr_engine: UtrEngine = typer.Option(
-            UtrEngine.whisper, "--utr-engine", case_sensitive=False,
-            help="Utterance Timing Recovery backend: whisper | rev | off. "
+            UtrEngine.rev, "--utr-engine", case_sensitive=False,
+            help="Utterance Timing Recovery backend: rev | whisper | off. "
             "When non-off, runs `Task.Utr` before FA to recover utterance "
-            "bullets on untimed CHATs. Skipped automatically when bullets "
-            "are already present.",
+            "bullets on fully-untimed CHATs. Automatically skipped when "
+            "*any* utterance already carries a bullet — UTR is intended "
+            "for fully-untimed transcripts only.",
         ),
         utr_model: str | None = typer.Option(
             None, "--utr-model",

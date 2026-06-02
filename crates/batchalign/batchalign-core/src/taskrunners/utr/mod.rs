@@ -7,11 +7,13 @@
 //!
 //! ## Pipeline shape
 //!
-//! 1. **Skip-when-already-timed.** Walk `chat.ast()`; if every utterance
-//!    has a non-zero bullet, emit `StageSkipped` and return. This makes
-//!    `Task::Fa::requires() = &[…, Task::Utr]` safe for callers whose
-//!    CHAT is already timed (manual transcripts with bullets, FA reruns,
-//!    UtSeg output).
+//! 1. **Skip-when-any-already-timed.** Walk `chat.ast()`; if *any*
+//!    utterance has a non-zero bullet, emit `StageSkipped` and return.
+//!    UTR is meant for fully untimed transcripts; partially-timed
+//!    files are handled by FA + interpolation, and running UTR on them
+//!    would risk overwriting hand-set bullets with weaker ASR-derived
+//!    ones. This makes `Task::Fa::requires() = &[…, Task::Utr]` safe
+//!    for any pipeline.
 //! 2. **Resolve audio.** Reuses the same sibling-audio fallback FA uses.
 //! 3. **Dispatch.** Sends `TaskInput::Utr(UtrInput)` (a serde-transparent
 //!    newtype over `AsrInput`) to the registered UTR backend. Python ASR
@@ -75,19 +77,24 @@ fn sibling_media(source_id: &SourceId) -> Option<MediaInput> {
     None
 }
 
-/// `true` when every utterance carries a non-zero bullet — the cheap
-/// short-circuit that makes UTR safe to include in any pipeline.
-fn all_utterances_already_timed(chat: &Chat) -> bool {
+/// `true` when *any* utterance carries a non-zero bullet.
+///
+/// UTR is intended for fully untimed transcripts. If even a single
+/// utterance already has a bullet, the file is partially timed —
+/// downstream FA / interpolation handles those without re-aligning the
+/// whole file via ASR. Running UTR on a partially-timed file would also
+/// risk overwriting hand-set bullets with weaker ASR-derived ones.
+fn any_utterance_already_timed(chat: &Chat) -> bool {
     for line in chat.ast().lines.0.iter() {
         if let Line::Utterance(u) = line {
-            match u.main.content.bullet.as_ref() {
-                Some(b) if b.timing.start_ms < b.timing.end_ms => continue,
-                _ => return false,
+            if let Some(b) = u.main.content.bullet.as_ref() {
+                if b.timing.start_ms < b.timing.end_ms {
+                    return true;
+                }
             }
         }
     }
-    // A file with no utterances has nothing to recover — treat as timed.
-    true
+    false
 }
 
 /// Resolve the chat's `@Languages:` header into a concrete `LanguageSpec`.
@@ -145,14 +152,14 @@ impl TaskRunner for UtrTaskRunner {
             }
         };
 
-        if all_utterances_already_timed(chat) {
+        if any_utterance_already_timed(chat) {
             sink.emit(ProgressEvent {
                 source_id: chat.source_id().clone(),
                 task: Some(Task::Utr),
                 kind: ProgressKind::StageSkipped,
                 completed: 0,
                 total: 0,
-                label: "all utterances already timed".into(),
+                label: "at least one utterance already timed — UTR skipped".into(),
             });
             return Ok(());
         }
