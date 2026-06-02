@@ -115,7 +115,7 @@ dev = [
 ]
 
 [project.scripts]
-batchalign3 = "batchalign.cli:app"
+batchalign = "batchalign.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/TalkBank/talkbank-tools"
