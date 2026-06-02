@@ -525,3 +525,81 @@ pub fn stamp_provenance(
         });
     lines.insert(insert_at, comment);
 }
+
+#[cfg(test)]
+mod stamp_provenance_tests {
+    //! Lock in the de-duplication behaviour of `stamp_provenance`. A
+    //! higher-level Pipeline-aware orchestrator (suggested follow-up
+    //! per review) could replace these per-stage calls with a single
+    //! end-of-pipeline stamp; until then these tests guard the
+    //! incremental behaviour each runner currently relies on.
+    use super::*;
+    use talkbank_model::Line;
+    use talkbank_model::model::Header;
+
+    fn comment_lines(lines: &[Line]) -> Vec<String> {
+        lines
+            .iter()
+            .filter_map(|l| match l.as_header() {
+                Some(Header::Comment { content }) => Some(content.to_chat_string()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn accumulates_distinct_stages() {
+        let mut lines: Vec<Line> = Vec::new();
+        stamp_provenance(&mut lines, "utr", Some("rev:rev_lang_en"));
+        stamp_provenance(&mut lines, "fa", Some("wav2vec2-fa:mms_fa-v3"));
+        let comments = comment_lines(&lines);
+        assert_eq!(comments.len(), 1, "exactly one batchalign3 comment");
+        let c = &comments[0];
+        assert!(c.contains("utr: rev:rev_lang_en"), "utr token present: {c}");
+        assert!(
+            c.contains("fa: wav2vec2-fa:mms_fa-v3"),
+            "fa token present: {c}"
+        );
+    }
+
+    #[test]
+    fn rerunning_same_stage_replaces_not_duplicates() {
+        let mut lines: Vec<Line> = Vec::new();
+        stamp_provenance(&mut lines, "utr", Some("rev:rev_lang_en"));
+        stamp_provenance(&mut lines, "utr", Some("whisper:large-v3"));
+        let comments = comment_lines(&lines);
+        assert_eq!(comments.len(), 1);
+        let c = &comments[0];
+        assert!(
+            !c.contains("rev:rev_lang_en"),
+            "old utr engine dropped: {c}"
+        );
+        assert!(c.contains("utr: whisper:large-v3"), "new engine present: {c}");
+        // Exactly one `utr: ` token.
+        assert_eq!(c.matches("utr: ").count(), 1);
+    }
+
+    #[test]
+    fn full_pipeline_rerun_replaces_per_stage_keeps_others() {
+        let mut lines: Vec<Line> = Vec::new();
+        stamp_provenance(&mut lines, "utr", Some("rev:en"));
+        stamp_provenance(&mut lines, "fa", Some("wav2vec2:v3"));
+        // Re-run UTR with a different engine; FA token should survive.
+        stamp_provenance(&mut lines, "utr", Some("whisper:large-v3"));
+        let comments = comment_lines(&lines);
+        assert_eq!(comments.len(), 1);
+        let c = &comments[0];
+        assert!(c.contains("utr: whisper:large-v3"), "new utr: {c}");
+        assert!(c.contains("fa: wav2vec2:v3"), "fa kept: {c}");
+        assert!(!c.contains("rev:en"), "old utr dropped: {c}");
+    }
+
+    #[test]
+    fn engine_none_records_unknown() {
+        let mut lines: Vec<Line> = Vec::new();
+        stamp_provenance(&mut lines, "asr", None);
+        let comments = comment_lines(&lines);
+        assert_eq!(comments.len(), 1);
+        assert!(comments[0].contains("asr: <unknown>"));
+    }
+}
