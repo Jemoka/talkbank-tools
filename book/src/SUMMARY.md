@@ -1,7 +1,7 @@
 # Summary
 
 **Status:** Current
-**Last updated:** 2026-04-30 19:25 EDT
+**Last updated:** 2026-06-01 01:05 PDT
 
 [Introduction](introduction.md)
 [Install](install/index.md)
@@ -106,7 +106,6 @@
 - [%gra Format Conventions](batchalign/reference/gra-format.md)
 - [Forced Alignment](batchalign/reference/forced-alignment.md)
 - [Whisper ASR](batchalign/reference/whisper-asr.md)
-- [HuggingFace Whisper Fine-tunes (`whisper_hub`)](batchalign/reference/whisper-hub-asr.md)
 - [Rev.AI Language Quality Strategy](batchalign/reference/revai-language-quality-strategy.md)
 - [Retrace Detection](batchalign/reference/retrace-detection.md)
 - [Multilingual Support](batchalign/reference/multilingual.md)
@@ -526,6 +525,16 @@
 - [Branch Protection](contributing/branch-protection.md)
 - [Reference Corpus](contributing/reference-corpus.md)
 - [Desktop App Testing](contributing/desktop-testing.md)
+
+# Operations
+
+- [Overview](operations/README.md)
+- [Platform Support](operations/platform-support.md)
+- [Release Pipeline](operations/release-pipeline.md)
+- [Release Contract](operations/release-contract.md)
+- [Code Signing & Distribution](operations/code-signing-and-distribution.md)
+- [Versioning](operations/versioning.md)
+- [Validation Feature Flags](operations/validation-feature-flags.md)
 
 # chatter — Integrating
 

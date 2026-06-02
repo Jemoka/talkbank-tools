@@ -17,8 +17,8 @@ cargo test --doc -p clan-core           # Doctests only (nextest can't run these
 
 Snapshot tests use `insta` to capture command output and detect regressions. They live alongside the test that produces them:
 
-- `crates/clan-core/tests/snapshots/` — snapshots from `transform_golden.rs`, `converter_golden.rs`, and other top-level tests in the `tests/` directory
-- `crates/clan-core/tests/clan_golden/snapshots/` — snapshots produced by the `clan_golden` test module (paired `@clan`/`@rust` pairs)
+- `crates/clan/clan-core/tests/snapshots/` — snapshots from `transform_golden.rs`, `converter_golden.rs`, and other top-level tests in the `tests/` directory
+- `crates/clan/clan-core/tests/clan_golden/snapshots/` — snapshots produced by the `clan_golden` test module (paired `@clan`/`@rust` pairs)
 
 ```bash
 cargo insta review -p clan-core         # Review pending snapshot changes

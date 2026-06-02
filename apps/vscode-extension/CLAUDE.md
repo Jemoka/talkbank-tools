@@ -1,15 +1,15 @@
 # VS Code Extension — TalkBank CHAT Editor
 
 **Status:** Current
-**Last updated:** 2026-05-01 09:47 EDT
+**Last updated:** 2026-06-01 00:52 PDT
 
-All user, developer, and integrator documentation lives in **`book/`**
-(mdBook, hosted alongside the other TalkBank books — see
-`../../docs/inventory.md` §2). The book is the single source of truth for
+All user, developer, and integrator documentation lives in the **unified
+TalkBank Toolchain mdBook** at the repo root (`../../book/`), under the
+`book/src/vscode/` section. The book is the single source of truth for
 this extension: installation, every mode (transcription, walker, coder,
 review), every feature, architecture, developer on-ramp, and custom LSP
-RPC contract reference. `book/src/introduction.md` is the entry point;
-`book/src/SUMMARY.md` is the table of contents.
+RPC contract reference. `book/src/introduction.md` is the top-level entry
+point; `book/src/SUMMARY.md` is the table of contents.
 
 `README.md` is the marketplace-facing summary (what a user sees on the
 VS Code Marketplace listing); it is a short feature overview plus a
@@ -98,17 +98,23 @@ apps/vscode-extension/
 │   └── utils/                 # alignmentSidecar, bulletParser (fallback), mediaResolver, speakerFilter, cliLocator
 ├── syntaxes/chat.tmLanguage.json  # TextMate grammar (fallback highlighting)
 ├── package.json               # Extension manifest (commands, keybindings, menus)
-├── book/                      # ← canonical documentation (mdBook)
 ├── README.md                  # Marketplace summary (keep short; book is the manual)
 └── CLAUDE.md                  # This file — AI-assistant guidance for the extension
+
+Canonical documentation lives in the repo-root `book/` (mdBook), under
+`book/src/vscode/`.
 ```
 
 ## Key Commands
 
 ```bash
-cd vscode && npm install && npm run compile
-cd vscode && npm test          # vitest
-cd vscode && npm run lint      # eslint
+cd apps/vscode-extension && npm install && npm run compile
+cd apps/vscode-extension && npm test          # vitest
+cd apps/vscode-extension && npm run lint      # eslint
+# Or via Bazel-driven `just`:
+just vscode build
+just vscode test
+just vscode package           # produces .vsix
 ```
 
 ## Features & Shortcuts
@@ -156,10 +162,11 @@ All user and developer documentation lives in **`book/`** (mdBook). Read
 `book/src/introduction.md` as the entry point; `book/src/SUMMARY.md`
 lists every chapter.
 
-High-traffic sections for newcomers:
+High-traffic sections for newcomers (within the unified book at
+`../../book/src/vscode/`):
 
-- `book/src/getting-started/installation.md` — install a platform VSIX
-- `book/src/developer/architecture.md` — three-layer design
-- `book/src/developer/lsp-protocol.md` — LSP surface + custom RPC
-- `book/src/navigation/alignment.md` — cross-tier alignment behavior
-- `book/src/developer/clan-parity.md` — CLAN feature parity
+- `book/src/vscode/getting-started/installation.md` — install a platform VSIX
+- `book/src/vscode/developer/architecture.md` — three-layer design
+- `book/src/vscode/developer/lsp-protocol.md` — LSP surface + custom RPC
+- `book/src/vscode/navigation/alignment.md` — cross-tier alignment behavior
+- `book/src/vscode/developer/clan-parity.md` — CLAN feature parity

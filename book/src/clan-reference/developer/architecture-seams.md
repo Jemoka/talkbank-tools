@@ -9,15 +9,15 @@ This page documents the current internal seams that contributors should preserve
 
 Top-level CLI argument wiring is no longer in one file.
 
-- shared CLI args live in `crates/chatter-cli/src/cli/args/core.rs`
-- shared CLAN filters and common options live in `crates/chatter-cli/src/cli/args/clan_common.rs`
-- CLAN command variants live in `crates/chatter-cli/src/cli/args/clan_commands.rs`
+- shared CLI args live in `crates/chatter/chatter-cli/src/cli/args/core.rs`
+- shared CLAN filters and common options live in `crates/chatter/chatter-cli/src/cli/args/clan_common.rs`
+- CLAN command variants live in `crates/chatter/chatter-cli/src/cli/args/clan_commands.rs`
 
 If you add a new CLAN command, register it in the appropriate split argument module instead of rebuilding a monolithic `args.rs`.
 
 ## CLAN dispatch
 
-`run_clan` now lives in `crates/chatter-cli/src/commands/clan/mod.rs` and dispatches into category files:
+`run_clan` now lives in `crates/chatter/chatter-cli/src/commands/clan/mod.rs` and dispatches into category files:
 
 - `analysis.rs`
 - `transforms.rs`
@@ -31,13 +31,13 @@ Keep family-specific logic in those modules. Shared file resolution, filtering, 
 
 Parallel validation output now has a renderer seam:
 
-- orchestration and stats live in `crates/chatter-cli/src/commands/validate_parallel/runtime.rs`
-- output shaping lives in `crates/chatter-cli/src/commands/validate_parallel/renderer.rs`
-- audit-specific behavior lives in `crates/chatter-cli/src/commands/validate_parallel/audit.rs`
+- orchestration and stats live in `crates/chatter/chatter-cli/src/commands/validate_parallel/runtime.rs`
+- output shaping lives in `crates/chatter/chatter-cli/src/commands/validate_parallel/renderer.rs`
+- audit-specific behavior lives in `crates/chatter/chatter-cli/src/commands/validate_parallel/audit.rs`
 
 If you need a new output mode, add a renderer implementation instead of extending a large runtime `match`.
 
-Audit-mode JSONL writing is also intentionally isolated. `crates/chatter-cli/src/commands/validate/audit_reporter.rs` owns a dedicated writer thread and a cloneable reporting handle for workers, so future audit changes should preserve that explicit ownership boundary instead of reintroducing shared writer locks.
+Audit-mode JSONL writing is also intentionally isolated. `crates/chatter/chatter-cli/src/commands/validate/audit_reporter.rs` owns a dedicated writer thread and a cloneable reporting handle for workers, so future audit changes should preserve that explicit ownership boundary instead of reintroducing shared writer locks.
 
 ## Dashboard state ownership
 
@@ -55,5 +55,5 @@ The VS Code extension and `chatter-lsp` use a typed execute-command boundary. Th
 
 - `book/src/apps/vscode-extension/reference/rpc-contracts.md` — the RPC contracts the extension and LSP speak
 - `book/src/apps/vscode-extension/developer/custom-commands.md` — how to add a new custom command
-- `crates/chatter-lsp/CLAUDE.md` — invariants for the server side
+- `crates/chatter/chatter-lsp/CLAUDE.md` — invariants for the server side
 

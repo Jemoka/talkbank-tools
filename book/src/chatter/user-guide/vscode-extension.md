@@ -32,7 +32,7 @@ The dev host runs the locally-compiled extension and talks to a `chatter-lsp` bi
 
 ### Live Validation
 
-Errors and warnings appear inline as you type — the same error codes as `chatter validate` (currently 191; verify with `rg -c '#\[code\("[EW]' crates/talkbank-model/src/errors/codes/error_code.rs`), with source-level precision:
+Errors and warnings appear inline as you type — the same error codes as `chatter validate` (currently 191; verify with `rg -c '#\[code\("[EW]' crates/core/talkbank-model/src/errors/codes/error_code.rs`), with source-level precision:
 
 - Squiggly underlines on the exact error location
 - Problems panel integration with error codes and descriptions
@@ -267,7 +267,7 @@ Utterance counts per speaker appear above the `@Participants` header (e.g., `CHI
 
 The extension launches the dedicated `chatter-lsp` binary over
 stdio using the Language Server Protocol. (`chatter-lsp` is a
-separate Rust crate at `crates/chatter-lsp/`; the VS Code
+separate Rust crate at `crates/chatter/chatter-lsp/`; the VS Code
 extension's executable resolver at
 `apps/vscode-extension/src/executableService.ts` looks for it in the bundled
 extension binary, then on PATH, then under the extension's target

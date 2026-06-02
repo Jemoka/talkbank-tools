@@ -1,19 +1,20 @@
-# docs/
+# Operations
 
 **Status:** Current
-**Last updated:** 2026-05-01 07:55 EDT
+**Last updated:** 2026-06-01 00:50 PDT
 
-This directory holds the small set of repo-level release-contract
-policy documents plus the auto-generated validation-error catalog.
-Everything else is in [the unified mdBook](../book/).
+This section holds repo-level release-contract policy documents plus
+the auto-generated validation-error catalog.
 
 ## Authoritative repo-level policy
 
 | Path | Role |
 |---|---|
-| [`PLATFORM-SUPPORT.md`](PLATFORM-SUPPORT.md) | Supported-platform matrix and per-surface support tiers |
-| [`RELEASE-CONTRACT.md`](RELEASE-CONTRACT.md) | Stability tiers and public-surface contract |
-| [`VERSIONING.md`](VERSIONING.md) | Version authority and compatibility policy |
+| [`platform-support.md`](platform-support.md) | Supported-platform matrix and per-surface support tiers |
+| [`release-contract.md`](release-contract.md) | Stability tiers and public-surface contract |
+| [`versioning.md`](versioning.md) | Version authority and compatibility policy |
+| [`release-pipeline.md`](release-pipeline.md) | How a code change becomes a published artifact |
+| [`code-signing-and-distribution.md`](code-signing-and-distribution.md) | Signing/notarization policy and allowed channels |
 | [`validation-feature-flags.md`](validation-feature-flags.md) | Reference for validation behavior switches |
 
 ## Generated reference

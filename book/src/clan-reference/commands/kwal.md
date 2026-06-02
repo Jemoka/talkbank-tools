@@ -35,7 +35,7 @@ chatter clan kwal -k want -k cookie file.cha
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** The
-> rewriter at `crates/clan-core/src/clan_args.rs:101` translates
+> rewriter at `crates/clan/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`, but no `clap` field consumes that token
 > today. This table is drafted from CLAN manual §7.17.5
 > (`Unique Options`, KWAL) verbatim for PI review. Tracked in

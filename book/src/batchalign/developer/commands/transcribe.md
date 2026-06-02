@@ -1,7 +1,7 @@
 # transcribe — Developer Reference
 
 **Status:** Current
-**Last updated:** 2026-05-05 08:21 EDT
+**Last updated:** 2026-06-01 00:51 PDT
 
 Implementation guide for the `transcribe` command. For user-facing
 documentation, see [User Guide: transcribe](../../user-guide/commands/transcribe.md).
@@ -92,7 +92,7 @@ execute_v2 request:
 {
   "task": "asr",
   "prepared_audio": { path, start_ms, end_ms, sample_rate },
-  "engine": "rev" | "whisper" | "whisperx" | "whisper_oai" | "tencent" | ...,
+  "engine": "rev" | "whisper" | "chatwhisper" | "openai" | "funaudio" | "tencent" | "qwen3",
   "language": "eng",
   "num_speakers": 2
 }

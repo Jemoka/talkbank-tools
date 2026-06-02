@@ -1,7 +1,7 @@
 # Installation
 
 **Status:** Current
-**Last updated:** 2026-04-28 23:14 EDT
+**Last updated:** 2026-06-01 00:50 PDT
 
 `chatter` runs on **Windows, macOS, and Linux**. Pre-built binaries are
 available from the [GitHub Releases](https://github.com/TalkBank/talkbank-tools/releases)
@@ -37,7 +37,7 @@ Build and install:
 
 ```bash
 cd ~/talkbank/talkbank-tools
-cargo install --path crates/chatter-cli
+cargo install --path crates/chatter/chatter-cli
 ```
 
 This installs the `chatter` binary to `~/.cargo/bin/` (macOS/Linux) or `%USERPROFILE%\.cargo\bin\` (Windows).
@@ -71,9 +71,12 @@ Everything lives in a single repository:
 └── talkbank-tools/         # This repo (grammar, crates, CLI, LSP, VS Code, CLAN, Batchalign)
     ├── grammar/            # Tree-sitter grammar
     ├── crates/             # All Rust crates (talkbank-* and batchalign-*)
-    ├── spec/               # CHAT specification
-    ├── apps/vscode-extension/             # VS Code extension
-    ├── apps/               # Tauri desktop apps (chatter-gui, dashboard-desktop) — both experimental
+    ├── resources/spec/     # CHAT specification (source of truth)
+    ├── resources/corpus/   # Reference corpus
+    ├── apps/vscode-extension/   # VS Code extension
+    ├── apps/chatter/       # Chatter Desktop (Tauri, experimental)
+    ├── apps/batchalign/    # Batchalign Desktop + dashboard (Tauri, experimental)
+    ├── python/             # batchalign3 Python package
     └── book/               # TalkBank Toolchain mdBook
 ```
 

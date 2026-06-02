@@ -1,7 +1,7 @@
 # Release Contract
 
 **Status:** Current
-**Last updated:** 2026-04-29 10:26 EDT
+**Last updated:** 2026-06-01 00:50 PDT
 
 This document defines which surfaces in the merged `talkbank-tools` repository
 are part of the public release contract. A version number in a manifest,
@@ -28,7 +28,7 @@ public or stability-guaranteed.
 | `batchalign3 serve` local server and dashboard UI | **Public preview** | Tracks the `batchalign3` product release line in `pyproject.toml` | End-user surface is supported, but the REST/WebSocket/API contract is not yet frozen for third-party integrations. |
 | `chatter-lsp` language server | **Public preview** | `Cargo.toml` `workspace.package.version` | Functional and documented, but protocol/configuration details may still evolve. |
 | VS Code extension | **Public preview** | `apps/vscode-extension/package.json` `version` | First public release channel is GitHub Releases VSIX-only. Marketplace publishing is intentionally deferred while binary discovery and release ops are still being hardened. |
-| Desktop shells in `desktop/` and `apps/batchalign/dashboard-desktop/` | **Experimental** | Their local `package.json` / `Cargo.toml` manifests | In-repo experiments only; not part of the supported release contract. |
+| Desktop shells in `apps/chatter/chatter-gui/` and `apps/batchalign/batchalign-gui/` | **Experimental** | Their local `package.json` / `Cargo.toml` manifests | In-repo experiments only; not part of the supported release contract. |
 | Internal implementation surfaces: `crates/batchalign-*` Rust crates, `batchalign-pyo3`, `send2clan-sys`, `apps/batchalign/cli-web-statuspage/`, generated worker/OpenAPI artifacts | **Internal** | Local manifests and generated files | Build/runtime internals only. The Batchalign Rust/PyO3 crates are explicitly unpublished (`publish = false`), so matching the public product version does **not** make them supported public Rust APIs. External consumers should not depend on them directly. |
 
 ## Conservative promises

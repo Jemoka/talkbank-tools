@@ -1,13 +1,13 @@
 # Platform Support Matrix
 
 **Status:** Current
-**Last updated:** 2026-04-29 10:26 EDT
+**Last updated:** 2026-06-01 00:50 PDT
 
 This document answers two separate questions for each public-facing surface in
 `talkbank-tools`:
 
 1. **Is this a supported public surface?** See also
-   [`RELEASE-CONTRACT.md`](RELEASE-CONTRACT.md).
+   [`release-contract.md`](release-contract.md).
 2. **What platform claim is accurate today?** That includes CI coverage,
    release artifacts, and important caveats.
 
@@ -21,8 +21,8 @@ This document answers two separate questions for each public-facing surface in
 | `chatter-lsp` | Public preview | Bundled in the same core release archives as `chatter` for Linux x86_64, macOS arm64/x86_64, and Windows x86_64 |
 | VS Code extension | Public preview | GitHub Releases publish platform-specific VSIX bundles (macOS arm64/x64, Linux x64/arm64, Windows x64) |
 | `batchalign3` CLI / local server / dashboard | Public preview | Wheels for macOS arm64/x86_64, Linux x86_64/aarch64, and Windows x86_64 |
-| Chatter Desktop (`desktop/`) | Experimental | In-repo validation GUI only; no supported release distribution |
-| Batchalign Desktop (`apps/batchalign/dashboard-desktop/`) | Experimental | In-repo Batchalign GUI shell only; no supported release distribution |
+| Chatter Desktop (`apps/chatter/chatter-gui/`) | Experimental | In-repo validation GUI only; no supported release distribution |
+| Batchalign Desktop (`apps/batchalign/batchalign-gui/`) | Experimental | In-repo Batchalign GUI shell only; no supported release distribution |
 
 ## Support level definitions
 
@@ -112,18 +112,18 @@ Batchalign deployment mode.
 The repo contains **two different desktop apps**. They are easy to confuse, so
 docs should always name them explicitly:
 
-- **Chatter Desktop** = `desktop/` = experimental native GUI for CHAT
+- **Chatter Desktop** = `apps/chatter/chatter-gui/` = experimental native GUI for CHAT
   validation-only workflows.
-- **Batchalign Desktop** = `apps/batchalign/dashboard-desktop/` = experimental native shell
+- **Batchalign Desktop** = `apps/batchalign/batchalign-gui/` = experimental native shell
   around the Batchalign processing/dashboard UI.
 
-### Chatter Desktop (`desktop/`)
+### Chatter Desktop (`apps/chatter/chatter-gui/`)
 
 | Platform | Tier | Current claim |
 |---|---|---|
 | macOS / Windows / Linux | C | Experimental in-repo app only; not part of the supported public release contract |
 
-### Batchalign Desktop (`apps/batchalign/dashboard-desktop/`)
+### Batchalign Desktop (`apps/batchalign/batchalign-gui/`)
 
 | Platform | Tier | Current claim |
 |---|---|---|

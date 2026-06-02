@@ -1,81 +1,158 @@
 # CI and Release
 
 **Status:** Current
-**Last updated:** 2026-04-29 10:39 EDT
+**Last modified:** 2026-06-01 01:05 PDT
 
-## Pre-Merge Verification
+This is the top-level map of the CI and release surface. For per-product
+detail, see [Release Pipeline](../operations/release-pipeline.md);
+for code-signing posture, see
+[Code Signing and Distribution](../operations/code-signing-and-distribution.md).
 
-Every change must pass `bazel build //... && bazel test //...` before merging. This runs gates G0 through G14:
+## Pre-merge verification
+
+Every change must pass `bazel build //... && bazel test //...` before
+merging:
 
 ```bash
 bazel build //... && bazel test //...
 ```
 
-See [Testing > Verification Gates](testing.md#verification-gates) for the full gate table.
+See [Quality Gates](./quality-gates.md) and
+[Testing](./testing.md) for the full local gate definitions and the
+mapping into CI jobs.
 
-## Generated Artifact Check (G12)
+The pre-push hook (`scripts/pre-push.sh`, installed via
+`ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push`) runs the fast
+subset on `git push`.
 
-`just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs && git diff --exit-code` regenerates all artifacts and verifies they match what's committed:
+## Workflow map
 
-- Symbol sets (Rust and JavaScript)
-- Tree-sitter corpus tests
-- Rust parser tests
-- Error documentation
+```mermaid
+flowchart LR
+    subgraph PR["Per-PR (path-scoped)"]
+        W1["bazel-rust.yml<br/>(ubuntu + macos-14)"]
+        W2["bazel-python.yml<br/>(ubuntu + macos-14)"]
+        W3["bazel-grammar.yml"]
+        W4["bazel-typescript.yml"]
+        W5["bazel-docs.yml"]
+        W6["bazel-tauri-batchalign.yml<br/>smoke (+ bundle on main)"]
+        W7["bazel-wheels.yml<br/>(4-platform matrix)"]
+    end
+    subgraph SCHED["Scheduled"]
+        W8["bazel-build-all.yml<br/>(cron 06:00 UTC)"]
+    end
+    subgraph DISPATCH["workflow_dispatch"]
+        W9["publish-pypi.yml"]
+    end
 
-If the check fails, it means committed generated artifacts are out of sync with
-their source inputs. That usually means specs or symbols changed without the
-corresponding regeneration step, not that every parser change should have run
-`just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs`.
+    W9 --> PYPI[(PyPI)]
+    W6 -->|"artifact, unsigned"| ART[(workflow artifacts)]
+    W7 -->|"artifact (cp310-abi3)"| ART
+    W4 -->|"vscode-extension-vsix artifact"| ART
+    W5 -->|"book-html artifact"| ART
+```
 
-## Parser Signature Guardrail (G0)
+Verified against `.github/workflows/` on 2026-06-01.
 
-`bash scripts/check-errorsink-option-signatures.sh` enforces a coding convention: parser functions should use consistent `ErrorSink` signatures. This prevents accidental introduction of incompatible parser APIs.
+## Workflows in detail
 
-## Release Process
+| Workflow file | Workflow name | Triggers | Jobs |
+|---|---|---|---|
+| `bazel-rust.yml` | `bazel · rust` | push/PR on Rust paths | `build-and-test` (ubuntu + macos-14) |
+| `bazel-python.yml` | `bazel · python` | push/PR on Python / engine paths | `build-and-test` (ubuntu + macos-14) |
+| `bazel-grammar.yml` | `bazel · grammar` | push/PR on grammar / symbol paths | `rust-binding`, `generated-artifacts-fresh` |
+| `bazel-typescript.yml` | `bazel · typescript` | push/PR on `apps/vscode-extension/**`, `schemas/**` | `vscode-extension` |
+| `bazel-docs.yml` | `bazel · docs` | push/PR on `book/**`, `bazel/book/**` | `build-and-linkcheck` |
+| `bazel-tauri-batchalign.yml` | `bazel · tauri-batchalign` | push/PR/dispatch on Batchalign GUI paths | `smoke` (every PR), `bundle` (main + dispatch only; macOS arm64, macOS x86_64, Linux x86_64) |
+| `bazel-wheels.yml` | `bazel · wheels (PR matrix)` | push/PR on wheel-affecting paths | `build` (macos-14, macos-13, ubuntu, ubuntu-arm) |
+| `bazel-build-all.yml` | `bazel · build-all (nightly)` | cron `0 6 * * *`, dispatch | `build-all` (ubuntu + macos-14, full `//...`) |
+| `publish-pypi.yml` | `publish · pypi (batchalign)` | `workflow_dispatch` only | `verify-version`, `build` (5-platform matrix), `publish` (gated on `publish=true` input) |
 
-Releases are currently manual and split by surface. Use the workflow that
-matches the release contract for the surface you are shipping.
+Windows is not exercised in any workflow today. The `bundle` matrix
+and the `bazel-wheels.yml` matrix both have Windows rows commented out
+(`tools/bazel` bash wrapper / `multitool` `uv.exe` layout, respectively).
 
-| Workflow | Scope | Tier | Output | Guardrails |
-|----------|-------|------|--------|------------|
-| `.github/workflows/release.yml` (`TalkBank Core Release`) | Canonical Rust binary release line for `chatter`; bundles preview `chatter-lsp` alongside it | Public stable + preview convenience binary | GitHub Release assets for the shared Rust workspace version | Requires an existing `vX.Y.Z` tag matching `Cargo.toml`; runs native binary smoke tests before publishing; does **not** cargo-publish the Rust library crates |
-| `.github/workflows/batchalign-release.yml` (`Batchalign Package Release (Preview)`) | Public `batchalign3` package/CLI release line | Public preview | Wheels + sdist, with optional GitHub Release and optional PyPI publish | Requires an existing `vX.Y.Z` tag matching `pyproject.toml`; runs wheel smoke tests before publish |
-| `.github/workflows/vscode-release.yml` (`VS Code Extension Release (Preview)`) | VS Code extension release line only | Public preview | GitHub prerelease containing five platform-specific VSIX files; no Marketplace publish | Requires `apps/vscode-extension/package.json` version match; compiles, lints, and tests before packaging |
-| `.github/workflows/batchalign-desktop.yml` (`Batchalign Desktop Bundles (Experimental)`) | Dashboard desktop shell bundle builds | Experimental | GitHub Actions artifacts only | Artifact-only internal validation; does not create a public GitHub release |
+## Generated artifact freshness
 
-General process:
+The grammar's generated artifacts (`grammar/src/parser.c`,
+`grammar/src/grammar.json`, `grammar/src/node-types.json`) are
+checked by `bazel-grammar.yml`'s `generated-artifacts-fresh` job. If
+they drift, regenerate locally:
 
-1. Run the relevant verification for the surface you are releasing (`bazel build //... && bazel test //...`
-   for the core Rust release line, the built-in workflow checks for VS Code, and
-   the Batchalign packaging checks for `batchalign3`).
-2. Update the canonical version source for that surface.
-3. For the core Rust and Batchalign package release lines, create and push the
-   matching `vX.Y.Z` git tag before dispatching the workflow.
-4. Trigger the surface-specific workflow.
-5. Only promote a preview or experimental surface by updating
-   `book/src/operations/release-contract.md`, `book/src/operations/versioning.md`, and the corresponding
-   workflow labeling together.
+```bash
+cd grammar && tree-sitter generate
+git diff grammar/src/parser.c grammar/src/grammar.json grammar/src/node-types.json
+git add grammar/src/ && git commit -m "grammar: regenerate"
+```
+
+Spec-driven artifacts (tree-sitter corpus tests, generated Rust parser
+tests, error docs) are regenerated by:
+
+```bash
+just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs
+git diff --exit-code
+```
+
+Spec drift is not enforced by a dedicated CI job today; it's caught by
+the per-package test jobs failing when generated tests don't match
+generated source.
+
+## Release process, per surface
+
+Only one surface has a fully automated release workflow today
+(`batchalign3` → PyPI). The rest are either workflow-artifact-only or
+hand-published. Full per-surface narrative lives in
+[Release Pipeline](../operations/release-pipeline.md). Summary:
+
+| Surface | Build in CI | Release path today | Gap |
+|---|---|---|---|
+| `batchalign3` PyPI wheel | `bazel-python.yml` + `bazel-wheels.yml` | `publish-pypi.yml` (`workflow_dispatch`, OIDC trusted publisher) | none for PyPI |
+| `chatter` / `chatter-lsp` | `bazel-rust.yml`, nightly `bazel-build-all.yml` | None — install from source | No release workflow |
+| VS Code extension `.vsix` | `bazel-typescript.yml` (artifact only) | Manual `vsce publish` from operator workstation | No automated marketplace workflow |
+| Batchalign desktop bundle | `bazel-tauri-batchalign.yml` `bundle` job (main + dispatch) | Workflow artifacts only; unsigned; macOS + Linux | No GitHub Release upload; no Windows; no signing |
+| Chatter desktop GUI | Nightly `bazel-build-all.yml` only | None | No CI bundle target; no release |
+| mdBook | `bazel-docs.yml` (artifact only) | None | No GitHub Pages deploy |
+
+### Promoting a surface
+
+When automating a release for any surface above:
+
+1. Run the relevant per-PR workflow on a clean `main` and confirm
+   green.
+2. Update the canonical version source for that surface (`just
+   versions` to inspect — current values: batchalign wheel `0.3.0`,
+   Rust workspace `0.2.0`, batchalign-engine `0.3.0`, Chatter GUI
+   bundle `0.1.0`).
+3. Add the publish workflow alongside (e.g. a `publish-chatter.yml`
+   modelled on `publish-pypi.yml`).
+4. Update [Release Pipeline](../operations/release-pipeline.md),
+   [Release Contract](../operations/release-contract.md), and
+   [Code Signing and Distribution](../operations/code-signing-and-distribution.md)
+   in the same patch.
 
 ## First-release release-ops guardrails
 
-- **VS Code stays GitHub Releases VSIX-only for the first public release.** Do
-  not add Marketplace publishing steps or docs until the release contract and
-  workflow/docs are explicitly reopened together.
-- **Batchalign release smoke must cover `batchalign3 serve` + `/health`.** The
-  wheel smoke path is not complete if it only checks `--help` and `version`.
-- **Signing/notarization language must follow `book/src/operations/code-signing-and-distribution.md`.**
-  Current GitHub Release archives, wheels, and VSIX files are not a license to
-  imply native-installer trust guarantees we do not yet automate.
+- **VS Code stays manual-publish until a release workflow exists.**
+  Do not add marketplace-claiming language to install docs until
+  automation lands.
+- **Desktop bundles are unsigned.** Any download instructions must
+  mark them as "unsigned development build". See
+  [Code Signing and Distribution](../operations/code-signing-and-distribution.md).
+- **`publish-pypi.yml` is the only publish workflow.** Treat any
+  reference to `release.yml`, `vscode-release.yml`,
+  `batchalign-release.yml`, `batchalign-desktop.yml`,
+  `publish-chatter.yml`, `publish-vscode.yml`, or `publish-desktop.yml`
+  in older docs as obsolete — those workflows do not exist.
 
-## Cross-Repo Testing
+## Cross-repo testing
 
-After changes to core crates, verify the downstream consumer:
+After changes to core crates, verify the downstream consumer locally:
 
 ```bash
 # batchalign (Python + Rust)
 cd /path/to/batchalign3
 uv run maturin develop    # Rebuild Rust extension
-uv run pytest             # 878 tests
+uv run pytest
 ```
 
-CLI, LSP, and CLAN tests run as part of the main workspace's `bazel test //...` and `bazel build //... && bazel test //...`.
+CLI, LSP, and CLAN coverage runs as part of `bazel test //...`.

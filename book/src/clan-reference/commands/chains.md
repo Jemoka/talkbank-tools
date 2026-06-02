@@ -32,7 +32,7 @@ chatter clan chains --tier cod file.cha
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** Rewriter
-> at `crates/clan-core/src/clan_args.rs:101` translates
+> at `crates/clan/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`; no `clap` field consumes it today.
 > Drafted from CLAN manual §7.1.2 (`Unique Options`, CHAINS) for
 > PI review.

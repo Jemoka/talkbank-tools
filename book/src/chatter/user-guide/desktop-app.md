@@ -1,7 +1,7 @@
 # Chatter Desktop (Experimental)
 
 **Status:** Current
-**Last updated:** 2026-05-11 10:55 EDT
+**Last updated:** 2026-06-01 00:50 PDT
 
 **⚠️ IMPORTANT: Chatter Desktop is an experimental in-repo evaluation app, NOT a supported end-user surface.** Use the `chatter` CLI for production CHAT validation, or use the VS Code extension for interactive editing with live validation. 
 
@@ -19,7 +19,7 @@ Chatter Desktop (`apps/chatter/chatter-gui/`) is intended **only for**:
 This is also **not** the Batchalign desktop app. The two experimental desktop surfaces in this repository are:
 
 - **Chatter Desktop** (`apps/chatter/chatter-gui/`) — CHAT validation GUI only (experimental)
-- **Batchalign Desktop** (`apps/batchalign/dashboard-desktop/`) — Batchalign processing UI (experimental)
+- **Batchalign Desktop** (`apps/batchalign/batchalign-gui/`) — Batchalign processing UI (experimental)
 
 ## Current status
 
@@ -33,7 +33,7 @@ This is also **not** the Batchalign desktop app. The two experimental desktop su
 ### From source
 
 ```bash
-cd apps/chatter-gui
+cd apps/chatter/chatter-gui
 npm install
 cargo tauri dev       # launches the app with hot reload
 cargo tauri build     # produces a distributable app bundle

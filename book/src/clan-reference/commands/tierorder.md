@@ -23,7 +23,7 @@ This command has no configurable options.
 
 Dependent tiers are sorted into the following canonical order
 (per the `tier_order()` priority function at
-`crates/clan-core/src/transforms/tierorder.rs:57-100`):
+`crates/clan/clan-core/src/transforms/tierorder.rs:57-100`):
 
 1. **Linguistic analysis tiers** (priorities 0-5):
    `%mor` → `%gra` → `%pho` → `%mod` → `%wor` → `%sin`

@@ -21,7 +21,13 @@ See the book’s CLI reference for the verified public surface.
 ## Installation
 
 ```bash
-cargo install --path crates/chatter-cli
+cargo install --path crates/chatter/chatter-cli
+```
+
+Or via the canonical Bazel build (from the repo root):
+
+```bash
+just chatter build       # bazel build -c opt //crates/chatter/chatter-cli:chatter
 ```
 
 ## License

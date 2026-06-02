@@ -1,53 +1,82 @@
 # Testing and Quality Gates
 
 **Status:** Current
-**Last updated:** 2026-04-29 10:39 EDT
+**Last modified:** 2026-06-01 01:05 PDT
 
-This page summarizes the **current** relationship between the local pre-merge
-gate (`bazel build //... && bazel test //...`) and the root CI workflow (`.github/workflows/ci.yml`).
+This page describes the **current** relationship between local
+verification and CI. The local canonical gate is `bazel build //... &&
+bazel test //...`. CI is a collection of scoped `bazel-*.yml` workflows
+that mirror parts of that gate on the paths each workflow watches, plus
+a nightly that runs the whole thing.
+
 See [Testing](testing.md) for the canonical local gate definitions.
 
 ## Local pre-merge contract
 
-`bazel build //... && bazel test //...` is the maintainer-facing local contract. It runs gates G0–G14 in
-sequence. `hooks-check` runs first as a warning, but it is not a numbered gate.
+`bazel build //... && bazel test //...` is the maintainer-facing local
+contract. Run it before pushing any change that touches Rust, Python,
+grammar, specs, or the book. The pre-push hook (`scripts/pre-push.sh`,
+installed via `ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push`)
+runs the fast subset (fmt, affected compile, parser guardrail,
+generated-check, fuzz-check) on every `git push`.
 
-## Root CI contract
+## CI workflow surface
 
-Root CI is broader than `bazel build //... && bazel test //...`, but it is **not** a byte-for-byte mirror
-of the local gate sequence. The workflow includes local-contract coverage where
-practical, plus CI-only jobs such as grammar generation, reference-corpus
-roundtrip, VS Code jobs, cross-platform CLI smoke, dependency audit, and the
-aggregate `ci-report`.
-
-### Local gate coverage in CI
-
-| Local gate | Local command | CI coverage today |
+| Workflow file | Jobs | When |
 |---|---|---|
-| G0 | `bash scripts/check-errorsink-option-signatures.sh` | `rust-check-and-test` |
-| G1 | `cargo check --workspace --all-targets` | `rust-check-and-test` |
-| G2 | `cd spec/tools && cargo check --all-targets` | `spec-tools` |
-| G3 | `cargo check --manifest-path crates/spec/talkbank-spec-testrun/Cargo.toml --all-targets` | **Not mirrored in root CI** |
-| G4 | `bash scripts/check-chat-manual-anchors.sh` | `chat-manual-anchor-check` |
-| G5 | `cargo nextest run -p talkbank-parser-tests --test generated` | `rust-check-and-test` |
-| G6 | `bazel test //crates/core/talkbank-parser-tests/...` | `rust-check-and-test` |
-| G7 | `cargo nextest run --test bare_timestamp_regression` | `rust-check-and-test` |
-| G8 | `cargo nextest run -p talkbank-parser-tests --test parser_equivalence_files` | `rust-check-and-test` |
-| G9 | `cargo nextest run -p talkbank-parser-tests --test wor_terminator_alignment` | `rust-check-and-test` |
-| G10 | `cargo nextest run -p talkbank-parser-tests --test parser_suite` | `rust-check-and-test` |
-| G11 | `just spec coverage` | **Not mirrored in root CI** |
-| G12 | `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs && git diff --exit-code` | `generated-artifacts` |
-| G13 | `(cd fuzz && cargo metadata --no-deps --format-version 1 >/dev/null)` | Covered more broadly by `fuzz-smoke`, not by the same command |
-| G14 | `bazel build //crates/batchalign/... && bazel test //crates/batchalign/...` | **Not mirrored in root CI** |
+| `bazel-rust.yml` | `build-and-test` (ubuntu + macos-14) | push/PR on Rust paths |
+| `bazel-python.yml` | `build-and-test` (ubuntu + macos-14) | push/PR on Python / engine paths |
+| `bazel-grammar.yml` | `rust-binding`, `generated-artifacts-fresh` | push/PR on grammar / symbol paths |
+| `bazel-typescript.yml` | `vscode-extension` (ubuntu) | push/PR on `apps/vscode-extension/**`, `schemas/**` |
+| `bazel-docs.yml` | `build-and-linkcheck` (ubuntu) | push/PR on `book/**`, `bazel/book/**` |
+| `bazel-tauri-batchalign.yml` | `smoke` (every PR), `bundle` (main + dispatch only, macOS arm64 / macOS x86_64 / Linux x86_64) | push/PR/dispatch on Batchalign GUI paths |
+| `bazel-wheels.yml` | `build` (macos-14, macos-13, ubuntu, ubuntu-arm) | push/PR on wheel-affecting paths |
+| `bazel-build-all.yml` | `build-all` (ubuntu + macos-14, full `//...`) | nightly cron `0 6 * * *` + manual dispatch |
+| `publish-pypi.yml` | `verify-version`, `build`, `publish` | `workflow_dispatch` only |
 
-### Additional CI-only checks
+CI is **not** a byte-for-byte mirror of the local gate sequence. Each
+workflow runs the Bazel build + test targets relevant to its path
+filter; the nightly `bazel-build-all.yml` covers everything that
+per-path workflows skip.
 
-These are required CI signals but are not part of `bazel build //... && bazel test //...`:
+## Gate-to-job mapping
 
-- `grammar`
-- `reference-corpus-roundtrip`
-- `vscode` and `vscode-vsix-smoke`
-- `cross-platform-smoke`
-- `dependency-audit`
-- `semver-checks` (pull requests)
-- `ci-report`
+| Concern | Local command | CI job(s) that cover it |
+|---|---|---|
+| Rust workspace compile + test | `bazel build //crates/... && bazel test //crates/...` | `bazel-rust.yml` `build-and-test`; nightly `bazel-build-all.yml` `build-all` |
+| Grammar binding builds | `bazel build //grammar:tree_sitter_talkbank` | `bazel-grammar.yml` `rust-binding` |
+| Generated `parser.c` / `grammar.json` / `node-types.json` fresh | `cd grammar && tree-sitter generate && git diff --exit-code` | `bazel-grammar.yml` `generated-artifacts-fresh` |
+| Python wheel + engine cdylib + py_test | `bazel build //python/batchalign:wheel && bazel test //python/batchalign:pytest` | `bazel-python.yml` `build-and-test` |
+| Wheel platform-matrix smoke (cp310-abi3) | `bazel run -c opt //python/batchalign:wheel` | `bazel-wheels.yml` `build` |
+| VS Code extension build / test / package | `just vscode build`, `just vscode test`, `just vscode package` | `bazel-typescript.yml` `vscode-extension` |
+| mdBook builds, internal links resolve | `bazel run //book:html && bazel run //book:linkcheck` | `bazel-docs.yml` `build-and-linkcheck` |
+| Batchalign desktop bundle openapi snapshot fresh | `bazel test //apps/batchalign/batchalign-gui:test_openapi_freshness` | `bazel-tauri-batchalign.yml` `smoke` |
+| Batchalign desktop bundle builds end-to-end | `bazel run //apps/batchalign/batchalign-gui/src-tauri:bundle -- --target <triple>` | `bazel-tauri-batchalign.yml` `bundle` (main + dispatch only) |
+| Exhaustive `//...` build + test | `bazel build //... && bazel test //...` | `bazel-build-all.yml` `build-all` (nightly) |
+
+## What's intentionally **not** enforced in CI
+
+- **Python lockfile drift** (`//python:requirements_test`). The target
+  exists but is tagged `manual` because `uv 0.5.18 --universal` is
+  host-OS-dependent. Contributors regenerate the lockfile via
+  `bazel run //python:requirements`; CI does not assert no drift.
+  See the comment in `bazel-python.yml`.
+- **Windows builds** (any surface). `tools/bazel` is a bash wrapper
+  incompatible with PowerShell; `multitool.lock.json` has a `uv.exe`
+  layout issue. Windows rows are commented out in
+  `bazel-tauri-batchalign.yml` and `bazel-wheels.yml`. See
+  [Code Signing and Distribution](../operations/code-signing-and-distribution.md).
+- **Code signing / notarization.** Nothing is signed today.
+- **Chatter desktop GUI bundle.** No dedicated workflow; only the
+  nightly `bazel-build-all.yml` exercises it.
+
+## Old job names that no longer exist
+
+For anyone hunting through the git history: `rust-check-and-test`,
+`spec-tools`, `chat-manual-anchor-check`, `generated-artifacts`,
+`fuzz-smoke`, `vscode-vsix-smoke`, `cross-platform-smoke`,
+`dependency-audit`, `semver-checks`, `ci-report` are all from the old
+`ci.yml`. That workflow has been retired in favor of the scoped
+`bazel-*.yml` set described above. The current job names live inside
+those workflows (e.g. `build-and-test`, `rust-binding`,
+`generated-artifacts-fresh`, `smoke`, `bundle`).

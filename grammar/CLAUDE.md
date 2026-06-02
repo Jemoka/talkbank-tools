@@ -1,6 +1,6 @@
 # Grammar — Tree-sitter Grammar for CHAT
 
-**Last modified:** 2026-05-11 23:31 EDT
+**Last modified:** 2026-06-01 00:52 PDT
 
 ## Overview
 Tree-sitter grammar definition for CHAT (`grammar.js`) plus generated parser and corpus tests.
@@ -188,7 +188,7 @@ After grammar changes pass local verification, these downstream repositories may
 |------------|-----|---------|
 | `talkbank-parser` | uses this parser directly | `cargo check -p talkbank-parser` |
 | `chatter-lsp` | LSP parser consumer | `cargo check -p chatter-lsp` |
-| `batchalign3` | parser bridge integration | `cargo test --manifest-path crates/batchalign-pyo3/Cargo.toml` |
+| `batchalign3` | parser bridge integration | `cargo test -p batchalign-engine` |
 
 ## Emergency Revert Procedure
 
@@ -204,4 +204,4 @@ Always regenerate after revert so generated artifacts match current `grammar.js`
 
 ## See Also
 - https://github.com/TalkBank/talkbank-tools/blob/main/CLAUDE.md
-- https://github.com/TalkBank/talkbank-tools/tree/main/spec
+- https://github.com/TalkBank/talkbank-tools/tree/main/resources/spec

@@ -1,7 +1,7 @@
 # Installation
 
 **Status:** Current
-**Last updated:** 2026-05-11 20:14 EDT
+**Last updated:** 2026-06-01 00:52 PDT
 
 This chapter walks you through installing VS Code and the TalkBank CHAT
 extension. The language server (`chatter-lsp`) ships inside each
@@ -90,9 +90,9 @@ launch the extension directly:
 # From the talkbank-tools/ repository root:
 cargo build --release -p chatter-lsp
 
-cd vscode
+cd apps/vscode-extension
 npm install
-npm run compile
+npm run compile     # or: just vscode build (from repo root)
 
 # Launch VS Code with the extension loaded in development mode:
 code-insiders --extensionDevelopmentPath=.

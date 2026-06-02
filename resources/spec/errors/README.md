@@ -66,7 +66,7 @@ See [ERROR_SPEC_FORMAT.md](ERROR_SPEC_FORMAT.md) for complete format documentati
 2. Follow the format in ERROR_SPEC_FORMAT.md
 3. Validate the spec:
    ```bash
-   cargo run --bin validate_error_specs --manifest-path crates/spec/talkbank-spec-testrun/Cargo.toml -- --spec-dir spec/errors
+   cargo run --bin validate_error_specs --manifest-path crates/spec/talkbank-spec-testrun/Cargo.toml -- --spec-dir resources/spec/errors
    ```
 
 #### Option 2: Generate from Error Corpus
@@ -75,25 +75,25 @@ If an error corpus file already exists:
 
 **Step 1: Generate specs from corpus**
 ```bash
-cd spec/tools
+cd crates/spec/talkbank-spec-testgen
 cargo run --bin corpus_to_specs -- \
-  --corpus-dir tests/error_corpus \
-  --spec-dir ../spec/errors
+  --corpus-dir crates/core/talkbank-parser-tests/tests/error_corpus \
+  --spec-dir resources/spec/errors
 ```
 
 **Step 2: Fix layer classifications**
 ```bash
-cargo run --bin fix_spec_layers -- --spec-dir ../spec/errors
+cargo run --bin fix_spec_layers -- --spec-dir resources/spec/errors
 ```
 
 **Step 3: Enhance specs with manual references**
 ```bash
-cargo run --bin enhance_specs -- --spec-dir ../spec/errors
+cargo run --bin enhance_specs -- --spec-dir resources/spec/errors
 ```
 
 **Step 4: Validate specs**
 ```bash
-cargo run --bin validate_error_specs --manifest-path crates/spec/talkbank-spec-testrun/Cargo.toml -- --spec-dir spec/errors
+cargo run --bin validate_error_specs --manifest-path crates/spec/talkbank-spec-testrun/Cargo.toml -- --spec-dir resources/spec/errors
 ```
 
 This automated pipeline generates `E###_auto.md` files with:
@@ -107,9 +107,9 @@ This automated pipeline generates `E###_auto.md` files with:
 Once you have error specs, generate validation tests:
 
 ```bash
-cd spec/tools
+cd crates/spec/talkbank-spec-testgen
 cargo run --bin gen_validation_tests -- \
-  --spec-dir ../spec/errors \
+  --spec-dir resources/spec/errors \
   --output-dir crates/talkbank-parser-tests/tests/generated \
   --fixture-dir crates/talkbank-parser-tests/tests/fixtures/errors
 ```
@@ -170,7 +170,7 @@ After generating tests:
 Validates that error specs follow the correct format and have proper metadata.
 
 ```bash
-cargo run --bin validate_error_specs --manifest-path crates/spec/talkbank-spec-testrun/Cargo.toml -- --spec-dir spec/errors
+cargo run --bin validate_error_specs --manifest-path crates/spec/talkbank-spec-testrun/Cargo.toml -- --spec-dir resources/spec/errors
 ```
 
 Checks:
@@ -185,8 +185,8 @@ Converts existing error corpus files to markdown specs.
 
 ```bash
 cargo run --bin corpus_to_specs -- \
-  --corpus-dir tests/error_corpus \
-  --spec-dir ../spec/errors \
+  --corpus-dir crates/core/talkbank-parser-tests/tests/error_corpus \
+  --spec-dir resources/spec/errors \
   [--overwrite]
 ```
 
@@ -201,7 +201,7 @@ Automatically corrects layer classification (parser vs validation) based on actu
 
 ```bash
 cargo run --bin fix_spec_layers -- \
-  --spec-dir ../spec/errors \
+  --spec-dir resources/spec/errors \
   [--dry-run]
 ```
 
@@ -218,7 +218,7 @@ Enhances auto-generated specs with CHAT manual references and corrected Expected
 
 ```bash
 cargo run --bin enhance_specs -- \
-  --spec-dir ../spec/errors \
+  --spec-dir resources/spec/errors \
   [--dry-run]
 ```
 
@@ -234,7 +234,7 @@ Generates test fixtures and test code from error specs.
 
 ```bash
 cargo run --bin gen_validation_tests -- \
-  --spec-dir ../spec/errors \
+  --spec-dir resources/spec/errors \
   --output-dir crates/talkbank-parser-tests/tests/generated \
   --fixture-dir crates/talkbank-parser-tests/tests/fixtures/errors
 ```
@@ -291,9 +291,9 @@ When adding a new validation rule:
 ## See Also
 
 - [ERROR_SPEC_FORMAT.md](ERROR_SPEC_FORMAT.md) - Detailed format specification
-- [talkbank-model validation CLAUDE.md](../../crates/talkbank-model/src/validation/CLAUDE.md) - Validator implementation patterns
-- [Root CLAUDE.md](../../CLAUDE.md) - TDD and testing requirements
+- [talkbank-model validation CLAUDE.md](../../../crates/core/talkbank-model/src/validation/CLAUDE.md) - Validator implementation patterns
+- [Root CLAUDE.md](../../../CLAUDE.md) - TDD and testing requirements
 
 ---
 
-Last Updated: 2026-01-19
+Last Updated: 2026-06-01

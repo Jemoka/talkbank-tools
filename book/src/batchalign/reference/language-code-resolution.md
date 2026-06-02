@@ -1,7 +1,7 @@
 # Language Code Resolution
 
 **Status:** Current
-**Last updated:** 2026-05-06 21:30 EDT
+**Last updated:** 2026-06-01 00:51 PDT
 
 This page documents how batchalign3 maps language codes to models, Stanza
 pipelines, and processing behavior.
@@ -109,9 +109,9 @@ models:
 | All others | * | `openai/whisper-large-v3` | same | large-v3 |
 
 Other ASR engines ignore language for model selection:
-- `--asr-engine whisper-oai`: always `whisper-turbo`
-- `--asr-engine whisperx`: always `whisper-large-v2`
+- `--engine openai`: always `whisper-turbo`
 - Rev.AI: cloud API, handles language internally
+- (Legacy `whisperx` engine removed.)
 
 ## Model Resolution (UTR)
 

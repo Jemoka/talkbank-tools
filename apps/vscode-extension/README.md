@@ -1,7 +1,7 @@
 # TalkBank CHAT for VS Code
 
 **Status:** Current
-**Last updated:** 2026-04-13 20:34 EDT
+**Last updated:** 2026-06-01 00:52 PDT
 
 Full language support for CHAT transcription files (`.cha`) — the format used by [TalkBank](https://talkbank.org), [CHILDES](https://childes.talkbank.org), and related corpora for linguistic research on conversational data.
 
@@ -179,7 +179,7 @@ On Windows/Linux, substitute `Ctrl` for `Cmd`.
 
 ## Beyond CLAN
 
-The extension goes well beyond replicating the macOS CLAN application. Features with no CLAN equivalent include: corpus-scale validation across entire directory trees, real-time diagnostics as you type, quick-fix code actions, bidirectional cross-tier alignment highlighting, alignment mismatch inlay hints, go-to-definition, find all references, rename across all occurrences, linked editing, code lens utterance counts, smart selection by syntactic units, workspace symbol search across files, clickable document links, speaker filtering, code folding, CSV export, configurable severity filtering, and cross-platform support (macOS, Windows, Linux). See the [CLAN Feature Parity chapter](book/src/developer/clan-parity.md) for the full comparison.
+The extension goes well beyond replicating the macOS CLAN application. Features with no CLAN equivalent include: corpus-scale validation across entire directory trees, real-time diagnostics as you type, quick-fix code actions, bidirectional cross-tier alignment highlighting, alignment mismatch inlay hints, go-to-definition, find all references, rename across all occurrences, linked editing, code lens utterance counts, smart selection by syntactic units, workspace symbol search across files, clickable document links, speaker filtering, code folding, CSV export, configurable severity filtering, and cross-platform support (macOS, Windows, Linux). See the [CLAN Feature Parity chapter](../../book/src/vscode/developer/clan-parity.md) for the full comparison.
 
 ## Requirements
 
@@ -204,12 +204,12 @@ The extension searches for `chatter-lsp` on your system PATH first, then falls b
 
 ## Documentation
 
-All documentation lives in the **[TalkBank CHAT Editor book](book/src/introduction.md)** (mdBook). Entry points:
+All documentation lives in the **[TalkBank Toolchain mdBook](../../book/src/vscode/introduction.md)**. Entry points:
 
-- [Getting Started](book/src/getting-started/installation.md) — install a platform VSIX and open your first file
-- [Editing](book/src/editing/syntax-highlighting.md) / [Navigation](book/src/navigation/alignment.md) / [Media & Transcription](book/src/media/playback.md) — feature chapters
-- [Developer Guide](book/src/developer/architecture.md) — three-layer architecture, LSP internals, adding features
-- [CLAN Feature Parity](book/src/developer/clan-parity.md) — comparison with the macOS CLAN application
+- [Getting Started](../../book/src/vscode/getting-started/installation.md) — install a platform VSIX and open your first file
+- [Editing](../../book/src/vscode/editing/syntax-highlighting.md) / [Navigation](../../book/src/vscode/navigation/alignment.md) / [Media & Transcription](../../book/src/vscode/media/playback.md) — feature chapters
+- [Developer Guide](../../book/src/vscode/developer/architecture.md) — three-layer architecture, LSP internals, adding features
+- [CLAN Feature Parity](../../book/src/vscode/developer/clan-parity.md) — comparison with the macOS CLAN application
 
 ## Links
 

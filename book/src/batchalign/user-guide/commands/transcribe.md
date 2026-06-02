@@ -1,7 +1,7 @@
 # transcribe
 
 **Status:** Current
-**Last updated:** 2026-05-11 10:25 EDT
+**Last updated:** 2026-06-01 00:51 PDT
 
 Create a new CHAT transcript from audio files using automatic speech
 recognition (ASR). Produces `.cha` files alongside or in a separate output
@@ -22,7 +22,7 @@ batchalign3 transcribe recordings/ -o transcripts/ --lang eng
 batchalign3 transcribe bilingual.wav -o out/ --lang auto
 
 # Transcribe with dedicated speaker diarization (Whisper, multiple speakers)
-batchalign3 transcribe interview.wav -o out/ --asr-engine whisper --diarization enabled
+batchalign3 transcribe interview.wav -o out/ --engine whisper --diarization enabled
 
 # Use the remote server
 batchalign3 --server http://your-server:8001 transcribe corpus/ -o out/ --lang eng
@@ -59,20 +59,24 @@ flowchart TD
     transcribe_s --> engine_check
     transcribe_m --> engine_check
 
-    engine_check{--asr-engine?}
-    engine_check -->|whisper| whisper[Whisper local ASR]
-    engine_check -->|whisper_hub| whisper_hub["HF Whisper fine-tune\n(per-language model_id)"]
+    engine_check{--engine?}
+    engine_check -->|whisper| whisper["HF Whisper local ASR"]
+    engine_check -->|chatwhisper| chatwhisper["CHATWhisper\n(TalkBank fine-tune)"]
     engine_check -->|rev| rev_preflight["Rev.AI preflight\nPre-submit audio in parallel\nskip_postprocessing=true for en/es"]
-    engine_check -->|whisperx| whisperx[WhisperX ASR]
-    engine_check -->|whisper_oai| whisper_oai[OpenAI Whisper ASR]
+    engine_check -->|openai| whisper_oai["OpenAI Whisper API\n(turbo)"]
+    engine_check -->|funaudio| funaudio["FunAudio SenseVoice\n(Cantonese/Mandarin)"]
+    engine_check -->|tencent| tencent["Tencent Cloud ASR"]
+    engine_check -->|qwen3| qwen3["Qwen3-ASR\n(Alibaba open-weight)"]
 
     rev_preflight --> rev_poll[Poll Rev.AI for results]
     rev_poll --> asr_tokens
 
     whisper --> asr_tokens
-    whisper_hub --> asr_tokens
-    whisperx --> asr_tokens
+    chatwhisper --> asr_tokens
     whisper_oai --> asr_tokens
+    funaudio --> asr_tokens
+    tencent --> asr_tokens
+    qwen3 --> asr_tokens
 
     asr_tokens["Raw ASR tokens\nword + start_s + end_s + optional speaker + confidence"]
     asr_tokens --> convert["convert_asr_response()\nGroups tokens by speaker label"]
@@ -146,8 +150,7 @@ CHAT transcripts.
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--lang CODE` | `eng` | 3-letter ISO language code, or `auto` for language auto-detection |
-| `--asr-engine {rev,whisper,whisper_hub,whisperx,whisper-oai}` | `rev` | ASR engine. See [`whisper-hub-asr.md`](../../reference/whisper-hub-asr.md) for `whisper_hub` (HuggingFace community fine-tunes). |
-| `--asr-engine-custom NAME` | — | Override ASR engine by name (e.g. `tencent`, `funaudio`) |
+| `--engine {rev,whisper,chatwhisper,openai,funaudio,tencent,qwen3}` | `rev` | ASR engine. Whisper-family engines `whisperx` and `whisper_hub` were removed; `whisper` is HF transformers, `chatwhisper` is the TalkBank fine-tune, and `openai` is the OpenAI Whisper Python library (turbo). |
 | `-n`, `--num-speakers N` | `2` | Expected number of speakers |
 | `--diarization {auto,enabled,disabled}` | `auto` | Dedicated Pyannote speaker diarization stage (`auto` = disabled) |
 | `--wor` / `--nowor` | `--nowor` | Include or suppress the `%wor` word-timing tier |
@@ -165,7 +168,7 @@ without passing `--diarization enabled`. Passing `--diarization enabled`
 explicitly runs an additional Pyannote post-ASR relabeling stage on top of the
 Rev labels, matching BA2's audited `transcribe_s` pipeline behavior.
 
-**Whisper-based engines** (`--asr-engine whisper`, `whisperx`, `whisper-oai`):
+**Whisper-based engines** (`--engine whisper`, `chatwhisper`, `openai`):
 these engines produce no speaker labels. Without `--diarization enabled`, all
 utterances are attributed to a single default speaker. Pass
 `--diarization enabled` to run a dedicated Pyannote stage that assigns speaker
@@ -180,7 +183,7 @@ stage.
 
 ## `--lang auto` behavior
 
-With `--asr-engine whisper`, `--lang auto` omits the language parameter from
+With `--engine whisper`, `--lang auto` omits the language parameter from
 Whisper's generation kwargs, letting the model detect the spoken language from
 the audio. The multilingual `openai/whisper-large-v3` model is always used
 with `auto` — language-specific fine-tuned models are bypassed because they

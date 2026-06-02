@@ -137,7 +137,7 @@ internet access (e.g., air-gapped machines), you can install from a local wheel
 file:
 
 ```bash
-uv tool install ./batchalign3-0.1.0-cp312-cp312-macosx_11_0_arm64.whl
+uv tool install ./batchalign3-0.3.0-cp312-cp312-macosx_11_0_arm64.whl
 ```
 
 Wheel files for all 5 supported platforms are built by the release CI. If a

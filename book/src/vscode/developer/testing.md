@@ -1,7 +1,7 @@
 # Testing
 
 **Status:** Current
-**Last updated:** 2026-04-16 22:14 EDT
+**Last updated:** 2026-06-01 00:52 PDT
 
 This chapter covers how to test both the Rust language server and the TypeScript VS Code extension.
 
@@ -100,10 +100,16 @@ list.
 ### Running Tests
 
 ```bash
-cd vscode
+cd apps/vscode-extension
 npm test              # Run all tests (vitest)
 npm run lint          # ESLint
 npm run test:coverage # Tests with coverage report
+```
+
+Alternatively, run via the `just` wrapper from the repo root:
+
+```bash
+just vscode test
 ```
 
 ### Test Framework
@@ -123,7 +129,7 @@ VS Code API interactions (commands, webviews, tree views) are harder to unit tes
 ### Launch Development Extension
 
 ```bash
-cd vscode
+cd apps/vscode-extension
 code --extensionDevelopmentPath=.
 ```
 
@@ -160,7 +166,7 @@ To inspect the raw JSON-RPC messages between VS Code and the server:
 ## Coverage
 
 ```bash
-cd vscode
+cd apps/vscode-extension
 npm run test:coverage
 ```
 
@@ -178,7 +184,7 @@ cargo nextest run -p talkbank-parser-tests  # Parser equivalence (if touching pa
 For extension changes:
 
 ```bash
-cd vscode && npm test && npm run lint
+cd apps/vscode-extension && npm test && npm run lint
 ```
 
 For any change:

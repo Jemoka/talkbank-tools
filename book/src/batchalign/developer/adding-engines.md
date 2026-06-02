@@ -361,8 +361,9 @@ should replace this with an enum such as `WhisperGenMode::{
 AutoDetect, FinetunePinnedByConfig, CantoneseSpecialCase,
 ForceLanguage(Name) }`, with each engine's loader picking the
 variant explicitly. Out of scope for a single-engine addition, but
-worth doing before the *next* whisper-family engine (WhisperX,
-WhisperOai Hub variant, etc.) repeats the same mistake.
+worth doing before the *next* whisper-family engine repeats the same
+mistake. (Note: the previously planned `whisperx` and `whisper_hub`
+engines have since been removed from the engine set.)
 
 ## Adding a new server command
 

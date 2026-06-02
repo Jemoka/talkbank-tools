@@ -1,7 +1,7 @@
 # Documentation Architecture
 
 **Status:** Current
-**Last updated:** 2026-03-24 00:01 EDT
+**Last updated:** 2026-06-01 00:52 PDT
 
 ## Principle: Centralized Book + Subsystem Satellites
 
@@ -61,7 +61,7 @@ under `book/src/`:
 | `book/src/batchalign/` | Batchalign users + devs | Pipeline, server, migration from BA2, ML commands |
 | `book/src/chatter/` | chatter CLI users + integrators | CLI reference, library usage, JSON contracts |
 | `book/src/chat-format/` | All users + integrators | CHAT format reference (headers, tiers, symbols) |
-| `book/src/apps/vscode-extension/` | VS Code extension users + extension devs | Editor workflows, configuration, design ADRs |
+| `book/src/vscode/` | VS Code extension users + extension devs | Editor workflows, configuration, design ADRs |
 | `book/src/clan-reference/` | CLAN users + porters | 80+ command reference pages, divergence + migration |
 | `book/src/architecture/` | All devs | Cross-surface architecture, parser/grammar/data-model design |
 | `book/src/contributing/` | Contributors | Setup, testing, coding standards, dev checks |

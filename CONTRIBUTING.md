@@ -1,6 +1,6 @@
 # Contributing to talkbank-tools
 
-**Last updated:** 2026-05-29 10:58 PDT
+**Last updated:** 2026-06-01 01:05 PDT
 
 Welcome. This repo is a polyglot monorepo orchestrated by **Bazel**. It
 ships two end-user products:
@@ -77,71 +77,17 @@ Skip both sections if you're only working on batchalign (Rust engine,
 wheel, sidecar, `batchalign3` CLI) or the spec / grammar /
 talkbank-* library crates.
 
-#### macOS (base toolchain)
+#### Per-platform install one-liners
 
-```bash
-# 1. Workspace tools. Bazelisk is what enables tools/bazel
-#    (the lockfile-reactivity wrapper) to run.
-brew install bazelisk just git
+| Platform | Base toolchain |
+|---|---|
+| macOS | `brew install bazelisk just git` + `xcode-select --install` (CLT is sufficient unless you build Tauri apps — see below). |
+| Linux (Debian/Ubuntu) | `apt-get install -y git curl build-essential pkg-config ca-certificates` plus a Bazel launcher (`npm i -g @bazel/bazelisk` or the bazel apt repo) and `just`. |
+| Linux (Fedora/RHEL) | `dnf install -y git gcc gcc-c++ make pkgconf-pkg-config` plus the same Bazel launcher + `just`. |
+| Windows | `scoop install bazelisk just git` plus Visual Studio 2022 Build Tools (MSVC). WSL2 + the Linux row is the easier path. |
 
-# 2. A working host C toolchain. Xcode Command Line Tools is enough
-#    for the base toolchain (batchalign wheel / sidecar / CLI; chatter
-#    CLI / LSP via the Bazel-native build path). The wheel build no
-#    longer transitively pulls libsqlite3-sys, so the CLT clang/SDK
-#    is sufficient on its own.
-xcode-select --install                                  # accept dialog if first time
-
-# 3. Optional: faster dev feedback for the VS Code extension.
-brew install node                                       # only if you want host-side `npm`
-```
-
-That's it. Full Xcode is only required for the Tauri desktop apps;
-see [Desktop-GUI host prereqs](#desktop-gui-host-prereqs).
-
-#### Linux (Debian/Ubuntu) (base toolchain)
-
-```bash
-sudo apt-get update
-sudo apt-get install -y \
-    git curl build-essential pkg-config ca-certificates
-
-# Bazel launcher + just.
-# Option A (apt):
-curl -fsSL https://bazel.build/bazel-release.pub.gpg | sudo gpg --dearmor -o /usr/share/keyrings/bazel-archive-keyring.gpg
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
-sudo apt-get update && sudo apt-get install -y bazel
-cargo install just                                      # needs rust; or use the prebuilt binary
-
-# Option B (mise / asdf / npm one-liner):
-npm install -g @bazel/bazelisk
-# (then `cargo install just` or download the binary from
-# https://github.com/casey/just/releases)
-```
-
-Linux distros ship matched clang/SDK by default; no macOS-style
-toolchain caveat applies.
-
-#### Linux (Fedora/RHEL) (base toolchain)
-
-```bash
-sudo dnf install -y git gcc gcc-c++ make pkgconf-pkg-config
-# Bazel + just same as Debian (apt → dnf for the bazelisk package).
-```
-
-#### Windows (base toolchain)
-
-Not tested by maintainers as a daily-driver dev environment, but CI
-builds wheels on Windows runners. Bare minimum:
-
-```powershell
-# winget or scoop are fine.
-scoop install bazelisk just git
-# Visual Studio 2022 Build Tools provides MSVC (the `*-sys` crate
-# linker target on Windows).
-```
-
-WSL2 (Ubuntu) is the easier path if you don't have a hard Windows
-requirement -- the Linux instructions above work as-is.
+Linux distros ship matched clang/SDK by default; the macOS Xcode caveat
+applies only for the Tauri desktop apps (next section).
 
 ### Chatter-only host prereqs
 
@@ -179,73 +125,15 @@ These apply to:
   - `apps/chatter/chatter-gui`     (Chatter.app — chatter desktop)
   - `apps/batchalign/batchalign-gui` (Batchalign.app — experimental)
 
-#### macOS (Tauri)
-
-Tauri on macOS links against WebKit.framework and other Cocoa
-frameworks. The CLT SDK exposes these symbols, but Tauri's bundler
-chain (`cargo tauri build` → codesign → notarytool) sometimes hits
-SDK-header drift on recent macOS releases; the supported answer is
-**full Xcode** for desktop-app contributors:
-
-```bash
-# 1. Install Xcode. Recent macOS releases (26.x) ship a CLT bundle
-#    whose clang and SDK don't agree with each other — cc-rs-driven
-#    builds can fail with `__kernel_ptr_semantics` / `__sized_by` /
-#    `fixpt_t` parse errors. Full Xcode bundles a matched clang/SDK.
-mas install 497799835                                   # `brew install mas` first
-# or download Xcode from https://developer.apple.com/xcode/
-
-# 2. Accept the Xcode license + finish post-install.
-sudo xcodebuild -license accept
-
-# 3. Point xcode-select at Xcode.app, not CommandLineTools.
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
-# 4. Verify the SDK path lives inside Xcode.app.
-xcrun --sdk macosx --show-sdk-path
-# expect: /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-# NOT:    /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
-```
-
-We don't vendor an SDK as a workaround because Apple's EULA prohibits
-redistribution. The Bazel-native build path goes through
-`toolchains_llvm`'s hermetic clang on Linux/Windows; on macOS we
-defer to whatever clang `xcrun -find clang` resolves (Xcode or CLT).
-
-#### Linux (Tauri, Debian/Ubuntu)
-
-```bash
-sudo apt-get install -y \
-    libwebkit2gtk-4.1-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev \
-    libssl-dev \
-    patchelf
-
-# node is also required for the frontend (Vite + npm install). Bazel's
-# rules_nodejs ships a hermetic node for build steps, but `cargo tauri
-# dev`'s reload loop currently shells out to host `npm`. Install one:
-sudo apt-get install -y nodejs npm
-# or use nvm / fnm if you want a specific version
-```
-
-#### Linux (Tauri, Fedora/RHEL)
-
-```bash
-sudo dnf install -y \
-    webkit2gtk4.1-devel \
-    libappindicator-gtk3-devel \
-    librsvg2-devel \
-    openssl-devel \
-    patchelf \
-    nodejs npm
-```
-
-#### Windows (Tauri)
-
-WebView2 ships with Windows 11 and on Windows 10 via the Edge runtime.
-No extra installs beyond the base toolchain. Install Node.js separately
-if you want `npm` for the dev-server loop.
+- **macOS:** install **full Xcode** (not just CLT), accept the license
+  (`sudo xcodebuild -license accept`), and point `xcode-select` at
+  `Xcode.app`. Recent macOS releases (26.x) ship a CLT bundle whose
+  clang and SDK disagree, which breaks Tauri's bundler chain. Verify
+  with `xcrun --sdk macosx --show-sdk-path` — it must live inside
+  `Xcode.app`, not CommandLineTools.
+- **Linux (Debian/Ubuntu):** `apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev patchelf nodejs npm`.
+- **Linux (Fedora/RHEL):** `dnf install -y webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel openssl-devel patchelf nodejs npm`.
+- **Windows:** WebView2 ships with Windows 11 (Edge runtime on 10). Only Node.js is extra.
 
 ### Verify your setup
 
@@ -298,31 +186,11 @@ Bazel's `--config=release` / `--config=dev`.
 
 ### Architecture decisions: sqlite linking
 
-The SQLite validation/roundtrip cache lives in
-`crates/core/talkbank-cache` (the `talkbank_cache::CachePool` type,
-re-exported as `UnifiedCache`). It uses `sqlx::SqlitePool` via the
-`sqlx-sqlite/sqlite-unbundled` feature so it **links** against the
-host's libsqlite3 rather than compiling a bundled `sqlite3.c`. The
-unbundled path is what lets the macOS CLT 26.x SDK regression (broken
-parse of `<sys/sysctl.h>` etc. under cc-rs) not bite this codebase.
-
-**Who pulls in libsqlite3-sys:**
-
-  - chatter-cli, chatter-lsp, chatter-gui (via talkbank-cache) — yes
-  - talkbank-transform                                              — no
-  - batchalign-core, batchalign-engine, the wheel, the sidecar      — no
-  - batchalign-gui                                                  — no
-
-Batchalign has its own `redb`-backed cache
-(`crates/batchalign/batchalign-engine/src/cache.rs`) — a pure-Rust
-embedded KV store with no system-library dependency. The wheel / CLI
-/ sidecar therefore build on a host with no sqlite installed at all.
-
-If you ever need to remove sqlite from chatter too, the
-`sqlite-unbundled` feature in `crates/core/talkbank-cache/Cargo.toml`
-is the single switch — flipping it back to `sqlite` returns to the
-bundled `sqlite3.c` compile (which fails on CLT 26.x but is fine on
-Linux/Windows and works on macOS once Xcode is selected).
+Chatter's `talkbank-cache` links against host libsqlite3 via the
+`sqlx-sqlite/sqlite-unbundled` feature (sidesteps the macOS CLT 26.x
+bundled-`sqlite3.c` regression). Batchalign uses `redb` instead and
+needs no host sqlite. See `book/src/architecture/sqlite-linking.md`
+for the full rationale and switch-back instructions.
 
 ---
 
@@ -401,115 +269,35 @@ crate_universe re-resolves on the next Bazel invocation.
 ### Release a wheel
 
 `python/pyproject.toml [project].version` is the source of truth for
-the wheel version. The host-platform wheel is the only thing you build
-locally:
-
-```bash
-just batchalign wheel                                        # host-platform wheel (auto-regen if needed)
-```
-
-The artifact lands at `python/target/wheels/batchalign-<version>-cp312-cp312-<host-plat>.whl`.
-
-Cross-platform wheels and PyPI uploads are CI-only — there is no local
-cross-build recipe and no local publish recipe. The
-`.github/workflows/publish-pypi.yml` matrix fans out to one native
-runner per platform (macOS arm/x86, Linux x86/arm, Windows x86), then
-uploads via PyPI's OIDC trusted-publisher flow.
-
-To cut a real release:
-
-1. Bump `python/pyproject.toml [project].version`.
-2. Open a PR. The lockfile diff is auto-included on the next Bazel
-   invocation; commit it as part of the PR (CI re-runs the
-   `:requirements_test` drift gate and fails if you forgot).
-3. After merge, dispatch `publish-pypi.yml` from the Actions UI with the
-   new version as the input `tag` and `publish=true`.
+the wheel version. `just batchalign wheel` builds a host-platform
+wheel into `python/target/wheels/`. Cross-platform wheels and PyPI
+uploads are CI-only — see `book/src/operations/release-pipeline.md`
+for the full release flow.
 
 ### Troubleshooting: macOS SDK header errors
 
-The batchalign wheel / sidecar no longer transitively links sqlite,
-so the historical `libsqlite3-sys` failure mode is gone. SDK-header
-parse errors can still appear in two situations:
-
-```
-mach/arm/vm_types.h:104:44: error: expected ';' after top level declarator
-sys/sysctl.h:801:22: error: a parameter list without types is only allowed
-                            in a function definition  (on `__sized_by`)
-sys/event.h:257: error: missing ',' between enumerators (on `__deprecated_enum_msg`)
-```
-
-→ CommandLineTools 26.x ships a mismatched clang/SDK pair; any
-cc-rs-driven crate that includes those headers (rare in batchalign's
-wheel graph, but possible — `ring` is the usual suspect) will
-fail. Install full Xcode and select it
-(see [Desktop-GUI host prereqs → macOS](#macos-tauri) for the exact
-steps). Verify with:
-
-```bash
-xcrun --sdk macosx --show-sdk-path
-# must be inside Xcode.app, not CommandLineTools
-```
-
-The same fix applies when building chatter (`talkbank-cache` links
-libsqlite3, and any chatter contributor already needs `brew install
-sqlite` from [Chatter-only host prereqs](#chatter-only-host-prereqs)).
-
-Linux + Windows runners ship matched toolchains and are unaffected.
+If a cc-rs-driven crate fails with `__kernel_ptr_semantics` /
+`__sized_by` / `fixpt_t` / `__deprecated_enum_msg` parse errors against
+headers under `mach/`, `sys/sysctl.h`, or `sys/event.h`, you're hitting
+the CommandLineTools 26.x mismatched-clang/SDK bug. Install full Xcode
+and select it (see [Desktop-GUI host prereqs](#desktop-gui-host-prereqs));
+verify with `xcrun --sdk macosx --show-sdk-path`. Linux + Windows are
+unaffected.
 
 ### Hermeticity pins
 
-The maturin/wheel path uses tools outside Bazel's hermetic sandbox
-(cargo, host SDK). `bazel/python/hermeticity_guard.sh` asserts
-uv/maturin/python/rustc versions match the pins in `python/pyproject.toml
-[tool.batchalign.pinned_tools]` before any shell-out, and scrubs
-leak-prone env vars (`CFLAGS`, `LDFLAGS`, `DYLD_LIBRARY_PATH`,
-`RUSTFLAGS`, `OPENSSL_DIR`, etc.) so a shell with weird state can't
-silently produce a divergent wheel. Bumping a tool: update the pin in
-`pyproject.toml` AND in `MODULE.bazel` AND in `rust-toolchain.toml` in
-the same commit.
+The maturin/wheel path uses host-side tools (cargo, host SDK) that sit
+outside Bazel's sandbox. `bazel/python/hermeticity_guard.sh` asserts
+uv/maturin/python/rustc versions match the pins in
+`python/pyproject.toml [tool.batchalign.pinned_tools]` and scrubs
+leak-prone env vars before any shell-out. Bumping a tool means updating
+`pyproject.toml`, `MODULE.bazel`, AND `rust-toolchain.toml` in the same
+commit.
 
-#### Hermetic C toolchain (`toolchains_llvm`)
-
-`MODULE.bazel` registers `toolchains_llvm` to pin a specific LLVM/clang
-release. Every Bazel-driven C/C++ action uses that clang.
-
-The maturin escape scripts (`bazel/python/{maturin,pyapp}_build.sh`)
-pick the C toolchain by host OS:
-
-- **Linux / Windows:** resolve the toolchains_llvm clang/ar/ranlib out
-  of the sh_binary runfiles tree and export them as `CC` / `CXX` /
-  `AR` / `RANLIB` / `CARGO_TARGET_*_LINKER`. `/usr/bin/cc` is never
-  touched.
-- **macOS:** defer to whatever clang `xcrun -find clang` resolves
-  (Xcode or CommandLineTools — Apple ships the SDK and clang as a
-  matched pair inside each). `toolchains_llvm` 1.7.0 caps its
-  darwin-arm64 prebuilts at LLVM 17.0.6 (LLVM stopped publishing
-  arm64-apple-darwin prebuilts on llvm.org), so a hermetic clang
-  would be too old for current SDK headers. For the wheel and CLI
-  paths CLT is enough; full Xcode is only required for the Tauri
-  desktop apps, see [Desktop-GUI host prereqs](#desktop-gui-host-prereqs).
-
-A `BATCHALIGN_FORCE_DARWIN_SDK_WORKAROUND=1` escape hatch in the
-shell scripts re-enables the `-D__kernel_ptr_semantics=` CFLAGS
-workaround for cross-compile scenarios that target darwin from a
-non-darwin host; not needed for normal local builds.
-
-If a future contributor wants fully hermetic macOS builds (CI matrix,
-license-clean distribution, defense against the next CLT regression),
-the route is `llvm.sysroot()` pointing at an `http_archive` of a
-known-good `MacOSX*.sdk` tarball. We don't ship that today because
-Apple's EULA prohibits SDK redistribution.
-
-#### Profile selection: Bazel-driven, no env-var rituals
-
-`just batchalign wheel` / `sidecar` / `wheel-<platform>` recipes pass
-`-c opt` to `bazel run`, and the `sh_binary` `args` include the
-`$(COMPILATION_MODE)` make-variable. The shell scripts translate that to
-maturin's `--release` / dev profile. **Do not** prepend
-`MATURIN_PROFILE=release` or `PYAPP_PROFILE=release` to the recipe --
-Bazel already knows the mode, and re-encoding it in env vars duplicates
-the source of truth. `MATURIN_PROFILE` and `PYAPP_PROFILE` remain as
-escape hatches when the scripts are run outside Bazel.
+For the hermetic C toolchain (`toolchains_llvm`), macOS SDK fallout, and
+the Bazel-driven profile selection contract (no `MATURIN_PROFILE`
+rituals), see `book/src/architecture/hermeticity.md` and the auto-memory
+note `macos-xcode-hermeticity-gap`.
 
 ---
 
@@ -590,30 +378,12 @@ stderr (visible in the terminal that spawned `cargo tauri dev`).
 
 ### Release
 
-CLI + LSP ship as platform binaries on GitHub Releases; GUI ships as
-signed/notarized `.app`/`.msi`/`.AppImage` bundles via the (TODO)
-`publish-chatter.yml` + `publish-desktop.yml` workflows. Manual release
-until those land:
-
-```bash
-just chatter build                                                    # release builds
-cp bazel-bin/crates/chatter/chatter-cli/chatter chatter-$(uname -s)-$(uname -m)
-cp bazel-bin/crates/chatter/chatter-lsp/chatter-lsp chatter-lsp-$(uname -s)-$(uname -m)
-# upload to a GitHub Release draft
-
-just chatter gui                                                      # GUI bundle
-# bundle output at apps/chatter/chatter-gui/src-tauri/target/release/bundle/
-# sign + notarize per book/src/operations/code-signing-and-distribution.md
-```
-
-VS Code extension:
-
-```bash
-just vscode build
-just vscode package                                                    # produces .vsix
-# Manual upload to marketplace via `vsce publish` (configured token), or
-# dispatch the (TODO) publish-vscode.yml workflow.
-```
+CLI + LSP ship as platform binaries on GitHub Releases; the GUI ships
+as signed/notarized `.app`/`.msi`/`.AppImage` bundles. Until the
+`publish-chatter.yml` / `publish-desktop.yml` / `publish-vscode.yml`
+workflows land, releases are manual via `just chatter build`,
+`just chatter gui`, and `just vscode package`. Signing/notarization
+steps live in `book/src/operations/code-signing-and-distribution.md`.
 
 ### Versioning
 
@@ -727,95 +497,16 @@ on a tag like `crates-v<x.y.z>`. Not done yet.
 
 ## How this repo is built (overview)
 
-**Bazel is the single entry point.** It orchestrates each ecosystem's
-canonical tooling rather than replacing it.
+Bazel is the single entry point; it orchestrates each ecosystem's
+canonical tooling (`rules_rust` + `crate_universe`, `rules_python` +
+`rules_uv`, maturin for release wheels, `cargo tauri build` for Tauri
+bundles, `npm`/`vsce` for the VS Code extension, `tree-sitter generate`
+for the grammar, `mdbook` for the book). Cargo still works at the
+workspace root as an escape hatch.
 
-| Surface | Tool Bazel calls | Why |
-|---|---|---|
-| Rust workspace | `rules_rust` + `crate_universe` | Native Bazel-cached Rust builds. |
-| Pyo3 cdylib | `rust_shared_library` + `pyo3-config.txt` | Hand-rolled abi3 path; no `rules_rust_pyo3` toolchain dance (it requires a newer Bazel). |
-| Python deps | `rules_uv` `pip_compile` → `rules_python` `pip.parse` | Lockfile drift gated by `:requirements_test`. |
-| Python execution | `rules_python` `py_library`/`py_binary`/`py_test` | Bazel-native; `_core.so` carried via runfiles `data`. |
-| Python wheel (release) | `maturin` via shell wrapper | No Bazel ruleset packages PyO3 wheels (manylinux, abi3, universal2). Maturin is canonical here. |
-| VS Code extension | `npm` + `vsce` via shell wrappers | `vsce` is npm-only. |
-| Tauri desktop bundles | `cargo tauri build` via shell wrapper | Tauri's bundling chain (codesign, notarytool, signtool) isn't modelled in Bazel. |
-| tree-sitter grammar | `tree-sitter generate` via shell wrapper | Multi-language bindings; only the Rust binding compiles through `cargo_build_script`. |
-| mdBook | `mdbook` via shell wrapper | Hermetic `mdbook` binary fetched via multitool. |
-
-Cargo still works at the workspace root (`cargo build`, `cargo nextest
-run`, `cargo run -p chatter-cli -- ...`). Bazel is canonical; Cargo is
-the escape hatch.
-
----
-
-## `bazel run` reference
-
-### Chatter
-
-```bash
-bazel run //crates/chatter/chatter-cli:chatter           # `chatter` CLI
-bazel run //crates/chatter/chatter-lsp:chatter-lsp        # Language Server
-bazel run //apps/chatter/chatter-gui/src-tauri:bundle     # cargo tauri build wrapper
-```
-
-### Batchalign
-
-```bash
-bazel run //python/batchalign                             # `batchalign3` CLI (py_binary)
-bazel run //python/batchalign:wheel                       # maturin build → python/target/wheels/
-bazel run //python/batchalign:lint                        # mypy (+ ruff)
-bazel test //python/batchalign:pytest                     # pytest via py_test
-bazel run //python:requirements                           # regenerate requirements.lock.txt
-```
-
-### Spec generators
-
-```bash
-bazel run //crates/spec/talkbank-spec-testgen:gen_tree_sitter_tests
-bazel run //crates/spec/talkbank-spec-testgen:gen_rust_tests
-bazel run //crates/spec/talkbank-spec-testgen:gen_validation_tests
-bazel run //crates/spec/talkbank-spec-testgen:gen_error_docs
-bazel run //crates/spec/talkbank-spec-testgen:validate_spec
-bazel run //crates/spec/talkbank-spec-testgen:coverage
-bazel run //crates/spec/talkbank-spec-testrun:validate_error_specs
-bazel run //crates/spec/talkbank-spec-testrun:extract_corpus_candidates
-```
-
-### Workspace dev tooling
-
-```bash
-bazel run //crates/xtask:xtask -- <subcommand>
-bazel run //bazel/sqlx:prepare                          # after any sqlx::query! edit
-```
-
-Lockfile maintenance (`Cargo.lock`, `python/requirements.lock.txt`,
-`python/uv.lock`) is handled automatically by `tools/bazel` on every
-Bazel invocation — there is no separate command. The
-`//bazel/cargo:repin` target still exists as a manual escape hatch but
-should not appear in any contributor workflow.
-
-### Docs
-
-```bash
-bazel run //book:serve                                  # preview at http://localhost:3000
-bazel run //book:html                                   # static HTML at book/build/html/
-bazel run //book:linkcheck                              # mdbook build + linkcheck preprocessor
-```
-
-### VS Code extension
-
-```bash
-bazel run //apps/vscode-extension:build
-bazel run //apps/vscode-extension:package               # produces .vsix
-bazel run //apps/vscode-extension:test
-```
-
-### Tree-sitter grammar (Rust binding only via Bazel)
-
-```bash
-bazel build //grammar:tree_sitter_talkbank
-bazel test  //grammar:tree_sitter_talkbank_unit_test
-```
+For the full surface-by-surface table and the canonical `bazel run`
+target list (chatter, batchalign, spec generators, docs, VS Code,
+grammar, dev tooling), see `book/src/contributing/bazel-workflows.md`.
 
 ---
 
@@ -888,21 +579,11 @@ flow. There is no local publish path.
 
 ## GitHub Actions (namespace-scoped)
 
-`.github/workflows/` is split by surface. Each workflow only runs on
-changes affecting its surface (path filters do the gating):
-
-| Workflow | When it runs | What it does |
-|---|---|---|
-| `bazel-rust.yml` | crates/, grammar/, Cargo.toml, MODULE.bazel | build + unit-test every Rust crate |
-| `bazel-python.yml` | python/, batchalign-{core,engine}/, talkbank-{model,parser,transform}/, bazel/python/ | `:requirements_test` drift gate + Bazel-native cdylib + py_library + py_test + CLI smoke |
-| `bazel-wheels.yml` | python/, crates/batchalign/, etc. (any path that affects the wheel) | 5-platform wheel matrix on every PR (artifact upload only, no publish); installs wheel into a fresh venv and verifies `import batchalign._core` |
-| `bazel-typescript.yml` | apps/vscode-extension/, schemas/ | extension build + .vsix package |
-| `bazel-grammar.yml` | grammar/, resources/spec/symbols/ | Rust binding + regen-drift check |
-| `bazel-docs.yml` | book/ | mdbook build + linkcheck |
-| `bazel-build-all.yml` | cron (06:00 UTC) + manual | `bazel build //...` + `bazel test //...` |
-| `publish-pypi.yml` | manual | batchalign wheel matrix (macOS arm/x86, Linux x86/arm, Windows x86) → PyPI (OIDC trusted-publisher) |
-
-All workflows use `bazel-contrib/setup-bazel@0.15.0` for Bazel + cache.
+`.github/workflows/` is split by surface, path-filtered so each workflow
+only runs against changes affecting it (Rust, Python, wheels,
+TypeScript, grammar, docs, the nightly `bazel build //... && bazel test
+//...` job, and the manual PyPI publish). For the surface-by-surface
+table, see `book/src/operations/release-pipeline.md`.
 
 ---
 
@@ -937,6 +618,10 @@ Tier-by-tier deep dives:
 - `grammar/CLAUDE.md` — grammar change workflow
 - `resources/spec/CLAUDE.md` — spec system overview
 - `book/src/operations/release-pipeline.md` — full chain from edit → PyPI / Marketplace / GitHub Release
+
+> Note: the `crates/batchalign/tests/ml_golden/` regression-runner referenced
+> by some fixture READMEs and design docs is aspirational; it is being staged
+> on a private branch and is not yet present in the public tree.
 
 ---
 

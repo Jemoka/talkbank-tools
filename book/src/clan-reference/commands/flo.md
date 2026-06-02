@@ -23,7 +23,7 @@ Processing steps:
 
 1. Strips all header lines (no `@UTF8`, `@Begin`, `@End`, etc.)
 2. Adds a `%flo:` dependent tier to each utterance containing the simplified main line: just countable words plus the terminator
-3. Strips retrace targets (words/groups before `[/]`, `[//]`, `[///]`, `[/-]` — the four `RetraceKind` variants per `crates/talkbank-model/src/model/content/retrace.rs`)
+3. Strips retrace targets (words/groups before `[/]`, `[//]`, `[///]`, `[/-]` — the four `RetraceKind` variants per `crates/core/talkbank-model/src/model/content/retrace.rs`)
 4. Strips non-countable words (`xxx`/`yyy`/`www`, `0word`, `&~frag`, `&-um`)
 5. Strips events (`&=thing`) and pauses
 6. For replaced words (`[: form]`), uses the replacement (corrected form)

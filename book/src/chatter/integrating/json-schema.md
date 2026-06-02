@@ -145,7 +145,7 @@ cargo test --test generate_schema
 ```
 
 After changing the editor/server analyze contract in
-`crates/chatter-lsp/src/backend/contracts.rs`:
+`crates/chatter/chatter-lsp/src/backend/contracts.rs`:
 
 ```bash
 cd talkbank-tools
@@ -160,9 +160,9 @@ generated artifacts stay in sync.
 - `schemas/chat-file/chat-file.schema.json` — generated schema
 - `schemas/chat-file/analyze-command.schema.json` — generated `talkbank/analyze` contract schema
 - `apps/vscode-extension/src/test/fixtures/analyzeCommandPayload.json` — shared concrete analyze-command fixture
-- `crates/talkbank-transform/src/json.rs` — schema loading and validation
-- `crates/talkbank-model/src/model/` — Rust data model
-- `crates/chatter-lsp/src/backend/contracts.rs` — Rust-owned editor/server transport contracts
+- `crates/core/talkbank-transform/src/json.rs` — schema loading and validation
+- `crates/core/talkbank-model/src/model/` — Rust data model
+- `crates/chatter/chatter-lsp/src/backend/contracts.rs` — Rust-owned editor/server transport contracts
 - `tests/generate_schema/` — shared schema generation helpers
 - `tests/generate_analyze_command_schema.rs` — analyze-contract schema generation test
 - `tests/validate_analyze_command_fixture.rs` — fixture/schema validation test for the editor/server contract

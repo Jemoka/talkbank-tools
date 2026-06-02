@@ -1,7 +1,7 @@
 # Versioning Policy
 
 **Status:** Current
-**Last updated:** 2026-04-29 10:26 EDT
+**Last updated:** 2026-06-01 00:50 PDT
 
 This repository ships multiple product surfaces with different audiences and
 different release mechanics. A version field is only authoritative for the
@@ -18,7 +18,7 @@ source below wins for public communication and release policy.
 | Batchalign runtime banner metadata | Internal | `batchalign/version` | `0.1.0` | Runtime metadata only; intentionally mirrors the public Batchalign preview version, but it is not a release-contract source. |
 | Batchalign Rust/PyO3 build crates (`crates/batchalign-*`, `pyo3/`) | Internal | Their local `Cargo.toml` manifests, kept in lockstep with `pyproject.toml` | `0.1.0` | Internal build metadata only. These crates are unpublished (`publish = false`) and are not independent public Rust APIs. |
 | VS Code extension | Public preview | `apps/vscode-extension/package.json` `version` | `0.1.0` | Independent Marketplace release line. |
-| Experimental desktop shells | Experimental | `desktop/package.json`, `desktop/src-tauri/Cargo.toml`, `apps/batchalign/dashboard-desktop/package.json`, `apps/batchalign/dashboard-desktop/src-tauri/Cargo.toml` | `0.1.0` | Experimental only; not part of the public release contract. |
+| Experimental desktop shells | Experimental | `apps/chatter/chatter-gui/package.json`, `apps/chatter/chatter-gui/src-tauri/Cargo.toml`, `apps/batchalign/batchalign-gui/package.json`, `apps/batchalign/batchalign-gui/src-tauri/Cargo.toml` | `0.1.0` | Experimental only; not part of the public release contract. |
 
 ## Rules
 

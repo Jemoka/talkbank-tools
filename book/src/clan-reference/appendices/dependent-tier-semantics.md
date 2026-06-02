@@ -4,7 +4,7 @@
 **Last updated:** 2026-05-11 23:50 EDT
 
 Classification of the 31 `DependentTier` variants
-(crates/talkbank-model/src/model/dependent_tier/types.rs) by
+(crates/core/talkbank-model/src/model/dependent_tier/types.rs) by
 structural complexity and how commands access them.
 
 ## Fully Structured (10 tiers)

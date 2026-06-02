@@ -1,82 +1,98 @@
 # Releasing
 
 **Status:** Current
-**Last updated:** 2026-04-29 10:16 EDT
+**Last modified:** 2026-06-01 01:05 PDT
 
-The extension is published as five platform-specific VSIX files via the
-`VS Code Extension Release (Preview)` workflow
-(`.github/workflows/vscode-release.yml`). Each VSIX bundles a prebuilt
-`chatter-lsp` for its target platform at
-`extension/server/chatter-lsp[.exe]`, so end users never need a Rust
-toolchain or a PATH binary — the extension finds the bundled server
-automatically (see [LSP Binary Discovery](../troubleshooting/lsp.md)). This
-workflow creates preview GitHub Releases only; Marketplace publishing is
-explicitly out of scope for the first public release.
+The VS Code extension is currently **published manually**. There is no
+release workflow in `.github/workflows/`; the only CI for the extension
+is `bazel-typescript.yml`, which on every PR builds, tests, and
+packages a single-platform `.vsix` and uploads it as a workflow
+artifact (`vscode-extension-vsix`).
 
-## Release channel policy
+An automated multi-platform release workflow (with a bundled
+`chatter-lsp` per target, GitHub Release upload, and optional
+marketplace push) is a planned follow-up. Until then, the process below
+is the source of truth.
 
-- **Current public channel:** GitHub Releases with platform-specific VSIX files.
-- **Not part of the first release:** VS Code Marketplace publish/rollout.
-- **Operator rule:** if workflow/docs/release notes say "install from VSIX",
-  they must point at the `vscode-vX.Y.Z` GitHub release assets, not a
-  Marketplace listing.
+## CI coverage today
 
-## Cutting a release
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `bazel-typescript.yml` (`vscode-extension` job) | push/PR on `apps/vscode-extension/**` or `schemas/**` | `bazel run //apps/vscode-extension:build`, `:test`, `:package`; uploads `.vsix` as workflow artifact |
 
-1. Bump `apps/vscode-extension/package.json` version.
-2. Commit and push to `main`.
-3. Trigger the workflow:
+There is **no** `vscode-release.yml`. Any reference to a 5-platform
+matrix or `vscode-vX.Y.Z` tagging workflow is aspirational.
+
+## Cutting a release (manual)
+
+1. Bump `apps/vscode-extension/package.json` version (semver).
+2. Open a PR with the version bump; merge once green.
+3. On a maintainer workstation, from the repo root:
    ```bash
-   gh workflow run vscode-release.yml -f version=X.Y.Z
+   just vscode build
+   just vscode package      # produces apps/vscode-extension/*.vsix
    ```
-4. Wait for all five matrix jobs to succeed:
-   - `darwin-arm64`
-   - `darwin-x64`
-   - `linux-x64`
-   - `linux-arm64`
-   - `win32-x64`
-5. The workflow creates a preview GitHub Release tagged `vscode-vX.Y.Z` with
-   the five VSIX files attached.
+   Or grab the `vscode-extension-vsix` artifact from the
+   `bazel-typescript.yml` run on the merge commit.
+4. Publish to the Visual Studio Marketplace using the operator's PAT:
+   ```bash
+   cd apps/vscode-extension
+   npx vsce publish --packagePath talkbank-chat-<version>.vsix
+   ```
+   The PAT is held by the operator, not in repo secrets. Create at
+   <https://dev.azure.com/_usersSettings/tokens> with scope
+   "Marketplace > Manage".
+5. Optionally attach the `.vsix` to a manually-created GitHub Release
+   for users who prefer side-loading.
 
-## Local packaging (single platform)
+## Local packaging for testing
 
-For a manual build targeting your current host:
+Same flow as a release build, just skip the marketplace step:
 
 ```bash
-cd <talkbank-tools-root>
-cargo build --release -p chatter-lsp
-cd vscode
-node scripts/prepare-server.mjs --source ../target/release/chatter-lsp
-npm run package:darwin-arm64   # or darwin-x64, linux-x64, linux-arm64, win32-x64
+just vscode build
+just vscode package
+code --install-extension apps/vscode-extension/talkbank-chat-<version>.vsix
 ```
 
-`prepare-server.mjs` stages the binary into `apps/vscode-extension/server/` with the
-correct name (`chatter-lsp` on Unix, `chatter-lsp.exe` on Windows) so
-`vsce package` bundles it at `<extension>/server/` inside the VSIX.
+If you want the extension to talk to a locally-built `chatter-lsp`,
+make sure that binary is on your `PATH` (e.g. `bazel build
+//crates/chatter/chatter-lsp:chatter-lsp` then point `PATH` at
+`bazel-bin/...`). Today's `.vsix` does **not** bundle a server binary;
+the extension finds `chatter-lsp` via discovery order documented in
+[LSP Binary Discovery](../troubleshooting/lsp.md).
 
-## Users installing a VSIX
+## Side-loading a `.vsix` (users)
 
-1. Go to <https://github.com/TalkBank/talkbank-tools/releases>.
-2. Open the `vscode-vX.Y.Z` release entry and download the VSIX matching the
-   user's platform.
-3. Install from the command line:
-   ```bash
-   code --install-extension talkbank-chat-<platform>.vsix
-   ```
+```bash
+code --install-extension talkbank-chat-<version>.vsix
+```
 
-No Rust toolchain, no PATH setup, no extra dependencies.
+Users still need `chatter-lsp` on `PATH`. Bundling a per-platform
+`chatter-lsp` into the `.vsix` is part of the planned release-workflow
+follow-up.
 
-## Version number discipline
+## Version-number discipline
 
-`apps/vscode-extension/package.json` is the single source of truth for the extension
-version. Do not hand-edit the `extension/server/chatter-lsp` binary
-name or the tag format — the CI workflow derives both from `version`.
-For a release candidate, append a pre-release identifier (`0.X.Y-rc.1`) per
-semver. The workflow still publishes to the `vscode-vX.Y.Z` GitHub prerelease
-tag; do not add Marketplace-specific release-channel assumptions.
+`apps/vscode-extension/package.json` is the single source of truth.
+Pre-release identifiers (`0.X.Y-rc.1`) are allowed per semver. Do not
+hand-roll release tags; once an automated workflow exists, it will own
+the tag format.
+
+## Planned follow-ups
+
+- A `bazel-vscode-release.yml` (or similar) that:
+  - builds `chatter-lsp` per target platform (darwin-arm64,
+    darwin-x64, linux-x64, linux-arm64, win32-x64),
+  - bundles the matching binary into a per-platform `.vsix`,
+  - uploads `.vsix` files to a `vscode-vX.Y.Z` GitHub Release,
+  - optionally runs `vsce publish` using a repo-held PAT secret.
+- Signed `chatter-lsp` binaries inside each `.vsix` (see
+  [Code Signing and Distribution](../../operations/code-signing-and-distribution.md)).
 
 ## Related chapters
 
 - [Installation](../getting-started/installation.md) — user-facing install
 - [Troubleshooting: LSP Connection](../troubleshooting/lsp.md) — binary discovery order
 - [Testing](testing.md) — the test gates a release must pass
+- [Release Pipeline](../../operations/release-pipeline.md) — repo-wide artifact map

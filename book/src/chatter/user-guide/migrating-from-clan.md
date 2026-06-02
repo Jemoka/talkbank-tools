@@ -40,9 +40,9 @@ The table below is the complete list of legacy flags the rewriter currently hand
 | `-glabel` | `--exclude-gem label` | Skip a named gem |
 | `+z25-125` | `--range 25-125` | Utterance index range |
 | `+r6` | `--include-retracings` | Include retraced material (MLU, FREQ) |
-| ~~`+dN`~~ | ~~`--display-mode N`~~ | Numeric display mode — **currently non-functional**: the rewriter at `crates/clan-core/src/clan_args.rs:101` produces `--display-mode`, but no `clap` field consumes it. Per-command N tables are CLAN-historical and need source-grounded specs before the flag can be honoured; tracked in `docs/superpowers/plans/2026-05-11-clan-rewriter-honor-three-flags.md` Phase 3. |
-| ~~`+k`~~ | ~~`--case-sensitive`~~ | Case-sensitive matching — **currently non-functional**: the rewriter at `crates/clan-core/src/clan_args.rs:104` produces `--case-sensitive`, but no `clap` field consumes it, so the flag fails parsing. Word matching is case-insensitive today. |
-| ~~`+fEXT`~~ | ~~`--output-ext EXT`~~ | Output file extension — **currently non-functional**: the rewriter at `crates/clan-core/src/clan_args.rs:107` produces `--output-ext`, but no `clap` field consumes it. Phase 2 of the rewriter-honor plan adds the clap field with `conflicts_with -o`. |
+| ~~`+dN`~~ | ~~`--display-mode N`~~ | Numeric display mode — **currently non-functional**: the rewriter at `crates/clan/clan-core/src/clan_args.rs:101` produces `--display-mode`, but no `clap` field consumes it. Per-command N tables are CLAN-historical and need source-grounded specs before the flag can be honoured; tracked in `docs/superpowers/plans/2026-05-11-clan-rewriter-honor-three-flags.md` Phase 3. |
+| ~~`+k`~~ | ~~`--case-sensitive`~~ | Case-sensitive matching — **currently non-functional**: the rewriter at `crates/clan/clan-core/src/clan_args.rs:104` produces `--case-sensitive`, but no `clap` field consumes it, so the flag fails parsing. Word matching is case-insensitive today. |
+| ~~`+fEXT`~~ | ~~`--output-ext EXT`~~ | Output file extension — **currently non-functional**: the rewriter at `crates/clan/clan-core/src/clan_args.rs:107` produces `--output-ext`, but no `clap` field consumes it. Phase 2 of the rewriter-honor plan adds the clap field with `conflicts_with -o`. |
 | `+wN` | `--context-after N` | KWAL trailing-context lines |
 | `-wN` | `--context-before N` | KWAL leading-context lines |
 | `+u` | (no-op) | Merge speakers — default behaviour, dropped silently |

@@ -21,7 +21,7 @@ chatter clan play2chat input.play
 | `-o`, `--output` | stdout | Output CHAT file path |
 
 The corpus name in `@ID` headers is hardcoded to `"play_corpus"`
-(`crates/clan-core/src/converters/play2chat.rs:92`); there is
+(`crates/clan/clan-core/src/converters/play2chat.rs:92`); there is
 no CLI flag to override it. If you need a different corpus name,
 post-edit the generated `@ID` lines or call
 `play_to_chat_with_options()` from Rust.

@@ -1,413 +1,251 @@
 # Release Pipeline
 
-**Last modified:** 2026-05-29 10:58 PDT
+**Last modified:** 2026-06-01 01:05 PDT
 
-How a code change becomes a published artifact. Five surfaces ship from
-this monorepo, each with its own chain:
+How a code change becomes a published artifact, **as the repo actually
+ships today**. Several products emerge from this monorepo; only one
+(`batchalign3` on PyPI) has automated publishing wired up. The rest are
+either workflow-artifact-only or hand-published. This page is a map of
+that reality, not a wishlist.
 
-| Surface | Artifact | Distribution channel | Workflow |
-|---|---|---|---|
-| `batchalign3` Python wheel | `.whl` (Linux x86_64 + arm64, macOS x86_64 + arm64) | PyPI | `publish-pypi.yml` |
-| `chatter` + `chatter-lsp` binaries | static Rust binaries, all 4 desktop OSes | GitHub Releases | `publish-chatter.yml` |
-| VS Code extension | `.vsix` | VS Code Marketplace | `publish-vscode.yml` |
-| Desktop apps (chatter-gui, batchalign-gui-dashboard) | `.app`/`.dmg`/`.msi`/AppImage | GitHub Releases | `publish-desktop.yml` |
-| mdBook documentation | static HTML site | GitHub Pages (or wherever you wire it) | `bazel-docs.yml` |
+## Workflows that exist
 
-Each chain is fully described below — what each step does, what env
-vars or secrets it consumes, what the failure modes are, and how to
-recover.
+Every CI workflow under `.github/workflows/` is Bazel-driven:
 
----
+| Workflow file | Triggers | Purpose |
+|---|---|---|
+| `bazel-rust.yml` | push/PR on Rust paths | Build + test all Rust tiers (ubuntu + macos-14) |
+| `bazel-python.yml` | push/PR on Python / batchalign-engine paths | Build cdylib + `py_test` + CLI smoke (ubuntu + macos-14) |
+| `bazel-grammar.yml` | push/PR on `grammar/**`, symbols | Rust binding build + generated-artifact drift check |
+| `bazel-typescript.yml` | push/PR on `apps/vscode-extension/**`, schemas | Build / test / package the VS Code extension (uploads `.vsix` artifact) |
+| `bazel-docs.yml` | push/PR on `book/**` | `bazel run //book:html` + `//book:linkcheck`; uploads `book-html` |
+| `bazel-tauri-batchalign.yml` | push/PR/dispatch on Batchalign GUI paths | PR-only smoke (ubuntu); on `main` + dispatch, matrix bundle of the Batchalign desktop app (macOS arm64, macOS x86_64, Linux x86_64) |
+| `bazel-wheels.yml` | push/PR on wheel-affecting paths | Multi-platform wheel build + abi3 smoke (4-cell matrix); artifact-only |
+| `bazel-build-all.yml` | nightly cron + dispatch | Exhaustive `bazel build //...` + `bazel test //...` on ubuntu-latest and macos-14 |
+| `publish-pypi.yml` | `workflow_dispatch` only | Build wheels via Bazel + maturin and upload to PyPI via OIDC trusted publisher |
 
-## The contract
+Everything else (chatter binary release, VS Code Marketplace push,
+desktop bundle distribution, code signing) is **not automated yet**.
+Where contributors and operators need to ship those today, the process
+is manual; the gaps are listed at the bottom of this page.
 
-Every release artifact is built by **Bazel** (which calls the
-ecosystem-native tool — maturin, cargo, vite, vsce, cargo tauri, mdbook).
-Every release artifact is **published** by a workflow that:
-
-1. Runs Bazel for the build half (hermetic, cached, identical to local dev).
-2. Calls the publish API directly for the push half (PyPI, Marketplace,
-   GitHub Releases) using secrets from the appropriate environment.
-
-Publish APIs cannot be Bazelized:
-
-- **PyPI** wants twine + OIDC trusted-publisher tokens.
-- **VS Code Marketplace** wants `vsce` + a Personal Access Token.
-- **GitHub Releases** wants `gh` or `softprops/action-gh-release` +
-  `${{ secrets.GITHUB_TOKEN }}`.
-- **Code signing** (macOS notarization, Windows Authenticode) needs
-  signing certificates protected at the workflow level.
-
-So every chain is: `bazel build` (deterministic, cached) → `publish API
-call` (workflow-only, secret-bearing).
-
----
-
-## 1. `batchalign3` Python wheel → PyPI
+## Products and how each ships today
 
 ```mermaid
-flowchart LR
-    A[edit python/ or batchalign-pyo3/]
-    A --> B[bazel run //python/batchalign:develop\n→ maturin develop]
-    B --> C[bazel run //python/batchalign:test\n+ //python/batchalign:lint]
-    C --> D[git push → CI]
-    D --> E[bazel-python.yml\nfast PR check]
-    D --> F[workflow_dispatch publish-pypi.yml]
-    F --> G[bazel run //python/batchalign:wheel\non Linux, macOS x86, macOS arm64]
-    G --> H[upload-artifact .whl per platform]
-    H --> I[pypa/gh-action-pypi-publish\n(OIDC trusted-publisher)]
-    I --> J[(PyPI)]
+flowchart TD
+    subgraph CI["CI / nightly"]
+        A1["bazel-rust.yml<br/>(ubuntu + macos-14)"]
+        A2["bazel-python.yml<br/>(ubuntu + macos-14)"]
+        A3["bazel-grammar.yml"]
+        A4["bazel-typescript.yml"]
+        A5["bazel-tauri-batchalign.yml<br/>smoke + bundle matrix"]
+        A6["bazel-wheels.yml<br/>(4-platform matrix)"]
+        A7["bazel-docs.yml"]
+        A8["bazel-build-all.yml<br/>(nightly cron 06:00 UTC)"]
+    end
+
+    subgraph PUB["Publish surfaces"]
+        P1["publish-pypi.yml<br/>(manual dispatch)"]
+        P2["GitHub workflow artifacts<br/>(no release publishing)"]
+        P3["Manual: vsce publish<br/>(operator's workstation)"]
+    end
+
+    subgraph PROD["Products"]
+        R1["batchalign3 wheel<br/>→ PyPI"]
+        R2["Batchalign desktop bundle<br/>(unsigned .app/.dmg/AppImage)"]
+        R3["VS Code extension .vsix"]
+        R4["chatter CLI / chatter-lsp"]
+        R5["chatter desktop GUI"]
+    end
+
+    A2 --> P1
+    A6 --> P1
+    P1 --> R1
+    A5 --> P2
+    P2 --> R2
+    A4 --> P2
+    P2 --> R3
+    R3 -.->|"manual today"| P3
+    A1 --> R4
+    A8 --> R4
+    A8 --> R5
 ```
 
-**Local iteration:**
+Verified against `.github/workflows/` on 2026-06-01.
+
+### 1. `batchalign3` Python wheel → PyPI
+
+**Build path in CI:** `bazel-python.yml` runs on every PR touching
+Python / batchalign-engine. It builds the cdylib (`_core_so`), runs
+`py_test`, and does a `py_binary --help` smoke. `bazel-wheels.yml`
+additionally builds the wheel on a 4-cell matrix (macos-14, macos-13,
+ubuntu-latest, ubuntu-24.04-arm) and smoke-installs it under Python
+3.10 and 3.12 to prove the `cp310-abi3` tag works.
+
+**Publish path:** `publish-pypi.yml` is the only publish workflow in
+the repo and is `workflow_dispatch` only.
+
+1. Operator dispatches with inputs `tag` (must match
+   `python/pyproject.toml [project].version`) and `publish` (boolean).
+2. `verify-version` job asserts the version string matches.
+3. `build` matrix (macOS arm64, macOS x86_64, Linux x86_64, Linux
+   aarch64, Windows x86_64) runs `bazel run -c opt //python/batchalign:wheel`
+   on each runner and uploads `.whl` artifacts. The wheel is built via
+   maturin (sole reader of `pyproject.toml` for the platform-tagging
+   matrix); the day-to-day Bazel `py_library` path uses `pyo3` directly,
+   not maturin.
+4. If `publish=true`, the `publish` job downloads all artifacts and
+   runs `pypa/gh-action-pypi-publish` with `id-token: write` (OIDC
+   trusted publisher; no API token in the repo).
+
+**Local wheel build:** `bazel run -c opt //python/batchalign:wheel`
+lands the wheel in `python/target/wheels/`.
+
+### 2. Batchalign desktop GUI → workflow artifacts (unsigned)
+
+**Build path in CI:** `bazel-tauri-batchalign.yml`. Two jobs:
+
+- `smoke` runs on every PR (ubuntu-latest): builds the frontend
+  filegroup and runs `bazel test //apps/batchalign/batchalign-gui:test_openapi_freshness`.
+- `bundle` runs on pushes to `main` and on `workflow_dispatch` only.
+  Matrix:
+  - `macos-14` → `aarch64-apple-darwin`
+  - `macos-13` → `x86_64-apple-darwin`
+  - `ubuntu-latest` → `x86_64-unknown-linux-gnu`
+
+  Each cell builds the sidecar (`bazel build
+  //python/batchalign:sidecar`) then runs `bazel run
+  //apps/batchalign/batchalign-gui/src-tauri:bundle -- --target <triple>`.
+  Bundles upload as workflow artifacts (`batchalign-<target>`),
+  retention 14 days.
+
+**Windows is not built.** The bundle matrix has a `windows-latest` row
+commented out: `tools/bazel` is a bash wrapper that bazelisk rejects on
+PowerShell hosts. Re-enabling requires a portable wrapper.
+
+**Publishing:** there is no GitHub Release publishing step. To get a
+bundle to a tester, an operator downloads the workflow artifact and
+hands it over directly.
+
+**Signing:** bundles are unsigned. See
+[code-signing-and-distribution.md](./code-signing-and-distribution.md).
+
+### 3. VS Code extension → manual marketplace publish
+
+**Build path in CI:** `bazel-typescript.yml` runs on every PR touching
+`apps/vscode-extension/**` or `schemas/**`. It runs `bazel run
+//apps/vscode-extension:build`, `:test`, and `:package` on ubuntu-latest
+and uploads the resulting `.vsix` as a workflow artifact
+(`vscode-extension-vsix`).
+
+**Publishing is manual today.** There is no `publish-vscode.yml` or
+equivalent in the repo. To publish a release:
+
+1. Bump `apps/vscode-extension/package.json` version on `main`.
+2. On a maintainer workstation, `just vscode build && just vscode package`
+   (or download the `vscode-extension-vsix` artifact from the matching
+   CI run).
+3. `npx vsce publish --packagePath <vsix>` using a marketplace PAT held
+   by the operator.
+
+An automated release workflow (cross-platform `.vsix` matrix with
+bundled `chatter-lsp`, GitHub Release upload, optional marketplace
+push) is a planned follow-up. See
+[`vscode/developer/releasing.md`](../vscode/developer/releasing.md) for
+the current step-by-step.
+
+### 4. `chatter` CLI + `chatter-lsp` → no release workflow
+
+`bazel-rust.yml` builds and tests these on every PR
+(`//crates/chatter/...`). `bazel-build-all.yml` re-builds them
+exhaustively each night. **There is no workflow that publishes binaries
+to a GitHub Release.** Users today install from source:
 
 ```bash
-bazel run //python/batchalign:develop    # editable install — rebuilds the PyO3 .so
-bazel run //python/batchalign:test       # pytest
-bazel run //python/batchalign:lint       # mypy
+bazel build //crates/chatter/chatter-cli:chatter
+# or
+cargo install --path crates/chatter/chatter-cli
 ```
 
-**Building a release wheel locally:**
+A `chatter` binary release workflow is a follow-up.
 
-```bash
-bazel run //python/batchalign:wheel
-ls python/target/wheels/            # batchalign3-0.1.0-py3-cp312-<plat>.whl
-```
+### 5. Chatter desktop GUI → nightly only
 
-The wheel is built by `maturin build --release --manifest-path
-crates/batchalign/batchalign-pyo3/Cargo.toml --out python/target/wheels`.
-The build script is `build/python/maturin_build.sh`, invoked by Bazel
-with `uv` passed as `$1` from `@multitool//tools/uv`.
+`apps/chatter/chatter-gui` has **no dedicated CI workflow**. The only
+coverage today is the nightly `bazel-build-all.yml`, which builds and
+tests everything but does not produce or upload a Tauri bundle.
 
-**Publishing to PyPI (`publish-pypi.yml`):**
+A dedicated `bazel-tauri-chatter.yml` modelled on the Batchalign one is
+a follow-up.
 
-1. **Inputs:** `tag` (wheel version, e.g. `0.1.5`), `publish` (boolean
-   — set false for a dry-run that only uploads artifacts).
-2. **Build matrix:** runs `bazel run //python/batchalign:wheel` on
-   `ubuntu-latest`, `macos-13`, `macos-14` in parallel. Each produces
-   a platform-tagged wheel.
-3. **Artifact upload:** each wheel becomes a workflow artifact
-   (`batchalign3-wheel-<os>`).
-4. **Publish job:** only runs when `publish=true`. Downloads all
-   wheels into `dist/`, then `pypa/gh-action-pypi-publish` uploads via
-   PyPI's OIDC trusted-publisher (no API token; identity is proven via
-   GitHub OIDC).
+### 6. mdBook documentation
 
-**Trusted-publisher setup (one-time on PyPI):** configure the project
-at <https://pypi.org/manage/project/batchalign3/settings/publishing/>
-with `TalkBank/talkbank-tools` as the publisher and `publish-pypi.yml`
-as the workflow filename.
+`bazel-docs.yml` builds the book and runs the link checker on every PR
+touching `book/**` or `bazel/book/**`, and uploads the HTML as a
+`book-html` artifact. There is no GitHub Pages deploy step yet;
+adding one is a one-line change (e.g.
+`peaceiris/actions-gh-pages` consuming the artifact).
 
-**Failure modes:**
+## Triggers, in one table
 
-- **Maturin build fails locally:** check `uv` is installed (Bazel
-  fetches a hermetic copy via multitool, but `python/uv.lock` must
-  also be in sync — run `cd python && uv lock` if pyproject.toml
-  changed).
-- **CI build passes on x86 but fails on arm64:** likely a torch /
-  pyannote.audio install issue; check the macos-14 logs.
-- **PyPI upload fails with "already exists":** PyPI is immutable;
-  bump the version in `python/pyproject.toml` and re-run.
-- **OIDC token mismatch:** the workflow file path or repo name in
-  PyPI's trusted-publisher config drifted; reset on the PyPI side.
+| Workflow | Push to main | PR | Cron | Dispatch |
+|---|---|---|---|---|
+| `bazel-rust.yml` | yes (Rust paths) | yes (Rust paths) | — | — |
+| `bazel-python.yml` | yes (Py / engine paths) | yes | — | — |
+| `bazel-grammar.yml` | yes (grammar paths) | yes | — | — |
+| `bazel-typescript.yml` | yes | yes | — | — |
+| `bazel-tauri-batchalign.yml` | yes (smoke + bundle) | yes (smoke only) | — | yes (bundle) |
+| `bazel-wheels.yml` | yes | yes | — | — |
+| `bazel-docs.yml` | yes | yes | — | — |
+| `bazel-build-all.yml` | — | — | `0 6 * * *` | yes |
+| `publish-pypi.yml` | — | — | — | yes |
 
----
-
-## 2. `chatter` + `chatter-lsp` binaries → GitHub Releases
-
-```mermaid
-flowchart LR
-    A[edit Rust source]
-    A --> B[bazel build //crates/chatter/...]
-    B --> C[bazel test //crates/chatter/...]
-    C --> D[git push → CI]
-    D --> E[bazel-rust.yml]
-    D --> F[workflow_dispatch publish-chatter.yml]
-    F --> G[matrix: ubuntu, macOS arm/x86, windows]
-    G --> H[bazel build --config=release\n//crates/chatter/chatter-cli:chatter\n//crates/chatter/chatter-lsp:chatter-lsp]
-    H --> I[upload-artifact per platform]
-    I --> J[softprops/action-gh-release\nattach binaries]
-    J --> K[(GitHub Release)]
-```
-
-**Local iteration:**
-
-```bash
-bazel run //crates/chatter/chatter-cli:chatter -- validate path/to/file.cha
-bazel run //crates/chatter/chatter-lsp:chatter-lsp  # blocks; speaks LSP over stdio
-```
-
-**Local release binary:**
-
-```bash
-bazel build --config=release //crates/chatter/chatter-cli:chatter
-ls bazel-bin/crates/chatter/chatter-cli/chatter      # the binary
-```
-
-**Publishing a release (`publish-chatter.yml`):**
-
-1. Trigger via Actions → `publish · chatter (cli + lsp binaries)` →
-   Run workflow. Provide `tag` (e.g. `v0.2.1`) and `draft` flag.
-2. Build matrix: 4 runners (Linux x86_64, macOS arm64, macOS x86_64,
-   Windows x86_64). Each invokes `bazel build --config=release`.
-3. Each runner stages `chatter` + `chatter-lsp` into `out/`, uploads
-   as a platform-tagged artifact.
-4. Release job downloads all artifacts and attaches them to a new
-   GitHub Release (draft by default).
-
-**Code signing:** the publish workflow does NOT sign the chatter
-binaries — they're statically-linked Rust binaries that GitHub releases
-as-is. Users on macOS may need to run them under `xattr -d
-com.apple.quarantine /path/to/chatter` the first time. If signed
-binaries are needed in the future, wire codesigning into this workflow
-between the build and the artifact upload.
-
----
-
-## 3. VS Code extension → Marketplace
-
-```mermaid
-flowchart LR
-    A[edit apps/vscode-extension/src/]
-    A --> B[bazel run //apps/vscode-extension:build]
-    B --> C[bazel run //apps/vscode-extension:test]
-    C --> D[git push → CI]
-    D --> E[bazel-typescript.yml]
-    D --> F[workflow_dispatch publish-vscode.yml]
-    F --> G[bazel build chatter-lsp --config=release]
-    G --> H[bazel run //apps/vscode-extension:package\n→ .vsix]
-    H --> I[upload-artifact .vsix]
-    I --> J[npx vsce publish\nVSCE_PAT secret]
-    J --> K[(VS Code Marketplace)]
-```
-
-**Local iteration:**
-
-```bash
-bazel run //apps/vscode-extension:build       # compile TypeScript
-bazel run //apps/vscode-extension:test        # run tests
-bazel run //apps/vscode-extension:package     # produces .vsix in cwd
-```
-
-The extension launches `chatter-lsp` over stdio. For local
-development, `chatter-lsp` must be in your `PATH` or built via
-`bazel build //crates/chatter/chatter-lsp:chatter-lsp` (the extension
-looks under `target/debug/` and `target/release/` as fallback).
-
-**Publishing (`publish-vscode.yml`):**
-
-1. Trigger via Actions. Provide `version` (e.g. `0.5.0`) and
-   `publish` flag.
-2. Build `chatter-lsp` in release mode (bundled into the .vsix as
-   the LSP binary that ships with the extension).
-3. Build + package the extension via Bazel → produces `.vsix`.
-4. Upload `.vsix` as an artifact.
-5. If `publish=true`, run `npx vsce publish --packagePath <.vsix>`
-   using the `VSCE_PAT` secret (a Personal Access Token from
-   <https://dev.azure.com/>).
-
-**PAT setup (one-time):** create at <https://dev.azure.com/_usersSettings/tokens>
-with "Marketplace > Manage" scope; store in the
-`vscode-marketplace` GitHub environment as secret `VSCE_PAT`.
-
----
-
-## 4. Desktop apps (Tauri) → GitHub Releases
-
-```mermaid
-flowchart LR
-    A[edit apps/<chatter|batchalign>/...]
-    A --> B[bazel build src-tauri Rust]
-    B --> C[bazel run dashboard:build\n(if batchalign-gui-dashboard)]
-    C --> D[git push → CI]
-    D --> E[bazel-typescript.yml\n+ bazel-rust.yml]
-    D --> F[workflow_dispatch publish-desktop.yml]
-    F --> G[matrix: macOS arm/x86, win, linux]
-    G --> H[cargo tauri build\nwith Apple/Win signing secrets]
-    H --> I[upload bundles\n.app/.dmg/.msi/AppImage]
-    I --> J[(GitHub Release)]
-```
-
-**Local iteration:**
-
-```bash
-cd apps/chatter/chatter-gui && cargo tauri dev          # hot reload
-cd apps/batchalign/batchalign-gui-dashboard && cargo tauri dev
-```
-
-**Local bundle (unsigned):**
-
-```bash
-cd apps/chatter/chatter-gui && cargo tauri build
-# Output: src-tauri/target/release/bundle/<platform>/
-```
-
-**Publishing (`publish-desktop.yml`):**
-
-1. Trigger via Actions. Choose which app to bundle (`chatter-gui`,
-   `batchalign-gui-dashboard`, or both).
-2. Build matrix: 4 runners. For `batchalign-gui-dashboard`, the React
-   dashboard SPA is built first (`bazel build //apps/batchalign/batchalign-cli-webdashboard:dist`)
-   so Tauri can embed it. The `:dist` label is the hermetic Vite
-   TreeArtifact emitted by `vite_bin.vite` — no host `npm install`.
-3. `cargo tauri build` runs with Apple Developer ID + notarytool
-   secrets present (on macOS) and Windows code-signing creds (on
-   Windows). Linux bundles are unsigned.
-4. Bundles upload as workflow artifacts.
-
-**Apple signing setup:** secrets needed in the workflow environment:
-`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
-`APPLE_SIGNING_IDENTITY`, `APPLE_API_KEY`, `APPLE_API_ISSUER`. See
-`book/src/operations/code-signing-and-distribution.md` for the certificate
-provisioning workflow.
-
----
-
-## 5. mdBook → GitHub Pages
-
-```mermaid
-flowchart LR
-    A[edit book/src/]
-    A --> B[bazel run //book:serve\n(local preview)]
-    B --> C[git push → CI]
-    C --> D[bazel-docs.yml]
-    D --> E[bazel run //book:html]
-    E --> F[bazel run //book:linkcheck]
-    F --> G[upload-artifact book-html]
-    G --> H{deploy?}
-    H -->|wire when ready| I[(GitHub Pages)]
-```
-
-**Local iteration:**
-
-```bash
-bazel run //book:serve         # auto-reload at localhost:3000
-```
-
-**Build for inspection:**
-
-```bash
-bazel run //book:html          # output: book/build/html/
-```
-
-The current `bazel-docs.yml` builds the book and uploads the HTML as
-an artifact on every push to `main`. Deploying to GitHub Pages is a
-one-line addition (drop `peaceiris/actions-gh-pages` onto the artifact)
-when you want a public docs site live.
-
----
-
-## Trigger summary
-
-| Workflow | Triggers |
-|---|---|
-| `bazel-rust.yml` | every push/PR touching Rust |
-| `bazel-python.yml` | every push/PR touching Python or PyO3 |
-| `bazel-typescript.yml` | every push/PR touching apps/vscode-extension/ or apps/batchalign/batchalign-cli-webdashboard/ |
-| `bazel-grammar.yml` | every push/PR touching grammar/ or symbols |
-| `bazel-docs.yml` | every push/PR touching book/ |
-| `bazel-build-all.yml` | nightly cron (06:00 UTC) + manual |
-| `publish-pypi.yml` | manual only |
-| `publish-chatter.yml` | manual only |
-| `publish-vscode.yml` | manual only |
-| `publish-desktop.yml` | manual only |
-
-Publishing always requires a deliberate human gesture (workflow
-dispatch). Build/test gates run automatically.
-
----
-
-## Cross-cutting workflows
-
-### Refreshing the crate_universe lockfile
-
-Automatic. `tools/bazel` (the Bazelisk wrapper at the workspace root)
-detects when any `Cargo.toml` is newer than `Cargo.lock` and sets
-`CARGO_BAZEL_REPIN=true` on the next Bazel invocation. crate_universe
-re-resolves and refreshes `Cargo.lock` + `MODULE.bazel.lock` inline.
-Just edit `Cargo.toml` and run whatever Bazel command you were going to
-run; commit the resulting `Cargo.lock` / `MODULE.bazel.lock` diff.
-
-The underlying `//bazel/cargo:repin` target still exists as a manual
-escape hatch (useful when running raw `bazel` without the wrapper, or
-debugging a stuck repin), but should not appear in any contributor
-workflow.
-
-### Refreshing the sqlx query cache
-
-Required after any `sqlx::query!` macro edit in batchalign.
-
-```bash
-bazel run //bazel/sqlx:prepare
-git diff crates/batchalign/batchalign-cli/.sqlx/
-git add crates/batchalign/batchalign-cli/.sqlx && git commit -m "sqlx: prepare"
-```
-
-Without an up-to-date `.sqlx/`, `bazel build //crates/batchalign/...`
-will fail at the sqlx compile-time validation step.
-
-### Regenerating tree-sitter parser.c
-
-Required after any `grammar/grammar.js` edit.
-
-```bash
-bazel run //grammar:tree_sitter_generate
-git diff grammar/src/parser.c grammar/src/grammar.json grammar/src/node-types.json
-git add grammar/src/ && git commit -m "grammar: regenerate"
-```
-
-The `bazel-grammar.yml` CI workflow asserts no drift between
-`grammar.js` and `src/parser.c`.
-
----
+Publishing always requires a deliberate human gesture
+(`workflow_dispatch`). Everything else is automatic on push/PR.
 
 ## Versioning
 
-| Surface | Version source | Bump strategy |
+`just versions` is the source of truth. Current values:
+
+| Surface | Source field | Today's value |
 |---|---|---|
-| Rust workspace crates (`talkbank-*`, `chatter-*`, `clan-*`) | `[workspace.package] version` in root `Cargo.toml` | semver; bump on a behavior change |
-| `batchalign-cli`, `batchalign-pyo3`, `batchalign-types` | per-crate `[package] version` (0.1.x preview line) | independent of the workspace version |
-| Python wheel `batchalign3` | `[project] version` in `python/pyproject.toml` | semver; pre-release tags allowed |
-| VS Code extension | `version` in `apps/vscode-extension/package.json` | bump on every Marketplace upload |
-| chatter binaries | `[workspace.package] version` | same as Rust workspace |
+| Python wheel `batchalign3` | `python/pyproject.toml [project].version` | `0.3.0` |
+| Rust workspace (chatter, talkbank-*, clan-*) | `[workspace.package].version` in root `Cargo.toml` | `0.2.0` |
+| `batchalign-engine` Rust crate | per-crate `[package].version` | `0.3.0` |
+| Chatter GUI bundle | `apps/chatter/chatter-gui/src-tauri/tauri.conf.json` | `0.1.0` |
+| VS Code extension | `apps/vscode-extension/package.json` version | bump per Marketplace push |
 
-The Rust workspace and the Python preview line are intentionally on
-**separate release trains** — see the comment in `Cargo.toml`'s
-`[workspace.dependencies]` for the rationale.
+Pinned toolchain (from `just versions`): Python 3.12, uv 0.5.18,
+maturin 1.7.4, Rust 1.95.0, pyapp 0.27.0.
 
----
+The Rust workspace and the Python preview line are on **separate
+release trains** by design.
 
-## Quick command reference
+## Local pre-merge gate
 
-```bash
-# Local dev
-bazel run //python/batchalign:develop            # editable batchalign3
-bazel run //crates/chatter/chatter-cli:chatter   # chatter CLI
-bazel run //book:serve                           # book preview
+`bazel build //... && bazel test //...` is the canonical pre-merge
+gate. The pre-push hook (`scripts/pre-push.sh`, installed via
+`ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push`) runs the fast
+subset locally. See [Quality Gates](../contributing/quality-gates.md).
 
-# Release artifacts (local)
-bazel run //python/batchalign:wheel              # batchalign3 wheel
-bazel build --config=release \
-  //crates/chatter/chatter-cli:chatter \
-  //crates/chatter/chatter-lsp:chatter-lsp       # release Rust binaries
-bazel run //apps/vscode-extension:package        # .vsix
-cd apps/chatter/chatter-gui && cargo tauri build # unsigned Tauri bundle
+## Known gaps (follow-up work)
 
-# Lockfile / cache maintenance
-# Cargo.lock and python/requirements.lock.txt regenerate automatically
-# on every Bazel invocation via tools/bazel. No manual command needed.
-bazel run //bazel/sqlx:prepare                   # after sqlx::query! edit
-bazel run //grammar:tree_sitter_generate         # after grammar.js edit
-```
-
----
+- No `chatter` / `chatter-lsp` GitHub Release workflow.
+- No automated VS Code extension release; manual `vsce publish` today.
+- No GitHub Release upload for Batchalign desktop bundles (artifacts
+  only). No Windows bundle.
+- No Chatter desktop GUI CI workflow beyond the nightly.
+- No code signing or notarization on any platform; see
+  [code-signing-and-distribution.md](./code-signing-and-distribution.md).
+- No GitHub Pages deploy for the book.
+- `//python:requirements_test` (lockfile drift) is `manual`-tagged
+  and not enforced in CI; see the comment in `bazel-python.yml`.
 
 ## See also
 
-- `.github/workflows/` — every CI workflow, well-commented
-- `CONTRIBUTING.md` — quick-start + `bazel run` reference for every binary
-- `book/src/operations/code-signing-and-distribution.md` — macOS/Windows
-  signing setup details
-- `book/src/operations/release-contract.md` — what we promise users
-  about breaking changes
-- `book/src/operations/versioning.md` — semver policy in detail
+- [Code Signing and Distribution](./code-signing-and-distribution.md)
+- [CI and Release](../contributing/ci-and-release.md)
+- [Quality Gates](../contributing/quality-gates.md)
+- [Branch Protection](../contributing/branch-protection.md)
+- [Versioning](./versioning.md)
+- [Release Contract](./release-contract.md)

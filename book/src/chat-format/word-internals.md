@@ -160,7 +160,7 @@ non-initial positions is valid: `200`, `h0me`, `abc0` all parse correctly.
 
 ### Word struct
 
-The `Word` struct (`crates/talkbank-model/src/model/content/word/word_type.rs`)
+The `Word` struct (`crates/core/talkbank-model/src/model/content/word/word_type.rs`)
 is the canonical typed representation:
 
 ```rust,ignore
@@ -194,7 +194,7 @@ Key fields:
 
 ### WordContent enum
 
-`WordContent` (`crates/talkbank-model/src/model/content/word/content.rs`)
+`WordContent` (`crates/core/talkbank-model/src/model/content/word/content.rs`)
 is the enum of everything that can appear inside a word body. Each variant
 maps directly to a grammar node.
 
@@ -470,7 +470,7 @@ appropriately:
 
 Underline and stress invariants are covered by corpus tests elsewhere
 in `grammar/test/corpus/` and by the parser-equivalence tests in
-`crates/talkbank-parser-tests/`. The historical
+`crates/core/talkbank-parser-tests/`. The historical
 `word_segment_purity.txt` consolidated 8 named tests in one file; it
 was retired in commit `fdceeac2` when the corresponding constructs
 were given their own per-construct test files (this is the new layout
@@ -505,9 +505,9 @@ If you add a new structural marker to the grammar:
 | `grammar/docs/tokenization-rules.md` | The 6 tokenization ambiguities with full examples |
 | `grammar/docs/precedence-decisions.md` | Precedence proofs (zero, colon, purity invariant) |
 | `grammar/docs/pre-coarsening-grammar.js.reference` | Historical: the grammar before coarsening |
-| `crates/talkbank-model/src/model/content/word/word_type.rs` | `Word` struct |
-| `crates/talkbank-model/src/model/content/word/content.rs` | `WordContent` enum (12 variants) |
-| `crates/talkbank-model/src/model/content/word/word_contents.rs` | `WordContents` (SmallVec-backed sequence) |
-| `crates/talkbank-model/src/model/content/word/category.rs` | `WordCategory` enum (5 variants) |
-| `crates/talkbank-model/src/model/content/word/form.rs` | `FormType` enum (22 variants) |
-| `crates/talkbank-model/src/model/content/word/language.rs` | `WordLanguageMarker` enum (4 variants) |
+| `crates/core/talkbank-model/src/model/content/word/word_type.rs` | `Word` struct |
+| `crates/core/talkbank-model/src/model/content/word/content.rs` | `WordContent` enum (12 variants) |
+| `crates/core/talkbank-model/src/model/content/word/word_contents.rs` | `WordContents` (SmallVec-backed sequence) |
+| `crates/core/talkbank-model/src/model/content/word/category.rs` | `WordCategory` enum (5 variants) |
+| `crates/core/talkbank-model/src/model/content/word/form.rs` | `FormType` enum (22 variants) |
+| `crates/core/talkbank-model/src/model/content/word/language.rs` | `WordLanguageMarker` enum (4 variants) |

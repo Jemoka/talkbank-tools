@@ -3,7 +3,7 @@
 **Status:** Current
 **Last updated:** 2026-05-12 17:42 EDT
 
-Golden tests under `crates/clan-core/tests/clan_golden/` (driven by the top-level `clan_golden.rs` entry point) and `crates/clan-core/tests/transform_golden.rs` compare `chatter clan` output against the legacy CLAN C binaries character-by-character.
+Golden tests under `crates/clan/clan-core/tests/clan_golden/` (driven by the top-level `clan_golden.rs` entry point) and `crates/clan/clan-core/tests/transform_golden.rs` compare `chatter clan` output against the legacy CLAN C binaries character-by-character.
 
 ## How they work
 
@@ -20,7 +20,7 @@ Golden tests require CLAN binaries. The lookup is a single env var:
 
 - `CLAN_BIN_DIR` — directory containing the CLAN command binaries (`check`, `freq`, `mlu`, …)
 
-See `clan_bin_dir()` and `clan_command_available()` in `crates/clan-core/tests/common/mod.rs`. If `CLAN_BIN_DIR` is unset or the specific command binary is missing from that directory, the test prints a skip notice via `require_clan_command()` and returns early, making it CI-safe.
+See `clan_bin_dir()` and `clan_command_available()` in `crates/clan/clan-core/tests/common/mod.rs`. If `CLAN_BIN_DIR` is unset or the specific command binary is missing from that directory, the test prints a skip notice via `require_clan_command()` and returns early, making it CI-safe.
 
 (Note: the legacy CLAN _library_ paths used by `database_integration.rs` follow a different resolver — `CLAN_SOURCE_DIR` env var → meta-repo sibling `OSX-CLAN/` → `~/OSX-CLAN/`. That is unrelated to the golden-test bin lookup.)
 
@@ -39,7 +39,7 @@ The current parity tally and the per-command divergence list live in
 
 ## Adding a golden test
 
-The harness in `crates/clan-core/tests/clan_golden/harness.rs` provides two patterns:
+The harness in `crates/clan/clan-core/tests/clan_golden/harness.rs` provides two patterns:
 
 - **Paired CLAN + Rust comparison** — declare a `ParityCase` and let the `parity_case_tests!` macro generate the test. CLAN side is auto-skipped when `clan_command_available()` reports the binary missing. Example: `clan_golden/check.rs:3` declares two paired CHECK cases.
 - **Rust-only snapshot** (when no CLAN binary corresponds, or the comparison is a one-off) — call the command's typed `Command`/`run_xxx` API directly and snapshot the output. Example: `clan_golden/rust_only.rs` shows the MORTABLE, RELY, and SCRIPT patterns.

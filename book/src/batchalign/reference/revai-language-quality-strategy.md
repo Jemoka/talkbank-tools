@@ -1,7 +1,7 @@
 # Rev.AI Language Quality Strategy
 
 **Status:** Current
-**Last updated:** 2026-05-01 09:47 EDT
+**Last updated:** 2026-06-01 01:05 PDT
 
 ## Background
 
@@ -204,14 +204,14 @@ Move from Option A/B to Option C (build the probe harness) when:
   evidence (kept in an operational workspace — never inline in this
   public repo).
 
-### Recommended alternative: `whisper_hub`
+### Recommended alternative: `whisper`
 
-The deny-list error message currently recommends `--asr-engine whisper_hub`
-for languages where Rev.AI is broken. This recommendation presumes
-empirical evidence that a community fine-tune works for that language.
-See [`whisper-hub-asr.md`](whisper-hub-asr.md) for the engine, its
-per-language default model table, and the evidence behind each
-recommendation.
+The deny-list error message currently recommends `--asr-engine whisper`
+(HuggingFace Whisper) for languages where Rev.AI is broken. This
+recommendation presumes empirical evidence that a community fine-tune
+works for that language. See [`whisper-asr.md`](whisper-asr.md) for the
+engine, its per-language default model table, and the evidence behind
+each recommendation.
 
 When adding a new deny-list entry, confirm first that the recommended
 alternative actually works on a real sample — else you're redirecting

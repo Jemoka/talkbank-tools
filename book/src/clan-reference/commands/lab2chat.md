@@ -22,7 +22,7 @@ chatter clan lab2chat input.lab
 | `-o`, `--output` | stdout | Output CHAT file path |
 
 The corpus name in `@ID` headers is hardcoded to `"lab_corpus"`
-(`crates/clan-core/src/converters/lab2chat.rs:110`); there is
+(`crates/clan/clan-core/src/converters/lab2chat.rs:110`); there is
 no CLI flag to override it.
 
 ## Supported Formats

@@ -1,7 +1,7 @@
 # Whisper Usage in Batchalign
 
 **Status:** Current
-**Last updated:** 2026-04-06 11:01 EDT
+**Last updated:** 2026-06-01 01:05 PDT
 
 ## Overview
 
@@ -18,8 +18,10 @@ Whisper models may be loaded simultaneously (FA + UTR).
 
 ## ASR Engines
 
-There are four ASR engines.  **Rev.AI is the production default** -- the three
-Whisper variants are local alternatives for when a commercial API is not wanted.
+**Rev.AI is the production default.** The Whisper variants are local
+alternatives for when a commercial API is not wanted. (The legacy `whisperx`
+engine has been removed; see the recent ASR refactor where segmentation is now
+handled uniformly except when an engine self-segments.)
 
 ### Rev.AI (default)
 
@@ -63,18 +65,9 @@ batchalign3 transcribe input/ -o output/ --asr-engine whisper --lang=eng
 - Device selection: CUDA > CPU (`MPS` is intentionally excluded; see
   `developer/apple-mps-workarounds.md`)
 
-### WhisperX (`--asr-engine whisperx`)
-
-```bash
-batchalign3 transcribe input/ -o output/ --asr-engine whisperx --lang=eng
-```
-
-- WhisperX engine in `inference/asr.py`
-- Uses the `whisperx` library (Whisper + phoneme-level forced alignment)
-- **Hardcoded to `large-v2`** -- ignores model resolution
-- Loads both a transcription model and an alignment model
-- Chunked processing with fallback: 60s -> 30s -> 15s
-- CUDA-only for `float16`; falls back to `float32` on CPU
+> **Removed:** `--asr-engine whisperx` (the WhisperX library wrapper) was
+> dropped in the ASR refactor. Forced alignment in batchalign3 is handled by
+> the dedicated `align` command and the in-tree FA engine.
 
 ## Model Selection
 
@@ -91,8 +84,7 @@ Language-specific model resolution lives in `inference/asr.py`:
 **Only the HuggingFace Whisper engine (`--asr-engine whisper`) uses this resolution.**
 The other engines have hardcoded models:
 
-- OpenAI Whisper (`--asr-engine whisper-oai`): always `"turbo"` (via `whisper.load_model("turbo")`)
-- WhisperX (`--asr-engine whisperx`): always `"large-v2"` (via `whisperx.load_model("large-v2")`)
+- OpenAI Whisper (`--engine openai`): always `"turbo"` (via `whisper.load_model("turbo")`)
 
 ## Auto-Detect Mode (`--lang auto`)
 
@@ -103,7 +95,7 @@ code-switched recordings (e.g., English/Spanish) where forcing a single
 language would cause the model to skip or garble content in the other language.
 
 ```bash
-batchalign3 transcribe bilingual_audio/ -o output/ --asr-engine whisper --lang auto
+batchalign3 transcribe bilingual_audio/ -o output/ --engine whisper --lang auto
 ```
 
 **How it works:**
@@ -122,8 +114,7 @@ graph LR
 | Engine | `--lang auto` behavior |
 |--------|----------------------|
 | `whisper` (HuggingFace) | Uses `openai/whisper-large-v3` (multilingual); omits `language` from kwargs |
-| `whisper-oai` | Turbo model; omits `language` from kwargs |
-| `whisperx` | Uses `large-v2`; omits `language` from kwargs |
+| `openai` | Turbo model; omits `language` from kwargs |
 | `rev` (Rev.AI) | Rev.AI has its own auto-detection via the API |
 
 **Limitations:**
@@ -236,7 +227,6 @@ use, not at CLI startup.
 | ASR (Cantonese)      | `alvanlii/whisper-small-cantonese` | small   |
 | ASR (other)          | `openai/whisper-large-v3`          | large-v3 |
 | ASR (OAI engine)     | `openai/whisper-turbo`             | turbo   |
-| ASR (WhisperX)       | `openai/whisper-large-v2`          | large-v2 |
 | FA                   | `openai/whisper-large-v2`          | large-v2 |
 | UTR (English)        | `talkbank/CHATWhisper-en-large-v1` | large-v1 base |
 | UTR (other)          | `openai/whisper-large-v2`          | large-v2 |

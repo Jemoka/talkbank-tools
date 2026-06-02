@@ -19,7 +19,7 @@ COMPLEXITY reads the `%gra` dependency tier and counts clause-embedding relation
 
 ### UD Relations (auto-detected)
 
-Per `crates/clan-core/src/commands/complexity.rs:10`:
+Per `crates/clan/clan-core/src/commands/complexity.rs:10`:
 
 | Relation | Description |
 |----------|-------------|

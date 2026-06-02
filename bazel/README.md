@@ -25,12 +25,10 @@ Ordered by where each entry sits in the build graph:
 | 1. Dep prep | `patches/` | crate_universe patch files (see `MODULE.bazel`) | crate_universe only |
 | 2. Toolchains | `python/` | `uv` + `maturin` orchestration: `cli`, `develop`, `maturin_build`, `pytest`, `lint`. Profile via `MATURIN_PROFILE` or `BAZEL_COMPILATION_MODE`. | `//python` only |
 | 3. App bundlers | `chatter-tauri/` | `cargo tauri build` wrapper for Chatter desktop. Profile via `TAURI_PROFILE` or `BAZEL_COMPILATION_MODE`. | `//apps/chatter/chatter-gui/src-tauri` only |
+| 3. App bundlers | `batchalign-tauri/` | `cargo tauri build` wrapper for Batchalign desktop. | `//apps/batchalign/batchalign-gui` only |
+| 3. App bundlers | `tauri/` | shared Tauri CLI install rule (`cargo_tauri`). | both Tauri bundlers |
 | 3. App bundlers | `vscode/` | `npm` + `vsce` wrappers for the VS Code extension | `//apps/vscode-extension` only |
 | 4. Docs | `book/` | mdBook wrappers (`serve`, `build`, `linkcheck`) | `//book` only |
-
-Removed: `dashboard/` — wrapped the deleted batchalign-cli-webdashboard
-Vite SPA. The replacement Tauri shell at `apps/batchalign/dashboard-desktop`
-builds outside Bazel via `cargo tauri build`.
 
 ## When to add a new subdir
 

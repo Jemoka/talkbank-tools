@@ -1,5 +1,10 @@
 # Align Regression Fixtures
 
+> **Note (runner not yet public):** The `regression_fixtures.rs` runner
+> referenced below lives in an internal-only test crate that has not been
+> open-sourced yet. Until it lands publicly, these fixtures document
+> expected behavior; running them requires the private workspace.
+
 This directory holds real-world `batchalign3 align` regression
 fixtures. Each subdirectory under `regressions/` is one bug.
 

@@ -1,7 +1,7 @@
 # scripts/
 
 **Status:** Current
-**Last updated:** 2026-04-28 23:01 EDT
+**Last updated:** 2026-06-01 01:05 PDT
 
 This directory is a shared toolbox for repo maintenance, generated-artifact
 refreshes, drift checks, targeted smoke tests, diagnostics, and fixture prep.
@@ -17,11 +17,11 @@ the index below when you need the direct script.
 
 | I want to... | Prefer this entrypoint | Notes |
 |---|---|---|
-| Run the normal contributor gates | `bazel build //...`, `bazel test //...`, `bazel build //... && bazel test //...`, `bazel build //... && bazel test //...`, `bazel build //... && bazel test //...` | Prefer these over ad hoc script chains. |
+| Run the normal contributor gates | `just build` / `just test` (= `bazel build //...` / `bazel test //...`) | Prefer these over ad hoc script chains. |
 | Install the repo’s local git guardrail | `ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push` | Installs `scripts/pre-push.sh`. |
-| Regenerate spec-driven or grammar-driven artifacts | `node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js`, `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs`, `scripts/update-tree-sitter.sh` | Use the Make targets unless you are doing grammar-specific regeneration. |
+| Regenerate spec-driven or grammar-driven artifacts | `node resources/spec/symbols/validate_symbol_registry.js && node scripts/generate-symbol-sets.js && node resources/spec/symbols/generate_rust_symbol_sets.js`, `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs`, `scripts/update-tree-sitter.sh` | Prefer the `just spec` recipes unless you are doing grammar-specific regeneration. |
 | Verify generated artifacts or guardrails are still in sync | `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs && git diff --exit-code`, `bash scripts/check-errorsink-option-signatures.sh`, `bash scripts/check-chat-manual-anchors.sh`, `bash scripts/check-error-specs.sh` | These are the canonical drift/guardrail entrypoints. |
-| Verify imported Batchalign generated surfaces | `bash scripts/check_dashboard_api_drift.sh`, `python3 scripts/check_runtime_drift.py`, `bash scripts/check_ipc_type_drift.sh` | Use the first two via `make`; IPC schema drift is still a direct script. |
+| Verify imported Batchalign generated surfaces | `bash scripts/check_dashboard_api_drift.sh`, `python3 scripts/check_runtime_drift.py`, `bash scripts/check_ipc_type_drift.sh` | Invoke the scripts directly; there is no `just` wrapper for these drift checks yet. |
 | Run a focused dashboard smoke or E2E helper | `bash scripts/run_react_dashboard_smoke.sh` | Builds the frontend dependencies it needs. |
 | Prepare a minimal repro fixture from real CHAT + media | `python3 scripts/trim_chat_audio.py ...` or `python3 scripts/prepare_corpus_media_fixture.py ...` | Prefer these over hand-editing fixtures. |
 
@@ -89,8 +89,10 @@ artifacts unless a script explicitly points at them.
 
 ## Rules of thumb
 
-- Prefer the `make` or `xtask` entrypoint when one exists; it captures the
-  supported workflow and usually composes multiple lower-level steps.
+- Prefer the `just` recipe (or `bazel` target, or `xtask` subcommand) when
+  one exists; it captures the supported workflow and usually composes
+  multiple lower-level steps. The repo's canonical entry points are
+  `just --list` and `bazel build //... && bazel test //...`.
 - Reach for direct scripts when you need a focused generator, a narrow
   diagnostic, or fixture-prep helper that does not have a stable top-level
   target.

@@ -1,7 +1,7 @@
 # Batchalign2 CLI Reference (Baseline)
 
 **Status:** Reference
-**Last updated:** 2026-05-05 13:54 EDT
+**Last updated:** 2026-06-01 21:36 PDT
 
 This document captures the CLI surface of Batchalign2 across **two baselines**:
 
@@ -74,9 +74,9 @@ Create transcripts from audio files via ASR.
 
 | Flag | Type | Default | Help | BA3 Status |
 |------|------|---------|------|------------|
-| `--whisper_oai` / `--rev` | exclusive pair | `--rev` | ASR engine (OAI variant) | Hidden compat alias → `--asr-engine` |
-| `--whisper` / `--rev` | exclusive pair | `--rev` | ASR engine (HF variant) | Hidden compat alias → `--asr-engine` |
-| `--whisperx` / `--rev` | exclusive pair | `--rev` | ASR engine (WhisperX variant) | Hidden compat alias → `--asr-engine` |
+| `--whisper_oai` / `--rev` | exclusive pair | `--rev` | ASR engine (OAI variant) | Hidden compat alias → `--engine openai` |
+| `--whisper` / `--rev` | exclusive pair | `--rev` | ASR engine (HF variant) | Hidden compat alias → `--engine whisper` |
+| `--whisperx` / `--rev` | exclusive pair | `--rev` | ASR engine (WhisperX variant) | **Removed in BA3.** WhisperX engine no longer ships; the BA2 flag is rejected. Use `--engine whisper` (HF) or `--engine openai` instead. |
 | `--diarize` / `--nodiarize` | bool | `False` | Speaker diarization | Hidden compat alias → `--diarization` |
 | `--wor` / `--nowor` | bool | `False` | Write %wor tier | Wired |
 | `--merge-abbrev` / `--no-merge-abbrev` | bool | `False` | Merge abbreviations **(Feb 9 only)** | Wired |

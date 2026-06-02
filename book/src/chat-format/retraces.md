@@ -86,7 +86,7 @@ container, which can hold any combination of words, replaced words, and
 other content items:
 
 ```rust,ignore
-// crates/talkbank-model/src/model/content/retrace.rs
+// crates/core/talkbank-model/src/model/content/retrace.rs
 pub struct Retrace {
     pub content: BracketedContent,          // the retraced words
     pub kind: RetraceKind,                  // Partial, Full, Multiple, Reformulation

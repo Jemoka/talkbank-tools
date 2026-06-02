@@ -1,7 +1,7 @@
 # Command Flowcharts
 
 **Status:** Current
-**Last updated:** 2026-05-03 08:50 EDT
+**Last updated:** 2026-06-01 00:51 PDT
 
 Option-driven flowcharts for every batchalign processing command. Each
 diagram shows how CLI flags route through different code paths at runtime.
@@ -333,7 +333,7 @@ commands chained automatically.
 - **Rev.AI with explicit `--diarize`:** BA3 now matches the audited Jan 9 BA2
   implementation. If you explicitly request diarization, BA3 still runs the
   separate Pyannote/NeMo post-ASR speaker stage on top of Rev output.
-- **Whisper-based engines** (`whisper`, `whisperx`, `whisper-oai`): these
+- **Whisper-based engines** (`whisper`, `chatwhisper`, `openai`): these
   engines do not return speaker labels. Passing `--diarize` (or
   `--diarization enabled`) runs a dedicated Pyannote speaker model as an
   additional stage.
@@ -360,18 +360,24 @@ flowchart TD
     transcribe_s --> engine_check
     transcribe_m --> engine_check
 
-    engine_check{--asr-engine?}
-    engine_check -->|whisper| whisper[Whisper local ASR]
+    engine_check{--engine?}
+    engine_check -->|whisper| whisper["HF Whisper local ASR"]
+    engine_check -->|chatwhisper| chatwhisper["CHATWhisper\n(TalkBank fine-tune)"]
     engine_check -->|rev| rev_preflight["Rev.AI preflight\nPre-submit audio in parallel\nskip_postprocessing=true for en/fr"]
-    engine_check -->|whisperx| whisperx[WhisperX ASR]
-    engine_check -->|whisper_oai| whisper_oai[OpenAI Whisper ASR]
+    engine_check -->|openai| whisper_oai["OpenAI Whisper API (turbo)"]
+    engine_check -->|funaudio| funaudio["FunAudio SenseVoice"]
+    engine_check -->|tencent| tencent["Tencent ASR"]
+    engine_check -->|qwen3| qwen3["Qwen3-ASR"]
 
     rev_preflight --> rev_poll[Poll Rev.AI for results]
     rev_poll --> asr_tokens
 
     whisper --> asr_tokens
-    whisperx --> asr_tokens
+    chatwhisper --> asr_tokens
     whisper_oai --> asr_tokens
+    funaudio --> asr_tokens
+    tencent --> asr_tokens
+    qwen3 --> asr_tokens
 
     asr_tokens["Raw ASR tokens\nword + start_s + end_s + optional speaker + confidence"]
     asr_tokens --> convert["convert_asr_response()\nALWAYS groups tokens by speaker label\nNo use_speaker_labels parameter"]

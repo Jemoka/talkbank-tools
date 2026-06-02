@@ -22,7 +22,7 @@ chatter clan text2chat input.txt
 | `-o`, `--output` | stdout | Output CHAT file path |
 
 The corpus name in `@ID` headers is hardcoded to `"text_corpus"`
-(`crates/clan-core/src/converters/text2chat.rs:37`); there is
+(`crates/clan/clan-core/src/converters/text2chat.rs:37`); there is
 no CLI flag to override it. Same pattern as the other converters
 in this directory.
 

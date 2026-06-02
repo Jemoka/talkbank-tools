@@ -25,8 +25,8 @@ Validation enforces:
 - disjoint CA delimiter and element sets.
 
 ## Generated Output
-- `../tree-sitter-talkbank/src/generated_symbol_sets.js` (in external grammar repo)
-- `crates/talkbank-model/src/generated/symbol_sets.rs`
+- `grammar/src/generated_symbol_sets.js` (consumed by `grammar/grammar.js`)
+- `crates/core/talkbank-model/src/generated/symbol_sets.rs`
 - `crates/spec/talkbank-spec-testgen/src/generated/symbol_sets.rs`
 
 ## Regeneration

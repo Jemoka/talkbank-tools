@@ -21,7 +21,7 @@ chatter clan salt2chat input.slt
 | `-o`, `--output` | stdout | Output CHAT file path |
 
 The corpus name in `@ID` headers is hardcoded to `"salt_corpus"`
-(`crates/clan-core/src/converters/salt2chat.rs:193`); there is
+(`crates/clan/clan-core/src/converters/salt2chat.rs:193`); there is
 no CLI flag to override it. Same pattern as the other converters
 in this directory.
 

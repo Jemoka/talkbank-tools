@@ -1,15 +1,16 @@
 # CLAUDE.md — Chatter Desktop App
 
 **Status:** Current
-**Last updated:** 2026-05-01 09:47 EDT
+**Last updated:** 2026-06-01 00:52 PDT
 
 ## Overview
 
 Native desktop validation app for CHAT files, built with Tauri v2 (Rust backend, React + TypeScript frontend). Sibling to the VS Code extension (`apps/vscode-extension/`). Designed for linguists and researchers who don't use a terminal.
 
 This is **not** the Batchalign desktop shell. That active Batchalign surface
-lives in `apps/batchalign/dashboard-desktop/` and wraps the shared Batchalign
-apps/batchalign/cli-web-statuspage/server flow. `desktop/` remains the separate Chatter validation app.
+lives in `apps/batchalign/batchalign-gui/` (Tauri v2 + React, served by the
+Batchalign daemon). `apps/chatter/chatter-gui/` remains the separate Chatter
+validation app.
 
 ## Functional Parity with TUI
 
@@ -19,7 +20,7 @@ apps/batchalign/cli-web-statuspage/server flow. `desktop/` remains the separate 
 
 ### Error Display Parity (mandatory)
 
-The TUI source is at `crates/chatter-cli/src/ui/validation_tui/`. Every rendering behavior listed below must be matched:
+The TUI source is at `crates/chatter/chatter-cli/src/ui/validation_tui/`. Every rendering behavior listed below must be matched:
 
 | Feature | TUI implementation | Desktop status |
 |---------|-------------------|----------------|
@@ -69,7 +70,7 @@ colors.
 ## Architecture
 
 ```
-desktop/
+apps/chatter/chatter-gui/
   src-tauri/            Rust backend (Tauri v2)
     src/
       protocol.rs       Shared command/event names + transport request types
@@ -100,11 +101,15 @@ desktop/
 ## Development
 
 ```bash
-cd desktop
+cd apps/chatter/chatter-gui
 npm install
 cargo tauri dev           # Launch with hot reload (frontend + backend)
 cargo tauri build         # Distributable app bundle (DMG/MSI/AppImage)
 cargo tauri build --debug # Debug build for E2E testing
+
+# Or via Bazel-driven `just`:
+just chatter gui          # release bundle
+just chatter gui debug    # debug bundle
 ```
 
 ## Testing
@@ -112,15 +117,15 @@ cargo tauri build --debug # Debug build for E2E testing
 Three tiers — see [Desktop App Testing](../book/src/contributing/desktop-testing.md) for full details.
 
 ```bash
-# Tier 1: focused apps/batchalign/cli-web-statuspage/runtime seam tests
-cd desktop && npm run test:unit
+# Tier 1: focused frontend runtime-seam tests
+cd apps/chatter/chatter-gui && npm run test:unit
 
 # Tier 2: Rust integration tests (fast, run always)
 cargo nextest run -p chatter-gui --test validation_bridge
 
 # Tier 3: E2E smoke tests (slow, Linux/Windows only)
 tauri-driver &
-npm run test:e2e
+cd apps/chatter/chatter-gui && npm run test:e2e
 ```
 
 ## App Identity
@@ -175,4 +180,4 @@ Follow the root `CLAUDE.md` for all Rust code. Additional rules for the desktop 
 - **No mutex** — use `ArcSwapOption`, atomics, or channels. See the mutex policy.
 - **serde field names** — every enum variant with fields needs `#[serde(rename_all = "camelCase")]`. The enum-level `rename_all` only affects tag names, not field names.
 - **TypeScript types must mirror Rust types** — when changing `events.rs`, update `types.ts` and run the integration tests to verify.
-- **Reference the TUI source** when implementing display features — `crates/chatter-cli/src/ui/validation_tui/` is the reference implementation for error rendering, file list behavior, and navigation.
+- **Reference the TUI source** when implementing display features — `crates/chatter/chatter-cli/src/ui/validation_tui/` is the reference implementation for error rendering, file list behavior, and navigation.

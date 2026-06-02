@@ -1,7 +1,7 @@
 # Batchalign Command I/O Parity: Local CLI vs Server
 
 **Status:** Current
-**Last updated:** 2026-05-01 09:47 EDT
+**Last updated:** 2026-06-01 00:51 PDT
 
 This document describes the input/output flow for every batchalign command,
 comparing direct local CLI execution with the server-based (`--server`)
@@ -155,7 +155,7 @@ Pyannote speaker diarization stage when separate diarization is needed. Output
 Not a separate CLI command — triggered by `batchalign3 transcribe --diarize`.
 
 **When to use:** This path is primarily for Whisper-based transcription
-(`--asr-engine whisper`, `whisperx`, `whisper-oai`), where the ASR engine does
+(`--engine whisper`, `chatwhisper`, `openai`), where the ASR engine does
 not return speaker labels. For Rev.AI (the default engine), speaker labels are
 already present in the ASR response and are always applied without
 `--diarize`, so the normal Rev.AI path already produces speaker-attributed

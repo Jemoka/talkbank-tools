@@ -1,7 +1,7 @@
 # Server Model Loading and Caching
 
 **Status:** Current
-**Last updated:** 2026-05-05 08:21 EDT
+**Last updated:** 2026-06-01 00:51 PDT
 
 This document describes every ML model loaded by batchalign3 workers,
 when each model is loaded into memory, and how results are cached.
@@ -63,8 +63,9 @@ The server auto-chains forced alignment + UTR + disfluency + retrace.
 ### `transcribe` (server-owned composition over `asr`)
 
 Current CLI default engine is Rev.AI. Alternate ASR engines are selected with
-`--asr-engine whisper`, `--asr-engine whisperx`, or
-`--asr-engine whisper-oai`. The server auto-chains disfluency + retrace.
+`--engine whisper`, `--engine chatwhisper`, `--engine openai`,
+`--engine funaudio`, `--engine tencent`, or `--engine qwen3` (the legacy
+`whisperx` engine has been removed). The server auto-chains disfluency + retrace.
 For languages with a dedicated utterance model (`eng`, `cmn`, `zho`, `yue`),
 transcribe also runs pre-CHAT utterance segmentation before CHAT assembly.
 
@@ -73,7 +74,6 @@ transcribe also runs pre-CHAT utterance segmentation before CHAT assembly.
 | Rust `crates/batchalign/src/revai/asr.rs` — Rev (default) | Rev.AI HTTP client only | local + remote API | negligible local memory | per-file server dispatch | No |
 | `inference/asr.py` — Whisper OAI | None (OpenAI API) | remote | N/A | N/A | No |
 | `inference/asr.py` — Whisper | `openai/whisper-large-v3` + optional BertUtteranceModel | HF Hub | ~3 GB + ~400 MB | Worker startup (immediate) | Yes |
-| `inference/asr.py` — WhisperX | `large-v2` + alignment model + optional BertUtteranceModel | HF Hub / WhisperX | ~4 GB | Worker startup (immediate) | Yes |
 | Rust (disfluency) | None | local | negligible | N/A | No |
 | Rust (retrace) | None | local | negligible | N/A | No |
 

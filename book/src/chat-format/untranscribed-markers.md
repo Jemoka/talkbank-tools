@@ -68,9 +68,9 @@ against the whole field.
 ## What ASR pipelines should do instead
 
 The `transcript_from_asr_utterances` gate (defined in
-`crates/talkbank-transform/src/asr_postprocess/cleanup.rs`, exercised
+`crates/core/talkbank-transform/src/asr_postprocess/cleanup.rs`, exercised
 by the pipeline assembled in
-`crates/talkbank-transform/src/build_chat/`) demonstrates the right
+`crates/core/talkbank-transform/src/build_chat/`) demonstrates the right
 pattern:
 
 1. The pipeline silently fixes only orthographically inarguable

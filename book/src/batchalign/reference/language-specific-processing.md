@@ -48,10 +48,9 @@ Language determines which fine-tuned model is loaded for ASR. See
 | Hebrew (heb) | `ivrit-ai/whisper-large-v3` | `openai/whisper-large-v2` |
 | All others | `openai/whisper-large-v3` | `openai/whisper-large-v2` |
 
-Only the HuggingFace `--asr-engine whisper` engine uses language-specific
-resolution. `--asr-engine whisper-oai` always loads `whisper-turbo`;
-`--asr-engine whisperx` always loads `whisper-large-v2`. See
-[Whisper ASR](whisper-asr.md).
+Only the HuggingFace `--engine whisper` engine uses language-specific
+resolution. `--engine openai` always loads `whisper-turbo`. (The legacy
+`whisperx` engine has been removed.) See [Whisper ASR](whisper-asr.md).
 
 ### Stage 2: Number Expansion
 

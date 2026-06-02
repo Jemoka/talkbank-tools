@@ -1,7 +1,7 @@
 # Benchmarks
 
 **Status:** Reference
-**Last updated:** 2026-03-15
+**Last updated:** 2026-06-01
 
 Quick local benchmarks for core parsing and processing hot paths.
 
@@ -9,8 +9,7 @@ Run these from the repository root. If you are benchmarking a fresh source
 checkout, prepare the dev environment first:
 
 ```bash
-make sync
-bazel build //...-python
+just batchalign build         # prepares the Bazel-native Python deps + `_core.so`
 ```
 
 ## 1) CHAT parser throughput

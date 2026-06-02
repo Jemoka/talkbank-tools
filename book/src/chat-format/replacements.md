@@ -105,7 +105,7 @@ generalizes consistently:
 - `%gra` produces **two** entries — paired to the two `%mor` items.
 
 The alignment-counting code that enforces this is in
-[`alignment/units.rs`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs)
+[`alignment/units.rs`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/core/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs)
 — look for the `UtteranceContent::ReplacedWord` arm. The full table
 of per-domain rules is in
 [`resources/spec/docs/ALIGNMENT_RULES.md`](https://github.com/TalkBank/talkbank-tools/blob/main/resources/spec/docs/ALIGNMENT_RULES.md).
@@ -116,7 +116,7 @@ A replacement is modeled as a first-class `UtteranceContent` variant,
 not as a flag on `Word`:
 
 ```rust,ignore
-// crates/talkbank-model/src/model/annotation/replacement.rs
+// crates/core/talkbank-model/src/model/annotation/replacement.rs
 pub struct ReplacedWord {
     pub word: Word,                       // left side: original spoken word
     pub replacement: Replacement,         // right side: 1+ intended words
@@ -136,7 +136,7 @@ Two consequences of this shape:
    top-level slot in the AST.
 2. **The `walk_words()` content walker yields `WordItem::ReplacedWord`
    as a distinct leaf** (defined in
-   `crates/talkbank-model/src/alignment/helpers/walk/mod.rs`).
+   `crates/core/talkbank-model/src/alignment/helpers/walk/mod.rs`).
    Domain-aware extraction code branches on this leaf type and
    chooses original or replacement per the table above.
 
@@ -155,7 +155,7 @@ This produces `[E220] "C-3PO" is not a legal word in language(s) "eng":
 numeric digits not allowed` — exactly as if `C-3PO` had appeared on the
 main tier directly. **The replacement does not provide an escape from
 word-level validation.** The implementation is in
-[`replacement.rs:117-202`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/model/annotation/replacement.rs).
+[`replacement.rs:117-202`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/core/talkbank-model/src/model/annotation/replacement.rs).
 
 This is critical for any code generating replacements programmatically:
 do not assume `[: ...]` lets you smuggle arbitrary text past the word
@@ -243,9 +243,9 @@ them here so future contributors don't reinvent them.
 |---------|-----------|
 | Grammar rule (`replacement`) | `grammar/grammar.js:1341-1352` |
 | Word-with-replacement rule | `grammar/grammar.js:1063-1071` |
-| `ReplacedWord` struct | `crates/talkbank-model/src/model/annotation/replacement.rs` (search `pub struct ReplacedWord`) |
-| Per-domain alignment | `crates/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs` (search `UtteranceContent::ReplacedWord`) |
-| Replacement validation | `crates/talkbank-model/src/model/annotation/replacement.rs` (search `impl ... Validate for ReplacementWords`) |
+| `ReplacedWord` struct | `crates/core/talkbank-model/src/model/annotation/replacement.rs` (search `pub struct ReplacedWord`) |
+| Per-domain alignment | `crates/core/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs` (search `UtteranceContent::ReplacedWord`) |
+| Replacement validation | `crates/core/talkbank-model/src/model/annotation/replacement.rs` (search `impl ... Validate for ReplacementWords`) |
 | Reference corpus example | `resources/corpus/reference/annotation/errors-and-replacements.cha` |
 | CHAT manual | <https://talkbank.org/0info/manuals/CHAT.html#Replacement_Scope> |
 

@@ -1,7 +1,7 @@
 # Adding Support for a New Language
 
 **Status:** Current
-**Last updated:** 2026-05-01 09:47 EDT
+**Last updated:** 2026-06-01 01:05 PDT
 
 This page is the checklist to run through when someone says "let's add
 language X." Skipping any of these checks produces silent quality bugs
@@ -182,8 +182,8 @@ user-visible support — adjust integration before merging.
 - `book/src/reference/languages/overview.md` — language index
 - `book/src/reference/revai-language-quality-strategy.md` — when to
   switch away from Rev.AI
-- `book/src/reference/whisper-hub-asr.md` — HuggingFace fine-tune
-  routing
+- `book/src/batchalign/reference/whisper-asr.md` — HuggingFace Whisper
+  fine-tune routing
 - `crates/batchalign/CLAUDE.md` — `asr_postprocess` module
   map
 - `scripts/codegen_num2lang.py` — `ISO3_TO_NUM2WORDS` and

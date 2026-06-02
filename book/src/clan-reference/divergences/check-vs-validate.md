@@ -106,7 +106,7 @@ additionally checks research conventions.
 ## Error Number Mapping
 
 The mapping table from typed `ErrorCode` to CHECK number 1–161 lives in
-`crates/clan-core/src/commands/check/error_map.rs` (`check_error_number`).
+`crates/clan/clan-core/src/commands/check/error_map.rs` (`check_error_number`).
 The match arms there are the live source of truth — count them directly
 rather than caching a stale number in this doc. Variants without a CHECK
 equivalent fall through to `0`; those errors render as `[<code>]` in

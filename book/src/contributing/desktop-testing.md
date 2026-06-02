@@ -1,7 +1,7 @@
 # Desktop App Testing
 
 **Status:** Current
-**Last updated:** 2026-03-17
+**Last updated:** 2026-06-01 00:52 PDT
 
 This document covers the testing strategy for the Chatter desktop app
 (`apps/chatter/chatter-gui/`). Testing is split into three tiers by speed and scope.
@@ -39,7 +39,7 @@ verify the JSON shape, field names, event ordering, and stats consistency.
 
 ```bash
 # TypeScript capability/seam tests
-cd apps/chatter-gui && npm run test:unit
+cd apps/chatter/chatter-gui && npm run test:unit
 
 # Rust contract/integration tests
 cargo nextest run -p chatter-gui --test validation_bridge
@@ -138,7 +138,7 @@ does not support WebDriver. Run E2E tests in CI (Linux) or on a Windows machine.
 tauri-driver
 
 # Terminal 2: run the tests
-cd desktop
+cd apps/chatter/chatter-gui
 npm run test:e2e
 ```
 
@@ -243,5 +243,5 @@ Add to the existing CI workflow:
   run: |
     tauri-driver &
     sleep 2
-    cd apps/chatter-gui && npm run test:e2e
+    cd apps/chatter/chatter-gui && npm run test:e2e
 ```

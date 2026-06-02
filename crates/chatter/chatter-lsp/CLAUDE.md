@@ -3,7 +3,7 @@
 **Status:** Current
 **Last updated:** 2026-05-01 09:47 EDT
 
-Guidance for Claude Code when working inside `crates/chatter-lsp/`. Read the
+Guidance for Claude Code when working inside `crates/chatter/chatter-lsp/`. Read the
 workspace-level `talkbank-tools/CLAUDE.md` first — this file layers **LSP-specific
 rules** on top of the cross-cutting design rules.
 
@@ -128,7 +128,7 @@ Rules of thumb:
 ## Where things live
 
 ```
-crates/chatter-lsp/
+crates/chatter/chatter-lsp/
 ├── src/
 │   ├── bin/            # tower-lsp binary entry point (stdio transport)
 │   ├── lib.rs          # module tree exported for tests
@@ -178,9 +178,9 @@ cargo nextest run -p talkbank-parser-tests --test roundtrip_reference_corpus
 ## Related documentation
 
 - Public user + developer docs for the VS Code extension:
-  `talkbank-tools/book/src/apps/vscode-extension/` (the VS Code section of the
-  unified TalkBank Toolchain mdBook, post-P11).
+  `talkbank-tools/book/src/vscode/` (the VS Code section of the
+  unified TalkBank Toolchain mdBook).
 - Unified book, chatter architecture chapter:
   `talkbank-tools/book/src/architecture/alignment.md`.
 - VS Code extension guidance: `talkbank-tools/apps/vscode-extension/CLAUDE.md`.
-- Custom RPC contract reference (planned): `book/src/apps/vscode-extension/reference/rpc-contracts.md`.
+- Custom RPC contract reference (planned): `book/src/vscode/reference/`.

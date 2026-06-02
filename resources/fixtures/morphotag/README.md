@@ -1,5 +1,11 @@
 # Morphotag Regression Fixtures
 
+> **Note (runner not yet public):** The regression-fixture runner referenced
+> from the top-level `resources/fixtures/README.md` lives in an internal-only
+> test crate that has not been open-sourced yet. Until it lands publicly,
+> these fixtures document expected behavior; running them requires the
+> private workspace.
+
 This directory will hold real-world `batchalign3 morphotag` regression
 fixtures. The convention matches `align/` — see the top-level
 `resources/fixtures/README.md` for the directory layout and the

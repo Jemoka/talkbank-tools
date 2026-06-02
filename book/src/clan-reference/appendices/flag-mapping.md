@@ -3,7 +3,7 @@
 **Status:** Current
 **Last updated:** 2026-05-12 04:20 EDT
 
-Complete mapping between legacy CLAN `+flag`/`-flag` syntax and modern `--flag` equivalents. Both styles are accepted by `chatter clan`. Translation lives in `crates/clan-core/src/clan_args.rs`.
+Complete mapping between legacy CLAN `+flag`/`-flag` syntax and modern `--flag` equivalents. Both styles are accepted by `chatter clan`. Translation lives in `crates/clan/clan-core/src/clan_args.rs`.
 
 ## Speaker and tier filters
 

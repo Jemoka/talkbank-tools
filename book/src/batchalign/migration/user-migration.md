@@ -1,7 +1,7 @@
 # User Workflow Migration (batchalign2 -> batchalign3)
 
 **Status:** Current
-**Last updated:** 2026-05-05 13:54 EDT
+**Last updated:** 2026-06-01 21:36 PDT
 
 This page describes durable differences between:
 
@@ -146,9 +146,13 @@ There are hidden per-command BA2 aliases that still parse and map onto the
 current typed options:
 
 - `align`: `--whisper`, `--rev`, `--whisper-fa`, `--wav2vec`
-- `transcribe`: `--whisper`, `--whisperx`, `--whisper-oai`, `--rev`,
-  `--diarize`, `--nodiarize`
+- `transcribe`: `--whisper`, `--whisper-oai`, `--rev`, `--diarize`, `--nodiarize`
 - `benchmark`: `--whisper`, `--whisper-oai`, `--rev`
+
+**Removed in BA3:** `--whisperx` (BA2 only). The WhisperX engine no longer
+ships with BA3; the flag is not recognized. Use `--engine whisper` (HF) or
+`--engine openai` instead. The BA3 engine set is `rev, whisper, chatwhisper,
+openai, funaudio, tencent, qwen3`.
 
 **`transcribe` diarization semantics are now identical in BA2 and BA3.** Both
 systems keep `--diarize` as an opt-in path with a `False` / `auto` default.

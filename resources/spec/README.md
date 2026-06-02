@@ -9,7 +9,7 @@ that, see `book/`.
 `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs` reads this directory and regenerates:
 
 - `grammar/test/corpus/*.txt` — tree-sitter corpus tests
-- `crates/core/talkbank-parser-tests/tests/generated/*.rs` — Rust parser/validator tests
+- `crates/core/talkbank-parser-tests/tests/generated/*.rs` — Rust parser/validator tests (canonical path)
 - `book/src/operations/errors/*.md` — per-error documentation pages
 
 **Never hand-edit those output files.** They are wiped and regenerated on every
@@ -27,7 +27,7 @@ that, see `book/`.
 ## Generator crates
 
 The generators that consume this directory live in the main Rust workspace
-under `crates/core/`:
+under `crates/spec/`:
 
 | Crate | Role |
 |---|---|
@@ -35,5 +35,5 @@ under `crates/core/`:
 | `talkbank-spec-testrun` | **Live-parser verification.** Runs each error spec through the actual `talkbank-parser` to confirm it produces the claimed error codes (`validate_error_specs`), and mines real `.cha` files for candidate specs (`extract_corpus_candidates`). |
 
 Before the 2026-05-15 reorganization, both crates lived inside `spec/` as a
-separate Cargo workspace. They are now ordinary workspace members in
-`crates/core/`. The full workflow is documented in [`CLAUDE.md`](./CLAUDE.md).
+separate Cargo workspace. They now live under `crates/spec/` as ordinary
+workspace members. The full workflow is documented in [`CLAUDE.md`](./CLAUDE.md).

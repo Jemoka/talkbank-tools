@@ -23,7 +23,7 @@ chatter clan freq --include-word "the" file.cha
 
 > **`+k` / `--case-sensitive` is currently non-functional.** The
 > legacy `+k` flag rewrites to `--case-sensitive` (see
-> `crates/clan-core/src/clan_args.rs:104`), but no `clap` field
+> `crates/clan/clan-core/src/clan_args.rs:104`), but no `clap` field
 > consumes that token in the current `Freq`/`CommonAnalysisArgs`
 > structs, so passing it produces a parse error. Word matching is
 > case-insensitive today.
@@ -54,7 +54,7 @@ chatter clan freq --include-word "the" file.cha
 ## Display Modes (`+dN` / `--display-mode N`) — DRAFT, awaiting PI review
 
 > **Status: drafted from CLAN manual; not yet implemented.** The legacy
-> rewriter at `crates/clan-core/src/clan_args.rs:101` translates
+> rewriter at `crates/clan/clan-core/src/clan_args.rs:101` translates
 > `+dN` → `--display-mode N`, but no `clap` field consumes that token
 > today. This section drafts the per-N table from CLAN manual
 > §7.10.15 (`Unique Options`, FREQ) verbatim, for PI review and

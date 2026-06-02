@@ -10,7 +10,7 @@ published) is the authoritative source. Until then, treat the rustdoc
 comments inside each crate's `src/lib.rs` as the source of truth.
 
 > **Examples on this page are mirrored as a real Cargo test at
-> `crates/talkbank-transform/tests/book_library_usage_examples.rs`.**
+> `crates/core/talkbank-transform/tests/book_library_usage_examples.rs`.**
 > The book renders them as `rust,ignore` so mdbook doesn't try to link
 > against the workspace's many compiled crate variants; the parallel
 > test runs the same code under `cargo test` and is what catches API
@@ -33,9 +33,9 @@ them, so use git or path dependencies today:
 
 ```toml
 [dependencies]
-talkbank-model = { path = "../talkbank-tools/crates/talkbank-model" }
-talkbank-transform = { path = "../talkbank-tools/crates/talkbank-transform" }
-talkbank-parser = { path = "../talkbank-tools/crates/talkbank-parser" }
+talkbank-model = { path = "../talkbank-tools/crates/core/talkbank-model" }
+talkbank-transform = { path = "../talkbank-tools/crates/core/talkbank-transform" }
+talkbank-parser = { path = "../talkbank-tools/crates/core/talkbank-parser" }
 ```
 
 The published-crate workflow is tracked separately; once it lands these

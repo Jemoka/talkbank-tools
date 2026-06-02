@@ -1,7 +1,13 @@
 # Test Fixtures
 
 **Status:** Current
-**Last updated:** 2026-04-17 17:52 EDT
+**Last updated:** 2026-06-01 01:05 PDT
+
+> **Note (runner not yet public):** The
+> `crates/batchalign/tests/ml_golden/<command>/regressions.rs` runner
+> referenced below lives in an internal-only test crate that has not been
+> open-sourced yet. Until it lands publicly, these fixtures document
+> expected behavior; running them requires the private workspace.
 
 This directory holds CHAT and CHAT+audio fixtures used by the test
 suite. Two layouts coexist:

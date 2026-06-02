@@ -5,7 +5,7 @@
 
 ## Steps
 
-1. **Create the module** — `crates/clan-core/src/commands/<name>.rs` with
+1. **Create the module** — `crates/clan/clan-core/src/commands/<name>.rs` with
    four types:
    - `<Name>Config` — command configuration (from CLI flags)
    - `<Name>State` — mutable accumulator (implements `Default`)
@@ -14,23 +14,23 @@
      resolves to
    - `<Name>Command` — unit struct implementing `AnalysisCommand`
 
-2. **Register** — add `pub mod <name>;` to `crates/clan-core/src/commands/mod.rs`
+2. **Register** — add `pub mod <name>;` to `crates/clan/clan-core/src/commands/mod.rs`
 
 3. **Wire CLI** — add a subcommand variant to `ClanCommands` in
-   `crates/chatter-cli/src/cli/args/clan_commands.rs`
+   `crates/chatter/chatter-cli/src/cli/args/clan_commands.rs`
 
 4. **Wire dispatch** — add the match arm in the appropriate family module
    (`analysis.rs`, `transforms.rs`, `converters.rs`, `compatibility.rs`,
-   or `helpers.rs`) under `crates/chatter-cli/src/commands/clan/`; keep
-   `run_clan()` in `crates/chatter-cli/src/commands/clan/mod.rs` as the
+   or `helpers.rs`) under `crates/chatter/chatter-cli/src/commands/clan/`; keep
+   `run_clan()` in `crates/chatter/chatter-cli/src/commands/clan/mod.rs` as the
    thin top-level dispatcher
 
 5. **Add golden test** — add a test case in the relevant file under
-   `crates/clan-core/tests/clan_golden/`
+   `crates/clan/clan-core/tests/clan_golden/`
 
 ## Skeleton
 
-The trait is defined in `crates/clan-core/src/framework/command.rs`.
+The trait is defined in `crates/clan/clan-core/src/framework/command.rs`.
 It has three associated types (`Config`, `State`, `Output`) and three
 methods (`process_utterance`, `end_file` with a default no-op impl, and
 `finalize`).

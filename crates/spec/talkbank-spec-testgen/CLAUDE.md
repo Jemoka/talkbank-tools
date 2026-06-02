@@ -1,13 +1,13 @@
 # spec/tools - Core Generators Crate
 
 **Status:** Current
-**Last updated:** 2026-05-01 09:47 EDT
+**Last updated:** 2026-06-01 00:52 PDT
 
 ## Overview
 Rust generators that turn CHAT specs into tests and documentation artifacts.
-This crate lives in the separate `crates/spec/talkbank-spec-testgen/Cargo.toml` workspace alongside
-`spec/runtime-tools`, which owns runtime-aware bootstrap/mining/validation
-tasks.
+This crate lives at `crates/spec/talkbank-spec-testgen/` in the main workspace
+alongside `crates/spec/talkbank-spec-testrun/`, which owns runtime-aware
+bootstrap/mining/validation tasks.
 
 ## Key Commands
 ```bash
@@ -15,12 +15,12 @@ tasks.
 just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs           # Regenerate all tests from specs
 just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs && git diff --exit-code    # Verify generated artifacts are in sync
 
-# Manual:
-cargo run --bin gen_tree_sitter_tests -- -o ../../grammar/test/corpus -t templates
-cargo run --bin gen_rust_tests -- -o ../../crates/talkbank-parser-tests/tests/generated
-cargo run --bin gen_validation_tests -- -o ../../crates/talkbank-parser-tests/tests/generated
-cargo run --bin gen_error_docs -- -o ../../docs/errors
-cargo test
+# Manual (cargo escape hatch — run from the repo root):
+cargo run -p talkbank-spec-testgen --bin gen_tree_sitter_tests -- -o grammar/test/corpus -t crates/spec/talkbank-spec-testgen/templates
+cargo run -p talkbank-spec-testgen --bin gen_rust_tests -- -o crates/core/talkbank-parser-tests/tests/generated
+cargo run -p talkbank-spec-testgen --bin gen_validation_tests -- -o crates/core/talkbank-parser-tests/tests/generated
+cargo run -p talkbank-spec-testgen --bin gen_error_docs -- -o book/src/operations/errors
+cargo test -p talkbank-spec-testgen
 ```
 
 ## Binary Reference
@@ -54,7 +54,7 @@ cargo test
 
 ### Runtime-Aware Sibling Crate
 
-`spec/runtime-tools` owns the tools that need the live Rust parser/model crates:
+`crates/spec/talkbank-spec-testrun` owns the tools that need the live Rust parser/model crates:
 - `validate_error_specs`
 - `bootstrap`
 - `bootstrap_tiers`

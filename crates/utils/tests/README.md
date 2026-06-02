@@ -67,7 +67,7 @@ bazel build //... && bazel test //...                             # Pre-merge ga
 - **Construct coverage**: Create a spec in `resources/spec/constructs/`, then `just spec gen-tree-sitter-tests && just spec gen-rust-tests && just spec gen-error-docs`
 - **Integration tests**: Add a new `.rs` file here with a descriptive name
 
-See [resources/spec/errors/README.md](../resources/spec/errors/README.md) for the spec format.
+See [resources/spec/errors/README.md](../../../resources/spec/errors/README.md) for the spec format.
 
 ---
-Last Updated: 2026-03-05
+Last Updated: 2026-06-01

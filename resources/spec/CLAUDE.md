@@ -1,7 +1,7 @@
 # spec — CHAT Specification
 
 **Status:** Current
-**Last updated:** 2026-05-01 09:47 EDT
+**Last updated:** 2026-06-01 00:52 PDT
 
 ## How This Works
 
@@ -27,7 +27,7 @@ it will be deleted next time someone runs `just spec gen-tree-sitter-tests && ju
 | `resources/spec/constructs/` | Valid CHAT examples with expected CSTs |
 | `resources/spec/errors/` | Invalid CHAT examples with expected error codes |
 | → `grammar/test/corpus/` | Generated tree-sitter tests |
-| → `tests/generated/` | Generated Rust parser/validation tests |
+| → `crates/core/talkbank-parser-tests/tests/generated/` | Generated Rust parser/validation tests |
 | → `book/src/operations/errors/` | Generated error documentation pages |
 
 ## Adding a Test
@@ -162,6 +162,6 @@ grammar rule so that previously-unparsable content now parses:
 4. Run `bazel build //... && bazel test //...` to confirm
 
 ## See Also
-- `spec/tools/CLAUDE.md` — generator implementation details
+- `crates/spec/talkbank-spec-testgen/CLAUDE.md` — generator implementation details
 - `grammar/CLAUDE.md` — grammar change workflow
 - `book/src/contributing/testing.md` — testing strategy

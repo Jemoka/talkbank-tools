@@ -13,7 +13,7 @@ See the [CLAN manual](https://talkbank.org/0info/manuals/CLAN.html#_Toc220409286
 
 > **Note on `-f` short flag.** Both `--script` and `--format`
 > declare `-f` as their short flag in
-> `crates/chatter-cli/src/cli/args/clan_commands.rs:260` and
+> `crates/chatter/chatter-cli/src/cli/args/clan_commands.rs:260` and
 > `:345`. clap currently accepts this — `chatter clan mortable
 > --help` runs successfully and `-f test.cut` resolves to
 > `--script` — so the previous warning that the command was

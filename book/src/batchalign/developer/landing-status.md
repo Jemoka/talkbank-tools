@@ -104,7 +104,7 @@ These were marked Skip/Defer in `ba3_cutover_plan.md`:
 - `tokio-console` / `py-spy` — premature; tracing is enough.
 - Typed callback Protocol types in Stanza — `ipc-schema` already typed.
 - `ProcessingContext` dataclass — Pydantic-at-boundary covers it.
-- `whisper_hub` — `backends/asr/whisperx.py` already takes HF model IDs.
+- `whisper_hub` — superseded; `whisperx` and `whisper_hub` engines have since been removed entirely (see `backends/asr/` for the current engine set).
 - Cantonese particle pre-chunk — wait on sliding-window first.
 - Capability detection endpoint — add when a consumer asks.
 - Constituency parser in Rust; OTLP; rate limiting.

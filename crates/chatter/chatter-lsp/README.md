@@ -1,7 +1,7 @@
 # chatter-lsp
 
 **Status:** Current
-**Last updated:** 2026-04-13 20:30 EDT
+**Last updated:** 2026-06-01 00:52 PDT
 
 [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) implementation for [CHAT format](https://talkbank.org/0info/manuals/CHAT.html).
 
