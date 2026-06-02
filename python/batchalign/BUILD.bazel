@@ -167,6 +167,26 @@ py_test(
 # Bazel-side rust_library build that doubled the rustc cost on every
 # `.rs` edit. The `no-cache` tag below preserves correctness without
 # that cost.
+#
+# Caveat — the rules_rust build isn't fully eliminated. `srcs` pulls
+# in `:_proto_generated_py`, which transitively depends on
+# `//crates/batchalign/batchalign-core:proto_schema_json`. That genrule
+# uses `:emit_proto_schema` (a rust_binary) as its tool, and
+# `:emit_proto_schema` links `:batchalign_core` as a rust_library.
+# Result: every wheel build first compiles `batchalign_core` + a chunk
+# of its transitive crate-universe deps via rules_rust in the exec
+# config (visible as `Compiling Rust rlib batchalign_core ... [for
+# tool]`), then maturin rebuilds the same crate graph from scratch
+# under cargo's target/. Two compiles of overlapping crates per cold
+# wheel build. We accept this for now — cargo's incremental cache
+# absorbs the hit on warm rebuilds, and the schema-emitter-as-tool
+# pattern is what gives us regen-on-build for `_proto_generated.py`
+# without a hand-checked-in artifact. If this cost ever bites, three
+# escape hatches: (a) check in `proto.schema.json` with a CI diff
+# guard, (b) factor proto types into a leaf `batchalign-proto` crate
+# so `:emit_proto_schema` doesn't pull all of `batchalign_core`, or
+# (c) move schema emission into maturin's build itself and ship the
+# generated `.py` inside the wheel.
 _LLVM_TOOLS = [
     "@llvm_toolchain_llvm//:bin/clang",
     "@llvm_toolchain_llvm//:bin/llvm-ar",
