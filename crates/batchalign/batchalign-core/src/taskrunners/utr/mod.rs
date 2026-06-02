@@ -180,13 +180,22 @@ impl TaskRunner for UtrTaskRunner {
         };
 
         if any_utterance_already_timed(chat) {
+            // Emit StageStarted+StageInjected (not StageSkipped) so the
+            // TUI bridge treats UTR as a clean no-op rather than a
+            // terminal per-file skip. StageSkipped is a terminal state
+            // in the TUI Task state machine (see
+            // `python/batchalign/cli/tui/task.py`) — emitting it here
+            // would lock the file's display at "skip" and prevent FA's
+            // StageStarted from advancing the task, even though the
+            // Rust pipeline continues running FA correctly on disk.
+            sink.emit(ProgressEvent::stage_started(chat.source_id(), Task::Utr));
             sink.emit(ProgressEvent {
                 source_id: chat.source_id().clone(),
                 task: Some(Task::Utr),
-                kind: ProgressKind::StageSkipped,
+                kind: ProgressKind::StageInjected,
                 completed: 0,
                 total: 0,
-                label: "at least one utterance already timed — UTR skipped".into(),
+                label: "nothing to recover — all utterances already timed".into(),
             });
             return Ok(());
         }
