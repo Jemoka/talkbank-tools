@@ -437,23 +437,25 @@ pub fn clear_media_unlinked(lines: &mut [talkbank_model::Line]) {
     }
 }
 
-/// Insert or extend a `@Comment: batchalign3 <sha> | <stage>: <engine> ...`
-/// header just before the first utterance.
+/// Insert one `@Comment: batchalign3 <sha> | <stage>: <engine> | <ts>`
+/// header per pipeline stage, just before the first utterance.
 ///
-/// Each pipeline stage (`asr`, `utr`, `fa`, ...) calls this at the end of
-/// a successful run with its task name and the registered backend's name.
-/// Behaviour:
+/// One stage → one comment line. A full UTR → FA run therefore produces:
 ///
-/// * **First call** (no prior batchalign3 comment): writes
-///   `@Comment: batchalign3 <sha> | <stage>: <engine>`.
-/// * **Subsequent calls** with a different `stage`: parses the existing
-///   `batchalign3` comment, appends `| <stage>: <engine>` to it. So a
-///   full UTR → FA run produces
-///   `@Comment: batchalign3 <sha> | utr: rev:rev_lang_en | fa: wav2vec2-fa:mms_fa-v3`.
-/// * **Re-run of the same stage**: replaces that stage's token (no
-///   duplicates).
-/// * `engine = None`: records `<stage>: <unknown>` so the stage is still
-///   visible in the audit trail.
+/// ```text
+/// @Comment:	batchalign3 abc1234 | utr: rev:rev_lang_en | 2026-06-02T17:04:12Z
+/// @Comment:	batchalign3 abc1234 | fa: wav2vec2-fa:mms_fa-v3 | 2026-06-02T17:09:33Z
+/// ```
+///
+/// One-line-per-stage was chosen over a single accumulated comment so the
+/// audit trail stays readable as pipelines grow longer, and each stage
+/// carries its own UTC timestamp (ISO-8601, second precision) — stages
+/// may run on different days, or hours apart on the same day.
+///
+/// Re-running the *same* stage replaces that stage's comment in place
+/// (matched by leading `<stage>: ` token). Other stages' comments are left
+/// untouched. `engine = None` records `<stage>: <unknown>` so the stage is
+/// still visible.
 ///
 /// The git SHA is baked at compile time via `option_env!`. The Bazel path
 /// goes through `BATCHALIGN_GIT_SHA`; cargo via `VERGEN_GIT_SHA`. Falls back
@@ -470,45 +472,27 @@ pub fn stamp_provenance(
         .or(option_env!("BATCHALIGN_GIT_SHA"))
         .unwrap_or("unknown");
     let engine_label = engine.unwrap_or("<unknown>");
-    let new_token = format!("{stage}: {engine_label}");
+    let ts = current_utc_timestamp();
+    let stamp = format!("{PROVENANCE_PREFIX}{sha} | {stage}: {engine_label} | {ts}");
+    let stage_marker = format!("| {stage}: ");
 
-    // Find and remove any existing batchalign3 comment; remember its
-    // existing per-stage tokens (after the `batchalign3 <sha>` prefix).
-    let mut existing_tokens: Vec<String> = Vec::new();
-    let mut existing_idx: Option<usize> = None;
-    for (i, l) in lines.iter().enumerate() {
+    // If a prior comment for this exact stage exists, replace it in place.
+    let mut replaced = false;
+    for l in lines.iter_mut() {
         if let Some(Header::Comment { content }) = l.as_header() {
             let text = content.to_chat_string();
-            if let Some(tail) = text.strip_prefix(PROVENANCE_PREFIX) {
-                // Tail begins with the sha; tokens follow ` | `.
-                if let Some((_sha, rest)) = tail.split_once(" | ") {
-                    existing_tokens = rest
-                        .split(" | ")
-                        .map(str::trim)
-                        .filter(|s| !s.is_empty())
-                        .map(String::from)
-                        .collect();
-                }
-                existing_idx = Some(i);
+            if text.starts_with(PROVENANCE_PREFIX) && text.contains(&stage_marker) {
+                *l = Line::header(Header::Comment {
+                    content: BulletContent::from_text(stamp.clone()),
+                });
+                replaced = true;
                 break;
             }
         }
     }
-    if let Some(i) = existing_idx {
-        lines.remove(i);
+    if replaced {
+        return;
     }
-
-    // Drop any prior entry for this stage (same stage running twice
-    // replaces, not duplicates), then append the new one.
-    let prefix = format!("{stage}: ");
-    existing_tokens.retain(|t| !t.starts_with(&prefix));
-    existing_tokens.push(new_token);
-
-    let stamp = if existing_tokens.is_empty() {
-        format!("{PROVENANCE_PREFIX}{sha}")
-    } else {
-        format!("{PROVENANCE_PREFIX}{sha} | {}", existing_tokens.join(" | "))
-    };
 
     let comment = Line::header(Header::Comment {
         content: BulletContent::from_text(stamp),
@@ -526,13 +510,45 @@ pub fn stamp_provenance(
     lines.insert(insert_at, comment);
 }
 
+/// Current UTC timestamp as ISO-8601 `YYYY-MM-DDTHH:MM:SSZ`. Pure-stdlib
+/// (no chrono dep) via Howard Hinnant's `civil_from_days` algorithm
+/// (<http://howardhinnant.github.io/date_algorithms.html>) for the date
+/// part and trivial modular arithmetic for the time-of-day part.
+fn current_utc_timestamp() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let days = secs.div_euclid(86_400);
+    let tod = secs.rem_euclid(86_400) as u32;
+    let (y, mo, d) = civil_from_unix_days(days);
+    let h = tod / 3600;
+    let mi = (tod % 3600) / 60;
+    let s = tod % 60;
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z")
+}
+
+fn civil_from_unix_days(days: i64) -> (i32, u32, u32) {
+    // Shift so day 0 is 0000-03-01 (Hinnant's "civil" epoch).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097) as u64; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as i32, m, d)
+}
+
 #[cfg(test)]
 mod stamp_provenance_tests {
-    //! Lock in the de-duplication behaviour of `stamp_provenance`. A
-    //! higher-level Pipeline-aware orchestrator (suggested follow-up
-    //! per review) could replace these per-stage calls with a single
-    //! end-of-pipeline stamp; until then these tests guard the
-    //! incremental behaviour each runner currently relies on.
+    //! One `@Comment` per stage; rerunning a stage replaces that stage's
+    //! comment in place; other stages' comments are untouched. Each
+    //! comment carries its own UTC date so stages run on different days
+    //! stay auditable.
     use super::*;
     use talkbank_model::Line;
     use talkbank_model::model::Header;
@@ -547,19 +563,26 @@ mod stamp_provenance_tests {
             .collect()
     }
 
+    fn ba_comments(lines: &[Line]) -> Vec<String> {
+        comment_lines(lines)
+            .into_iter()
+            .filter(|c| c.starts_with(PROVENANCE_PREFIX))
+            .collect()
+    }
+
     #[test]
-    fn accumulates_distinct_stages() {
+    fn one_comment_per_stage_with_date() {
         let mut lines: Vec<Line> = Vec::new();
         stamp_provenance(&mut lines, "utr", Some("rev:rev_lang_en"));
         stamp_provenance(&mut lines, "fa", Some("wav2vec2-fa:mms_fa-v3"));
-        let comments = comment_lines(&lines);
-        assert_eq!(comments.len(), 1, "exactly one batchalign3 comment");
-        let c = &comments[0];
-        assert!(c.contains("utr: rev:rev_lang_en"), "utr token present: {c}");
-        assert!(
-            c.contains("fa: wav2vec2-fa:mms_fa-v3"),
-            "fa token present: {c}"
-        );
+        let comments = ba_comments(&lines);
+        assert_eq!(comments.len(), 2, "one comment per stage: {comments:?}");
+        let utr = comments.iter().find(|c| c.contains("| utr: ")).unwrap();
+        let fa = comments.iter().find(|c| c.contains("| fa: ")).unwrap();
+        assert!(utr.contains("rev:rev_lang_en"), "utr engine: {utr}");
+        assert!(fa.contains("wav2vec2-fa:mms_fa-v3"), "fa engine: {fa}");
+        assert!(has_timestamp_tail(utr), "utr ts tail: {utr}");
+        assert!(has_timestamp_tail(fa), "fa ts tail: {fa}");
     }
 
     #[test]
@@ -567,16 +590,11 @@ mod stamp_provenance_tests {
         let mut lines: Vec<Line> = Vec::new();
         stamp_provenance(&mut lines, "utr", Some("rev:rev_lang_en"));
         stamp_provenance(&mut lines, "utr", Some("whisper:large-v3"));
-        let comments = comment_lines(&lines);
-        assert_eq!(comments.len(), 1);
+        let comments = ba_comments(&lines);
+        assert_eq!(comments.len(), 1, "still one utr comment: {comments:?}");
         let c = &comments[0];
-        assert!(
-            !c.contains("rev:rev_lang_en"),
-            "old utr engine dropped: {c}"
-        );
-        assert!(c.contains("utr: whisper:large-v3"), "new engine present: {c}");
-        // Exactly one `utr: ` token.
-        assert_eq!(c.matches("utr: ").count(), 1);
+        assert!(!c.contains("rev:rev_lang_en"), "old engine dropped: {c}");
+        assert!(c.contains("whisper:large-v3"), "new engine present: {c}");
     }
 
     #[test]
@@ -584,22 +602,51 @@ mod stamp_provenance_tests {
         let mut lines: Vec<Line> = Vec::new();
         stamp_provenance(&mut lines, "utr", Some("rev:en"));
         stamp_provenance(&mut lines, "fa", Some("wav2vec2:v3"));
-        // Re-run UTR with a different engine; FA token should survive.
         stamp_provenance(&mut lines, "utr", Some("whisper:large-v3"));
-        let comments = comment_lines(&lines);
-        assert_eq!(comments.len(), 1);
-        let c = &comments[0];
-        assert!(c.contains("utr: whisper:large-v3"), "new utr: {c}");
-        assert!(c.contains("fa: wav2vec2:v3"), "fa kept: {c}");
-        assert!(!c.contains("rev:en"), "old utr dropped: {c}");
+        let comments = ba_comments(&lines);
+        assert_eq!(comments.len(), 2, "utr replaced in place: {comments:?}");
+        let utr = comments.iter().find(|c| c.contains("| utr: ")).unwrap();
+        let fa = comments.iter().find(|c| c.contains("| fa: ")).unwrap();
+        assert!(utr.contains("whisper:large-v3"));
+        assert!(!utr.contains("rev:en"));
+        assert!(fa.contains("wav2vec2:v3"));
     }
 
     #[test]
     fn engine_none_records_unknown() {
         let mut lines: Vec<Line> = Vec::new();
         stamp_provenance(&mut lines, "asr", None);
-        let comments = comment_lines(&lines);
+        let comments = ba_comments(&lines);
         assert_eq!(comments.len(), 1);
         assert!(comments[0].contains("asr: <unknown>"));
+    }
+
+    /// True iff `s` ends with ` | YYYY-MM-DDTHH:MM:SSZ`.
+    fn has_timestamp_tail(s: &str) -> bool {
+        let Some(tail) = s.rsplit(" | ").next() else {
+            return false;
+        };
+        // Shape: 0123-56-89T12:45:78Z  (length 20)
+        if tail.len() != 20 {
+            return false;
+        }
+        let b = tail.as_bytes();
+        let punct_ok = b[4] == b'-' && b[7] == b'-' && b[10] == b'T'
+            && b[13] == b':' && b[16] == b':' && b[19] == b'Z';
+        let digits_ok = [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18]
+            .iter()
+            .all(|&i| b[i].is_ascii_digit());
+        punct_ok && digits_ok
+    }
+
+    #[test]
+    fn civil_from_unix_days_matches_known_dates() {
+        // Sanity-check the date math at a few well-known epochs.
+        assert_eq!(civil_from_unix_days(0), (1970, 1, 1));
+        assert_eq!(civil_from_unix_days(31), (1970, 2, 1));
+        // 2000-03-01 = day 11017.
+        assert_eq!(civil_from_unix_days(11_017), (2000, 3, 1));
+        // 2026-06-02 = day 20_606.
+        assert_eq!(civil_from_unix_days(20_606), (2026, 6, 2));
     }
 }

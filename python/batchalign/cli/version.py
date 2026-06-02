@@ -29,12 +29,12 @@ import typer
 
 
 _BANNER = r"""
- ____        _       _           _ _
-| __ )  __ _| |_ ___| |__   __ _| (_) __ _ _ __
-|  _ \ / _` | __/ __| '_ \ / _` | | |/ _` | '_ \
-| |_) | (_| | || (__| | | | (_| | | | (_| | | | |
-|____/ \__,_|\__\___|_| |_|\__,_|_|_|\__, |_| |_|
-                                     |___/
+     __          __       __          ___            _____
+    / /_  ____ _/ /______/ /_  ____ _/ (_)___ _____ |__  /
+   / __ \/ __ `/ __/ ___/ __ \/ __ `/ / / __ `/ __ \ /_ < 
+  / /_/ / /_/ / /_/ /__/ / / / /_/ / / / /_/ / / / /__/ / 
+ /_.___/\__,_/\__/\___/_/ /_/\__,_/_/_/\__, /_/ /_/____/  
+                                      /____/              
 """
 
 _MAINTAINERS = (
@@ -48,7 +48,7 @@ def _resolve_version() -> str:
     try:
         return metadata.version("batchalign")
     except metadata.PackageNotFoundError:
-        return "unknown"
+        return "-prerelease"
 
 
 def _resolve_git_sha() -> str:
@@ -96,10 +96,8 @@ def render() -> str:
     sha = _resolve_git_sha()
     lines = [
         _BANNER,
-        f"  TalkBank | batchalign3 {version}  (git {sha})",
-        "",
-        "  Maintainers:",
-        *[f"    - {m}" for m in _MAINTAINERS],
+        f"  v{version}  (git {sha})",
+        "  Developed by "+(", ".join([f"{m}" for m in _MAINTAINERS])),
         "",
         "  talkbank.org",
         "",

@@ -460,6 +460,7 @@ async fn run_one(
         }
         value = try_step(inner.clone(), task, value, sink.clone()).await;
     }
+    stamp_run_provenance(&inner, &mut value);
     let sid = value.source_id();
     sink.emit(ProgressEvent {
         source_id: sid,
@@ -470,6 +471,48 @@ async fn run_one(
         label: String::new(),
     });
     value
+}
+
+/// Stamp a single `@Comment: batchalign3 <sha> | <task>: <engine> | …`
+/// provenance header onto every Chat artifact this pipeline produced.
+///
+/// Lifted up from the per-task runners (asr / fa / utr) so the comment lists
+/// every Batchalign stage that touched the file in one place, with the git
+/// SHA baked at compile time by `batchalign_core::utils::stamp_provenance`.
+/// Runs only on the success path (`!value.is_failed()`); a failed run still
+/// emits a `BAValue::Failed` so its `partial` can be inspected, but we do
+/// not stamp a half-done file as "produced by" the full pipeline.
+fn stamp_run_provenance(inner: &PipelineInner, value: &mut BAValue) {
+    if value.is_failed() {
+        return;
+    }
+    let dispatcher: &dyn batchalign_core::base::Dispatcher = inner.engine.as_ref();
+    stamp_chats_in_value(value, &inner.order, dispatcher);
+}
+
+fn stamp_chats_in_value(
+    value: &mut BAValue,
+    order: &[batchalign_core::Task],
+    dispatcher: &dyn batchalign_core::base::Dispatcher,
+) {
+    match value {
+        BAValue::Chat(chat) => {
+            let lines = &mut chat.ast_mut().lines.0;
+            for &task in order {
+                let engine = dispatcher.engine_name(task);
+                batchalign_core::utils::stamp_provenance(
+                    lines,
+                    task.as_str(),
+                    engine.as_deref(),
+                );
+            }
+        }
+        BAValue::Cons { head, tail } => {
+            stamp_chats_in_value(head, order, dispatcher);
+            stamp_chats_in_value(tail, order, dispatcher);
+        }
+        _ => {}
+    }
 }
 
 async fn try_step(

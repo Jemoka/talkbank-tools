@@ -461,6 +461,7 @@ name = "batchalign"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "polars" },
@@ -583,6 +584,7 @@ dev = [
     { name = "wheel" },
 ]
 runtime = [
+    { name = "click" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "openai-whisper" },
@@ -604,6 +606,7 @@ requires-dist = [
     { name = "aliyun-python-sdk-core", marker = "extra == 'all'", specifier = ">=2.13" },
     { name = "aliyun-python-sdk-core", marker = "extra == 'cantonese'", specifier = ">=2.13" },
     { name = "build", marker = "extra == 'dev'" },
+    { name = "click", specifier = ">=8" },
     { name = "cos-python-sdk-v5", marker = "extra == 'all'" },
     { name = "cos-python-sdk-v5", marker = "extra == 'cantonese'" },
     { name = "datamodel-code-generator", marker = "extra == 'dev'", specifier = ">=0.26" },
@@ -695,6 +698,7 @@ dev = [
     { name = "wheel" },
 ]
 runtime = [
+    { name = "click", specifier = ">=8" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "openai-whisper" },
     { name = "polars", specifier = ">=0.20" },

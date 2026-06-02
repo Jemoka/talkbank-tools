@@ -16,7 +16,6 @@ use crate::base::{ProgressEvent, ProgressSink};
 use crate::proto::asr::{AsrInput, AsrOutput, LanguageSpec};
 use crate::utils::SourceId;
 use crate::utils::SpeakerLabel;
-use crate::utils::stamp_provenance;
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
 use std::collections::BTreeMap;
@@ -64,8 +63,7 @@ impl TaskRunner for AsrTaskRunner {
         let output_raw = dispatcher.dispatch(TaskInput::Asr(input)).await?;
         let output: AsrOutput = output_raw.try_into()?;
 
-        let engine = dispatcher.engine_name(Task::Asr);
-        let chat = build_chat_from_asr(&media.source_id, &language, &output, engine.as_deref())?
+        let chat = build_chat_from_asr(&media.source_id, &language, &output)?
             .with_media(media.clone());
         *value = BAValue::Chat(chat);
 
@@ -86,7 +84,6 @@ fn build_chat_from_asr(
     source_id: &SourceId,
     language: &LanguageSpec,
     output: &AsrOutput,
-    engine: Option<&str>,
 ) -> BAResult<Chat> {
     use talkbank_model::ErrorCollector;
     use talkbank_transform::build_chat::{
@@ -174,15 +171,12 @@ fn build_chat_from_asr(
         write_wor: false,
     };
 
-    let mut chat_file =
+    let chat_file =
         build_chat(&desc).map_err(|e| BAError::Internal(format!("build_chat: {e}")))?;
 
-    // Stamp provenance as a `@Comment` header: BA version + engine name.
-    // Inserted just before the first utterance so it sits at the tail of the
-    // header block — visible to anyone reading the file, ignored by the
-    // alignment / mor / wor stages downstream. Shared with `FaTaskRunner`
-    // via `utils::stamp_provenance`.
-    stamp_provenance(&mut chat_file.lines.0, Task::Asr.as_str(), engine);
+    // Provenance `@Comment` stamping happens once at end-of-pipeline in
+    // `batchalign_engine::pipeline::run_one` (single source of truth for
+    // git SHA + per-stage engine accumulation). No per-runner stamping.
 
     let collector = ErrorCollector::new();
     let validated = chat_file.validate_into(&collector, None);
@@ -272,24 +266,18 @@ mod tests {
                 fake_segment("spk_1", "general kenobi", 1000, 2200),
             ],
         };
-        let chat = build_chat_from_asr(
-            &sid,
-            &LanguageSpec::Code("eng".into()),
-            &out,
-            Some("WhisperBackend"),
-        )
-        .expect("chat");
+        let chat = build_chat_from_asr(&sid, &LanguageSpec::Code("eng".into()), &out)
+            .expect("chat");
         let text = chat.to_chat();
         assert!(text.contains("@Languages:\teng"));
         assert!(text.contains("@Participants:"));
         assert!(text.contains("*PAR0:\thello there ."));
         assert!(text.contains("*PAR1:\tgeneral kenobi ."));
-        // Provenance stamp: BA version + engine name.
+        // Provenance `@Comment` is stamped by the pipeline driver, not the
+        // runner — see `batchalign_engine::pipeline::stamp_run_provenance`.
         assert!(
-            text.contains("@Comment:")
-                && text.contains("batchalign3 ")
-                && text.contains("WhisperBackend"),
-            "expected provenance @Comment in:\n{text}"
+            !text.contains("batchalign3 "),
+            "runner must not stamp provenance: {text}"
         );
     }
 

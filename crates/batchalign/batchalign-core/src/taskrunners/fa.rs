@@ -29,7 +29,6 @@ use crate::proto::asr::{AsrSegment, AsrWord, LanguageSpec};
 use crate::proto::fa::{FaInput, FaOutput};
 use crate::utils::{
     BAError, BAResult, MediaInput, SourceId, SpeakerLabel, clear_media_unlinked, prepare_pcm,
-    stamp_provenance,
 };
 use async_trait::async_trait;
 use smol_str::SmolStr;
@@ -138,16 +137,10 @@ impl TaskRunner for FaTaskRunner {
         // sees the bar move from 0 → 100 here.
         progress.finish();
 
-        // Stamp the file with BA version + engine name (parity with
-        // `asr.rs::build_chat_from_asr`'s provenance `@Comment`). The shared
-        // `stamp_provenance` helper dedupes any prior stamp so reruns don't
-        // accrete one `@Comment` per invocation.
-        let engine = dispatcher.engine_name(Task::Fa);
-        stamp_provenance(
-            &mut chat.ast_mut().lines.0,
-            Task::Fa.as_str(),
-            engine.as_deref(),
-        );
+        // Provenance `@Comment` stamping happens once at end-of-pipeline in
+        // `batchalign_engine::pipeline::run_one`; per-runner stamping has
+        // been lifted to the pipeline so a single BA-touched file ends up
+        // with a single `batchalign3 <sha> | …` comment for the whole run.
 
         // FA just injected bullets — if the input was tagged `, unlinked`
         // (the E544-required marker for transcripts with no timing), that

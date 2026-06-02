@@ -36,7 +36,7 @@ import os
 import signal
 import sys
 import time
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any, Callable
 
@@ -52,6 +52,7 @@ from rich.progress import (
 )
 from rich.status import Status
 
+from ... import config as _ba_config
 from . import bridge
 from .errors import is_rich, normalise_one_line, render_error
 from .hints import hint_for
@@ -290,9 +291,15 @@ class Interface:
             self._status = Status("preparing pipeline…", console=self.console,
                                     spinner="dots")
             self._status.__enter__()
+        # Let credential prompts fired from deep inside backend
+        # construction quiesce our live region while they draw — the
+        # rich Status spinner and Progress deck both repaint on a
+        # timer, which otherwise garbles the credential Panel/Prompt.
+        _ba_config.register_prompt_suspend(self._suspend_for_prompt)
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
+        _ba_config.register_prompt_suspend(None)
         # Drop the spinner if it's still up (pipeline setup error or
         # zero-input run — no callbacks_for ever called).
         self._close_status()
@@ -405,6 +412,46 @@ class Interface:
         else:
             self.console.print(f"[dim]{n} {files_word}[/]")
         self.console.print()
+
+    @contextmanager
+    def _suspend_for_prompt(self):
+        """Pause the active spinner/progress region for a credential prompt.
+
+        Rich's Status and Progress widgets both repaint on a timer; if
+        we leave them running while ``config._prompt_form`` draws its
+        Panel and Prompt, the two redraw loops fight and we get the
+        garbled output that the user reported (interleaved spinner
+        glyphs and unreadable input line). Stopping the live region
+        for the duration of the prompt — and restarting it after —
+        keeps both surfaces legible.
+        """
+        status, self._status = self._status, None
+        progress, self._progress = self._progress, None
+        if status is not None:
+            with suppress(Exception):
+                status.__exit__(None, None, None)
+        if progress is not None:
+            with suppress(Exception):
+                progress.stop()
+        try:
+            yield
+        finally:
+            if progress is not None:
+                with suppress(Exception):
+                    progress.start()
+                self._progress = progress
+            if status is not None:
+                # Re-arm the same spinner so the user sees the original
+                # "preparing pipeline…" status continue after they
+                # finish entering credentials.
+                new_status = Status(
+                    "preparing pipeline…",
+                    console=self.console,
+                    spinner="dots",
+                )
+                with suppress(Exception):
+                    new_status.__enter__()
+                self._status = new_status
 
     def _close_status(self) -> None:
         if self._status is not None:

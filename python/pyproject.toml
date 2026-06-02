@@ -7,7 +7,7 @@ build-backend = "maturin"
 
 [project]
 name = "batchalign"
-version = "0.3.0"
+version = "0.9.0-alpha.1"
 description = "TalkBank CHAT processing pipeline"
 readme = "batchalign/README.md"
 license = "BSD-3-Clause"
@@ -37,6 +37,12 @@ classifiers = [
 ]
 dependencies = [
     "typer>=0.12",
+    # `batchalign.cli` subclasses `TyperGroup` and references `click.Context`,
+    # `click.Command`, and `click.HelpFormatter` directly. Typer pulls click
+    # in transitively, but the wheel smoke test on a clean Python 3.10 venv
+    # has been observed to import-error on click before typer's transitive
+    # resolution lands — list it as a direct dep so it is guaranteed present.
+    "click>=8",
     "tqdm>=4",
     "numpy>=1.24",
     "polars>=0.20",
@@ -186,6 +192,7 @@ pyapp = "0.27.0"     # https://crates.io/crates/pyapp -- consumed by
 # matter to wheel consumers; they live in `[project.optional-dependencies]`
 # above and reach the wheel via maturin's pyproject.toml reader.
 runtime = [
+    "click>=8",
     "numpy>=1.24",
     "polars>=0.20",
     "pydantic>=2",

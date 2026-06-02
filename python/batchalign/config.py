@@ -52,9 +52,10 @@ from __future__ import annotations
 import configparser
 import os
 import sys
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Callable, ContextManager, Mapping
 
 CONFIG_PATH = Path.home() / ".batchalign.ini"
 
@@ -258,6 +259,37 @@ def suppress_interactive(suppressed: bool = True) -> None:
     _INTERACTIVE_SUPPRESSED = suppressed
 
 
+# Hook used by the TUI to pause its live-rendering region (Rich Status
+# spinner / Progress deck) while we draw a credential prompt. Without
+# this the prompt's Panel and Prompt collide with the spinner's redraw
+# loop and you get the garbled output the user reported. Callers set
+# this with `register_prompt_suspend(factory)`; `factory()` must return
+# a context manager that stops/restarts the live region.
+_PROMPT_SUSPEND: Callable[[], ContextManager[None]] | None = None
+
+
+def register_prompt_suspend(
+    factory: Callable[[], ContextManager[None]] | None,
+) -> None:
+    """Install (or clear) the live-region suspend factory.
+
+    The TUI installs this on entry so any credential prompt fired from
+    deep inside backend construction can quiesce the spinner/progress
+    deck for the duration of the prompt. Pass `None` to clear.
+    """
+    global _PROMPT_SUSPEND
+    _PROMPT_SUSPEND = factory
+
+
+@contextmanager
+def _prompt_suspended() -> "ContextManager[None]":
+    """Run the wrapped block with any active TUI live region paused."""
+    factory = _PROMPT_SUSPEND
+    cm = factory() if factory is not None else nullcontext()
+    with cm:
+        yield
+
+
 def _can_prompt() -> bool:
     """True when stdin and stderr are TTYs and prompting isn't suppressed."""
     if _INTERACTIVE_SUPPRESSED:
@@ -303,15 +335,125 @@ def _render_header(provider: str, intro: str) -> None:
 
 
 def _ask(label: str, *, secret: bool, default: str | None) -> str:
-    """Prompt for one field via rich.prompt.Prompt."""
-    from rich.prompt import Prompt
+    """Prompt for one field.
 
-    return Prompt.ask(
-        f"[bold cyan]{label}[/bold cyan]",
-        password=secret,
-        default=default if default is not None else "",
-        show_default=default is not None and not secret,
-    )
+    Non-secret fields go through rich.prompt.Prompt (which gives us
+    history-friendly readline editing + nice default rendering). Secret
+    fields use :func:`_masked_input`, which echoes `*` per character so
+    the user can see how many characters they've pasted/typed (vs. the
+    silent ``password=True`` mode where nothing appears at all and the
+    user can't tell whether the paste landed).
+    """
+    if not secret:
+        from rich.prompt import Prompt
+
+        return Prompt.ask(
+            f"[bold cyan]{label}[/bold cyan]",
+            default=default if default is not None else "",
+            show_default=default is not None,
+        )
+    return _masked_input(label)
+
+
+def _masked_input(label: str) -> str:
+    """Read a line from the user, echoing ``*`` for every character.
+
+    Falls back to :func:`getpass.getpass` (silent input) when stdin is
+    not a real TTY or we can't put it in raw mode. The label is rendered
+    via rich so it matches the non-secret prompt style.
+    """
+    from rich.console import Console
+
+    console = Console(stderr=True)
+    console.print(f"[bold cyan]{label}[/bold cyan]: ", end="")
+
+    try:
+        return _read_masked_line()
+    except (OSError, ValueError, ImportError):
+        import getpass
+
+        return getpass.getpass("")
+
+
+def _read_masked_line() -> str:
+    """Raw-mode character-by-character read that echoes ``*``.
+
+    Posix uses ``termios``/``tty``; Windows uses ``msvcrt``. Raises if
+    stdin isn't a TTY so :func:`_masked_input` can fall back to silent
+    ``getpass``.
+    """
+    if not sys.stdin.isatty():
+        raise OSError("stdin is not a tty")
+
+    if os.name == "nt":
+        import msvcrt
+
+        chars: list[str] = []
+        while True:
+            ch = msvcrt.getwch()
+            if ch in ("\r", "\n"):
+                sys.stderr.write("\n")
+                sys.stderr.flush()
+                return "".join(chars)
+            if ch == "\x03":  # Ctrl-C
+                raise KeyboardInterrupt
+            if ch == "\x04":  # Ctrl-D
+                raise EOFError
+            if ch in ("\b", "\x7f"):
+                if chars:
+                    chars.pop()
+                    sys.stderr.write("\b \b")
+                    sys.stderr.flush()
+                continue
+            chars.append(ch)
+            sys.stderr.write("*")
+            sys.stderr.flush()
+
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    chars = []
+    try:
+        tty.setraw(fd)
+        while True:
+            ch = sys.stdin.read(1)
+            if ch in ("\r", "\n"):
+                sys.stderr.write("\r\n")
+                sys.stderr.flush()
+                return "".join(chars)
+            if ch == "\x03":  # Ctrl-C
+                raise KeyboardInterrupt
+            if ch == "\x04":  # Ctrl-D
+                raise EOFError
+            if ch in ("\x7f", "\b"):
+                if chars:
+                    chars.pop()
+                    sys.stderr.write("\b \b")
+                    sys.stderr.flush()
+                continue
+            if ch == "\x1b":
+                # Drain CSI / SS3 escape sequences (arrow keys, fn
+                # keys, etc.) so they don't show up as stray `*`s.
+                # Sequences are short — read up to a final byte in the
+                # 0x40-0x7E range.
+                import select
+
+                while select.select([sys.stdin], [], [], 0.01)[0]:
+                    seq = sys.stdin.read(1)
+                    if not seq:
+                        break
+                    if "@" <= seq <= "~":
+                        break
+                continue
+            if ch < " ":
+                continue
+            chars.append(ch)
+            sys.stderr.write("*")
+            sys.stderr.flush()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
 def _prompt_single(
@@ -324,15 +466,16 @@ def _prompt_single(
         provider.lower(), (provider, "API Key")
     )
     section, option = location
-    _render_header(display_name, f"Enter your {display_name} {label}.")
-    try:
-        value = _ask(label, secret=True, default=None).strip()
-    except (KeyboardInterrupt, EOFError):
-        return None
-    if not value:
-        return None
-    _persist(path, section, option, value)
-    return value
+    with _prompt_suspended():
+        _render_header(display_name, f"Enter your {display_name} {label}.")
+        try:
+            value = _ask(label, secret=True, default=None).strip()
+        except (KeyboardInterrupt, EOFError):
+            return None
+        if not value:
+            return None
+        _persist(path, section, option, value)
+        return value
 
 
 def _prompt_form(
@@ -343,23 +486,24 @@ def _prompt_form(
 ) -> dict[str, str]:
     """Prompt for the missing provider fields. Persists each non-empty entry."""
     section, prefix = location
-    _render_header(
-        provider,
-        f"Enter the {len(fields)} credential field(s) needed for {provider}.",
-    )
     collected: dict[str, str] = {}
-    for field in fields:
-        try:
-            raw = _ask(field.label, secret=field.secret, default=field.default)
-        except (KeyboardInterrupt, EOFError):
-            break
-        value = raw.strip()
-        if not value:
-            if field.required:
+    with _prompt_suspended():
+        _render_header(
+            provider,
+            f"Enter the {len(fields)} credential field(s) needed for {provider}.",
+        )
+        for field in fields:
+            try:
+                raw = _ask(field.label, secret=field.secret, default=field.default)
+            except (KeyboardInterrupt, EOFError):
                 break
-            continue
-        _persist(path, section, f"{prefix}{field.name}", value)
-        collected[field.name] = value
+            value = raw.strip()
+            if not value:
+                if field.required:
+                    break
+                continue
+            _persist(path, section, f"{prefix}{field.name}", value)
+            collected[field.name] = value
     return collected
 
 
@@ -370,4 +514,5 @@ __all__ = [
     "get_provider",
     "has_config",
     "suppress_interactive",
+    "register_prompt_suspend",
 ]

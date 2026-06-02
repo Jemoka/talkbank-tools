@@ -79,7 +79,7 @@ use crate::base::{Dispatcher, TaskRunner};
 use crate::proto::asr::{AsrInput, AsrOptions, AsrOutput, LanguageSpec};
 use crate::proto::utr::UtrInput;
 use crate::utils::{
-    BAError, BAResult, MediaInput, SourceId, clear_media_unlinked, prepare_pcm, stamp_provenance,
+    BAError, BAResult, MediaInput, SourceId, clear_media_unlinked, prepare_pcm,
 };
 use async_trait::async_trait;
 use smol_str::SmolStr;
@@ -255,12 +255,8 @@ impl TaskRunner for UtrTaskRunner {
         // `@Media` header so the now-linked state is reflected on disk.
         clear_media_unlinked(&mut chat.ast_mut().lines.0);
 
-        let engine = dispatcher.engine_name(Task::Utr);
-        stamp_provenance(
-            &mut chat.ast_mut().lines.0,
-            Task::Utr.as_str(),
-            engine.as_deref(),
-        );
+        // Provenance `@Comment` stamping happens once at end-of-pipeline in
+        // `batchalign_engine::pipeline::run_one` rather than per-runner.
 
         sink.emit(ProgressEvent {
             source_id: chat.source_id().clone(),
