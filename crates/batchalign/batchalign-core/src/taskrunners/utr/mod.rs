@@ -256,7 +256,11 @@ impl TaskRunner for UtrTaskRunner {
         clear_media_unlinked(&mut chat.ast_mut().lines.0);
 
         let engine = dispatcher.engine_name(Task::Utr);
-        stamp_provenance(&mut chat.ast_mut().lines.0, engine.as_deref());
+        stamp_provenance(
+            &mut chat.ast_mut().lines.0,
+            Task::Utr.as_str(),
+            engine.as_deref(),
+        );
 
         sink.emit(ProgressEvent {
             source_id: chat.source_id().clone(),

@@ -408,21 +408,9 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
 // Provenance stamp (BA version + engine name on a `@Comment` header)
 // ---------------------------------------------------------------------------
 
-/// Prefix every provenance `@Comment` starts with. Used to detect and replace
+/// Prefix every provenance `@Comment` starts with. Used to detect and refresh
 /// a prior stamp on retag so reruns don't accrete a comment per invocation.
 pub const PROVENANCE_PREFIX: &str = "batchalign3 ";
-
-/// Insert (or refresh) a `@Comment: batchalign3 <sha> | engine: <name>` header
-/// just before the first utterance.
-///
-/// Used by both `AsrTaskRunner` (stamps a freshly-built CHAT) and
-/// `FaTaskRunner` (re-stamps an existing CHAT). Any prior comment starting
-/// with [`PROVENANCE_PREFIX`] is removed first, so retagging the same file
-/// doesn't accrete duplicates.
-///
-/// The git SHA is baked at compile time via `option_env!`. The Bazel path
-/// goes through `BATCHALIGN_GIT_SHA`; cargo via `VERGEN_GIT_SHA`. Falls back
-/// to `"unknown"` when neither is set (test runs, IDE checks).
 /// Clear the `unlinked` status from any `@Media` header in the file.
 ///
 /// CHAT requires an explicit linkage-status flag (`, unlinked` /
@@ -449,24 +437,78 @@ pub fn clear_media_unlinked(lines: &mut [talkbank_model::Line]) {
     }
 }
 
-pub fn stamp_provenance(lines: &mut Vec<talkbank_model::Line>, engine: Option<&str>) {
+/// Insert or extend a `@Comment: batchalign3 <sha> | <stage>: <engine> ...`
+/// header just before the first utterance.
+///
+/// Each pipeline stage (`asr`, `utr`, `fa`, ...) calls this at the end of
+/// a successful run with its task name and the registered backend's name.
+/// Behaviour:
+///
+/// * **First call** (no prior batchalign3 comment): writes
+///   `@Comment: batchalign3 <sha> | <stage>: <engine>`.
+/// * **Subsequent calls** with a different `stage`: parses the existing
+///   `batchalign3` comment, appends `| <stage>: <engine>` to it. So a
+///   full UTR → FA run produces
+///   `@Comment: batchalign3 <sha> | utr: rev:rev_lang_en | fa: wav2vec2-fa:mms_fa-v3`.
+/// * **Re-run of the same stage**: replaces that stage's token (no
+///   duplicates).
+/// * `engine = None`: records `<stage>: <unknown>` so the stage is still
+///   visible in the audit trail.
+///
+/// The git SHA is baked at compile time via `option_env!`. The Bazel path
+/// goes through `BATCHALIGN_GIT_SHA`; cargo via `VERGEN_GIT_SHA`. Falls back
+/// to `"unknown"` when neither is set (test runs, IDE checks).
+pub fn stamp_provenance(
+    lines: &mut Vec<talkbank_model::Line>,
+    stage: &str,
+    engine: Option<&str>,
+) {
     use talkbank_model::Line;
     use talkbank_model::model::{BulletContent, Header};
 
     let sha = option_env!("VERGEN_GIT_SHA")
         .or(option_env!("BATCHALIGN_GIT_SHA"))
         .unwrap_or("unknown");
-    let stamp = match engine {
-        Some(name) => format!("{PROVENANCE_PREFIX}{sha} | engine: {name}"),
-        None => format!("{PROVENANCE_PREFIX}{sha}"),
-    };
+    let engine_label = engine.unwrap_or("<unknown>");
+    let new_token = format!("{stage}: {engine_label}");
 
-    lines.retain(|l| match l.as_header() {
-        Some(Header::Comment { content }) => {
-            !content.to_chat_string().starts_with(PROVENANCE_PREFIX)
+    // Find and remove any existing batchalign3 comment; remember its
+    // existing per-stage tokens (after the `batchalign3 <sha>` prefix).
+    let mut existing_tokens: Vec<String> = Vec::new();
+    let mut existing_idx: Option<usize> = None;
+    for (i, l) in lines.iter().enumerate() {
+        if let Some(Header::Comment { content }) = l.as_header() {
+            let text = content.to_chat_string();
+            if let Some(tail) = text.strip_prefix(PROVENANCE_PREFIX) {
+                // Tail begins with the sha; tokens follow ` | `.
+                if let Some((_sha, rest)) = tail.split_once(" | ") {
+                    existing_tokens = rest
+                        .split(" | ")
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(String::from)
+                        .collect();
+                }
+                existing_idx = Some(i);
+                break;
+            }
         }
-        _ => true,
-    });
+    }
+    if let Some(i) = existing_idx {
+        lines.remove(i);
+    }
+
+    // Drop any prior entry for this stage (same stage running twice
+    // replaces, not duplicates), then append the new one.
+    let prefix = format!("{stage}: ");
+    existing_tokens.retain(|t| !t.starts_with(&prefix));
+    existing_tokens.push(new_token);
+
+    let stamp = if existing_tokens.is_empty() {
+        format!("{PROVENANCE_PREFIX}{sha}")
+    } else {
+        format!("{PROVENANCE_PREFIX}{sha} | {}", existing_tokens.join(" | "))
+    };
 
     let comment = Line::header(Header::Comment {
         content: BulletContent::from_text(stamp),

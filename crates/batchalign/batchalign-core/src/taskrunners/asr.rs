@@ -182,7 +182,7 @@ fn build_chat_from_asr(
     // header block — visible to anyone reading the file, ignored by the
     // alignment / mor / wor stages downstream. Shared with `FaTaskRunner`
     // via `utils::stamp_provenance`.
-    stamp_provenance(&mut chat_file.lines.0, engine);
+    stamp_provenance(&mut chat_file.lines.0, Task::Asr.as_str(), engine);
 
     let collector = ErrorCollector::new();
     let validated = chat_file.validate_into(&collector, None);
