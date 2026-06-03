@@ -199,12 +199,26 @@ genrule(
     srcs = [
         # `_proto_generated.py` is the only input the genrule action
         # actually *reads via Bazel runfiles* — maturin_build.sh stages
-        # it into the source tree before maturin packages. Everything
-        # else maturin needs (`pyproject.toml`, `.rs` sources under
-        # `crates/`, `.py` sources under `python/batchalign/`) lives in
-        # the source tree and is read directly via
-        # `BUILD_WORKSPACE_DIRECTORY`, not through Bazel inputs.
+        # it into the source tree before maturin packages. The `.rs`
+        # sources under `crates/` and `.py` sources under
+        # `python/batchalign/` are read directly via
+        # `BUILD_WORKSPACE_DIRECTORY`, NOT through Bazel inputs (see the
+        # `tags` comment below for why).
         "//python/batchalign/_core:_proto_generated_py",
+        # `pyproject.toml` IS declared as a Bazel input. It owns the
+        # wheel version (`[project].version`), the runtime deps, the
+        # optional-dependencies extras, and the maturin config — every
+        # one of these changes the wheel's identity or contents. Without
+        # it in `srcs`, a version bump in pyproject.toml does not
+        # invalidate this action and `bazel run //python/batchalign:wheel`
+        # silently serves the previous wheel. The `tags = ["no-cache"]`
+        # below does NOT compensate for this: that tag disables result
+        # caching, not action skipping — Bazel's incremental analysis
+        # still skips when declared inputs are unchanged. Declaring a
+        # plain TOML file in `srcs` does not trigger any `rust_library`
+        # rebuild (that concern only applies to `.rs` files reached via
+        # rules_rust/aspect_rules_py).
+        "//python:pyproject.toml",
     ] + _LLVM_TOOLS,
     tools = [
         "//bazel/python:maturin_build.sh",
@@ -232,17 +246,31 @@ genrule(
     # All other hermeticity holds — uv, rustc, cargo, the LLVM toolchain
     # all come from Bazel-managed deps.
     local = True,
-    # `no-cache`: this action reads its real inputs (`.rs` under
-    # `crates/`, `.py` under `python/batchalign/`, `pyproject.toml`)
-    # from the source tree at run time, NOT through Bazel's input set.
-    # If we declared all of those in `srcs` for invalidation, building
-    # the wheel would also force a parallel Bazel-side `rust_library`
-    # build of every crate maturin already compiles via cargo — every
-    # `.rs` edit would pay rustc twice. Instead, we let the action
-    # always re-run; cargo's incremental cache and maturin's "already
-    # up to date" check keep the no-op case sub-second. Net effect:
-    # one rustc compile per `.rs` edit (the maturin one), no stale
-    # wheels, no double-build cost for the GUI sidecar dev loop.
+    # `no-cache`: disables caching of the action's outputs (local disk
+    # cache + remote cache). The `.rs` under `crates/` and `.py` under
+    # `python/batchalign/` are read from the source tree at run time,
+    # NOT through Bazel's declared input set — if we declared all of
+    # them in `srcs`, every `.rs` edit would force a parallel Bazel-side
+    # `rust_library` rebuild of every crate maturin already compiles
+    # via cargo (rustc twice per edit). Skipping the declaration keeps
+    # the GUI sidecar dev loop fast; cargo's incremental cache and
+    # maturin's "already up to date" check keep the no-op case
+    # sub-second.
+    #
+    # Caveat: `no-cache` does NOT force re-execution. Bazel's
+    # incremental analysis still skips this action when its declared
+    # input hashes are unchanged. That is why `pyproject.toml` is an
+    # explicit `srcs` entry — without it, a version bump silently
+    # serves the previously built wheel. Source-tree-resident `.rs` /
+    # `.py` edits also do not invalidate this action on their own;
+    # they're picked up when some declared input (e.g. the proto
+    # generator) changes or when the user forces a rebuild
+    # (`bazel clean`, deleting `bazel-bin/python/batchalign/*.whl`, or
+    # touching pyproject.toml). If pure `.rs`/`.py` invalidation
+    # becomes a real pain point, the next step is to declare those
+    # globs in `srcs` and accept the double-build cost, or move the
+    # whole wheel build out of a genrule into a `repository_rule` /
+    # external action with explicit input tracking.
     tags = ["no-cache"],
 )
 

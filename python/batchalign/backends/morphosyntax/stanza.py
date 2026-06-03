@@ -506,7 +506,7 @@ class StanzaBackend(Morphosyntax):
                     lemma=u.lemma,
                     features=list(u.features),
                     index=u.index,
-                    head=0 if u.deprel == "root" else u.head,
+                    head=0 if u.deprel.lower() == "root" else u.head,
                     deprel=u.deprel,
                 )
                 for u in word.units
@@ -518,7 +518,7 @@ class StanzaBackend(Morphosyntax):
             t_index, t_head, t_deprel = analysis.terminator
             terminator = GraTerminator(
                 index=t_index,
-                head=0 if t_deprel == "root" else t_head,
+                head=0 if t_deprel.lower() == "root" else t_head,
                 deprel=t_deprel,
             )
 

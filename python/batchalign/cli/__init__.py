@@ -137,7 +137,13 @@ class LazyTyperGroup(TyperGroup):
         # or attaches a sub-group (`add_typer`). After conversion, the
         # corresponding entry lives in click_obj.commands.
         sub: Any = None
-        if isinstance(click_obj, click.MultiCommand):
+        # Duck-type for a Click group. Typer vendors its own private
+        # copy of click (`typer._click`), so its TyperGroup is NOT a
+        # subclass of the top-level `click.Group` — the previous
+        # `isinstance(click_obj, click.MultiCommand)` check always
+        # failed, dropping us into the `else` branch and re-wrapping
+        # sub-groups under themselves (e.g. `cache cache clear`).
+        if hasattr(click_obj, "commands"):
             sub = click_obj.commands.get(cmd_name)
             if sub is None and len(click_obj.commands) == 1:
                 sub = next(iter(click_obj.commands.values()))
