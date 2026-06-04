@@ -128,7 +128,7 @@ def test_run_pipeline_isolates_per_source_failures(fake_progress_core):
     assert {getattr(o, "source_id", None) for o in outs} == {"good1", "good2"}
     out = _strip_ansi(buf.getvalue())
     assert "fail=1" in out
-    assert "ok=2" in out
+    assert "done=2" in out
     assert "parse error: header missing" in out
     assert ui.exit_code == 1
 
@@ -184,7 +184,7 @@ def test_per_utterance_ticks_advance_task_progress(fake_progress_core):
     # The point is the ticks made it through without raising; we verify
     # final state is OK (counts credited) rather than the cleared progress.
     assert ui.exit_code == 0
-    assert task.state.value == "OK"
+    assert task.state.value == "DONE"
 
 
 def test_run_pipeline_top_level_raise_marks_all_unterminated(fake_progress_core):

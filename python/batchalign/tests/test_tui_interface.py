@@ -56,9 +56,9 @@ def test_all_ok_exit_zero_and_done_line(fake_progress_core):
     assert ui.exit_code == 0
     assert "batchalign3 transcribe" in out
     assert "2 files" in out
-    assert "ok=2" in out
+    assert "done=2" in out
     assert "fail=0" in out
-    assert "ok  " in out  # at least one completion line
+    assert "done" in out  # at least one completion line
 
 
 def test_partial_failure_exit_one_and_hint_in_summary(fake_progress_core):
@@ -90,7 +90,7 @@ def test_partial_failure_exit_one_and_hint_in_summary(fake_progress_core):
     out = _strip_ansi(buf.getvalue())
     assert ui.exit_code == 1
     assert "fail=1" in out
-    assert "ok=1" in out
+    assert "done=1" in out
     assert "whisper: cuda OOM" in out
     assert "hint: try --device cpu" in out
 
