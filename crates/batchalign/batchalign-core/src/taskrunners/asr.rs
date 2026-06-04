@@ -60,7 +60,25 @@ impl TaskRunner for AsrTaskRunner {
             options: Default::default(),
         };
 
-        let output_raw = dispatcher.dispatch(TaskInput::Asr(input)).await?;
+        // Thread a backend-progress channel through so Python ASR backends
+        // that loop over chunks (whisper, chatwhisper, funaudio) can feed
+        // per-chunk `stage_tick`s into the same `ProgressSink` the per-utt
+        // runners use. The Rust side has no per-unit work; the Python side
+        // does — this is the Stanza-style partial-progress wiring for the
+        // single-dispatch ASR runner. Backends that don't emit (rev,
+        // tencent, aliyun cloud calls) simply see a no-op handle.
+        let progress = std::sync::Arc::new(crate::base::ScaledProgress::new(
+            sink.clone(),
+            media.source_id.clone(),
+            Task::Asr,
+            1,
+        ));
+        let progress_dyn: std::sync::Arc<dyn crate::base::BackendProgress> = progress.clone();
+        progress.start_step();
+        let output_raw = dispatcher
+            .dispatch_with_progress(TaskInput::Asr(input), progress_dyn)
+            .await?;
+        progress.finish();
         let output: AsrOutput = output_raw.try_into()?;
 
         let chat = build_chat_from_asr(&media.source_id, &language, &output)?
