@@ -42,6 +42,8 @@ impl Default for CompareBackend {
             // backend code, so a `v1 → v1` change with new behaviour will
             // happily serve stale outputs. Manual bumping is the workaround
             // until the cache grows an explicit `code_version` field.
+            // v3.2 (2026-06-20): add `cwer`, an order-insensitive
+            // bag-of-words error rate that cancels displaced matching words.
             // v3.1 (2026-06-02): two-phase compare. Phase 1 keeps the
             // window/snap/rotation heuristics but only uses them to decide
             // gold→main utt mapping. Phase 2 re-aligns each main utt's full
@@ -49,7 +51,7 @@ impl Default for CompareBackend {
             // every gold utt mapped to it, so leading/trailing main tokens
             // that fell outside the bag-of-words window show up as `+word`
             // insertions instead of vanishing.
-            name: "compare:rust:v3.1".to_owned(),
+            name: "compare:rust:v3.2".to_owned(),
             tasks: vec![Task::Compare],
             // Compare is CPU-bound and runs entirely on the engine thread
             // pool. We allow up-to-32-per-batch but a small window so the
@@ -223,13 +225,7 @@ fn compare_one(input: CompareInput) -> BAResult<CompareOutput> {
         }
 
         let alignment = levenshtein_align(&main_toks, &gold_toks);
-        let mut cmp = build_utt_cmp(
-            &alignment,
-            &main_toks,
-            &main_pos_v,
-            &gold_toks,
-            &gold_pos_v,
-        );
+        let mut cmp = build_utt_cmp(&alignment, &main_toks, &main_pos_v, &gold_toks, &gold_pos_v);
         cmp.main_utt_idx = Some(*main_idx);
 
         // Append the terminator from the last gold utt that mapped here so
@@ -311,6 +307,7 @@ fn build_compare_metrics(
         // for direct diffability against BA2's compare.csv.
         file_label: format!("{source_id}.cha"),
         wer: summary.wer,
+        cwer: summary.cwer,
         accuracy: summary.accuracy,
         matches: summary.matches,
         insertions: summary.insertions,
@@ -997,6 +994,33 @@ impl UttCmp {
     fn edit_distance(&self) -> u32 {
         self.inserts + self.deletes
     }
+    fn cwer_edit_distance(&self) -> u32 {
+        let mut unmatched_gold: Vec<&str> = self
+            .tokens
+            .iter()
+            .filter_map(|(text, status, pos)| {
+                (*status == TokStatus::ExtraGold && !matches!(pos, TokPos::Punct))
+                    .then_some(text.as_str())
+            })
+            .collect();
+        let mut unmatched_main = 0u32;
+
+        for (text, status, pos) in &self.tokens {
+            if *status != TokStatus::ExtraMain || matches!(pos, TokPos::Punct) {
+                continue;
+            }
+            if let Some(idx) = unmatched_gold
+                .iter()
+                .position(|gold| match_fn(text.as_str(), gold))
+            {
+                unmatched_gold.swap_remove(idx);
+            } else {
+                unmatched_main += 1;
+            }
+        }
+
+        unmatched_main + unmatched_gold.len() as u32
+    }
 }
 
 fn build_utt_cmp(
@@ -1049,6 +1073,7 @@ struct Summary {
     total_gold_words: u32,
     total_main_words: u32,
     wer: f64,
+    cwer: f64,
     accuracy: f64,
 }
 
@@ -1066,14 +1091,21 @@ fn summarize(per: &[UttCmp]) -> Summary {
     } else {
         (s.insertions + s.deletions) as f64 / s.total_gold_words as f64
     };
+    let cwer_ed: u32 = per.iter().map(UttCmp::cwer_edit_distance).sum();
+    s.cwer = if s.total_gold_words == 0 {
+        0.0
+    } else {
+        cwer_ed as f64 / s.total_gold_words as f64
+    };
     s.accuracy = 1.0 - s.wer;
     s
 }
 
 fn summary_json(s: &Summary) -> String {
     format!(
-        "{{\"wer\":{:.4},\"accuracy\":{:.4},\"matches\":{},\"insertions\":{},\"deletions\":{},\"total_gold_words\":{},\"total_main_words\":{}}}",
+        "{{\"wer\":{:.4},\"cwer\":{:.4},\"accuracy\":{:.4},\"matches\":{},\"insertions\":{},\"deletions\":{},\"total_gold_words\":{},\"total_main_words\":{}}}",
         s.wer,
+        s.cwer,
         s.accuracy,
         s.matches,
         s.insertions,
@@ -1206,9 +1238,16 @@ fn serialize_xcmp(cmp: &UttCmp) -> String {
     } else {
         cmp.edit_distance() as f64 / g as f64
     };
+    let cwer_ed = cmp.cwer_edit_distance();
+    let cwer = if g == 0 {
+        0.0
+    } else {
+        cwer_ed as f64 / g as f64
+    };
     format!(
-        "wer={:.4} ed={} gold={} match={} ins={} del={}",
+        "wer={:.4} cwer={:.4} ed={} gold={} match={} ins={} del={}",
         wer,
+        cwer,
         cmp.edit_distance(),
         g,
         cmp.matches,
@@ -1299,6 +1338,18 @@ mod tests {
         assert!(matches!(r[3], AlignItem::Match { .. }));
     }
 
+    #[test]
+    fn cwer_ignores_reordered_words() {
+        let main = vec!["he", "went", "to", "the", "park"];
+        let gold = vec!["went", "to", "the", "park", "he"];
+        let pos = vec!["?"; 5];
+        let alignment = levenshtein_align(&main, &gold);
+        let cmp = build_utt_cmp(&alignment, &main, &pos, &gold, &pos);
+
+        assert!(cmp.edit_distance() > 0);
+        assert_eq!(cmp.cwer_edit_distance(), 0);
+    }
+
     // TODO: this test exercises `%mor:` POS lift-through via a hand-crafted
     // CHAT fixture; the CHAT parser rejects our minimal `%mor:` line so the
     // test needs a richer fixture or a different setup. The same code path
@@ -1352,5 +1403,6 @@ mod tests {
         assert!(out.annotated_main.contains("%xcmp:"));
         assert!(out.annotated_main.contains("ba.compare.summary:"));
         assert!(out.metrics_json.contains("\"wer\""));
+        assert!(out.metrics_json.contains("\"cwer\""));
     }
 }

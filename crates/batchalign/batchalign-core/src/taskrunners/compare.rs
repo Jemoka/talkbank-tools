@@ -185,7 +185,7 @@ fn strip_compare_tiers(chat: &mut crate::base::Chat) {
 
 /// Materialize the structured `CompareMetrics` payload into a wide-format
 /// `MetricsArtifact` (one row per file). Column order matches BA2's
-/// `compare.csv`: file + 7 global cols + per-POS quartets sorted
+/// `compare.csv`: file + global cols + per-POS quartets sorted
 /// alphabetically by POS.
 fn compare_metrics_to_artifact(output: &CompareOutput, source_id: &SourceId) -> MetricsArtifact {
     let m = &output.metrics;
@@ -193,6 +193,7 @@ fn compare_metrics_to_artifact(output: &CompareOutput, source_id: &SourceId) -> 
     let mut schema: Vec<String> = vec![
         "file".to_owned(),
         "wer".to_owned(),
+        "cwer".to_owned(),
         "accuracy".to_owned(),
         "matches".to_owned(),
         "insertions".to_owned(),
@@ -215,6 +216,10 @@ fn compare_metrics_to_artifact(output: &CompareOutput, source_id: &SourceId) -> 
     columns.insert(
         "wer".to_owned(),
         serde_json::Value::from(format!("{:.4}", m.wer)),
+    );
+    columns.insert(
+        "cwer".to_owned(),
+        serde_json::Value::from(format!("{:.4}", m.cwer)),
     );
     columns.insert(
         "accuracy".to_owned(),
@@ -255,7 +260,7 @@ fn compare_metrics_to_artifact(output: &CompareOutput, source_id: &SourceId) -> 
 
     MetricsArtifact {
         source_id: source_id.clone(),
-        producer: SmolStr::new_static("compare:rust:v3.1"),
+        producer: SmolStr::new_static("compare:rust:v3.2"),
         kind: MetricsKind::Compare,
         table: MetricsTable {
             schema,

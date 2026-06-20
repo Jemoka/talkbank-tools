@@ -9,7 +9,7 @@
 //! backend boundary as CHAT text — the runner re-parses the annotated text
 //! back into a validated AST.
 
-use crate::cache::{hash_serialized, CacheKey};
+use crate::cache::{CacheKey, hash_serialized};
 use crate::register_proto_schema;
 use crate::utils::SourceId;
 use schemars::JsonSchema;
@@ -61,9 +61,9 @@ pub struct CompareOutput {
     /// `@Comment: ba.compare.summary:` header. Same numbers as the columns
     /// in `metrics`, just JSON instead of long-format.
     pub metrics_json: String,
-    /// One CSV-shaped metrics row carrying BA2's columns: `file`, `wer`,
-    /// `accuracy`, `matches`, `insertions`, `deletions`, `total_gold_words`,
-    /// `total_main_words`, plus per-POS quartets (`NOUN:matches`,
+    /// One CSV-shaped metrics row carrying BA2's columns plus `cwer`: `file`,
+    /// `wer`, `cwer`, `accuracy`, `matches`, `insertions`, `deletions`,
+    /// `total_gold_words`, `total_main_words`, plus per-POS quartets (`NOUN:matches`,
     /// `NOUN:insertions`, `NOUN:deletions`, `NOUN:total`, …). The driver
     /// wraps this in a `MetricsArtifact { kind: Compare }` so the CSV
     /// lands at `<source>.compare.csv` next to the annotated `<source>.cha`.
@@ -77,6 +77,7 @@ pub struct CompareOutput {
 pub struct CompareMetrics {
     pub file_label: String,
     pub wer: f64,
+    pub cwer: f64,
     pub accuracy: f64,
     pub matches: u32,
     pub insertions: u32,
