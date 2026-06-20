@@ -90,6 +90,7 @@ def write_outcomes(
     out_dir: Path | None,
     *,
     output_suffix: str | None = None,
+    strip_word_timing: bool = False,
 ) -> None:
     """Write each outcome to disk.
 
@@ -119,7 +120,7 @@ def write_outcomes(
             target.parent.mkdir(parents=True, exist_ok=True)
             safe_resolve(target.parent, out_dir.resolve())
         target.parent.mkdir(parents=True, exist_ok=True)
-        outcome.write(str(target))
+        outcome.write(str(target), strip_word_timing=strip_word_timing)
 
 
 def require_api_key(provider: str, ini_key: str, env_var: str) -> str:

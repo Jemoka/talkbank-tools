@@ -89,6 +89,7 @@ def register(app: typer.Typer) -> None:
             help="Run the ASR model on CPU (BA2's --force-cpu). Needed on Apple "
             "MPS, where Whisper's bfloat16 attention kernel is unsupported.",
         ),
+        nowor: bool = typer.Option(False, "--nowor", help="Omit word-level timing (`%wor` and inline word bullets)."),
     ) -> None:
         """Transcribe media into CHAT (.cha) files.
 
@@ -140,7 +141,7 @@ def register(app: typer.Typer) -> None:
             for inp in inputs:
                 ui.push(Task.from_input(inp))
             outcomes = list(ui.run_pipeline(pipeline, inputs))
-            write_outcomes(outcomes, root, out, output_suffix=".cha")
+            write_outcomes(outcomes, root, out, output_suffix=".cha", strip_word_timing=nowor)
 
         raise typer.Exit(code=ui.exit_code)
 
