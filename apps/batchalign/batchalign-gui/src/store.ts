@@ -62,9 +62,8 @@ export interface FileRow {
 /**
  * Per-verb config blob. The shape is intentionally loose here because
  * the daemon's recipe request schemas are introspected at runtime
- * (see protocol/openapi.gen.ts once generated). Panels read
- * `state.capabilities.recipes[verb].params` to decide what fields to
- * render, write back via `VERB_CONFIG_CHANGED` actions.
+ * Panels read `state.capabilities.recipes[verb].params` to decide what
+ * fields to render, write back via `VERB_CONFIG_CHANGED` actions.
  */
 export type VerbConfig = Record<string, unknown>;
 

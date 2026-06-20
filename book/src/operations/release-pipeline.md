@@ -106,7 +106,7 @@ lands the wheel in `python/target/wheels/`.
 **Build path in CI:** `bazel-tauri-batchalign.yml`. Two jobs:
 
 - `smoke` runs on every PR (ubuntu-latest): builds the frontend
-  filegroup and runs `bazel test //apps/batchalign/batchalign-gui:test_openapi_freshness`.
+  filegroup and generated protocol artifacts.
 - `bundle` runs on pushes to `main` and on `workflow_dispatch` only.
   Matrix:
   - `macos-14` → `aarch64-apple-darwin`

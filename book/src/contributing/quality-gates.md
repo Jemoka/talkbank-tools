@@ -50,7 +50,7 @@ per-path workflows skip.
 | Wheel platform-matrix smoke (cp310-abi3) | `bazel run -c opt //python/batchalign:wheel` | `bazel-wheels.yml` `build` |
 | VS Code extension build / test / package | `just vscode build`, `just vscode test`, `just vscode package` | `bazel-typescript.yml` `vscode-extension` |
 | mdBook builds, internal links resolve | `bazel run //book:html && bazel run //book:linkcheck` | `bazel-docs.yml` `build-and-linkcheck` |
-| Batchalign desktop bundle openapi snapshot fresh | `bazel test //apps/batchalign/batchalign-gui:test_openapi_freshness` | `bazel-tauri-batchalign.yml` `smoke` |
+| Batchalign desktop generated protocol artifacts build | `bazel build //apps/batchalign/batchalign-gui:protocol_artifacts` | `bazel-tauri-batchalign.yml` `smoke` |
 | Batchalign desktop bundle builds end-to-end | `bazel run //apps/batchalign/batchalign-gui/src-tauri:bundle -- --target <triple>` | `bazel-tauri-batchalign.yml` `bundle` (main + dispatch only) |
 | Exhaustive `//...` build + test | `bazel build //... && bazel test //...` | `bazel-build-all.yml` `build-all` (nightly) |
 

@@ -6,12 +6,6 @@
 // `http://127.0.0.1:<port>` with a generic `TypeError: Load failed`;
 // the Rust relay sidesteps the WebKit network stack entirely.
 //
-// Until `just batchalign gen-openapi` produces `protocol/openapi.gen.ts`,
-// this client uses hand-rolled wrappers. After codegen lands, the
-// `client` export will be replaced with an `openapi-fetch` instance
-// parameterized on `paths` from the generated module — pointed at a
-// custom `fetch` shim that delegates to `daemon_request`.
-
 import { invoke } from "@tauri-apps/api/core";
 import type { CapabilitiesJson } from "./store";
 

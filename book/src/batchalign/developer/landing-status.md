@@ -93,7 +93,7 @@ should land before the fixture proves the failure.
 |---|---|---|---|
 | 34 | Golden hermetic fixtures via pytest | **Done** | `python/batchalign/tests/test_golden_fixtures.py` — 8 tests against real Catalan + Andrew transcripts in `talkbank-alignment/`. Covers Landing 4 #18/#19/#20 closures plus recipe smokes. |
 | 35 | Daemon HTTP smoke (Python TestClient e2e) | **Done** | Commit `9b2ed71`. `test_daemon_e2e.py` boots FastAPI in-process and asserts `/health`, `/capabilities`, `/recipes`, `/backends`, `/openapi.json`, the `X-Batchalign-SHA` response header, and the 404 path. 7 tests. |
-| 36 | `tests/json_compat.rs` snapshot tests | **Already covered** | openapi_freshness Bazel sh_test (`apps/batchalign/batchalign-gui:openapi_freshness`) snapshots the live `app.openapi()` output; drift fails CI. |
+| 36 | `tests/json_compat.rs` snapshot tests | **Already covered** | `//apps/batchalign/batchalign-gui:protocol_artifacts` generates the live OpenAPI and capabilities JSON as Bazel outputs instead of checking snapshots into source. |
 
 ## Explicitly Skipped (per plan)
 

@@ -112,7 +112,7 @@ jobs:
           print(f"batchalign       {batchalign.__file__}")
           print(f"batchalign._core {_core.__file__}")
           PY
-            "/tmp/wheel-smoke-$py/bin/batchalign3" --help > /dev/null
+            "/tmp/wheel-smoke-$py/bin/batchalign" --help > /dev/null
           done
 
       - uses: actions/upload-artifact@v4
