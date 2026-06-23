@@ -53,7 +53,7 @@ jobs:
           # Every cell is a NATIVE build. No MATURIN_TARGET; runner arch ==
           # target arch.
           - { runner: macos-14,         platform: macos-arm64 }
-          - { runner: macos-13,         platform: macos-x86_64 }
+          # - { runner: macos-13,         platform: macos-x86_64 }
           - { runner: ubuntu-latest,    platform: linux-x86_64 }
           - { runner: ubuntu-24.04-arm, platform: linux-aarch64 }
           # windows-x86_64 deferred: multitool's uv.exe at archive root
