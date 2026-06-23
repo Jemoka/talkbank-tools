@@ -24,7 +24,7 @@ from pathlib import Path
 
 import typer
 
-from ._common import CHAT_EXTENSIONS, _root_for, _walk, write_outcomes
+from ._common import CHAT_EXTENSIONS, _root_for, _walk, write_outcome
 from ._options import cli_options
 from .tui import Interface, Task
 
@@ -130,7 +130,12 @@ def register(app: typer.Typer) -> None:
             inputs, root = _pair_folder_with_gold(folder)
             for inp in inputs:
                 ui.push(Task.from_input(inp))
-            outcomes = list(ui.run_pipeline(pipeline, inputs))
-            write_outcomes(outcomes, root, out)
+            list(
+                ui.run_pipeline(
+                    pipeline,
+                    inputs,
+                    on_outcome=lambda outcome: write_outcome(outcome, root, out),
+                )
+            )
 
         raise typer.Exit(code=ui.exit_code)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 
-from ._common import collect_chat_inputs, write_outcomes
+from ._common import collect_chat_inputs, write_outcome
 from ._options import cli_options
 from .tui import Interface, Task
 
@@ -100,8 +100,8 @@ def register(app: typer.Typer) -> None:
                     staged: list = []
                     for inp in inputs:
                         src = Path(inp.path)
-                        stem = src.stem
-                        staged_path = tmpdir / f"{stem}.cha"
+                        staged_path = tmpdir / src.relative_to(root)
+                        staged_path.parent.mkdir(parents=True, exist_ok=True)
                         _strip_existing_mor_gra(src, staged_path)
                         inp.path = str(staged_path)
                         staged.append(inp)
@@ -109,8 +109,13 @@ def register(app: typer.Typer) -> None:
 
                 for inp in inputs:
                     ui.push(Task.from_input(inp))
-                outcomes = list(ui.run_pipeline(pipeline, inputs))
-                write_outcomes(outcomes, root, out)
+                list(
+                    ui.run_pipeline(
+                        pipeline,
+                        inputs,
+                        on_outcome=lambda outcome: write_outcome(outcome, root, out),
+                    )
+                )
                 exit_code = ui.exit_code
         finally:
             if tmpdir is not None:

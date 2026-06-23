@@ -51,10 +51,16 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.status import Status
+from rich.syntax import Syntax
 
 from ... import config as _ba_config
 from . import bridge
-from .errors import is_rich, normalise_one_line, render_error
+from .errors import (
+    extract_verbose_traceback,
+    is_rich,
+    normalise_one_line,
+    render_error,
+)
 from .hints import hint_for
 from .task import Task, TaskState
 
@@ -76,6 +82,7 @@ _STATE_STYLE = {
     TaskState.FAIL: "red",
     TaskState.SKIP: "blue",
 }
+_TRACEBACK_ENV = "BATCHALIGN_CLI_VERBOSE_TRACEBACKS"
 
 
 class Interface:
@@ -213,7 +220,13 @@ class Interface:
         self._open_run()
         return bridge.callbacks_for(tasks, on_event=self._on_event)
 
-    def run_pipeline(self, pipeline: Any, inputs: list[Any]):
+    def run_pipeline(
+        self,
+        pipeline: Any,
+        inputs: list[Any],
+        *,
+        on_outcome: Callable[[Any], None] | None = None,
+    ):
         """Submit `inputs` as a single `pipeline.run(inputs, callbacks=…)` call.
 
         Rust does both the concurrency and the per-backend batching:
@@ -250,8 +263,18 @@ class Interface:
             ordered_sids.append(sid)
 
         cbs = bridge.callbacks_for(tasks_by_sid, on_event=self._on_event)
+        old_traceback_env = os.environ.get(_TRACEBACK_ENV)
+        if self.verbosity >= 2:
+            os.environ[_TRACEBACK_ENV] = "1"
         try:
-            outcomes = pipeline.run(list(inputs), callbacks=cbs)
+            if on_outcome is None:
+                outcomes = pipeline.run(list(inputs), callbacks=cbs)
+            else:
+                outcomes = pipeline.run(
+                    list(inputs),
+                    callbacks=cbs,
+                    outcome_callback=on_outcome,
+                )
         except Exception as exc:  # noqa: BLE001
             # A pipeline-level raise now means a genuinely unrecoverable
             # error (no source_id could even be derived for one of the
@@ -265,6 +288,11 @@ class Interface:
                         self._refresh_task(task)
                     self._mark_completed(task)
             return
+        finally:
+            if old_traceback_env is None:
+                os.environ.pop(_TRACEBACK_ENV, None)
+            else:
+                os.environ[_TRACEBACK_ENV] = old_traceback_env
 
         # Outcomes come back in the same order as inputs. Yield only
         # the healthy ones; failed sources already wrote their fail
@@ -274,11 +302,12 @@ class Interface:
         for sid, outcome in zip(ordered_sids, outcomes):
             task = tasks_by_sid.get(sid)
             if task is None:
-                yield outcome
+                if on_outcome is None:
+                    yield outcome
                 continue
             if task.is_terminal:
                 self._mark_completed(task)
-            if task.state is not TaskState.FAIL:
+            if on_outcome is None and task.state is not TaskState.FAIL:
                 yield outcome
 
     # ----- lifecycle ------------------------------------------------------
@@ -549,6 +578,28 @@ class Interface:
                 self.console.print(f"      hint: {hint}")
             else:
                 self.console.print(f"      [dim]hint:[/] {hint}")
+        self._print_verbose_traceback(task.error)
+
+    def _print_verbose_traceback(self, error: str | None) -> None:
+        if self.verbosity < 2:
+            return
+        traceback = extract_verbose_traceback(error)
+        if not traceback:
+            return
+        if self.plain:
+            self.console.print("      traceback:")
+            for line in traceback.rstrip().splitlines():
+                self.console.print(f"        {line}")
+        else:
+            self.console.print("      [dim]traceback:[/]")
+            self.console.print(
+                Syntax(
+                    traceback,
+                    "pytb",
+                    word_wrap=False,
+                    background_color="default",
+                )
+            )
 
     # ----- progress wiring ------------------------------------------------
 

@@ -18,6 +18,7 @@ Two invariants matter:
 from __future__ import annotations
 
 import io
+import os
 import re
 from types import SimpleNamespace
 
@@ -79,6 +80,63 @@ def test_run_pipeline_submits_inputs_in_one_call(fake_progress_core):
     assert ui.exit_code == 0
 
 
+def test_run_pipeline_enables_traceback_capture_only_at_vv(fake_progress_core):
+    RustTask, ProgressKind, ProgressEvent = fake_progress_core
+    console, _ = _capture_console()
+    env_values: list[str | None] = []
+
+    class FakePipeline:
+        def run(self, inputs, callbacks):
+            env_values.append(os.environ.get("BATCHALIGN_CLI_VERBOSE_TRACEBACKS"))
+            cbs = dict(callbacks)
+            for inp in inputs:
+                cbs[inp.source_id](ProgressEvent(
+                    source_id=inp.source_id,
+                    kind=ProgressKind.StageStarted,
+                    task=RustTask.Asr,
+                ))
+                cbs[inp.source_id](ProgressEvent(
+                    source_id=inp.source_id,
+                    kind=ProgressKind.SourceCompleted,
+                ))
+            return [SimpleNamespace(source_id=inp.source_id, ok=True)
+                    for inp in inputs]
+
+    inp = SimpleNamespace(source_id="a", path="/x/a.wav")
+    old = os.environ.pop("BATCHALIGN_CLI_VERBOSE_TRACEBACKS", None)
+    try:
+        ui = Interface.open(
+            command="transcribe",
+            params={},
+            output=None,
+            plain=True,
+            console=console,
+            verbosity=1,
+        )
+        with ui:
+            ui.push(Task.from_input(inp))
+            list(ui.run_pipeline(FakePipeline(), [inp]))
+        assert env_values == [None]
+        assert os.environ.get("BATCHALIGN_CLI_VERBOSE_TRACEBACKS") is None
+
+        ui = Interface.open(
+            command="transcribe",
+            params={},
+            output=None,
+            plain=True,
+            console=console,
+            verbosity=2,
+        )
+        with ui:
+            ui.push(Task.from_input(inp))
+            list(ui.run_pipeline(FakePipeline(), [inp]))
+        assert env_values == [None, "1"]
+        assert os.environ.get("BATCHALIGN_CLI_VERBOSE_TRACEBACKS") is None
+    finally:
+        if old is not None:
+            os.environ["BATCHALIGN_CLI_VERBOSE_TRACEBACKS"] = old
+
+
 def test_run_pipeline_isolates_per_source_failures(fake_progress_core):
     """One bad source must not take the others out, and must not yield."""
     RustTask, ProgressKind, ProgressEvent = fake_progress_core
@@ -131,6 +189,63 @@ def test_run_pipeline_isolates_per_source_failures(fake_progress_core):
     assert "done=2" in out
     assert "parse error: header missing" in out
     assert ui.exit_code == 1
+
+
+def test_run_pipeline_outcome_callback_writes_during_run(fake_progress_core):
+    """When a writer callback is supplied, successes are not yielded again."""
+    RustTask, ProgressKind, ProgressEvent = fake_progress_core
+    console, _ = _capture_console()
+    written: list[str] = []
+    timeline: list[tuple[str, list[str]]] = []
+
+    class FakePipeline:
+        def run(self, inputs, callbacks, outcome_callback=None):
+            assert outcome_callback is not None
+            cbs = dict(callbacks)
+            outcomes = []
+            for inp in inputs:
+                sid = inp.source_id
+                cbs[sid](ProgressEvent(
+                    source_id=sid,
+                    kind=ProgressKind.StageStarted,
+                    task=RustTask.Morphosyntax,
+                ))
+                cbs[sid](ProgressEvent(
+                    source_id=sid,
+                    kind=ProgressKind.SourceCompleted,
+                ))
+                outcome = SimpleNamespace(source_id=sid, ok=True)
+                outcome_callback(outcome)
+                timeline.append((f"{sid}-completed", list(written)))
+                outcomes.append(outcome)
+            timeline.append(("returning", list(written)))
+            return outcomes
+
+    ui = Interface.open(
+        command="morphotag", params={}, output=None,
+        plain=True, console=console,
+    )
+    inputs = [SimpleNamespace(source_id=sid, path=f"/x/{sid}.cha")
+              for sid in ("a", "b")]
+    with ui:
+        for inp in inputs:
+            ui.push(Task.from_input(inp))
+        outs = list(
+            ui.run_pipeline(
+                FakePipeline(),
+                inputs,
+                on_outcome=lambda outcome: written.append(outcome.source_id),
+            )
+        )
+
+    assert outs == []
+    assert written == ["a", "b"]
+    assert timeline == [
+        ("a-completed", ["a"]),
+        ("b-completed", ["a", "b"]),
+        ("returning", ["a", "b"]),
+    ]
+    assert ui.exit_code == 0
 
 
 def test_per_utterance_ticks_advance_task_progress(fake_progress_core):

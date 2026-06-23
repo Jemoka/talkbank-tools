@@ -50,6 +50,9 @@ _ERROR_ENTRY = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _PY_PREFIX  = re.compile(r"^[A-Za-z_]\w*(?:Error|Exception)\s*:\s*", re.IGNORECASE)
+_TRACEBACK_MARKER = "Traceback (most recent call last):"
+_RUST_TRACE_MARKER = "Rust stack trace (captured at file failure):"
+_TRACEBACK_MARKERS = (_TRACEBACK_MARKER, _RUST_TRACE_MARKER)
 
 # Matches one bullet line from a multi-error summary (see
 # `crates/batchalign/batchalign-core/src/taskrunners/morphosyntax.rs::
@@ -303,7 +306,8 @@ def normalise_one_line(error: str | None) -> str:
     """
     if not error:
         return ""
-    out = re.sub(r"\s+", " ", error).strip()
+    concise, _traceback = split_verbose_traceback(error)
+    out = re.sub(r"\s+", " ", concise).strip()
     # Unwrap the Rust dispatch envelope, keeping just what Python raised.
     m = re.search(r"Backend\.call raised:\s*(.+)$", out)
     if m:
@@ -317,8 +321,60 @@ def normalise_one_line(error: str | None) -> str:
     return out
 
 
+def split_verbose_traceback(error: str | None) -> tuple[str, str | None]:
+    """Split an appended traceback block from the concise error text.
+
+    The Rust/PyO3 backend bridge can preserve Python exceptions as:
+
+        Backend.call raised: ValueError: boom
+        Traceback (most recent call last):
+          ...
+
+    Native Rust stage failures can also append a Rust backtrace under
+    `Rust stack trace...`. Normal CLI verbosity should continue through
+    the existing concise formatter path, while `-vv` can print the full
+    traceback separately.
+    """
+    if not error:
+        return "", None
+    marker_positions = [
+        idx for marker in _TRACEBACK_MARKERS
+        if (idx := error.find(marker)) >= 0
+    ]
+    idx = min(marker_positions) if marker_positions else -1
+    if idx < 0:
+        return error, None
+    concise = error[:idx].rstrip()
+    traceback = error[idx:].strip()
+    return concise, traceback or None
+
+
+def extract_verbose_traceback(error: str | None) -> str | None:
+    """Return the preserved traceback block, if one is present."""
+    _concise, traceback = split_verbose_traceback(error)
+    return traceback
+
+
+def split_python_traceback(error: str | None) -> tuple[str, str | None]:
+    """Backward-compatible alias for older imports."""
+    return split_verbose_traceback(error)
+
+
+def extract_python_traceback(error: str | None) -> str | None:
+    """Backward-compatible alias for older imports."""
+    return extract_verbose_traceback(error)
+
+
 # Internal alias kept for the parse-error renderer.
 _normalise_one_line = normalise_one_line
 
 
-__all__ = ["render_error", "is_rich", "normalise_one_line"]
+__all__ = [
+    "render_error",
+    "is_rich",
+    "normalise_one_line",
+    "extract_verbose_traceback",
+    "extract_python_traceback",
+    "split_verbose_traceback",
+    "split_python_traceback",
+]

@@ -118,6 +118,140 @@ def test_total_failure_exit_two(fake_progress_core):
     assert ui.exit_code == 2
 
 
+def test_traceback_hidden_below_vv(fake_progress_core):
+    RustTask, ProgressKind, ProgressEvent = fake_progress_core
+    console, buf = _capture_console()
+    ui = Interface.open(
+        command="morphotag",
+        params={},
+        output=None,
+        plain=True,
+        console=console,
+        verbosity=1,
+    )
+    error = (
+        "Backend.call raised: ValueError: bad token\n"
+        "Traceback (most recent call last):\n"
+        "  File \"backend.py\", line 10, in call\n"
+        "    explode()\n"
+        "ValueError: bad token"
+    )
+    with ui:
+        a = ui.push(Task(source_id="a", label="x.cha"))
+        cbs = dict(ui.callbacks_for({"a": a}))
+        cbs["a"](ProgressEvent(source_id="a",
+                                kind=ProgressKind.StageStarted,
+                                task=RustTask.Morphosyntax))
+        cbs["a"](ProgressEvent(source_id="a",
+                                kind=ProgressKind.StageFailed,
+                                task=RustTask.Morphosyntax,
+                                label=error))
+    out = _strip_ansi(buf.getvalue())
+    assert "ValueError: bad token" in out
+    assert "Traceback (most recent call last):" not in out
+    assert "explode()" not in out
+
+
+def test_traceback_printed_at_vv(fake_progress_core):
+    RustTask, ProgressKind, ProgressEvent = fake_progress_core
+    console, buf = _capture_console()
+    ui = Interface.open(
+        command="morphotag",
+        params={},
+        output=None,
+        plain=True,
+        console=console,
+        verbosity=2,
+    )
+    error = (
+        "Backend.call raised: ValueError: bad token\n"
+        "Traceback (most recent call last):\n"
+        "  File \"backend.py\", line 10, in call\n"
+        "    explode()\n"
+        "ValueError: bad token"
+    )
+    with ui:
+        a = ui.push(Task(source_id="a", label="x.cha"))
+        cbs = dict(ui.callbacks_for({"a": a}))
+        cbs["a"](ProgressEvent(source_id="a",
+                                kind=ProgressKind.StageStarted,
+                                task=RustTask.Morphosyntax))
+        cbs["a"](ProgressEvent(source_id="a",
+                                kind=ProgressKind.StageFailed,
+                                task=RustTask.Morphosyntax,
+                                label=error))
+    out = _strip_ansi(buf.getvalue())
+    assert "ValueError: bad token" in out
+    assert "traceback:" in out
+    assert "Traceback (most recent call last):" in out
+    assert "explode()" in out
+
+
+def test_rust_traceback_hidden_below_vv(fake_progress_core):
+    RustTask, ProgressKind, ProgressEvent = fake_progress_core
+    console, buf = _capture_console()
+    ui = Interface.open(
+        command="transcribe",
+        params={},
+        output=None,
+        plain=True,
+        console=console,
+        verbosity=1,
+    )
+    error = (
+        "internal: build_chat: Failed to parse text utterance\n"
+        "Rust stack trace (captured at file failure):\n"
+        "   0: batchalign_engine::pipeline::format_stage_failure_message"
+    )
+    with ui:
+        a = ui.push(Task(source_id="a", label="x.mp3"))
+        cbs = dict(ui.callbacks_for({"a": a}))
+        cbs["a"](ProgressEvent(source_id="a",
+                                kind=ProgressKind.StageStarted,
+                                task=RustTask.Asr))
+        cbs["a"](ProgressEvent(source_id="a",
+                                kind=ProgressKind.StageFailed,
+                                task=RustTask.Asr,
+                                label=error))
+    out = _strip_ansi(buf.getvalue())
+    assert "internal: build_chat: Failed to parse text utterance" in out
+    assert "Rust stack trace (captured at file failure):" not in out
+    assert "format_stage_failure_message" not in out
+
+
+def test_rust_traceback_printed_at_vv(fake_progress_core):
+    RustTask, ProgressKind, ProgressEvent = fake_progress_core
+    console, buf = _capture_console()
+    ui = Interface.open(
+        command="transcribe",
+        params={},
+        output=None,
+        plain=True,
+        console=console,
+        verbosity=2,
+    )
+    error = (
+        "internal: build_chat: Failed to parse text utterance\n"
+        "Rust stack trace (captured at file failure):\n"
+        "   0: batchalign_engine::pipeline::format_stage_failure_message"
+    )
+    with ui:
+        a = ui.push(Task(source_id="a", label="x.mp3"))
+        cbs = dict(ui.callbacks_for({"a": a}))
+        cbs["a"](ProgressEvent(source_id="a",
+                                kind=ProgressKind.StageStarted,
+                                task=RustTask.Asr))
+        cbs["a"](ProgressEvent(source_id="a",
+                                kind=ProgressKind.StageFailed,
+                                task=RustTask.Asr,
+                                label=error))
+    out = _strip_ansi(buf.getvalue())
+    assert "internal: build_chat: Failed to parse text utterance" in out
+    assert "traceback:" in out
+    assert "Rust stack trace (captured at file failure):" in out
+    assert "format_stage_failure_message" in out
+
+
 def test_empty_inputs_exit_two_setup_failure(fake_progress_core):
     console, _buf = _capture_console()
     ui = Interface.open(

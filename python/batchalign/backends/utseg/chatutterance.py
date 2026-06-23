@@ -81,8 +81,10 @@ class CHATUtteranceBackend(UtSeg):
         #   * `disfl2` — + retrace [/] marking
         #   * `tsdist` — + utterance-level timestamp distribution from the
         #     parent AsrSegment's [start_ms, end_ms] across the split spans
+        #   * `nodot1` — strip internal periods left behind by Punkt
+        #     abbreviation handling
         canto = ":canto" if self._cantonese and self._lang != "yue" else ""
-        return f"chatutterance:{self._model_id}:disfl2:tsdist{canto}"
+        return f"chatutterance:{self._model_id}:disfl2:tsdist:nodot1{canto}"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -109,6 +111,10 @@ class CHATUtteranceBackend(UtSeg):
                     sentence = sentence.strip()
                     if not sentence:
                         continue
+                    if sentence[-1:] in ".?!":
+                        sentence = sentence[:-1].replace(".", "") + sentence[-1]
+                    else:
+                        sentence = sentence.replace(".", "")
                     sentences.append(
                         clean_utterance(sentence, self._cleanup, self._lang)
                     )

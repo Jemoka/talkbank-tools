@@ -9,7 +9,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
-use crate::cache::{default_cache_path_py, nuke_cache, CachePolicy, CacheSpec};
+use crate::cache::{CachePolicy, CacheSpec, default_cache_path_py, nuke_cache};
 use crate::dp_py::dp_align;
 use crate::native_backends;
 use crate::pipeline::Pipeline;

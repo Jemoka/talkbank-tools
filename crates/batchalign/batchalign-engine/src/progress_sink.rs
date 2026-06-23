@@ -19,7 +19,9 @@ pub struct CallbackSink {
 
 impl CallbackSink {
     pub fn new() -> Self {
-        Self { by_source: HashMap::new() }
+        Self {
+            by_source: HashMap::new(),
+        }
     }
 
     pub fn from_pairs(pairs: Vec<(SourceId, Py<PyAny>)>) -> Self {

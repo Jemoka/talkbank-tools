@@ -16,7 +16,11 @@ fn cache_open_creates_file_and_parent() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let path = tmp.path().join("sub").join("cache.redb");
     let cache = Cache::open(&path, CachePolicy::Use).expect("open cache");
-    assert!(path.exists(), "cache file was not created at {}", path.display());
+    assert!(
+        path.exists(),
+        "cache file was not created at {}",
+        path.display()
+    );
     drop(cache);
 }
 

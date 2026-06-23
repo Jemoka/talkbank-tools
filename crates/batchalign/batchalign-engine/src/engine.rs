@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use batchalign_core::base::Dispatcher;
 use batchalign_core::{
@@ -16,7 +16,7 @@ use batchalign_core::{
 use tokio::sync::{mpsc, oneshot};
 
 use crate::backend_impl::BackendImpl;
-use crate::batcher::{batcher_loop, BatchItem};
+use crate::batcher::{BatchItem, batcher_loop};
 use crate::cache::Cache;
 
 /// Tunables for the engine. `max_concurrent_values` is the Pipeline-level
@@ -109,18 +109,19 @@ impl BatchalignEngine {
     /// 4. Inserting per-task route entries pointing at the new channel.
     ///
     /// Errors if a task already has a registered backend (no contention).
-    pub fn register(
-        &self,
-        backend: BackendImpl,
-        handle: &tokio::runtime::Handle,
-    ) -> Result<()> {
+    pub fn register(&self, backend: BackendImpl, handle: &tokio::runtime::Handle) -> Result<()> {
         let policy = backend.batch_policy();
         let name = backend.name().to_string();
         let tasks: Vec<Task> = backend.tasks().to_vec();
         let backend = Arc::new(backend);
         let (tx, rx) = mpsc::unbounded_channel::<BatchItem>();
 
-        handle.spawn(batcher_loop(backend.clone(), policy, self.cache.clone(), rx));
+        handle.spawn(batcher_loop(
+            backend.clone(),
+            policy,
+            self.cache.clone(),
+            rx,
+        ));
 
         let mut routes = self
             .routes
@@ -157,8 +158,11 @@ impl BatchalignEngine {
     pub async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
         // Delegate to the progress-threading entry point with a
         // no-op progress channel — keeps the routing logic in one place.
-        self.dispatch_inner(input, Arc::new(NullBackendProgress) as Arc<dyn BackendProgress>)
-            .await
+        self.dispatch_inner(
+            input,
+            Arc::new(NullBackendProgress) as Arc<dyn BackendProgress>,
+        )
+        .await
     }
 
     /// Like [`dispatch`] but ships a backend-side progress handle with

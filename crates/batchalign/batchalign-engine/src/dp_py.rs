@@ -14,7 +14,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
-use talkbank_transform::dp_align::{align, AlignResult, MatchMode};
+use talkbank_transform::dp_align::{AlignResult, MatchMode, align};
 
 /// Align two sequences with the Rust Hirschberg DP.
 ///
@@ -62,10 +62,7 @@ pub fn dp_align(
                 dict.set_item("key", key)?;
                 dict.set_item("payload_idx", payload_idx)?;
             }
-            AlignResult::ExtraReference {
-                key,
-                reference_idx,
-            } => {
+            AlignResult::ExtraReference { key, reference_idx } => {
                 dict.set_item("type", "extra_reference")?;
                 dict.set_item("key", key)?;
                 dict.set_item("reference_idx", reference_idx)?;

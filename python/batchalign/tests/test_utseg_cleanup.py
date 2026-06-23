@@ -7,6 +7,12 @@ word-lists and the n-gram retrace marker. These run with no models.
 from __future__ import annotations
 
 from batchalign.backends.utseg import cleanup
+from batchalign.backends.utseg.chatutterance import CHATUtteranceBackend
+from batchalign._core.proto import (
+    AsrSegment,
+    LanguageSpecPerFile,
+    UtSegInput,
+)
 
 
 def test_disfluency_marks_filled_pauses():
@@ -41,3 +47,35 @@ def test_clean_utterance_disfluency_then_retrace():
     table = cleanup.load_cleanup("eng")
     # uh → &-uh, and the repeated "the the" → the [/] the.
     assert cleanup.clean_utterance("uh the the dog", table, "en") == "&-uh the [/] the dog"
+
+
+def test_chatutterance_strips_internal_periods_from_segmenter_output():
+    backend = CHATUtteranceBackend.__new__(CHATUtteranceBackend)
+    backend._lang = "eng"
+    backend._cleanup = {}
+    backend._segmenter = lambda _text: [
+        "d. oh two seven thirtieth of September twenty [/] twenty three yeah."
+    ]
+
+    [out] = backend.call(
+        [
+            UtSegInput(
+                source_id="fixture.wav",
+                segments=[
+                    AsrSegment(
+                        start_ms=0,
+                        end_ms=1000,
+                        text="D oh two seven thirtieth of september twenty twenty three yeah",
+                        speaker=None,
+                        words=[],
+                    )
+                ],
+                language=LanguageSpecPerFile(kind="per_file"),
+                stanza_fallback=False,
+            )
+        ]
+    )
+
+    assert out.utterances[0].text == (
+        "d oh two seven thirtieth of September twenty [/] twenty three yeah."
+    )

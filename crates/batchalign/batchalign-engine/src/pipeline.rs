@@ -14,24 +14,28 @@
 //! Drop calls `cancel`, which clears the engine's route table; the runtime
 //! drops shortly after, joining all spawned tasks.
 
+use std::backtrace::Backtrace;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use batchalign_core::{
-    BAError, BAValue, Chat, ChatInput, DynTaskRunner, MediaInput, PairedInput, Paired,
-    ProgressEvent, ProgressKind, ProgressSink,
-    SourceId, Task,
+    BAError, BAValue, Chat, ChatInput, DynTaskRunner, MediaInput, Paired, PairedInput,
+    ProgressEvent, ProgressKind, ProgressSink, SourceId, Task,
 };
+use futures::stream::{FuturesUnordered, StreamExt};
+use pyo3::Py;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
-use pyo3::Py;
 // `pyo3::PyObject` is the alias `Py<PyAny>` in pyo3 0.28; use it via Py<PyAny>.
 use tokio::sync::Semaphore;
 
 use crate::backend_impl::BackendImpl;
 use crate::cache::{Cache, CacheSpec};
 use crate::engine::BatchalignEngine;
+use crate::py_outcome::PyOutcome;
+
+const VERBOSE_TRACEBACK_ENV: &str = "BATCHALIGN_CLI_VERBOSE_TRACEBACKS";
+const RUST_TRACE_MARKER: &str = "Rust stack trace (captured at file failure):";
 
 /// The Python-facing pipeline object.
 #[pyclass]
@@ -130,14 +134,16 @@ impl Pipeline {
     ///
     /// Each input must be a `MediaInput`, a filesystem path string, or any
     /// duck-typed object with `.path` (+ optional `.source_id`). Returns one
-    /// `Outcome` per input.
-    #[pyo3(signature = (inputs, callbacks=None))]
+    /// `Outcome` per input. When `outcome_callback` is supplied, each
+    /// successful outcome is passed to it as soon as that source completes.
+    #[pyo3(signature = (inputs, callbacks=None, outcome_callback=None))]
     fn run(
         &self,
         py: Python<'_>,
         inputs: Vec<Py<PyAny>>,
         callbacks: Option<Vec<(String, Py<PyAny>)>>,
-    ) -> PyResult<Vec<crate::py_outcome::PyOutcome>> {
+        outcome_callback: Option<Py<PyAny>>,
+    ) -> PyResult<Vec<Py<PyOutcome>>> {
         let mut sink_pairs: Vec<(SourceId, Py<PyAny>)> = Vec::new();
         if let Some(cbs) = callbacks {
             for (id, cb) in cbs {
@@ -147,7 +153,8 @@ impl Pipeline {
                 sink_pairs.push((sid, cb));
             }
         }
-        let sink = Arc::new(crate::progress_sink::CallbackSink::from_pairs(sink_pairs)) as Arc<dyn ProgressSink>;
+        let sink = Arc::new(crate::progress_sink::CallbackSink::from_pairs(sink_pairs))
+            as Arc<dyn ProgressSink>;
         // Per-input fallible conversion. A parse failure on one source must
         // not abort the rest of the batch — convert it into a
         // `BAValue::Failed` and emit StageFailed + SourceCompleted so the
@@ -168,7 +175,7 @@ impl Pipeline {
                             kind: ProgressKind::StageFailed,
                             completed: 0,
                             total: 0,
-                            label: msg.clone(),
+                            label: format_stage_failure_message(&msg),
                         });
                         sink.emit(ProgressEvent {
                             source_id: sid.clone(),
@@ -207,14 +214,44 @@ impl Pipeline {
         // immediately; the run loop then drains quickly. This doesn't kill
         // already-running backends (they finish their current call) but
         // stops *queuing* new work, which is the slowness the user feels.
+        if let Some(outcome_callback) = outcome_callback {
+            return py.detach(|| {
+                let rt = inner.runtime.clone();
+                let engine = inner.engine.clone();
+                rt.block_on(async move {
+                    let work =
+                        run_inner_with_outcome_callback(inner, bavalues, sink, outcome_callback);
+                    tokio::pin!(work);
+                    let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+                    interval.tick().await; // skip the immediate first tick
+                    loop {
+                        tokio::select! {
+                            outcomes = &mut work => return outcomes,
+                            _ = interval.tick() => {
+                                let interrupted = Python::attach(|py| {
+                                    py.check_signals().is_err()
+                                });
+                                if interrupted {
+                                    engine.cancel();
+                                    // Don't break — let `work` finish unwinding
+                                    // so already-running tasks get their proper
+                                    // `BAValue::Failed` and the sink emits the
+                                    // closing events.
+                                }
+                            }
+                        }
+                    }
+                })
+            });
+        }
+
         let outcomes = py.detach(|| {
             let rt = inner.runtime.clone();
             let engine = inner.engine.clone();
             rt.block_on(async move {
                 let work = run_inner(inner, bavalues, sink);
                 tokio::pin!(work);
-                let mut interval =
-                    tokio::time::interval(std::time::Duration::from_millis(100));
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
                 interval.tick().await; // skip the immediate first tick
                 loop {
                     tokio::select! {
@@ -235,10 +272,10 @@ impl Pipeline {
                 }
             })
         });
-        Ok(outcomes
+        outcomes
             .into_iter()
-            .map(crate::py_outcome::PyOutcome::from_value)
-            .collect())
+            .map(|value| Py::new(py, PyOutcome::from_value(value)))
+            .collect()
     }
 
     /// Best-effort cancel. Cooperative — flips the engine's cancel flag so
@@ -449,6 +486,57 @@ async fn run_inner(
     futures::future::join_all(futures).await
 }
 
+async fn run_inner_with_outcome_callback(
+    inner: Arc<PipelineInner>,
+    inputs: Vec<BAValue>,
+    sink: Arc<dyn ProgressSink>,
+    outcome_callback: Py<PyAny>,
+) -> PyResult<Vec<Py<PyOutcome>>> {
+    let total = inputs.len();
+    let mut futures = FuturesUnordered::new();
+
+    for (idx, value) in inputs.into_iter().enumerate() {
+        let me = inner.clone();
+        let sink = sink.clone();
+        futures.push(async move {
+            let permit = me.sem.clone().acquire_owned().await;
+            let _permit = match permit {
+                Ok(p) => p,
+                Err(_) => {
+                    let sid = value.source_id();
+                    return (
+                        idx,
+                        BAValue::Failed {
+                            source_id: sid,
+                            error: BAError::Internal("semaphore closed".into()),
+                            partial: Some(Box::new(value)),
+                        },
+                    );
+                }
+            };
+            (idx, run_one(me, value, sink).await)
+        });
+    }
+
+    let mut outcomes: Vec<Option<Py<PyOutcome>>> = (0..total).map(|_| None).collect();
+    while let Some((idx, value)) = futures.next().await {
+        let failed = value.is_failed();
+        let outcome = Python::attach(|py| -> PyResult<Py<PyOutcome>> {
+            let outcome = Py::new(py, PyOutcome::from_value(value))?;
+            if !failed {
+                outcome_callback.call1(py, (outcome.clone_ref(py),))?;
+            }
+            Ok(outcome)
+        })?;
+        outcomes[idx] = Some(outcome);
+    }
+
+    Ok(outcomes
+        .into_iter()
+        .map(|outcome| outcome.expect("one outcome per input"))
+        .collect())
+}
+
 async fn run_one(
     inner: Arc<PipelineInner>,
     mut value: BAValue,
@@ -500,11 +588,7 @@ fn stamp_chats_in_value(
             let lines = &mut chat.ast_mut().lines.0;
             for &task in order {
                 let engine = dispatcher.engine_name(task);
-                batchalign_core::utils::stamp_provenance(
-                    lines,
-                    task.as_str(),
-                    engine.as_deref(),
-                );
+                batchalign_core::utils::stamp_provenance(lines, task.as_str(), engine.as_deref());
             }
         }
         BAValue::Cons { head, tail } => {
@@ -563,7 +647,7 @@ async fn try_step(
                 kind: ProgressKind::StageFailed,
                 completed: 0,
                 total: 0,
-                label: format!("{e:#}"),
+                label: format_stage_failure_error(&e),
             });
             BAValue::Failed {
                 source_id,
@@ -572,6 +656,21 @@ async fn try_step(
             }
         }
     }
+}
+
+fn format_stage_failure_error(error: &BAError) -> String {
+    let message = format!("{error:#}");
+    format_stage_failure_message(&message)
+}
+
+fn format_stage_failure_message(message: &str) -> String {
+    if std::env::var_os(VERBOSE_TRACEBACK_ENV).is_none() {
+        return message.to_string();
+    }
+    format!(
+        "{message}\n{RUST_TRACE_MARKER}\n{}",
+        Backtrace::force_capture(),
+    )
 }
 
 /// Materialize the task set from what the caller declared. We do NOT
@@ -645,4 +744,3 @@ fn topo_sort_stable(declared_order: &[Task], task_set: &HashSet<Task>) -> Vec<Ta
 fn canonical_runner(t: Task) -> Box<dyn DynTaskRunner> {
     batchalign_core::taskrunners::canonical(t)
 }
-

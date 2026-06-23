@@ -49,10 +49,14 @@ fn main() {
                 .args(["rev-parse", "--short", "HEAD"])
                 .output()
                 .ok()
-                .and_then(|o| if o.status.success() {
-                    String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
-                } else {
-                    None
+                .and_then(|o| {
+                    if o.status.success() {
+                        String::from_utf8(o.stdout)
+                            .ok()
+                            .map(|s| s.trim().to_string())
+                    } else {
+                        None
+                    }
                 })
         })
         .unwrap_or_else(|| "unknown".to_string());
@@ -83,8 +87,7 @@ fn main() {
         .and_then(Path::parent)
         .expect("locate workspace root from CARGO_MANIFEST_DIR")
         .to_path_buf();
-    let target_path = project_root
-        .join("python/batchalign/_core/_proto_generated.py");
+    let target_path = project_root.join("python/batchalign/_core/_proto_generated.py");
     let codegen_script = project_root.join("bazel/python/codegen_proto.py");
 
     if !target_path.parent().map(Path::is_dir).unwrap_or(false) {
@@ -123,8 +126,8 @@ fn main() {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$defs": defs,
     });
-    let schema_path = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"))
-        .join("proto.schema.json");
+    let schema_path =
+        PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR")).join("proto.schema.json");
     let schema_text = match serde_json::to_string_pretty(&root) {
         Ok(s) => s,
         Err(e) => {
@@ -133,7 +136,10 @@ fn main() {
         }
     };
     if let Err(e) = std::fs::write(&schema_path, format!("{schema_text}\n")) {
-        println!("cargo:warning=batchalign-engine build.rs: write schema {}: {e}", schema_path.display());
+        println!(
+            "cargo:warning=batchalign-engine build.rs: write schema {}: {e}",
+            schema_path.display()
+        );
         return;
     }
 
@@ -141,7 +147,9 @@ fn main() {
     // active venv, so `python3` on PATH IS the venv's interpreter. When
     // the venv's interpreter isn't called `python3` (Windows), fall back
     // to `python`.
-    let python = which("python3").or_else(|| which("python")).unwrap_or_else(|| PathBuf::from("python3"));
+    let python = which("python3")
+        .or_else(|| which("python"))
+        .unwrap_or_else(|| PathBuf::from("python3"));
     if !codegen_script.is_file() {
         println!(
             "cargo:warning=batchalign-engine build.rs: codegen script not found at {} \
@@ -201,7 +209,10 @@ fn splice_discriminator(parent_name: &str, schema: &mut serde_json::Value) {
         return;
     };
     let tag: Option<String> = {
-        let variants = obj.get("oneOf").and_then(serde_json::Value::as_array).cloned();
+        let variants = obj
+            .get("oneOf")
+            .and_then(serde_json::Value::as_array)
+            .cloned();
         let Some(variants) = variants else {
             return;
         };

@@ -65,8 +65,8 @@ impl BackendImpl {
 
             if let Ok(attr) = bound.getattr("__batchalign_native_arc__") {
                 if let Ok(cap) = attr.cast::<PyCapsule>() {
-                    let expected = CString::new(NATIVE_ARC_CAPSULE_NAME)
-                        .expect("static capsule name");
+                    let expected =
+                        CString::new(NATIVE_ARC_CAPSULE_NAME).expect("static capsule name");
                     if let Ok(ptr) = cap.pointer_checked(Some(&expected)) {
                         // SAFETY: every native wrapper macro publishes a
                         // capsule with this exact name and an
@@ -80,10 +80,9 @@ impl BackendImpl {
                 }
             }
 
-            let name: String = bound
-                .getattr("name")?
-                .extract()
-                .map_err(|e| pyo3::exceptions::PyTypeError::new_err(format!("backend.name must be str: {e}")))?;
+            let name: String = bound.getattr("name")?.extract().map_err(|e| {
+                pyo3::exceptions::PyTypeError::new_err(format!("backend.name must be str: {e}"))
+            })?;
 
             // batch_policy is either a BatchPolicy #[pyclass] or a duck-typed
             // object with max_size + window_ms attributes. We extract via the
@@ -94,7 +93,10 @@ impl BackendImpl {
                 Err(_) => {
                     let max_size: usize = policy_obj.getattr("max_size")?.extract()?;
                     let window_ms: u64 = policy_obj.getattr("window_ms")?.extract()?;
-                    BatchPolicy { max_size, window_ms }
+                    BatchPolicy {
+                        max_size,
+                        window_ms,
+                    }
                 }
             };
 
@@ -154,11 +156,7 @@ impl Backend for BackendImpl {
         // Always go through the progress-threading entry point — the
         // batcher uses `call_with_progress`, this `call` exists only
         // for legacy callers (tests) that don't want a progress channel.
-        Backend::call_with_progress(
-            self,
-            batch,
-            Arc::new(batchalign_core::NullBackendProgress),
-        )
+        Backend::call_with_progress(self, batch, Arc::new(batchalign_core::NullBackendProgress))
     }
 
     fn call_with_progress(
@@ -246,7 +244,13 @@ fn call_py_backend(
             .obj
             .bind(py)
             .call_method("call", (py_batch,), Some(&kwargs))
-            .map_err(|e| BAError::Worker(format!("Backend.call raised: {e}")))?;
+            .map_err(|e| {
+                if std::env::var_os("BATCHALIGN_CLI_VERBOSE_TRACEBACKS").is_some() {
+                    BAError::Worker(format_py_exception(py, "Backend.call raised", e))
+                } else {
+                    BAError::Worker(format!("Backend.call raised: {e}"))
+                }
+            })?;
 
         // Reverse the rehydration: typed *Output dataclasses -> tagged-dict
         // JSON -> Vec<TaskOutput>. Pass the original input tags through
@@ -281,6 +285,25 @@ fn call_py_backend(
             .map_err(|e| BAError::Worker(format!("deserialize Vec<TaskOutput>: {e}")))?;
         Ok(outputs)
     })
+}
+
+fn format_py_exception(py: Python<'_>, context: &str, err: PyErr) -> String {
+    let fallback = err.to_string();
+    let exc = err.into_value(py);
+    let traceback = py
+        .import("traceback")
+        .and_then(|m| m.getattr("format_exception"))
+        .and_then(|f| f.call1((exc.bind(py),)))
+        .and_then(|parts| parts.extract::<Vec<String>>())
+        .map(|parts| parts.concat())
+        .unwrap_or_else(|_| fallback.clone());
+
+    let traceback = traceback.trim_end();
+    if traceback.is_empty() {
+        format!("{context}: {fallback}")
+    } else {
+        format!("{context}: {fallback}\n{traceback}")
+    }
 }
 
 /// Python-side callable that forwards `progress(completed, total)`

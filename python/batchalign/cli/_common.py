@@ -105,22 +105,40 @@ def write_outcomes(
     directory.
     """
     for outcome in outcomes:
-        src_str = getattr(outcome, "source_id", None)
-        if not src_str:
-            raise typer.BadParameter("outcome missing source_id; cannot determine output path")
-        src = Path(src_str)
-        if out_dir is None:
-            target = src.with_suffix(output_suffix) if output_suffix else src
-        else:
-            rel = src.relative_to(root)
-            if output_suffix:
-                rel = rel.with_suffix(output_suffix)
-            target = out_dir / rel
-            # Ensure the symlink-resolved target stays under out_dir.
-            target.parent.mkdir(parents=True, exist_ok=True)
-            safe_resolve(target.parent, out_dir.resolve())
+        write_outcome(
+            outcome,
+            root,
+            out_dir,
+            output_suffix=output_suffix,
+            strip_word_timing=strip_word_timing,
+        )
+
+
+def write_outcome(
+    outcome: Any,
+    root: Path,
+    out_dir: Path | None,
+    *,
+    output_suffix: str | None = None,
+    strip_word_timing: bool = False,
+) -> None:
+    """Write one outcome to disk."""
+    src_str = getattr(outcome, "source_id", None)
+    if not src_str:
+        raise typer.BadParameter("outcome missing source_id; cannot determine output path")
+    src = Path(src_str)
+    if out_dir is None:
+        target = src.with_suffix(output_suffix) if output_suffix else src
+    else:
+        rel = src.relative_to(root)
+        if output_suffix:
+            rel = rel.with_suffix(output_suffix)
+        target = out_dir / rel
+        # Ensure the symlink-resolved target stays under out_dir.
         target.parent.mkdir(parents=True, exist_ok=True)
-        outcome.write(str(target), strip_word_timing=strip_word_timing)
+        safe_resolve(target.parent, out_dir.resolve())
+    target.parent.mkdir(parents=True, exist_ok=True)
+    outcome.write(str(target), strip_word_timing=strip_word_timing)
 
 
 def require_api_key(provider: str, ini_key: str, env_var: str) -> str:
@@ -144,6 +162,7 @@ __all__ = [
     "collect_chat_inputs",
     "collect_media_inputs",
     "safe_resolve",
+    "write_outcome",
     "write_outcomes",
     "require_api_key",
 ]

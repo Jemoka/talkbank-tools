@@ -13,9 +13,9 @@ use std::sync::Mutex;
 use batchalign_core::{BAError, BAValue, SourceId};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use talkbank_model::alignment::helpers::{walk_words_mut, WordItemMut};
-use talkbank_model::model::DependentTier;
 use talkbank_model::Line;
+use talkbank_model::alignment::helpers::{WordItemMut, walk_words_mut};
+use talkbank_model::model::DependentTier;
 
 /// Opaque PyO3 handle around a single pipeline outcome.
 ///
@@ -152,10 +152,10 @@ fn strip_word_timing_from_chat(chat: &mut batchalign_core::Chat) {
 mod tests {
     use super::*;
     use batchalign_core::{Chat, SourceId};
-    use talkbank_model::alignment::helpers::{walk_words, WordItem};
+    use talkbank_model::alignment::helpers::{WordItem, walk_words};
     use talkbank_transform::asr_postprocess;
     use talkbank_transform::build_chat::{
-        build_chat, ParticipantDesc, TranscriptDescription, UtteranceDesc, WordDesc,
+        ParticipantDesc, TranscriptDescription, UtteranceDesc, WordDesc, build_chat,
     };
 
     fn word(text: &str, start_ms: Option<u64>, end_ms: Option<u64>) -> WordDesc {

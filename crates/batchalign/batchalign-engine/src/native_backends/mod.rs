@@ -89,12 +89,10 @@ macro_rules! native_backend {
                 &self,
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<pyo3::Bound<'py, pyo3::types::PyCapsule>> {
-                let arc: ::std::sync::Arc<dyn ::batchalign_core::Backend> =
-                    self.inner.clone();
-                let name = ::std::ffi::CString::new(
-                    $crate::native_backends::NATIVE_ARC_CAPSULE_NAME,
-                )
-                .expect("static capsule name");
+                let arc: ::std::sync::Arc<dyn ::batchalign_core::Backend> = self.inner.clone();
+                let name =
+                    ::std::ffi::CString::new($crate::native_backends::NATIVE_ARC_CAPSULE_NAME)
+                        .expect("static capsule name");
                 pyo3::types::PyCapsule::new(py, arc, Some(name))
             }
 

@@ -74,9 +74,9 @@ impl TaskRunner for UtSegTaskRunner {
                 language: LanguageSpec::PerFile,
                 stanza_fallback: false,
             };
-            let out_raw = dispatcher.dispatch(TaskInput::UtSeg(input)).await?;
+            let out_raw = dispatcher.dispatch(TaskInput::UtSeg(input.clone())).await?;
             let out: UtSegOutput = out_raw.try_into()?;
-            collect_split(row, &out, &mut new_utts);
+            collect_split(row, &input, &out, &mut new_utts);
             sink.emit(ProgressEvent::stage_tick(
                 &source_id,
                 Task::UtSeg,
@@ -123,6 +123,15 @@ struct NewUtterance {
     speaker: String,
     text: String,
     bullet: Option<(u64, u64)>,
+    debug: UtSegDebug,
+}
+
+/// Debug-only provenance for an utterance produced from one UtSeg model call.
+#[derive(Debug, Clone)]
+struct UtSegDebug {
+    source_utterance: String,
+    model_input: UtSegInput,
+    model_output: UtSegOutput,
 }
 
 /// Pull `(speaker, spoken text, media window)` for each utterance in document
@@ -157,7 +166,17 @@ fn collect_utterance_rows(chat: &Chat) -> Vec<UtteranceRow> {
 
 /// Append the segmenter's sub-utterances for one row. Falls back to the
 /// original (single) utterance when the backend returns no spans.
-fn collect_split(row: &UtteranceRow, out: &UtSegOutput, sink: &mut Vec<NewUtterance>) {
+fn collect_split(
+    row: &UtteranceRow,
+    input: &UtSegInput,
+    out: &UtSegOutput,
+    sink: &mut Vec<NewUtterance>,
+) {
+    let debug = UtSegDebug {
+        source_utterance: row.text.clone(),
+        model_input: input.clone(),
+        model_output: out.clone(),
+    };
     if out.utterances.is_empty() {
         if !row.text.trim().is_empty() {
             // No split: keep the blob as one utterance with a default period.
@@ -165,6 +184,7 @@ fn collect_split(row: &UtteranceRow, out: &UtSegOutput, sink: &mut Vec<NewUttera
                 speaker: row.speaker.clone(),
                 text: format!("{} .", row.text.trim()),
                 bullet: None,
+                debug,
             });
         }
         return;
@@ -192,6 +212,7 @@ fn collect_split(row: &UtteranceRow, out: &UtSegOutput, sink: &mut Vec<NewUttera
             speaker: row.speaker.clone(),
             text,
             bullet,
+            debug: debug.clone(),
         });
     }
 }
@@ -259,7 +280,54 @@ fn build_chat_from_utterances(
         write_wor: false,
     };
 
-    let chat_file = build_chat(&desc).map_err(|e| BAError::Internal(format!("build_chat: {e}")))?;
+    let chat_file = build_chat(&desc).map_err(|e| {
+        for (idx, utt) in utts.iter().enumerate() {
+            let single = TranscriptDescription {
+                langs: if langs.is_empty() {
+                    vec!["eng".to_string()]
+                } else {
+                    langs.to_vec()
+                },
+                participants: vec![ParticipantDesc {
+                    id: utt.speaker.clone(),
+                    name: None,
+                    role: "Participant".to_string(),
+                    corpus: "batchalign".to_string(),
+                }],
+                media_name: Some(source_id.as_str().to_string()),
+                media_type: Some("audio".to_string()),
+                utterances: vec![UtteranceDesc {
+                    speaker: utt.speaker.clone(),
+                    words: None,
+                    text: Some(utt.text.clone()),
+                    start_ms: utt.bullet.map(|b| b.0),
+                    end_ms: utt.bullet.map(|b| b.1),
+                    lang: None,
+                }],
+                write_wor: false,
+            };
+            if build_chat(&single).is_err() {
+                let model_input = serde_json::to_string_pretty(&utt.debug.model_input)
+                    .unwrap_or_else(|_| format!("{:#?}", utt.debug.model_input));
+                let model_output = serde_json::to_string_pretty(&utt.debug.model_output)
+                    .unwrap_or_else(|_| format!("{:#?}", utt.debug.model_output));
+                tracing::debug!(
+                    target: "batchalign::utseg",
+                    "UtSeg re-parse failure\nsource_id: {}\nutterance_index: {}\nspeaker: {}\nrebuilt_utterance: {}\nsource_utterance: {}\nmodel_input:\n{}\nmodel_output:\n{}\nerror: {}",
+                    source_id.as_str(),
+                    idx,
+                    utt.speaker,
+                    utt.text,
+                    utt.debug.source_utterance,
+                    model_input,
+                    model_output,
+                    e,
+                );
+                break;
+            }
+        }
+        BAError::Internal(format!("build_chat: {e}"))
+    })?;
     let collector = ErrorCollector::new();
     let validated = chat_file.validate_into(&collector, None);
     Ok(Chat::from_validated_ast(validated, source_id.clone()))

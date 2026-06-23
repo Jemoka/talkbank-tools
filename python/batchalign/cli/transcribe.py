@@ -22,7 +22,7 @@ from typing import Any
 import typer
 
 from ..lang import LanguageCode
-from ._common import collect_media_inputs, write_outcomes
+from ._common import collect_media_inputs, write_outcome
 from ._options import cli_options
 from .tui import Interface, Task
 
@@ -140,8 +140,19 @@ def register(app: typer.Typer) -> None:
             inputs, root = collect_media_inputs(folder)
             for inp in inputs:
                 ui.push(Task.from_input(inp))
-            outcomes = list(ui.run_pipeline(pipeline, inputs))
-            write_outcomes(outcomes, root, out, output_suffix=".cha", strip_word_timing=nowor)
+            list(
+                ui.run_pipeline(
+                    pipeline,
+                    inputs,
+                    on_outcome=lambda outcome: write_outcome(
+                        outcome,
+                        root,
+                        out,
+                        output_suffix=".cha",
+                        strip_word_timing=nowor,
+                    ),
+                )
+            )
 
         raise typer.Exit(code=ui.exit_code)
 

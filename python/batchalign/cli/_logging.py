@@ -77,6 +77,9 @@ def configure(verbosity: int) -> None:
     Idempotent — safe to call multiple times. Replaces any prior
     handlers we installed (identified by their `_batchalign_cli` mark).
     """
+    if verbosity >= 2 and "BATCHALIGN_LOG" not in os.environ and "RUST_LOG" not in os.environ:
+        os.environ["BATCHALIGN_LOG"] = "batchalign=debug"
+
     root = logging.getLogger()
     # Remove any prior handlers we installed; leave foreign handlers
     # (e.g. pytest's capture) alone.

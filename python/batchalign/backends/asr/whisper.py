@@ -38,7 +38,7 @@ class WhisperBackend(ASR, UTR):
         batch_size: int = 32,
         batch_window_ms: int = 50,
         device: str | None = None,
-        chunk_length_s: int = 30,
+        chunk_length_s: int = 15,
     ) -> None:
         from transformers import pipeline  # type: ignore[import-not-found]
 
@@ -101,7 +101,7 @@ class WhisperBackend(ASR, UTR):
                 language = self._language
         else:
             language = self._language
-        gen_kwargs: dict[str, Any] = {}
+        gen_kwargs: dict[str, Any] = {"task": "transcribe"}
         if language is not None:
             gen_kwargs["language"] = language
 

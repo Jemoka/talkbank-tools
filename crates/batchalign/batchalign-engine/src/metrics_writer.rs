@@ -52,12 +52,7 @@ pub fn write(artifact: &MetricsArtifact, path: &Path) -> Result<()> {
         let cells: Vec<String> = table
             .schema
             .iter()
-            .map(|col| {
-                row.columns
-                    .get(col)
-                    .map(json_cell)
-                    .unwrap_or_default()
-            })
+            .map(|col| row.columns.get(col).map(json_cell).unwrap_or_default())
             .collect();
         write_csv_row(&mut out, &cells)?;
     }
