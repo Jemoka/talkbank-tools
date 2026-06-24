@@ -29,6 +29,7 @@ except ImportError:
     class _CoreMediaInput:  # type: ignore[no-redef]
         path: str
         source_id: str = ""
+        language: str | None = None
 
     @dataclass
     class _CoreChatInput:  # type: ignore[no-redef]
@@ -42,14 +43,18 @@ except ImportError:
         source_id: str = ""
 
 
-def media_from_path(path: str | Path, source_id: str | None = None) -> _CoreMediaInput:
+def media_from_path(
+    path: str | Path,
+    source_id: str | None = None,
+    language: str | None = None,
+) -> _CoreMediaInput:
     """Construct a `MediaInput` from a filesystem path.
 
     `source_id` defaults to the file stem (matches the spec §16.4 CLI default).
     """
     p = Path(path).absolute()
     sid = source_id if source_id is not None else p.stem
-    return _CoreMediaInput(path=str(p), source_id=sid)
+    return _CoreMediaInput(path=str(p), source_id=sid, language=language)
 
 
 def chat_from_path(path: str | Path, source_id: str | None = None) -> _CoreChatInput:

@@ -792,6 +792,7 @@ mod tests {
         let mut value = BAValue::Media(MediaInput {
             source_id: SourceId::new_unchecked("audio"),
             path: "/dev/null".into(),
+            language: None,
         });
         let dispatcher = RecordingDispatcher::new();
         let err = MorphosyntaxTaskRunner

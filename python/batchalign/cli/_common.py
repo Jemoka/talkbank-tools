@@ -53,11 +53,14 @@ def collect_chat_inputs(folder: Path) -> tuple[list[Any], Path]:
     return inputs, _root_for(folder)
 
 
-def collect_media_inputs(folder: Path) -> tuple[list[Any], Path]:
+def collect_media_inputs(folder: Path, *, language: str | None = None) -> tuple[list[Any], Path]:
     """Walk `folder` for media files; return (inputs, root)."""
     from batchalign.inputs import media_from_path
 
-    inputs = [media_from_path(p, source_id=str(p)) for p in _walk(folder, MEDIA_EXTENSIONS)]
+    inputs = [
+        media_from_path(p, source_id=str(p), language=language)
+        for p in _walk(folder, MEDIA_EXTENSIONS)
+    ]
     return inputs, _root_for(folder)
 
 

@@ -137,7 +137,7 @@ def register(app: typer.Typer) -> None:
                 speaker_backend=speaker_backend,
                 utseg_backend=utseg_backend,
             )
-            inputs, root = collect_media_inputs(folder)
+            inputs, root = collect_media_inputs(folder, language=lang_code.alpha_3)
             for inp in inputs:
                 ui.push(Task.from_input(inp))
             list(

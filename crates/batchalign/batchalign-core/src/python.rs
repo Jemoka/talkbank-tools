@@ -80,9 +80,15 @@ fn coerce_source_id(value: &Bound<'_, PyAny>) -> PyResult<SourceId> {
 #[pymethods]
 impl MediaInput {
     #[new]
-    #[pyo3(signature = (path, source_id))]
-    fn py_new(path: std::path::PathBuf, source_id: &Bound<'_, PyAny>) -> PyResult<Self> {
-        Ok(Self::new(coerce_source_id(source_id)?, path))
+    #[pyo3(signature = (path, source_id, language=None))]
+    fn py_new(
+        path: std::path::PathBuf,
+        source_id: &Bound<'_, PyAny>,
+        language: Option<String>,
+    ) -> PyResult<Self> {
+        let mut input = Self::new(coerce_source_id(source_id)?, path);
+        input.language = language;
+        Ok(input)
     }
 }
 

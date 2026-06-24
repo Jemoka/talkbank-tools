@@ -33,7 +33,14 @@ pub(super) fn build_utterance_lines(
                 )
             })?
         } else {
-            build_word_utterance(parser, &utterance.speaker, words, desc.write_wor)?
+            build_word_utterance(
+                parser,
+                &utterance.speaker,
+                words,
+                desc.write_wor,
+                utterance.start_ms,
+                utterance.end_ms,
+            )?
         };
 
         if let Some(mut line) = built {
@@ -189,6 +196,8 @@ fn build_word_utterance(
     speaker: &str,
     words: &[WordDesc],
     write_wor: bool,
+    fallback_start_ms: Option<u64>,
+    fallback_end_ms: Option<u64>,
 ) -> Result<Option<Line>, String> {
     let mut content: Vec<UtteranceContent> = Vec::new();
     let mut utt_start_ms: Option<u64> = None;
@@ -251,7 +260,10 @@ fn build_word_utterance(
     }
 
     let mut main = talkbank_model::model::MainTier::new(speaker, content, terminator);
-    if let (Some(start), Some(end)) = (utt_start_ms, utt_end_ms) {
+    if let (Some(start), Some(end)) = (
+        utt_start_ms.or(fallback_start_ms),
+        utt_end_ms.or(fallback_end_ms),
+    ) {
         main = main.with_bullet(Bullet::new(start, end));
     }
 

@@ -1066,6 +1066,7 @@ mod tests {
         let v = BAValue::Media(MediaInput {
             source_id: SourceId::new_unchecked("x"),
             path: "/dev/null".into(),
+            language: None,
         });
         let r = v.write(Path::new("/tmp/x.cha"));
         assert!(r.is_err());

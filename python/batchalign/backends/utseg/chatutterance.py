@@ -83,15 +83,16 @@ class CHATUtteranceBackend(UtSeg):
         #     parent AsrSegment's [start_ms, end_ms] across the split spans
         #   * `nodot1` — strip internal periods left behind by Punkt
         #     abbreviation handling
+        #   * `wordts1` — carry fixed ASR word timings through split spans
         canto = ":canto" if self._cantonese and self._lang != "yue" else ""
-        return f"chatutterance:{self._model_id}:disfl2:tsdist:nodot1{canto}"
+        return f"chatutterance:{self._model_id}:disfl2:tsdist:nodot1:wordts1{canto}"
 
     @property
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
     def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
-        from batchalign._core.proto import UtSegInput, UtSegOutput, UtteranceSpan
+        from batchalign._core.proto import AsrWord, UtSegInput, UtSegOutput, UtteranceSpan
 
         outputs: list[Any] = []
         for item in batch:
@@ -125,44 +126,78 @@ class CHATUtteranceBackend(UtSeg):
                 # count. This gives every split sub-utterance a usable bullet,
                 # so transcripts produced from segments with timing (FunAudio,
                 # Tencent, Qwen3-ASR + FA, …) carry utterance-level
-                # timestamps end-to-end. Word-level timings would require
-                # mapping per-word bullets through the segmenter; that's a
-                # follow-up — utterance-level is the user-stated bar.
+                # timestamps end-to-end. When source words carry fixed ASR
+                # timings, those words are sliced into the emitted spans below.
                 #
                 # When the parent has no timing (`end_ms == 0`), emit
                 # zero-timed spans (no bullet downstream) so we don't
                 # fabricate bullets out of nothing.
-                if seg.end_ms > seg.start_ms:
-                    parent_start = seg.start_ms
-                    parent_dur = seg.end_ms - seg.start_ms
-                    total_chars = sum(len(s) for s in sentences) or 1
-                    cur = parent_start
-                    n = len(sentences)
-                    for i, sent in enumerate(sentences):
-                        if i == n - 1:
-                            # Last span absorbs rounding so the final
-                            # end_ms exactly matches the parent's end_ms.
-                            end = seg.end_ms
-                        else:
-                            sent_chars = len(sent)
-                            end = cur + round(
-                                sent_chars / total_chars * parent_dur
-                            )
-                        spans.append(
-                            UtteranceSpan(
-                                start_ms=cur, end_ms=end, text=sent, words=[]
+                bounds = _distributed_bounds(seg.start_ms, seg.end_ms, sentences)
+                cursor = 0
+                for sent, (fallback_start, fallback_end) in zip(sentences, bounds):
+                    tokens = _timing_tokens(sent)
+                    fixed_words = []
+                    for token, src in zip(tokens, seg.words[cursor:cursor + len(tokens)]):
+                        fixed_words.append(
+                            AsrWord(
+                                text=token,
+                                start_ms=src.start_ms,
+                                end_ms=src.end_ms,
+                                confidence=src.confidence,
                             )
                         )
-                        cur = end
-                else:
-                    for sent in sentences:
-                        spans.append(
-                            UtteranceSpan(
-                                start_ms=0, end_ms=0, text=sent, words=[]
-                            )
+                    cursor += len(tokens)
+                    timed = [w for w in fixed_words if w.end_ms > w.start_ms]
+                    if timed:
+                        start_ms, end_ms = timed[0].start_ms, timed[-1].end_ms
+                    else:
+                        start_ms, end_ms = fallback_start, fallback_end
+                    spans.append(
+                        UtteranceSpan(
+                            start_ms=start_ms,
+                            end_ms=end_ms,
+                            text=sent,
+                            words=fixed_words,
                         )
+                    )
             outputs.append(UtSegOutput(source_id=item.source_id, utterances=spans))
         return outputs
+
+
+def _distributed_bounds(
+    start_ms: int,
+    end_ms: int,
+    sentences: list[str],
+) -> list[tuple[int, int]]:
+    if end_ms <= start_ms:
+        return [(0, 0) for _ in sentences]
+    parent_dur = end_ms - start_ms
+    total_chars = sum(len(s) for s in sentences) or 1
+    cur = start_ms
+    bounds: list[tuple[int, int]] = []
+    for i, sent in enumerate(sentences):
+        if i == len(sentences) - 1:
+            end = end_ms
+        else:
+            end = cur + round(len(sent) / total_chars * parent_dur)
+        bounds.append((cur, end))
+        cur = end
+    return bounds
+
+
+def _timing_tokens(text: str) -> list[str]:
+    """Return alignable output tokens, excluding CHAT markup and terminators."""
+    tokens: list[str] = []
+    for raw in text.replace("<", " < ").replace(">", " > ").split():
+        tok = raw.strip()
+        if not tok or tok in {"<", ">", "[/]", "[//]", ".", "?", "!", ","}:
+            continue
+        if tok.startswith("[") and tok.endswith("]"):
+            continue
+        tok = tok.strip("<>").rstrip(".?!,;:")
+        if tok:
+            tokens.append(tok)
+    return tokens
 
 
 __all__ = ["CHATUtteranceBackend"]

@@ -13,12 +13,15 @@ use crate::base::Task;
 use crate::base::TaskInput;
 use crate::base::{Dispatcher, TaskRunner};
 use crate::base::{ProgressEvent, ProgressSink};
-use crate::proto::asr::{AsrInput, AsrOutput, LanguageSpec};
+use crate::proto::asr::{AsrInput, AsrOutput, AsrWord, LanguageSpec};
 use crate::utils::SourceId;
 use crate::utils::SpeakerLabel;
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
+use smol_str::SmolStr;
 use std::collections::BTreeMap;
+use talkbank_transform::asr_postprocess::{ChatWordText, WordKind};
+use talkbank_transform::build_chat::WordDesc;
 
 /// ASR runner — `Task::Asr` entry point. The runner ships an `AsrInput`
 /// with `LanguageSpec::Auto` and default `AsrOptions`; the backend supplies
@@ -52,7 +55,11 @@ impl TaskRunner for AsrTaskRunner {
         let audio = crate::utils::prepare_pcm(&media)
             .map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
 
-        let language = LanguageSpec::Auto;
+        let language = media
+            .language
+            .as_ref()
+            .map(|code| LanguageSpec::Code(SmolStr::new(code.as_str())))
+            .unwrap_or(LanguageSpec::Auto);
         let input = AsrInput {
             source_id: media.source_id.clone(),
             audio,
@@ -161,14 +168,18 @@ fn build_chat_from_asr(
         } else {
             (Some(seg.start_ms), Some(seg.end_ms))
         };
-        // Text mode: the words + terminator are parsed via tree-sitter, so any
-        // CHAT content markers (retrace `[/]`, disfluency `&-uh`) round-trip
-        // typed. We append the default period; the UtSeg stage re-segments and
-        // re-terminates per the BERT model.
+        let words = asr_words_to_word_descs(&seg.words);
+        // Prefer word mode when the backend supplied word tokens, so their
+        // fixed ASR timings survive even if the pipeline stops after ASR.
+        let text = if words.is_empty() {
+            Some(format!("{utt_text} ."))
+        } else {
+            None
+        };
         utterances.push(UtteranceDesc {
             speaker: code.clone(),
-            words: None,
-            text: Some(format!("{utt_text} .")),
+            words: (!words.is_empty()).then_some(words),
+            text,
             start_ms,
             end_ms,
             lang: None,
@@ -186,7 +197,7 @@ fn build_chat_from_asr(
         media_name: Some(source_id.as_str().to_string()),
         media_type: Some("audio".to_string()),
         utterances,
-        write_wor: false,
+        write_wor: true,
     };
 
     let chat_file =
@@ -199,6 +210,29 @@ fn build_chat_from_asr(
     let collector = ErrorCollector::new();
     let validated = chat_file.validate_into(&collector, None);
     Ok(Chat::from_validated_ast(validated, source_id.clone()))
+}
+
+fn asr_words_to_word_descs(words: &[AsrWord]) -> Vec<WordDesc> {
+    words
+        .iter()
+        .filter_map(|w| {
+            let text = w.text.trim();
+            if text.is_empty() {
+                return None;
+            }
+            let (start_ms, end_ms) = if w.end_ms > w.start_ms {
+                (Some(w.start_ms), Some(w.end_ms))
+            } else {
+                (None, None)
+            };
+            Some(WordDesc {
+                text: ChatWordText::try_from(text).ok()?,
+                start_ms,
+                end_ms,
+                kind: WordKind::Regular,
+            })
+        })
+        .collect()
 }
 
 /// Resolve a `LanguageSpec` to a usable ISO-3 code for the CHAT header.
@@ -274,6 +308,29 @@ mod tests {
         }
     }
 
+    fn fake_timed_segment(speaker: &str) -> AsrSegment {
+        AsrSegment {
+            start_ms: 0,
+            end_ms: 900,
+            text: "hello there".into(),
+            speaker: Some(SpeakerLabel::new(speaker)),
+            words: vec![
+                AsrWord {
+                    text: "hello".into(),
+                    start_ms: 0,
+                    end_ms: 400,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "there".into(),
+                    start_ms: 400,
+                    end_ms: 900,
+                    confidence: None,
+                },
+            ],
+        }
+    }
+
     #[test]
     fn build_chat_emits_validated_typed_doc() {
         let sid = SourceId::try_new("tst").expect("sid");
@@ -297,6 +354,41 @@ mod tests {
             !text.contains("batchalign3 "),
             "runner must not stamp provenance: {text}"
         );
+    }
+
+    #[test]
+    fn build_chat_preserves_asr_word_timings() {
+        let sid = SourceId::try_new("tst").expect("sid");
+        let out = AsrOutput {
+            source_id: sid.clone(),
+            segments: vec![fake_timed_segment("spk_0")],
+        };
+        let chat =
+            build_chat_from_asr(&sid, &LanguageSpec::Code("eng".into()), &out).expect("chat");
+        let text = chat.to_chat();
+        assert!(text.contains("%wor:"), "expected %wor tier, got {text}");
+        assert!(
+            text.contains("\u{15}0_400\u{15}"),
+            "expected first word timing, got {text}"
+        );
+        assert!(
+            text.contains("\u{15}400_900\u{15}"),
+            "expected second word timing, got {text}"
+        );
+    }
+
+    #[test]
+    fn build_chat_uses_asr_language_for_headers() {
+        let sid = SourceId::try_new("tst").expect("sid");
+        let out = AsrOutput {
+            source_id: sid.clone(),
+            segments: vec![fake_segment("spk_0", "hola", 0, 500)],
+        };
+        let chat =
+            build_chat_from_asr(&sid, &LanguageSpec::Code("spa".into()), &out).expect("chat");
+        let text = chat.to_chat();
+        assert!(text.contains("@Languages:\tspa"), "expected spa header, got {text}");
+        assert!(text.contains("@ID:\tspa|batchalign|PAR0"), "expected spa ID, got {text}");
     }
 
     #[tokio::test]

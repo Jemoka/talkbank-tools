@@ -166,12 +166,25 @@ pub struct MediaInput {
     pub source_id: SourceId,
     /// Path to the audio file. Decoded lazily by the engine.
     pub path: PathBuf,
+    /// Optional ISO-639-3 language hint for source-creating ASR pipelines.
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 impl MediaInput {
     /// Construct a `MediaInput` from a path and an explicit `SourceId`.
     pub fn new(source_id: SourceId, path: PathBuf) -> Self {
-        Self { source_id, path }
+        Self {
+            source_id,
+            path,
+            language: None,
+        }
+    }
+
+    /// Attach an ISO-639-3 language hint for ASR transcript construction.
+    pub fn with_language(mut self, language: impl Into<String>) -> Self {
+        self.language = Some(language.into());
+        self
     }
 }
 

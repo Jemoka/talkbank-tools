@@ -17,7 +17,7 @@ use crate::base::Task;
 use crate::base::TaskInput;
 use crate::base::{Dispatcher, TaskRunner};
 use crate::base::{ProgressEvent, ProgressSink};
-use crate::proto::asr::{AsrSegment, LanguageSpec};
+use crate::proto::asr::{AsrSegment, AsrWord, LanguageSpec};
 use crate::proto::utseg::{UtSegInput, UtSegOutput};
 use crate::utils::SourceId;
 use crate::utils::{BAError, BAResult};
@@ -102,6 +102,7 @@ struct UtteranceRow {
     text: String,
     start_ms: u64,
     end_ms: u64,
+    words: Vec<AsrWord>,
 }
 
 impl UtteranceRow {
@@ -111,7 +112,7 @@ impl UtteranceRow {
             end_ms: self.end_ms,
             text: self.text.clone(),
             speaker: None,
-            words: Vec::new(),
+            words: self.words.clone(),
         }
     }
 }
@@ -123,6 +124,7 @@ struct NewUtterance {
     speaker: String,
     text: String,
     bullet: Option<(u64, u64)>,
+    words: Vec<AsrWord>,
     debug: UtSegDebug,
 }
 
@@ -141,10 +143,23 @@ fn collect_utterance_rows(chat: &Chat) -> Vec<UtteranceRow> {
         .utterances()
         .map(|u| {
             let speaker = u.main.speaker.as_str().to_string();
-            let mut words: Vec<String> = Vec::new();
+            let wor_timings: Vec<Option<(u64, u64)>> = u
+                .wor_tier()
+                .map(|tier| tier.words().map(word_timing).collect())
+                .unwrap_or_default();
+            let mut words: Vec<AsrWord> = Vec::new();
             walk_words(&u.main.content.content.0, None, &mut |w| match w {
-                WordItem::Word(x) => words.push(x.cleaned_text().to_string()),
-                WordItem::ReplacedWord(r) => words.push(r.word.cleaned_text().to_string()),
+                WordItem::Word(x) => {
+                    let fallback = wor_timings.get(words.len()).and_then(|t| *t);
+                    words.push(asr_word_from_text(x.cleaned_text(), word_timing(x).or(fallback)));
+                }
+                WordItem::ReplacedWord(r) => {
+                    let fallback = wor_timings.get(words.len()).and_then(|t| *t);
+                    words.push(asr_word_from_text(
+                        r.word.cleaned_text(),
+                        word_timing(&r.word).or(fallback),
+                    ));
+                }
                 WordItem::Separator(_) => {}
             });
             let (start_ms, end_ms) = u
@@ -156,12 +171,33 @@ fn collect_utterance_rows(chat: &Chat) -> Vec<UtteranceRow> {
                 .unwrap_or((0, 0));
             UtteranceRow {
                 speaker,
-                text: words.join(" "),
+                text: words
+                    .iter()
+                    .map(|w| w.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" "),
                 start_ms,
                 end_ms,
+                words,
             }
         })
         .collect()
+}
+
+fn word_timing(word: &talkbank_model::model::Word) -> Option<(u64, u64)> {
+    word.inline_bullet
+        .as_ref()
+        .map(|b| (b.timing.start_ms, b.timing.end_ms))
+}
+
+fn asr_word_from_text(text: &str, timing: Option<(u64, u64)>) -> AsrWord {
+    let (start_ms, end_ms) = timing.unwrap_or((0, 0));
+    AsrWord {
+        text: text.to_string(),
+        start_ms,
+        end_ms,
+        confidence: None,
+    }
 }
 
 /// Append the segmenter's sub-utterances for one row. Falls back to the
@@ -184,6 +220,7 @@ fn collect_split(
                 speaker: row.speaker.clone(),
                 text: format!("{} .", row.text.trim()),
                 bullet: None,
+                words: row.words.clone(),
                 debug,
             });
         }
@@ -212,6 +249,7 @@ fn collect_split(
             speaker: row.speaker.clone(),
             text,
             bullet,
+            words: span.words.clone(),
             debug: debug.clone(),
         });
     }
@@ -330,7 +368,45 @@ fn build_chat_from_utterances(
     })?;
     let collector = ErrorCollector::new();
     let validated = chat_file.validate_into(&collector, None);
-    Ok(Chat::from_validated_ast(validated, source_id.clone()))
+    let mut chat = Chat::from_validated_ast(validated, source_id.clone());
+    inject_word_timings(&mut chat, utts)?;
+    Ok(chat)
+}
+
+fn inject_word_timings(chat: &mut Chat, utts: &[NewUtterance]) -> BAResult<()> {
+    use talkbank_model::DependentTier;
+    use talkbank_model::model::{Bullet, Word, WorTier};
+
+    let mut idx = 0usize;
+    for line in chat.ast_mut().lines.0.iter_mut() {
+        let talkbank_model::Line::Utterance(u) = line else {
+            continue;
+        };
+        let Some(src) = utts.get(idx) else {
+            break;
+        };
+        if src.words.iter().any(|w| w.end_ms > w.start_ms) {
+            let words = src
+                .words
+                .iter()
+                .map(|w| {
+                    let word = Word::simple(w.text.as_str());
+                    if w.end_ms > w.start_ms {
+                        word.with_inline_bullet(Bullet::new(w.start_ms, w.end_ms))
+                    } else {
+                        word
+                    }
+                })
+                .collect();
+            let wor =
+                WorTier::from_words(words).with_terminator(u.main.content.terminator.clone());
+            u.dependent_tiers
+                .retain(|t| !matches!(t, DependentTier::Wor(_)));
+            u.dependent_tiers.push(DependentTier::Wor(wor));
+        }
+        idx += 1;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -343,13 +419,19 @@ mod tests {
 
     struct ScriptedDispatcher {
         outputs: Mutex<Vec<UtSegOutput>>,
+        assert_input_words: bool,
     }
 
     #[async_trait]
     impl Dispatcher for ScriptedDispatcher {
         async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
             match input {
-                TaskInput::UtSeg(_) => {
+                TaskInput::UtSeg(input) => {
+                    if self.assert_input_words {
+                        let words = &input.segments[0].words;
+                        assert_eq!(words.len(), 4, "UtSegInput should carry word timings");
+                        assert_eq!((words[1].start_ms, words[1].end_ms), (100, 200));
+                    }
                     let mut q = self.outputs.lock().expect("lock");
                     if q.is_empty() {
                         return Err(BAError::Internal("scripted: drained".into()));
@@ -369,6 +451,7 @@ mod tests {
         let chat = Chat::parse(BLOB_CHAT, sid.clone()).expect("parse blob");
         let mut value = BAValue::Chat(chat);
         let disp = ScriptedDispatcher {
+            assert_input_words: false,
             outputs: Mutex::new(vec![UtSegOutput {
                 source_id: sid.clone(),
                 utterances: vec![
@@ -400,5 +483,81 @@ mod tests {
         assert_eq!(main_lines.len(), 2, "expected 2 utterances, got {text}");
         assert!(main_lines[0].contains("hello there"));
         assert!(main_lines[1].contains("general kenobi"));
+    }
+
+    const TIMED_BLOB_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR1 Participant\n@ID:\teng|batchalign|PAR1|||||Participant|||\n\
+*PAR1:\thello there general kenobi .\n\
+%wor:\thello \u{15}0_100\u{15} there \u{15}100_200\u{15} general \u{15}200_300\u{15} kenobi \u{15}300_400\u{15} .\n\
+@End\n";
+
+    #[tokio::test]
+    async fn preserves_word_timings_through_split() {
+        let sid = SourceId::try_new("ut").expect("sid");
+        let chat = Chat::parse(TIMED_BLOB_CHAT, sid.clone()).expect("parse timed blob");
+        let mut value = BAValue::Chat(chat);
+        let disp = ScriptedDispatcher {
+            assert_input_words: true,
+            outputs: Mutex::new(vec![UtSegOutput {
+                source_id: sid.clone(),
+                utterances: vec![
+                    UtteranceSpan {
+                        start_ms: 0,
+                        end_ms: 200,
+                        text: "hello there .".into(),
+                        words: vec![
+                            AsrWord {
+                                text: "hello".into(),
+                                start_ms: 0,
+                                end_ms: 100,
+                                confidence: None,
+                            },
+                            AsrWord {
+                                text: "there".into(),
+                                start_ms: 100,
+                                end_ms: 200,
+                                confidence: None,
+                            },
+                        ],
+                    },
+                    UtteranceSpan {
+                        start_ms: 200,
+                        end_ms: 400,
+                        text: "general kenobi .".into(),
+                        words: vec![
+                            AsrWord {
+                                text: "general".into(),
+                                start_ms: 200,
+                                end_ms: 300,
+                                confidence: None,
+                            },
+                            AsrWord {
+                                text: "kenobi".into(),
+                                start_ms: 300,
+                                end_ms: 400,
+                                confidence: None,
+                            },
+                        ],
+                    },
+                ],
+            }]),
+        };
+        UtSegTaskRunner
+            .apply(&mut value, &disp, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
+            .await
+            .expect("apply");
+        let BAValue::Chat(c) = value else {
+            panic!("expected chat");
+        };
+        let text = c.to_chat();
+        assert!(text.contains("%wor:"), "expected %wor tiers, got {text}");
+        assert!(
+            text.contains("\u{15}100_200\u{15}"),
+            "expected fixed timing, got {text}"
+        );
+        assert!(
+            text.contains("\u{15}300_400\u{15}"),
+            "expected fixed timing, got {text}"
+        );
     }
 }
