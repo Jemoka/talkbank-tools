@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 use batchalign_core::{
-    BAError, BAValue, Chat, ChatInput, DynTaskRunner, MediaInput, Paired, PairedInput,
+    AiChatInput, BAError, BAValue, Chat, ChatInput, DynTaskRunner, MediaInput, Paired, PairedInput,
     ProgressEvent, ProgressKind, ProgressSink, SourceId, Task,
 };
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -291,9 +291,10 @@ impl Pipeline {
 /// Coerce a single Python input object into a `BAValue`.
 ///
 /// Accepts (in order): `MediaInput` → `BAValue::Media`, `ChatInput` →
-/// `BAValue::Chat` (parsed + validated), `PairedInput` → `BAValue::Paired`
-/// (both sides parsed + validated), a filesystem path string → `BAValue::Media`,
-/// or any object exposing a `.path` and (optional) `.source_id` attribute.
+/// `BAValue::Chat` (parsed + validated), `AiChatInput` → `BAValue::Ai`,
+/// `PairedInput` → `BAValue::Paired` (both sides parsed + validated), a
+/// filesystem path string → `BAValue::Media`, or any object exposing a `.path`
+/// and (optional) `.source_id` attribute.
 /// Compare pipelines need `PairedInput`; FA / morphotag / translate / coref
 /// can take `ChatInput` to skip ASR.
 fn convert_py_input(py: Python<'_>, obj: Py<PyAny>) -> PyResult<BAValue> {
@@ -303,6 +304,9 @@ fn convert_py_input(py: Python<'_>, obj: Py<PyAny>) -> PyResult<BAValue> {
     }
     if let Ok(c) = bound.extract::<ChatInput>() {
         return load_chat_input(&c).map(BAValue::Chat);
+    }
+    if let Ok(ai) = bound.extract::<AiChatInput>() {
+        return load_ai_chat_input(&ai);
     }
     if let Ok(p) = bound.extract::<PairedInput>() {
         let main = load_chat_at(&p.main, &p.source_id)?;
@@ -408,6 +412,9 @@ fn recover_source_id(py: Python<'_>, obj: &Py<PyAny>) -> Option<SourceId> {
     if let Ok(c) = bound.extract::<ChatInput>() {
         return Some(c.source_id);
     }
+    if let Ok(ai) = bound.extract::<AiChatInput>() {
+        return Some(ai.source_id);
+    }
     if let Ok(p) = bound.extract::<PairedInput>() {
         return Some(p.source_id);
     }
@@ -444,6 +451,22 @@ fn media_from_string(path_str: &str) -> PyResult<BAValue> {
 
 fn load_chat_input(c: &ChatInput) -> PyResult<Chat> {
     load_chat_at(&c.path, &c.source_id)
+}
+
+fn load_ai_chat_input(ai: &AiChatInput) -> PyResult<BAValue> {
+    if !matches!(
+        ai.path.extension().and_then(|s| s.to_str()),
+        Some("cha") | Some("chat")
+    ) {
+        return Err(PyValueError::new_err(
+            "AiChatInput path must point to a .cha/.chat transcript",
+        ));
+    }
+    let chat = load_chat_at(&ai.path, &ai.source_id)?;
+    Ok(BAValue::Ai {
+        instruction: ai.instruction.clone(),
+        chat,
+    })
 }
 
 fn load_chat_at(path: &std::path::Path, sid: &SourceId) -> PyResult<Chat> {
@@ -585,6 +608,13 @@ fn stamp_chats_in_value(
 ) {
     match value {
         BAValue::Chat(chat) => {
+            let lines = &mut chat.ast_mut().lines.0;
+            for &task in order {
+                let engine = dispatcher.engine_name(task);
+                batchalign_core::utils::stamp_provenance(lines, task.as_str(), engine.as_deref());
+            }
+        }
+        BAValue::Ai { chat, .. } => {
             let lines = &mut chat.ast_mut().lines.0;
             for &task in order {
                 let engine = dispatcher.engine_name(task);

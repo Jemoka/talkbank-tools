@@ -205,6 +205,28 @@ impl ChatInput {
     }
 }
 
+/// A CHAT file plus per-run instruction for `Task::Ai`.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, set_all))]
+pub struct AiChatInput {
+    /// Pipeline identifier for this transcript.
+    pub source_id: SourceId,
+    /// Path to the `.cha` file.
+    pub path: PathBuf,
+    /// Instruction sent to the AI backend.
+    pub instruction: String,
+}
+
+impl AiChatInput {
+    pub fn new(source_id: SourceId, path: PathBuf, instruction: String) -> Self {
+        Self {
+            source_id,
+            path,
+            instruction,
+        }
+    }
+}
+
 /// A pair `(main, gold)` of CHAT files. Compare pipelines start here.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, set_all))]

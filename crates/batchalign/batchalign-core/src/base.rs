@@ -6,6 +6,7 @@
 //! `paired.rs`, `chat.rs`, and `progress.rs` per the spec2.md reorg.
 
 use crate::metrics::MetricsArtifact;
+use crate::proto::ai::{AiInput, AiOutput};
 use crate::proto::asr::{AsrInput, AsrOutput};
 use crate::proto::compare::{CompareInput, CompareOutput};
 use crate::proto::coref::{CorefInput, CorefOutput};
@@ -40,6 +41,8 @@ use talkbank_transform::parse_and_validate;
     pyo3::pyclass(eq, eq_int, hash, frozen, rename_all = "PascalCase")
 )]
 pub enum Task {
+    /// Generic AI-assisted transcript editing.
+    Ai,
     /// Automatic speech recognition.
     Asr,
     /// Forced alignment of an already-transcribed CHAT to its audio.
@@ -68,6 +71,7 @@ impl Task {
     /// The upstream tasks this stage requires in the DAG.
     pub const fn requires(self) -> &'static [Task] {
         match self {
+            Task::Ai => &[],
             Task::Asr | Task::Speaker => &[],
             Task::UtSeg => &[Task::Asr],
             // UTR has no DAG prerequisites: it operates on a CHAT plus
@@ -92,6 +96,7 @@ impl Task {
     /// Stable, short name used in `@Comment:` provenance and progress events.
     pub const fn as_str(self) -> &'static str {
         match self {
+            Task::Ai => "ai",
             Task::Asr => "asr",
             Task::Fa => "fa",
             Task::Speaker => "speaker",
@@ -105,7 +110,8 @@ impl Task {
     }
 
     /// Every variant — useful for iteration in tests and codegen.
-    pub const ALL: [Task; 9] = [
+    pub const ALL: [Task; 10] = [
+        Task::Ai,
         Task::Asr,
         Task::Fa,
         Task::Speaker,
@@ -184,6 +190,7 @@ macro_rules! union_input_output {
 
 union_input_output! {
     input {
+        Ai(AiInput) => Ai,
         Asr(AsrInput) => Asr,
         Fa(FaInput) => Fa,
         Speaker(SpeakerInput) => Speaker,
@@ -199,6 +206,7 @@ union_input_output! {
         Compare(CompareInput) => Compare,
     }
     output {
+        Ai(AiOutput),
         Asr(AsrOutput),
         Fa(FaOutput),
         Speaker(SpeakerOutput),
@@ -232,6 +240,7 @@ macro_rules! try_from_output {
 }
 
 try_from_output! {
+    Ai(AiOutput),
     Asr(AsrOutput),
     Fa(FaOutput),
     Speaker(SpeakerOutput),
@@ -428,6 +437,11 @@ pub enum BAValue {
     Media(MediaInput),
     /// A validated CHAT document.
     Chat(Chat<Validated>),
+    /// A CHAT document paired with the instruction for `Task::Ai`.
+    Ai {
+        instruction: String,
+        chat: Chat<Validated>,
+    },
     /// Compare input: a main CHAT and a gold reference CHAT.
     Paired(Paired),
     /// Terminal metrics (compare summaries, benchmarks, …).
@@ -471,6 +485,7 @@ impl BAValue {
         match self {
             BAValue::Media(m) => m.source_id.clone(),
             BAValue::Chat(c) => c.source_id().clone(),
+            BAValue::Ai { chat, .. } => chat.source_id().clone(),
             BAValue::Paired(p) => p.source_id().clone(),
             BAValue::Metrics(m) => m.source_id.clone(),
             BAValue::Failed { source_id, .. } => source_id.clone(),
@@ -498,6 +513,7 @@ impl BAValue {
         match self {
             BAValue::Media(_) => "Media",
             BAValue::Chat(_) => "Chat",
+            BAValue::Ai { .. } => "Ai",
             BAValue::Paired(_) => "Paired",
             BAValue::Metrics(_) => "Metrics",
             BAValue::Failed { .. } => "Failed",
@@ -512,6 +528,7 @@ impl BAValue {
     pub fn write(&self, path: &Path) -> BAResult<()> {
         match self {
             BAValue::Chat(c) => c.write(path),
+            BAValue::Ai { chat, .. } => chat.write(path),
             BAValue::Paired(p) => p.main().write(path),
             BAValue::Metrics(m) => write_metrics_csv(m, path),
             BAValue::Media(_) => Err(BAError::Internal(

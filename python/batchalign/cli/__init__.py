@@ -59,6 +59,10 @@ _LAZY_SUBCOMMANDS: dict[str, tuple[str, str]] = {
         "batchalign.cli.translate",
         "Translate utterances; emits CHAT with `%eng:` tiers.",
     ),
+    "ai": (
+        "batchalign.cli.ai",
+        "Run generic AI transcript editing over CHAT files.",
+    ),
     "utseg": (
         "batchalign.cli.utseg",
         "Utterance segmentation pass over CHAT.",

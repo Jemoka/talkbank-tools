@@ -29,6 +29,11 @@ from typing import Any
 # public names so adding/removing a Rust proto type propagates here
 # automatically on the next Bazel build.
 from batchalign._core._proto_generated import (  # noqa: F401
+    # AI
+    AiInput,
+    AiOutput,
+    AiRevision,
+    AiUtterance,
     # Shared
     LanguageSpecAuto,
     LanguageSpecCode,
@@ -103,6 +108,7 @@ LanguageSpec = (LanguageSpecAuto, LanguageSpecCode, LanguageSpecPerFile)
 # mapping; this table exists separately because `rebuild_tagged_inputs`
 # receives one item at a time, not a wrapped list.
 _TAG_TO_INPUT: dict[str, type] = {
+    "Ai": AiInput,
     "Asr": AsrInput,
     "Fa": FaInput,
     "Speaker": SpeakerInput,
@@ -120,6 +126,7 @@ _TAG_TO_INPUT: dict[str, type] = {
 }
 
 _OUTPUT_TO_TAG: dict[type, str] = {
+    AiOutput: "Ai",
     AsrOutput: "Asr",
     FaOutput: "Fa",
     SpeakerOutput: "Speaker",

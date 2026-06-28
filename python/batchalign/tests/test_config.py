@@ -38,6 +38,31 @@ def test_ba2_compatible_revai_key(tmp_path):
     assert config.get_api_key("revai", path=p) == "SECRET_KEY_VALUE"
 
 
+def test_ai_together_key(tmp_path):
+    p = tmp_path / "ba.ini"
+    _write_ini(
+        p,
+        """
+        [ai]
+        together.key = TOGETHER_SECRET
+        """,
+    )
+    assert config.get_api_key("together", section="ai", path=p) == "TOGETHER_SECRET"
+
+
+def test_section_pinned_api_key_does_not_read_env(tmp_path, monkeypatch):
+    p = tmp_path / "ba.ini"
+    _write_ini(
+        p,
+        """
+        [ai]
+        together.key = IN_INI
+        """,
+    )
+    monkeypatch.setenv("BATCHALIGN_TOGETHER_KEY", "FROM_ENV")
+    assert config.get_api_key("together", section="ai", path=p) == "IN_INI"
+
+
 def test_env_var_overrides_ini(tmp_path, monkeypatch):
     p = tmp_path / "ba.ini"
     _write_ini(

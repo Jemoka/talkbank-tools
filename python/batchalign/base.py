@@ -20,6 +20,7 @@ from batchalign._core import (  # type: ignore[attr-defined]
     CachePolicy,
     CacheSpec,
     ChatInput,
+    AiChatInput,
     MediaInput,
     PairedInput,
     Pipeline,
@@ -32,6 +33,7 @@ from batchalign._core import (  # type: ignore[attr-defined]
 
 # Backend trait + marker ABCs (pure Python).
 from batchalign.backends.base import (
+    AI,
     ASR,
     Backend,
     Coref,
@@ -50,6 +52,7 @@ __all__ = [
     "BAValue",
     "MediaInput",
     "ChatInput",
+    "AiChatInput",
     "PairedInput",
     "BatchPolicy",
     "CachePolicy",
@@ -60,6 +63,7 @@ __all__ = [
     "nuke_cache",
     # Backend trait + markers
     "Backend",
+    "AI",
     "ASR",
     "FA",
     "Speaker",

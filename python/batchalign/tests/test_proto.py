@@ -25,6 +25,10 @@ def test_proto_module_imports() -> None:
     from batchalign._core import proto as p
 
     for name in [
+        "AiInput",
+        "AiOutput",
+        "AiRevision",
+        "AiUtterance",
         "AsrInput",
         "AsrOutput",
         "AsrSegment",

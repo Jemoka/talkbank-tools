@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from batchalign.backends.base import (
     Backend,
+    AI,
     ASR,
     FA,
     Speaker,
@@ -23,6 +24,7 @@ from batchalign.backends.base import (
     Coref,
     declared_tasks,
 )
+from batchalign.backends.ai import DspyAIBackend
 from batchalign.backends.asr import (
     AliyunAsrBackend,
     ChatWhisperBackend,
@@ -53,6 +55,7 @@ from batchalign.backends.utseg import CantoneseWordSegBackend, CHATUtteranceBack
 __all__ = [
     # Marker ABCs
     "Backend",
+    "AI",
     "ASR",
     "FA",
     "Speaker",
@@ -61,6 +64,8 @@ __all__ = [
     "Translate",
     "Coref",
     "declared_tasks",
+    # AI
+    "DspyAIBackend",
     # ASR
     "AliyunAsrBackend",
     "ChatWhisperBackend",

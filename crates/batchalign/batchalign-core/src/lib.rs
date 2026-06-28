@@ -27,14 +27,14 @@ pub mod utils;
 pub mod python;
 
 pub use backends::{Backend, BackendCallError, BackendMeta, BatchPolicy};
-pub use cache::CacheKey;
 pub use base::{
     BAValue, BackendProgress, Chat, Dispatcher, DynTaskRunner, NotValidated, NullBackendProgress,
     NullSink, PROGRESS_SCALE, Paired, ProgressEvent, ProgressKind, ProgressSink, ScaledProgress,
     Task, TaskInput, TaskOutput, TaskRunner, Validated,
 };
+pub use cache::CacheKey;
 pub use metrics::{MetricsArtifact, MetricsKind, MetricsRow, MetricsTable};
 pub use utils::{
-    AudioError, BAError, BAResult, ChatInput, MediaInput, PairedInput, PreparedAudio, SourceId,
-    SpeakerLabel, prepare_pcm,
+    AiChatInput, AudioError, BAError, BAResult, ChatInput, MediaInput, PairedInput, PreparedAudio,
+    SourceId, SpeakerLabel, prepare_pcm,
 };

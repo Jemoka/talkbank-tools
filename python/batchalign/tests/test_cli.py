@@ -13,6 +13,7 @@ SUBCOMMANDS = [
     "align",
     "morphotag",
     "translate",
+    "ai",
     "utseg",
     "compare",
 ]
@@ -62,6 +63,54 @@ def test_align_exposes_fa_engines():
     assert "--engine" in help_text
     for engine in ("wav2vec", "whisper_fa", "qwen"):
         assert engine in help_text, f"align --engine missing {engine}"
+
+
+def test_ai_exposes_dspy_engine():
+    help_text = _help("ai")
+    assert "--engine" in help_text
+    assert "dspy" in help_text
+    assert "--model" in help_text
+    assert "--max-tokens" in help_text
+    assert "--timeout" in help_text
+
+
+def test_ai_passes_instruction_to_inputs(tmp_path, monkeypatch):
+    import batchalign as ba
+
+    chat = tmp_path / "sample.cha"
+    chat.write_text("@Begin\n@Languages:\teng\n*PAR:\thello .\n@End\n")
+    captured = {}
+
+    class FakeBackend:
+        pass
+
+    class FakePipeline:
+        def run(self, inputs, callbacks=None, outcome_callback=None):
+            captured["inputs"] = list(inputs)
+            return []
+
+    def fake_recipe(*, ai_backend, **_opts):
+        captured["backend"] = ai_backend
+        return FakePipeline()
+
+    def fake_dspy_backend(**kwargs):
+        captured["backend_kwargs"] = kwargs
+        return FakeBackend()
+
+    monkeypatch.setattr(ba, "DspyAIBackend", fake_dspy_backend)
+    monkeypatch.setattr(ba.recipes, "ai", fake_recipe)
+
+    result = CliRunner().invoke(
+        app,
+        ["ai", "revise punctuation", str(chat), "--out", str(tmp_path / "out")],
+    )
+    assert result.exit_code == 0, result.output
+    inputs = captured["inputs"]
+    assert len(inputs) == 1
+    assert inputs[0].instruction == "revise punctuation"
+    assert str(chat) in str(inputs[0].source_id)
+    assert captured["backend_kwargs"]["max_tokens"] == 1024
+    assert captured["backend_kwargs"]["timeout"] == 30
 
 
 def test_compare_takes_single_folder_with_gold_template():
@@ -158,7 +207,7 @@ def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
     # transcribe runs the pipeline; cover that by swapping it for a no-op.
     def fake_recipe(**kwargs):
         class P:
-            def run(self, inputs, callbacks):
+            def run(self, inputs, callbacks=None, **_kwargs):
                 return []
         return P()
     monkeypatch.setattr(ba.recipes, "transcribe", fake_recipe)

@@ -112,6 +112,12 @@ def translate(*, translate_backend: Any, **opts: Any) -> Any:
     return Pipeline(tasks=[Task.Translate], backends=[translate_backend], **opts)
 
 
+def ai(*, ai_backend: Any, **opts: Any) -> Any:
+    """Generic AI transcript editing."""
+    Task, Pipeline = _core()
+    return Pipeline(tasks=[Task.Ai], backends=[ai_backend], **opts)
+
+
 def coref(*, coref_backend: Any, **opts: Any) -> Any:
     """Coreference resolution."""
     Task, Pipeline = _core()
@@ -162,6 +168,7 @@ __all__ = [
     "utr",
     "morphotag",
     "translate",
+    "ai",
     "coref",
     "utseg",
     "compare",

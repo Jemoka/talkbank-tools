@@ -22,6 +22,9 @@ The file uses ``configparser`` syntax with flat dotted keys::
     [translate]
     engine.google.key = <api key>
 
+    [ai]
+    together.key = <api key>
+
     [auth]
     hf_token = <huggingface token>
 
@@ -43,8 +46,9 @@ prompts the user for the missing fields and writes them back to
 explicitly; default behavior is non-interactive (so library use, CI,
 and tests never block on input).
 
-All lookups also honor environment variables (``BATCHALIGN_<PROVIDER>_*``)
-so CI and containerized runs can avoid touching the home directory.
+Default-section lookups also honor environment variables
+(``BATCHALIGN_<PROVIDER>_*``) so CI and containerized runs can avoid touching
+the home directory. Callsites that pin a section read the config file only.
 """
 
 from __future__ import annotations
@@ -64,6 +68,7 @@ CONFIG_PATH = Path.home() / ".batchalign.ini"
 _API_KEY_LOCATIONS: Mapping[str, tuple[str, str]] = {
     "rev": ("asr", "engine.rev.key"),
     "revai": ("asr", "engine.rev.key"),
+    "together": ("ai", "together.key"),
     "openai": ("asr", "engine.openai.key"),
     "qwen": ("asr", "engine.aliyun.ak_secret"),
     "google_translate": ("translate", "engine.google.key"),
@@ -140,6 +145,7 @@ _PROVIDER_FIELDS: Mapping[str, tuple[_Field, ...]] = {
 _API_KEY_DISPLAY: Mapping[str, tuple[str, str]] = {
     "rev": ("Rev.AI", "API Key"),
     "revai": ("Rev.AI", "API Key"),
+    "together": ("Together", "API Key"),
     "openai": ("OpenAI", "API Key"),
     "qwen": ("Qwen (Aliyun)", "AccessKey Secret"),
     "google_translate": ("Google Translate", "API Key"),
@@ -172,24 +178,31 @@ def get(section: str, option: str, *, path: Path = CONFIG_PATH) -> str | None:
 def get_api_key(
     provider: str,
     *,
+    section: str | None = None,
     path: Path = CONFIG_PATH,
     interactive: bool = False,
 ) -> str | None:
     """Return the API key for ``provider``, or ``None`` if not configured.
 
     Resolution order:
-      1. ``BATCHALIGN_<PROVIDER>_KEY`` env var (uppercased).
+      1. ``BATCHALIGN_<PROVIDER>_KEY`` env var (uppercased), only for
+         legacy default-section lookups.
       2. ``~/.batchalign.ini`` per :data:`_API_KEY_LOCATIONS`.
       3. If ``interactive=True`` and stdin is a TTY, pop a rich form
          and persist the entered value to ``path`` for next time.
     """
-    env_var = f"BATCHALIGN_{provider.upper()}_KEY"
-    env_val = os.environ.get(env_var)
-    if env_val:
-        return env_val
+    if section is None:
+        env_var = f"BATCHALIGN_{provider.upper()}_KEY"
+        env_val = os.environ.get(env_var)
+        if env_val:
+            return env_val
     loc = _API_KEY_LOCATIONS.get(provider.lower())
     if loc is None:
-        return None
+        if section is None:
+            return None
+        loc = (section, f"{provider.lower()}.key")
+    elif section is not None:
+        loc = (section, loc[1])
     value = get(loc[0], loc[1], path=path)
     if value:
         return value

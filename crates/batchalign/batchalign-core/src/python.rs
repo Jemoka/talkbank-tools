@@ -8,7 +8,7 @@ use crate::backends::BatchPolicy;
 use crate::base::Task;
 use crate::base::{ProgressEvent, ProgressKind};
 use crate::utils::SourceId;
-use crate::utils::{ChatInput, MediaInput, PairedInput};
+use crate::utils::{AiChatInput, ChatInput, MediaInput, PairedInput};
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
@@ -19,6 +19,7 @@ pub fn register(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<BatchPolicy>()?;
     m.add_class::<MediaInput>()?;
     m.add_class::<ChatInput>()?;
+    m.add_class::<AiChatInput>()?;
     m.add_class::<PairedInput>()?;
     m.add_class::<ProgressEvent>()?;
     m.add_class::<ProgressKind>()?;
@@ -98,6 +99,19 @@ impl ChatInput {
     #[pyo3(signature = (path, source_id))]
     fn py_new(path: std::path::PathBuf, source_id: &Bound<'_, PyAny>) -> PyResult<Self> {
         Ok(Self::new(coerce_source_id(source_id)?, path))
+    }
+}
+
+#[pymethods]
+impl AiChatInput {
+    #[new]
+    #[pyo3(signature = (path, source_id, instruction))]
+    fn py_new(
+        path: std::path::PathBuf,
+        source_id: &Bound<'_, PyAny>,
+        instruction: String,
+    ) -> PyResult<Self> {
+        Ok(Self::new(coerce_source_id(source_id)?, path, instruction))
     }
 }
 

@@ -28,6 +28,7 @@ _EXPECTED_NAMES = (
     "BAValue",
     "MediaInput",
     "ChatInput",
+    "AiChatInput",
     "PairedInput",
     "CacheSpec",
     "CachePolicy",

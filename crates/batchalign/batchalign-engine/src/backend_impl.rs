@@ -260,6 +260,7 @@ fn call_py_backend(
         let input_tags: Vec<&'static str> = batch
             .iter()
             .map(|t| match t {
+                TaskInput::Ai(_) => "Ai",
                 TaskInput::Asr(_) => "Asr",
                 TaskInput::Fa(_) => "Fa",
                 TaskInput::Speaker(_) => "Speaker",

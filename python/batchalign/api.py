@@ -12,7 +12,7 @@ Three reflection passes wire everything at import time:
 2. ``BACKEND_CLASSES`` — every concrete `Backend` subclass exported by
    `batchalign.backends`. The marker ABCs (`ASR`, `FA`, ...) are
    excluded.
-3. ``InputSpec``       — uniform input shape (`media` / `chat` / `paired`),
+3. ``InputSpec``       — uniform input shape (`media` / `chat` / `ai` / `paired`),
    materialized via the existing `batchalign.inputs` helpers.
 
 Drift between these passes and the source modules is caught by
@@ -216,7 +216,7 @@ def build_backend(spec: BackendSpec | dict[str, Any]) -> Backend:
 # Layer 3: input materialization.
 # ---------------------------------------------------------------------------
 
-InputKind = Literal["media", "chat", "paired"]
+InputKind = Literal["media", "chat", "ai", "paired"]
 
 
 class InputSpec(BaseModel):
@@ -238,6 +238,7 @@ class InputSpec(BaseModel):
     gold_upload_id: str | None = None
     gold_url: str | None = None
     gold_path: str | None = None
+    instruction: str | None = None
     source_id: str | None = None
 
 
@@ -305,6 +306,14 @@ def materialize_input(spec: InputSpec, *, workdir: Path) -> Any:
         return ba_inputs.media_from_path(primary, source_id=spec.source_id)
     if spec.kind == "chat":
         return ba_inputs.chat_from_path(primary, source_id=spec.source_id)
+    if spec.kind == "ai":
+        if not spec.instruction:
+            raise HTTPException(status_code=400, detail="AI input requires instruction")
+        return ba_inputs.ai_from_path(
+            primary,
+            source_id=spec.source_id,
+            instruction=spec.instruction,
+        )
     if spec.kind == "paired":
         gold = _resolve_one(spec, use_gold=True, workdir=workdir)
         return ba_inputs.paired_from_paths(primary, gold, source_id=spec.source_id)

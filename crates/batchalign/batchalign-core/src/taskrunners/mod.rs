@@ -3,6 +3,7 @@
 //!
 //! See `spec2.md` §24 for the phasing.
 
+pub mod ai;
 pub mod asr;
 pub mod compare;
 pub mod coref;
@@ -25,6 +26,7 @@ use crate::base::Task;
 /// for the phasing.
 pub fn canonical(task: Task) -> Box<dyn DynTaskRunner> {
     match task {
+        Task::Ai => Box::new(ai::AiTaskRunner::default()),
         Task::Asr => Box::new(asr::AsrTaskRunner),
         Task::Fa => Box::new(fa::FaTaskRunner),
         Task::Speaker => Box::new(speaker::SpeakerTaskRunner),

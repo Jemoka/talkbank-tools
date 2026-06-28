@@ -107,6 +107,7 @@ impl PyOutcome {
 fn strip_word_timing_from_value(value: &mut BAValue) {
     match value {
         BAValue::Chat(chat) => strip_word_timing_from_chat(chat),
+        BAValue::Ai { chat, .. } => strip_word_timing_from_chat(chat),
         BAValue::Paired(paired) => {
             let (main, _) = paired.as_mut_parts();
             strip_word_timing_from_chat(main);

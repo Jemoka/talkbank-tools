@@ -6,6 +6,7 @@ import pytest
 
 from batchalign.backends.base import (
     Backend,
+    AI,
     ASR,
     FA,
     Speaker,
@@ -40,6 +41,10 @@ class _StubAsr(_StubBackend, ASR):
     pass
 
 
+class _StubAi(_StubBackend, AI):
+    pass
+
+
 class _StubAsrFa(_StubBackend, ASR, FA):
     pass
 
@@ -53,9 +58,14 @@ class _StubMorpho(_StubBackend, Morphosyntax):
 
 
 class _StubEverything(
-    _StubBackend, ASR, FA, Speaker, UtSeg, Morphosyntax, Translate, Coref
+    _StubBackend, AI, ASR, FA, Speaker, UtSeg, Morphosyntax, Translate, Coref
 ):
     pass
+
+
+def test_ai_marker():
+    b = _StubAi()
+    assert declared_tasks(b) == [Task.Ai]
 
 
 def test_single_marker():
@@ -86,6 +96,7 @@ def test_every_marker():
     b = _StubEverything()
     tasks = declared_tasks(b)
     assert set(tasks) == {
+        Task.Ai,
         Task.Asr,
         Task.Fa,
         Task.Speaker,
@@ -122,11 +133,13 @@ def test_batch_policy_constructors():
 def test_backend_class_re_exports():
     # Importing from the package re-export should yield the same classes.
     from batchalign.backends import (
+        AI as AI2,
         Backend as B2,
         ASR as ASR2,
         Morphosyntax as M2,
     )
     assert B2 is Backend
+    assert AI2 is AI
     assert ASR2 is ASR
     assert M2 is Morphosyntax
 
@@ -135,6 +148,7 @@ def test_concrete_backend_classes_importable():
     # The concrete classes must at least be importable (their constructors
     # lazy-import heavy ML deps, so just touching the class is fine).
     from batchalign.backends import (
+        DspyAIBackend,
         WhisperBackend,
         StanzaBackend,
         PyannoteBackend,
@@ -147,6 +161,7 @@ def test_concrete_backend_classes_importable():
 
     # Each must inherit from `Backend` (transitively via its marker ABC).
     for cls in (
+        DspyAIBackend,
         WhisperBackend,
         StanzaBackend,
         PyannoteBackend,
@@ -178,3 +193,93 @@ def test_revai_atomic_call_via_class_mro():
     from batchalign.backends import RevAI
     assert issubclass(RevAI, ASR)
     assert issubclass(RevAI, Speaker)
+
+
+def test_dspy_ai_declared_task_via_class_mro():
+    from batchalign.backends import DspyAIBackend
+    assert issubclass(DspyAIBackend, AI)
+
+
+def test_dspy_ai_backend_name_includes_prompt_hash():
+    import hashlib
+
+    from batchalign.backends import DspyAIBackend
+    from batchalign.backends.ai.dspy import CHAT_SYSTEM_PROMPT
+
+    backend = DspyAIBackend(module=object())
+    prompt_hash = hashlib.blake2s(
+        CHAT_SYSTEM_PROMPT.encode("utf-8"), digest_size=4
+    ).hexdigest()
+
+    assert backend.name.endswith(f":p{prompt_hash}")
+
+
+def test_dspy_ai_logs_each_input_and_output(caplog):
+    from batchalign._core.proto import AiInput, AiUtterance
+    from batchalign.backends import DspyAIBackend
+
+    class Prediction:
+        revised = "*PAR:\tHello .\n"
+
+    class Module:
+        def __call__(self, **_kwargs):
+            return Prediction()
+
+    backend = DspyAIBackend(module=Module())
+    item = AiInput(
+        source_id="sample",
+        instruction="translate to chinese",
+        utterances=[
+            AiUtterance(
+                index=0,
+                chat="*PAR:\thello .\n",
+                context=["*PAR:\tthere .\n"],
+            )
+        ],
+    )
+
+    with caplog.at_level("DEBUG", logger="batchalign.ai"):
+        backend.call([item])
+
+    text = caplog.text
+    assert "AI model input" in text
+    assert "translate to chinese" in text
+    assert "*PAR:\thello ." in text
+    assert "AI model output" in text
+    assert "*PAR:\tHello ." in text
+
+
+def test_dspy_ai_joins_revised_blocks():
+    from batchalign._core.proto import AiInput, AiUtterance
+    from batchalign.backends import DspyAIBackend
+
+    class Prediction:
+        revised_blocks = [
+            "*LENO:\tI never saw my dad put the belt on .",
+            "*LENO:\tI only saw him take it off .",
+        ]
+
+    class Module:
+        def __call__(self, **_kwargs):
+            return Prediction()
+
+    backend = DspyAIBackend(module=Module())
+    item = AiInput(
+        source_id="sample",
+        instruction="split into CHAT utterances",
+        utterances=[
+            AiUtterance(
+                index=0,
+                chat="*LENO:\tI never saw my dad put the belt on I only saw him take it off .\n",
+                context=[],
+            )
+        ],
+    )
+
+    out = backend.call([item])[0]
+
+    assert len(out.revisions) == 1
+    assert out.revisions[0].chat == (
+        "*LENO:\tI never saw my dad put the belt on .\n"
+        "*LENO:\tI only saw him take it off ."
+    )

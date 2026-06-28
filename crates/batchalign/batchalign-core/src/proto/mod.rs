@@ -22,6 +22,7 @@
 //! need its own registration. Register types that backends construct or
 //! `isinstance`-check directly.
 
+pub mod ai;
 pub mod asr;
 pub mod compare;
 pub mod coref;
@@ -32,6 +33,7 @@ pub mod translate;
 pub mod utr;
 pub mod utseg;
 
+pub use ai::{AiInput, AiOutput, AiRevision, AiUtterance};
 pub use asr::{AsrInput, AsrOptions, AsrOutput, AsrSegment, AsrWord, LanguageSpec};
 pub use compare::{CompareInput, CompareMetrics, CompareMetricsPos, CompareOutput};
 pub use coref::{CorefInput, CorefOutput};

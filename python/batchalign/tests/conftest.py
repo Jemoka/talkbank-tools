@@ -50,10 +50,12 @@ def fake_progress_core(monkeypatch):
     import types
 
     class Task(str, enum.Enum):
+        Ai = "Ai"
         Asr = "Asr"
         Fa = "Fa"
         Speaker = "Speaker"
         UtSeg = "UtSeg"
+        Utr = "Utr"
         Morphosyntax = "Morphosyntax"
         Translate = "Translate"
         Coref = "Coref"

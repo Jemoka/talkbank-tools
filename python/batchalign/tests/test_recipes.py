@@ -21,10 +21,12 @@ def fake_core(monkeypatch):
     import enum
 
     class Task(str, enum.Enum):
+        Ai = "Ai"
         Asr = "Asr"
         Fa = "Fa"
         Speaker = "Speaker"
         UtSeg = "UtSeg"
+        Utr = "Utr"
         Morphosyntax = "Morphosyntax"
         Translate = "Translate"
         Coref = "Coref"
@@ -111,6 +113,15 @@ def test_translate(fake_core):
     assert pipe.backends == ["t"]
 
 
+def test_ai(fake_core):
+    Task, Pipeline, _ = fake_core
+    from batchalign import recipes
+
+    pipe = recipes.ai(ai_backend="ai")
+    assert _task_names(pipe) == ["Ai"]
+    assert pipe.backends == ["ai"]
+
+
 def test_coref(fake_core):
     Task, Pipeline, _ = fake_core
     from batchalign import recipes
@@ -137,5 +148,3 @@ def test_compare_chains_morphosyntax_then_compare(fake_core):
     assert len(pipe.backends) == 2
     assert pipe.backends[0] == "stanza_fake"
     assert pipe.backends[1].name == "compare:rust:v3.1"
-
-

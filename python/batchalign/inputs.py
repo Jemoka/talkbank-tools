@@ -1,4 +1,4 @@
-"""Python-side helpers around `MediaInput`, `ChatInput`, `PairedInput`.
+"""Python-side helpers around `MediaInput`, `ChatInput`, `AiChatInput`, `PairedInput`.
 
 The authoritative types live in the compiled `batchalign._core`
 extension — they're PyO3 classes constructed from Rust. Helpers here
@@ -19,6 +19,7 @@ try:
     from batchalign._core import (  # type: ignore[attr-defined]
         MediaInput as _CoreMediaInput,
         ChatInput as _CoreChatInput,
+        AiChatInput as _CoreAiChatInput,
         PairedInput as _CorePairedInput,
     )
     _CORE_OK = True
@@ -35,6 +36,12 @@ except ImportError:
     class _CoreChatInput:  # type: ignore[no-redef]
         path: str
         source_id: str = ""
+
+    @dataclass
+    class _CoreAiChatInput:  # type: ignore[no-redef]
+        path: str
+        source_id: str = ""
+        instruction: str = ""
 
     @dataclass
     class _CorePairedInput:  # type: ignore[no-redef]
@@ -62,6 +69,18 @@ def chat_from_path(path: str | Path, source_id: str | None = None) -> _CoreChatI
     p = Path(path).absolute()
     sid = source_id if source_id is not None else p.stem
     return _CoreChatInput(path=str(p), source_id=sid)
+
+
+def ai_from_path(
+    path: str | Path,
+    *,
+    instruction: str,
+    source_id: str | None = None,
+) -> _CoreAiChatInput:
+    """Construct an AI transcript input from a CHAT path plus instruction."""
+    p = Path(path).absolute()
+    sid = source_id if source_id is not None else p.stem
+    return _CoreAiChatInput(path=str(p), source_id=sid, instruction=instruction)
 
 
 def paired_from_paths(
@@ -171,13 +190,16 @@ def iter_chat(
 MediaInput = _CoreMediaInput
 ChatInput = _CoreChatInput
 PairedInput = _CorePairedInput
+AiChatInput = _CoreAiChatInput
 
 __all__ = [
     "MediaInput",
     "ChatInput",
     "PairedInput",
+    "AiChatInput",
     "media_from_path",
     "chat_from_path",
+    "ai_from_path",
     "paired_from_paths",
     "sibling_media_for_chat",
     "iter_media",
