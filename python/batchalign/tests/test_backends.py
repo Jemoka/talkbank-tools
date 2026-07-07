@@ -283,3 +283,90 @@ def test_dspy_ai_joins_revised_blocks():
         "*LENO:\tI never saw my dad put the belt on .\n"
         "*LENO:\tI only saw him take it off ."
     )
+
+
+def test_dspy_ai_retries_with_validation_error():
+    from batchalign._core.proto import AiInput, AiUtterance
+    from batchalign.backends import DspyAIBackend
+
+    class Prediction:
+        def __init__(self, revised):
+            self.revised = revised
+
+    class Module:
+        def __init__(self):
+            self.errors = []
+
+        def __call__(self, **kwargs):
+            self.errors.append(kwargs["error"])
+            if len(self.errors) == 1:
+                return Prediction("*PAR:\tbad 49985_ .")
+            return Prediction("*PAR:\tgood .")
+
+    validation_errors = []
+
+    def validator(_source_id, _utterance_index, _current_chat, revised_chat):
+        if "bad" in revised_chat:
+            validation_errors.append("CHAT parse error: bad dependent tier")
+            return validation_errors[-1]
+        return None
+
+    module = Module()
+    backend = DspyAIBackend(module=module, validator=validator)
+    item = AiInput(
+        source_id="sample",
+        instruction="fix",
+        utterances=[
+            AiUtterance(
+                index=0,
+                chat="*PAR:\thello .\n",
+                context=[],
+            )
+        ],
+    )
+
+    out = backend.call([item])[0]
+
+    assert len(out.revisions) == 1
+    assert out.revisions[0].chat == "*PAR:\tgood ."
+    assert module.errors[0] == ""
+    assert "CHAT parse error: bad dependent tier" in module.errors[1]
+
+
+def test_dspy_ai_stops_after_max_validation_attempts():
+    from batchalign._core.proto import AiInput, AiUtterance
+    from batchalign.backends import DspyAIBackend
+    from batchalign.backends.ai.dspy import _MAX_VALIDATION_ATTEMPTS
+
+    class Prediction:
+        revised = "*PAR:\tbad 49985_ ."
+
+    class Module:
+        def __init__(self):
+            self.calls = 0
+
+        def __call__(self, **_kwargs):
+            self.calls += 1
+            return Prediction()
+
+    def validator(_source_id, _utterance_index, _current_chat, _revised_chat):
+        return "CHAT parse error: still invalid"
+
+    module = Module()
+    backend = DspyAIBackend(module=module, validator=validator)
+    item = AiInput(
+        source_id="sample",
+        instruction="fix",
+        utterances=[
+            AiUtterance(
+                index=0,
+                chat="*PAR:\thello .\n",
+                context=[],
+            )
+        ],
+    )
+
+    out = backend.call([item])[0]
+
+    assert out.revisions == []
+    assert module.calls == _MAX_VALIDATION_ATTEMPTS

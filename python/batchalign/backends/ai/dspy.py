@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any
+import tempfile
+from pathlib import Path
+from typing import Any, Callable
 
 from batchalign import config
 from batchalign.backends.base import AI, BatchPolicy
 
 
 _log = logging.getLogger("batchalign.ai")
+_MAX_VALIDATION_ATTEMPTS = 3
 
 
 CHAT_SYSTEM_PROMPT = """\
@@ -122,9 +125,11 @@ class DspyAIBackend(AI):
         timeout: int = 30,
         batch_size: int = 1,
         batch_window_ms: int = 0,
+        validator: Callable[[str, int, str, str], str | None] | None = None,
     ) -> None:
         self._model = model
         self._max_tokens = max_tokens
+        self._validator = validator or _validate_revision
         self._prompt_hash = hashlib.blake2s(
             CHAT_SYSTEM_PROMPT.encode("utf-8"), digest_size=4
         ).hexdigest()
@@ -164,6 +169,13 @@ class DspyAIBackend(AI):
                         "context items."
                     )
                 )
+                error: str = dspy.InputField(
+                    desc=(
+                        "Empty on the first attempt. On retry, contains CHAT parser "
+                        "or validation errors from the previous output. Fix those "
+                        "errors and return only valid revised_blocks."
+                    )
+                )
 
                 revised_blocks: list[str] = dspy.OutputField(
                     desc=(
@@ -192,7 +204,7 @@ class DspyAIBackend(AI):
 
     @property
     def name(self) -> str:
-        return f"dspy-ai:{self._model}:max{self._max_tokens}:p{self._prompt_hash}"
+        return f"dspy-ai:{self._model}:max{self._max_tokens}:p{self._prompt_hash}-v2"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -221,31 +233,18 @@ class DspyAIBackend(AI):
                     "\n---\n".join(utterance.context or []),
                     utterance.chat,
                 )
-                try:
-                    prediction = self._module(
-                        instruction=item.instruction,
-                        current=utterance.chat,
-                        context=utterance.context or [],
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    _log.warning(
-                        "AI model failure\nsource_id: %s\nutterance_index: %s\n"
-                        "utterance_total: %s\ninstruction:\n%s\ncontext:\n%s\n"
-                        "current:\n%s\nerror: %s",
-                        item.source_id,
-                        idx,
-                        total,
-                        item.instruction,
-                        "\n---\n".join(utterance.context or []),
-                        utterance.chat,
-                        exc,
-                    )
+                revision = self._call_with_validation_retries(
+                    item=item,
+                    utterance=utterance,
+                    batch_index=idx,
+                    utterance_total=total,
+                )
+                if revision is None:
                     if progress is not None:
                         progress(idx + 1, total)
                     continue
-                revision = _revision_from_prediction(prediction, utterance.index)
                 _log.debug(
-                    "AI model output\nsource_id: %s\nutterance_index: %s\n"
+                    "AI model accepted output\nsource_id: %s\nutterance_index: %s\n"
                     "utterance_total: %s\nrevised:\n%s",
                     item.source_id,
                     idx,
@@ -258,6 +257,90 @@ class DspyAIBackend(AI):
                     progress(idx + 1, total)
             outputs.append(AiOutput(source_id=item.source_id, revisions=revisions))
         return outputs
+
+    def _call_with_validation_retries(
+        self,
+        *,
+        item: Any,
+        utterance: Any,
+        batch_index: int,
+        utterance_total: int,
+    ) -> Any | None:
+        error = ""
+        for attempt in range(1, _MAX_VALIDATION_ATTEMPTS + 1):
+            try:
+                prediction = self._module(
+                    instruction=item.instruction,
+                    current=utterance.chat,
+                    context=utterance.context or [],
+                    error=error,
+                )
+            except Exception as exc:  # noqa: BLE001
+                _log.warning(
+                    "AI model failure\nsource_id: %s\nutterance_index: %s\n"
+                    "utterance_total: %s\nattempt: %s/%s\ninstruction:\n%s\ncontext:\n%s\n"
+                    "current:\n%s\nerror: %s",
+                    item.source_id,
+                    batch_index,
+                    utterance_total,
+                    attempt,
+                    _MAX_VALIDATION_ATTEMPTS,
+                    item.instruction,
+                    "\n---\n".join(utterance.context or []),
+                    utterance.chat,
+                    exc,
+                )
+                return None
+
+            revision = _revision_from_prediction(prediction, utterance.index)
+            _log.debug(
+                "AI model output\nsource_id: %s\nutterance_index: %s\n"
+                "utterance_total: %s\nattempt: %s/%s\nrevised:\n%s",
+                item.source_id,
+                batch_index,
+                utterance_total,
+                attempt,
+                _MAX_VALIDATION_ATTEMPTS,
+                revision.chat,
+            )
+
+            if not revision.chat.strip() or revision.chat == utterance.chat:
+                return revision
+
+            validation_error = self._validator(
+                str(item.source_id),
+                int(utterance.index),
+                str(utterance.chat),
+                str(revision.chat),
+            )
+            if validation_error is None:
+                return revision
+
+            error = (
+                "The previous revised_blocks did not produce valid CHAT. "
+                "Return corrected revised_blocks only.\n"
+                f"Validation error:\n{validation_error}\n"
+                f"Previous output:\n{revision.chat}"
+            )
+            _log.debug(
+                "AI revision rejected before returning\nsource_id: %s\n"
+                "utterance_index: %s\nattempt: %s/%s\nerror: %s",
+                item.source_id,
+                batch_index,
+                attempt,
+                _MAX_VALIDATION_ATTEMPTS,
+                validation_error,
+            )
+
+        _log.warning(
+            "AI revision rejected after maximum validation attempts\nsource_id: %s\n"
+            "utterance_index: %s\nattempts: %s\nlast_error: %s",
+            item.source_id,
+            batch_index,
+            _MAX_VALIDATION_ATTEMPTS,
+            error,
+        )
+        return None
 
 
 def _revision_from_prediction(prediction: Any, index: int) -> Any:
@@ -276,6 +359,92 @@ def _revision_from_prediction(prediction: Any, index: int) -> Any:
     else:
         chat = str(getattr(prediction, "revised", "") or "")
     return AiRevision(index=index, chat=chat)
+
+
+def _validate_revision(
+    source_id: str,
+    utterance_index: int,
+    _current_chat: str,
+    revised_chat: str,
+) -> str | None:
+    source_path = Path(source_id)
+    if not source_path.is_file():
+        return None
+
+    try:
+        source_text = source_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return f"could not read source transcript for validation: {exc}"
+
+    spans = _chat_utterance_spans(source_text)
+    if utterance_index >= len(spans):
+        return (
+            f"could not validate replacement: utterance index {utterance_index} "
+            f"out of range for {len(spans)} utterances"
+        )
+
+    start, end = spans[utterance_index]
+    candidate = (
+        source_text[:start]
+        + _ensure_trailing_newline(revised_chat)
+        + source_text[end:]
+    )
+    return _validate_chat_text(candidate, source_id=source_id)
+
+
+def _chat_utterance_spans(text: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    offset = 0
+    current_start: int | None = None
+    for line in text.splitlines(keepends=True):
+        if line.startswith("*"):
+            if current_start is not None:
+                spans.append((current_start, offset))
+            current_start = offset
+        elif line.startswith("@") and current_start is not None:
+            spans.append((current_start, offset))
+            current_start = None
+        offset += len(line)
+    if current_start is not None:
+        spans.append((current_start, offset))
+    return spans
+
+
+def _validate_chat_text(text: str, *, source_id: str) -> str | None:
+    try:
+        from batchalign._core import ChatInput, Pipeline  # type: ignore[attr-defined]
+    except ImportError:
+        return None
+
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        suffix=".cha",
+        delete=False,
+    ) as handle:
+        handle.write(text)
+        temp_path = Path(handle.name)
+
+    try:
+        pipeline = Pipeline([], [])
+        outcome = pipeline.run([ChatInput(path=str(temp_path), source_id=source_id)])[0]
+        if getattr(outcome, "is_failed", False):
+            return str(getattr(outcome, "error", "") or "CHAT parse/validation failed")
+        return None
+    finally:
+        try:
+            temp_path.unlink()
+        except OSError:
+            pass
+
+
+def _ensure_trailing_newline(text: str) -> str:
+    trimmed = text.strip()
+    if not trimmed:
+        return ""
+    if trimmed.endswith("\n"):
+        return trimmed
+    return f"{trimmed}\n"
 
 
 __all__ = ["DspyAIBackend"]
