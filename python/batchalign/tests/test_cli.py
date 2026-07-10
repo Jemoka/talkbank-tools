@@ -127,8 +127,19 @@ def test_asr_engine_enum_members():
 
     assert {e.value for e in AsrEngine} == {
         "rev", "whisper", "chatwhisper", "openai",
-        "funaudio", "tencent", "qwen3", "aliyun",
+        "funaudio", "tencent", "qwen3", "aliyun", "malayalam",
     }
+
+
+def test_malayalam_uses_sat_utterance_segmentation(monkeypatch):
+    import batchalign as ba
+    from batchalign.cli.transcribe import AsrEngine, _build_utseg
+    from batchalign.lang import LanguageCode
+
+    sentinel = object()
+    monkeypatch.setattr(ba, "MalayalamSaTBackend", lambda: sentinel)
+
+    assert _build_utseg(ba, LanguageCode.from_str("mal"), AsrEngine.malayalam) is sentinel
 
 
 # ---------------------------------------------------------------------------

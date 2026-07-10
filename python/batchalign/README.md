@@ -59,6 +59,7 @@ are gated behind extras — install only what you use:
 
 ```bash
 pip install 'batchalign[whisper]'      # Whisper ASR
+pip install 'batchalign[malayalam]'    # Malayalam Wav2Vec2 XLSR ASR
 pip install 'batchalign[stanza]'       # morphosyntax (%mor / %gra)
 pip install 'batchalign[pyannote]'     # speaker diarization
 pip install 'batchalign[revai]'        # Rev.AI cloud ASR

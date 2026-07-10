@@ -30,6 +30,7 @@ from batchalign.backends.asr import (
     ChatWhisperBackend,
     FunAsrBackend,
     FunAudioBackend,
+    MalayalamWav2Vec2Backend,
     OpenAIWhisperBackend,
     QwenAsrBackend,
     Qwen3AsrBackend,
@@ -50,7 +51,11 @@ from batchalign.backends.translate import (
     NllbTranslateBackend,
     TencentTmtBackend,
 )
-from batchalign.backends.utseg import CantoneseWordSegBackend, CHATUtteranceBackend
+from batchalign.backends.utseg import (
+    CantoneseWordSegBackend,
+    CHATUtteranceBackend,
+    MalayalamSaTBackend,
+)
 
 __all__ = [
     # Marker ABCs
@@ -71,6 +76,7 @@ __all__ = [
     "ChatWhisperBackend",
     "FunAsrBackend",
     "FunAudioBackend",
+    "MalayalamWav2Vec2Backend",
     "OpenAIWhisperBackend",
     "QwenAsrBackend",
     "Qwen3AsrBackend",
@@ -93,4 +99,5 @@ __all__ = [
     # UtSeg
     "CantoneseWordSegBackend",
     "CHATUtteranceBackend",
+    "MalayalamSaTBackend",
 ]

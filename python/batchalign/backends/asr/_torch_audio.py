@@ -19,6 +19,8 @@ backends; it does not affect any code that genuinely wants torchcodec.
 
 from __future__ import annotations
 
+from typing import Any
+
 
 def disable_torchcodec() -> None:
     """Best-effort: make transformers' ASR pipeline skip the torchcodec import.
@@ -43,4 +45,26 @@ def disable_torchcodec() -> None:
         pass
 
 
-__all__ = ["disable_torchcodec"]
+def ctc_timestamp_scale(chunks: list[Any], *, duration_s: float) -> float:
+    """Return a correction for clear integer-multiple CTC timestamp drift.
+
+    Some older checkpoints expose an output stride that disagrees with the
+    value Transformers uses to convert token offsets to seconds. Use physical
+    PCM duration as a model-independent sanity bound, correcting only a close
+    2x, 3x, or 4x multiple. Normal timestamps are returned unchanged.
+    """
+    ends = [
+        float(ts[1])
+        for chunk in chunks
+        if (ts := chunk.get("timestamp")) and ts[1] is not None
+    ]
+    if not ends or duration_s <= 0:
+        return 1.0
+    ratio = max(ends) / duration_s
+    multiple = round(ratio)
+    if 2 <= multiple <= 4 and abs(ratio - multiple) <= 0.2:
+        return 1.0 / multiple
+    return 1.0
+
+
+__all__ = ["ctc_timestamp_scale", "disable_torchcodec"]

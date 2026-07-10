@@ -38,6 +38,7 @@ class AsrEngine(str, Enum):
     tencent = "tencent"    # Tencent Cloud ASR (BA2 TencentEngine)
     qwen3 = "qwen3"        # Qwen3-ASR (Alibaba open-weight; tbtbt parity)
     aliyun = "aliyun"      # Aliyun NLS Cloud ASR (BA2 AlibabaEngine)
+    malayalam = "malayalam"  # gvs Wav2Vec2 XLSR Malayalam CTC
 
 
 # Engines that ship internal sentence segmentation — skip CHATUtterance
@@ -56,6 +57,7 @@ _DEFAULT_MODEL = {
     AsrEngine.openai: "turbo",
     AsrEngine.funaudio: "FunAudioLLM/SenseVoiceSmall",
     AsrEngine.qwen3: "Qwen/Qwen3-ASR-1.7B",
+    AsrEngine.malayalam: "gvs/wav2vec2-large-xlsr-malayalam",
 }
 
 
@@ -74,7 +76,7 @@ def register(app: typer.Typer) -> None:
         ),
         engine: AsrEngine = typer.Option(
             AsrEngine.rev, "--engine", case_sensitive=False,
-            help="ASR engine: rev | whisper | chatwhisper | openai | funaudio | tencent | qwen3.",
+            help="ASR engine: rev | whisper | chatwhisper | openai | funaudio | tencent | qwen3 | malayalam.",
         ),
         lang: str = typer.Option(
             ...,
@@ -203,6 +205,11 @@ def _build_asr(
         # per-language project. Credentials in ~/.batchalign.ini
         # (`engine.aliyun.{ak_id,ak_secret,ak_appkey}`).
         return ba.AliyunAsrBackend(), False
+    if engine is AsrEngine.malayalam:
+        return ba.MalayalamWav2Vec2Backend(
+            model=m or "gvs/wav2vec2-large-xlsr-malayalam",
+            device=device,
+        ), False
     raise typer.BadParameter(f"unknown engine: {engine}")
 
 
@@ -224,6 +231,8 @@ def _build_utseg(ba: Any, lang: LanguageCode, engine: AsrEngine | None = None):
     — even when the ASR model is `funasr/paraformer-zh` (Mandarin). Mirror
     that quirk so paraformer-zh BA3 output is byte-identical to BA2's.
     """
+    if lang.alpha_3 == "mal":
+        return ba.MalayalamSaTBackend()
     key = _UTSEG_LANG_3.get(lang.alpha_3)
     if key is None:
         return None

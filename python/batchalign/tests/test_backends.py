@@ -157,6 +157,7 @@ def test_concrete_backend_classes_importable():
         TencentAsrBackend,
         AliyunAsrBackend,
         FunAudioBackend,
+        MalayalamWav2Vec2Backend,
     )
 
     # Each must inherit from `Backend` (transitively via its marker ABC).
@@ -170,6 +171,7 @@ def test_concrete_backend_classes_importable():
         TencentAsrBackend,
         AliyunAsrBackend,
         FunAudioBackend,
+        MalayalamWav2Vec2Backend,
     ):
         assert issubclass(cls, Backend), cls
 
@@ -211,7 +213,7 @@ def test_dspy_ai_backend_name_includes_prompt_hash():
         CHAT_SYSTEM_PROMPT.encode("utf-8"), digest_size=4
     ).hexdigest()
 
-    assert backend.name.endswith(f":p{prompt_hash}")
+    assert backend.name.endswith(f":p{prompt_hash}-v2")
 
 
 def test_dspy_ai_logs_each_input_and_output(caplog):
