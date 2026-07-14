@@ -63,6 +63,7 @@ pip install 'batchalign[malayalam]'    # Malayalam Wav2Vec2 XLSR ASR
 pip install 'batchalign[stanza]'       # morphosyntax (%mor / %gra)
 pip install 'batchalign[pyannote]'     # speaker diarization
 pip install 'batchalign[revai]'        # Rev.AI cloud ASR
+pip install 'batchalign[google]'       # Gemini cloud ASR + diarization
 pip install 'batchalign[cantonese]'    # Cantonese pipeline (FunASR, Tencent)
 pip install 'batchalign[qwen3]'        # Qwen3 ASR + forced aligner
 pip install 'batchalign[nllb]'         # NLLB translation

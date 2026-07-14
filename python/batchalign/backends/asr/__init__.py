@@ -17,6 +17,7 @@ from batchalign.backends.asr.funasr import FunAsrBackend
 from batchalign.backends.asr.funaudio import FunAudioBackend
 from batchalign.backends.asr.qwen3_asr import Qwen3AsrBackend
 from batchalign.backends.asr.malayalam_wav2vec2 import MalayalamWav2Vec2Backend
+from batchalign.backends.asr.google import GoogleGenAIBackend
 
 __all__ = [
     "WhisperBackend",
@@ -30,4 +31,5 @@ __all__ = [
     "FunAudioBackend",
     "Qwen3AsrBackend",
     "MalayalamWav2Vec2Backend",
+    "GoogleGenAIBackend",
 ]

@@ -39,6 +39,7 @@ class AsrEngine(str, Enum):
     qwen3 = "qwen3"        # Qwen3-ASR (Alibaba open-weight; tbtbt parity)
     aliyun = "aliyun"      # Aliyun NLS Cloud ASR (BA2 AlibabaEngine)
     malayalam = "malayalam"  # gvs Wav2Vec2 XLSR Malayalam CTC
+    google = "google"      # Gemini audio ASR + native speaker diarization
 
 
 # Engines that ship internal sentence segmentation — skip CHATUtterance
@@ -53,6 +54,7 @@ def _engine_self_segments(engine: AsrEngine) -> bool:
 
 # Sensible per-engine default models (BA2's defaults where they exist).
 _DEFAULT_MODEL = {
+    AsrEngine.google: "gemini-3.5-flash",
     AsrEngine.whisper: "openai/whisper-large-v3",
     AsrEngine.openai: "turbo",
     AsrEngine.funaudio: "FunAudioLLM/SenseVoiceSmall",
@@ -76,7 +78,7 @@ def register(app: typer.Typer) -> None:
         ),
         engine: AsrEngine = typer.Option(
             AsrEngine.rev, "--engine", case_sensitive=False,
-            help="ASR engine: rev | whisper | chatwhisper | openai | funaudio | tencent | qwen3 | malayalam.",
+            help="ASR engine: rev | google | whisper | chatwhisper | openai | funaudio | tencent | qwen3 | malayalam.",
         ),
         lang: str = typer.Option(
             ...,
@@ -84,7 +86,11 @@ def register(app: typer.Typer) -> None:
             help="ISO-639-3 alpha_3 code: eng, cmn, yue, spa, … (Required.)",
         ),
         model: str | None = typer.Option(None, "--model", help="ASR model id (engine-specific default if omitted)."),
-        diarize: bool = typer.Option(False, "--diarize/--no-diarize", help="Run speaker diarization (ignored for rev, which diarizes itself)."),
+        diarize: bool = typer.Option(
+            False,
+            "--diarize/--no-diarize",
+            help="Run speaker diarization (ignored for rev and google, which diarize themselves).",
+        ),
         num_speakers: int = typer.Option(2, "--num-speakers", "-n", help="Expected speaker count (diarization hint)."),
         force_cpu: bool = typer.Option(
             False, "--force-cpu",
@@ -118,13 +124,13 @@ def register(app: typer.Typer) -> None:
             quiet=opts.quiet,
         ) as ui:
             device = "cpu" if force_cpu else None
-            asr_backend, rev_diarizes = _build_asr(
+            asr_backend, native_diarization = _build_asr(
                 ba, engine, model, lang_code, num_speakers, device
             )
-            # Rev does its own diarization; for the Whisper family add Pyannote
-            # when --diarize is requested.
+            # Cloud engines with native speaker labels share one atomic call;
+            # other engines opt into Pyannote with --diarize.
             speaker_backend: Any = None
-            if diarize and not rev_diarizes:
+            if diarize and not native_diarization:
                 speaker_backend = ba.PyannoteBackend()
             # Always pair the ASR with the BA2 CHATUtterance BERT
             # segmenter — every transcribe path must produce one
@@ -167,7 +173,7 @@ def _build_asr(
     num_speakers: int = 2,
     device: str | None = None,
 ):
-    """Construct the ASR backend for `engine`. Returns (backend, rev_diarizes).
+    """Construct the ASR backend for `engine`. Returns (backend, native_diarization).
 
     Every backend takes the resolved `LanguageCode` directly. Each
     one's constructor pulls whichever form (`alpha_2`, `alpha_3`, or
@@ -176,6 +182,12 @@ def _build_asr(
     m = model or _DEFAULT_MODEL.get(engine)
     if engine is AsrEngine.rev:
         return ba.RevAI(language=lang, num_speakers=num_speakers), True
+    if engine is AsrEngine.google:
+        return ba.GoogleGenAIBackend(
+            language=lang,
+            model=m or "gemini-3.5-flash",
+            num_speakers=num_speakers,
+        ), True
     if engine is AsrEngine.whisper:
         return ba.WhisperBackend(model=m, language=lang, device=device), False
     if engine is AsrEngine.chatwhisper:

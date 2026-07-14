@@ -19,6 +19,8 @@ The file uses ``configparser`` syntax with flat dotted keys::
 
     engine.openai.key = <api key>
 
+    engine.google.key = <Gemini API key>
+
     [translate]
     engine.google.key = <api key>
 
@@ -73,6 +75,7 @@ _API_KEY_LOCATIONS: Mapping[str, tuple[str, str]] = {
     "qwen": ("asr", "engine.aliyun.ak_secret"),
     "google_translate": ("translate", "engine.google.key"),
     "google": ("translate", "engine.google.key"),
+    "google_asr": ("asr", "engine.google.key"),
     "hf": ("auth", "hf_token"),
     "huggingface": ("auth", "hf_token"),
 }
@@ -88,6 +91,7 @@ _PROVIDER_LOCATIONS: Mapping[str, tuple[str, str]] = {
     "openai": ("asr", "engine.openai."),
     "rev": ("asr", "engine.rev."),
     "google": ("translate", "engine.google."),
+    "google_asr": ("asr", "engine.google."),
 }
 
 
@@ -139,6 +143,9 @@ _PROVIDER_FIELDS: Mapping[str, tuple[_Field, ...]] = {
     "google": (
         _Field("key", "API Key"),
     ),
+    "google_asr": (
+        _Field("key", "API Key"),
+    ),
 }
 
 # Display labels shown in the form header for `get_api_key` prompts.
@@ -150,6 +157,7 @@ _API_KEY_DISPLAY: Mapping[str, tuple[str, str]] = {
     "qwen": ("Qwen (Aliyun)", "AccessKey Secret"),
     "google_translate": ("Google Translate", "API Key"),
     "google": ("Google Translate", "API Key"),
+    "google_asr": ("Google Gemini ASR", "API Key"),
     "hf": ("HuggingFace", "Access Token"),
     "huggingface": ("HuggingFace", "Access Token"),
 }

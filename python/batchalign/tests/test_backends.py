@@ -158,6 +158,7 @@ def test_concrete_backend_classes_importable():
         AliyunAsrBackend,
         FunAudioBackend,
         MalayalamWav2Vec2Backend,
+        GoogleGenAIBackend,
     )
 
     # Each must inherit from `Backend` (transitively via its marker ABC).
@@ -172,6 +173,7 @@ def test_concrete_backend_classes_importable():
         AliyunAsrBackend,
         FunAudioBackend,
         MalayalamWav2Vec2Backend,
+        GoogleGenAIBackend,
     ):
         assert issubclass(cls, Backend), cls
 

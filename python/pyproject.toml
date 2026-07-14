@@ -74,6 +74,7 @@ malayalam    = ["transformers>=4.57,<5", "torch>=2.0", "torchaudio>=2.0", "wtpsp
 stanza       = ["stanza>=1.12", "transformers>=4.57,<5"]
 pyannote     = ["pyannote.audio>=3.0", "onnxruntime>=1.16"]
 revai        = ["rev-ai"]
+google       = ["google-genai"]
 cantonese    = ["pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "tencentcloud-sdk-python-tmt", "aliyun-python-sdk-core>=2.13", "aliyun-python-sdk-alimt", "funasr==1.3.1", "opencc", "cos-python-sdk-v5"]
 translate    = ["googletrans"]
 qwen3        = ["qwen-asr", "transformers>=4.57,<5", "torch>=2.0"]
@@ -91,6 +92,7 @@ all = [
     "stanza>=1.12",
     "pyannote.audio>=3.0", "onnxruntime>=1.16",
     "rev-ai",
+    "google-genai",
     "pycantonese>=4.2,<5", "tencentcloud-sdk-python-asr", "tencentcloud-sdk-python-tmt", "aliyun-python-sdk-core>=2.13", "aliyun-python-sdk-alimt", "funasr==1.3.1", "opencc", "cos-python-sdk-v5",
     "googletrans",
     "qwen-asr",
