@@ -63,7 +63,7 @@ class GoogleGenAIBackend(ASR, UTR, Speaker):
 
     @property
     def name(self) -> str:
-        return f"google-genai:{self._model}:json-v2"
+        return f"google-genai:{self._model}:word-timestamps-v3"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -138,7 +138,12 @@ class GoogleGenAIBackend(ASR, UTR, Speaker):
             "Do not translate, summarize, or include non-speech event "
             "descriptions. Return only a valid JSON object with a segments "
             "array. Every segment must contain the string fields "
-            "start_timestamp, end_timestamp, speaker, and content."
+            "start_timestamp, end_timestamp, speaker, and content, plus a "
+            "words array. Every item in words must contain the spoken token "
+            "as text and its start_timestamp and end_timestamp using the same "
+            "MM:SS.mmm format. Include every spoken word exactly once and do "
+            "not include punctuation-only tokens. Approximate word ranges are "
+            "acceptable."
         )
 
         tmp_path = ""
@@ -222,13 +227,33 @@ def _parse_response(output_text: str) -> dict[str, Any]:
     for raw in response["segments"]:
         if not isinstance(raw, dict):
             continue
+        words: list[dict[str, Any]] = []
+        for word in raw.get("words", []):
+            if not isinstance(word, dict):
+                continue
+            text = _chat_safe_text(str(word.get("text", "")))
+            if not text:
+                continue
+            start_ms = _timestamp_to_ms(str(word.get("start_timestamp", "0")))
+            end_ms = max(
+                start_ms,
+                _timestamp_to_ms(str(word.get("end_timestamp", "0"))),
+            )
+            words.append(
+                {
+                    "text": text,
+                    "start_ms": start_ms,
+                    "end_ms": end_ms,
+                    "confidence": None,
+                }
+            )
         normalized.append(
             {
                 "start_ms": _timestamp_to_ms(str(raw.get("start_timestamp", "0"))),
                 "end_ms": _timestamp_to_ms(str(raw.get("end_timestamp", "0"))),
                 "speaker": str(raw.get("speaker", "0")),
                 "text": str(raw.get("content", "")),
-                "words": [],
+                "words": words,
             }
         )
     return {"segments": normalized}
@@ -260,7 +285,7 @@ def _asr_segments(
         text = clean_utterance(text, cleanup_table, lang)
         words = []
         for word in raw.get("words", []):
-            word_text = str(word.get("text", "")).strip()
+            word_text = _chat_safe_text(str(word.get("text", "")))
             if not word_text:
                 continue
             start_ms = max(0, int(word.get("start_ms", 0)))

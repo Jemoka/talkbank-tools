@@ -61,12 +61,31 @@ class _Interactions:
                     "end_timestamp": "00:00.800",
                     "speaker": "0",
                     "content": "¿Hello there?",
+                    "words": [
+                        {
+                            "text": "Hello",
+                            "start_timestamp": "00:00.100",
+                            "end_timestamp": "00:00.400",
+                        },
+                        {
+                            "text": "there?",
+                            "start_timestamp": "00:00.450",
+                            "end_timestamp": "00:00.800",
+                        },
+                    ],
                 },
                 {
                     "start_timestamp": "00:00.900",
                     "end_timestamp": "00:01.200",
                     "speaker": "1",
                     "content": "hi",
+                    "words": [
+                        {
+                            "text": "hi",
+                            "start_timestamp": "00:00.900",
+                            "end_timestamp": "00:01.200",
+                        }
+                    ],
                 },
             ]
         }
@@ -114,7 +133,13 @@ def test_google_atomic_asr_and_diarization_share_one_interaction():
     assert [segment.speaker for segment in outputs[0].segments] == ["0", "1"]
     assert outputs[0].segments[0].text == "Hello there"
     assert outputs[0].segments[0].start_ms == 100
-    assert outputs[0].segments[0].words == []
+    assert [word.text for word in outputs[0].segments[0].words] == [
+        "Hello",
+        "there",
+    ]
+    assert [
+        (word.start_ms, word.end_ms) for word in outputs[0].segments[0].words
+    ] == [(100, 400), (450, 800)]
     assert [segment.speaker for segment in outputs[1].diarization.segments] == [
         "0",
         "1",
