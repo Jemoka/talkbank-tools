@@ -11,9 +11,9 @@ use smol_str::SmolStr;
 use std::fmt;
 use std::path::PathBuf;
 use symphonia::core::audio::AudioBuffer;
-use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::codecs::{CodecRegistry, DecoderOptions};
 use symphonia::core::errors::Error as SymphoniaError;
-use symphonia::core::formats::FormatOptions;
+use symphonia::core::formats::{FormatOptions, Track};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
@@ -355,15 +355,16 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
         .with_context(|| format!("audio_prep: probe {}", input.path.display()))?;
 
     let mut format = probed.format;
-    let track = format.default_track().ok_or_else(|| {
+    let codecs = symphonia::default::get_codecs();
+    let track = first_supported_track(format.tracks(), codecs).ok_or_else(|| {
         anyhow!(
-            "audio_prep: no default audio track in {}",
+            "audio_prep: no supported audio track in {}",
             input.path.display()
         )
     })?;
     let track_id = track.id;
 
-    let mut decoder = symphonia::default::get_codecs()
+    let mut decoder = codecs
         .make(&track.codec_params, &DecoderOptions::default())
         .with_context(|| "audio_prep: codec init")?;
 
@@ -437,6 +438,15 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
         channels,
         frame_count,
     })
+}
+
+/// Return the first track for which the enabled Symphonia registry has a
+/// decoder. In multimedia containers the default/first track is commonly the
+/// video stream, which an audio decoder must skip.
+fn first_supported_track<'a>(tracks: &'a [Track], codecs: &CodecRegistry) -> Option<&'a Track> {
+    tracks
+        .iter()
+        .find(|track| codecs.get_codec(track.codec_params.codec).is_some())
 }
 
 // ---------------------------------------------------------------------------
@@ -576,6 +586,25 @@ fn civil_from_unix_days(days: i64) -> (i32, u32, u32) {
     let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
     let y = if m <= 2 { y + 1 } else { y };
     (y as i32, m, d)
+}
+
+#[cfg(test)]
+mod audio_track_tests {
+    use super::*;
+    use symphonia::core::codecs::{CODEC_TYPE_AAC, CODEC_TYPE_NULL, CodecParameters};
+
+    #[test]
+    fn selects_supported_audio_after_non_audio_track() {
+        let mut non_audio_params = CodecParameters::new();
+        non_audio_params.for_codec(CODEC_TYPE_NULL);
+        let mut audio_params = CodecParameters::new();
+        audio_params.for_codec(CODEC_TYPE_AAC);
+        let tracks = [Track::new(1, non_audio_params), Track::new(2, audio_params)];
+
+        let selected = first_supported_track(&tracks, symphonia::default::get_codecs())
+            .expect("AAC track should be supported");
+        assert_eq!(selected.id, 2);
+    }
 }
 
 #[cfg(test)]

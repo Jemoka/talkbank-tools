@@ -21,7 +21,7 @@ import typer
 from batchalign import config as _ba_config
 
 CHAT_EXTENSIONS = (".cha", ".chat")
-MEDIA_EXTENSIONS = (".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4")
+MEDIA_EXTENSIONS = (".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4", ".mov", ".m4v")
 
 
 def _walk(folder: Path, suffixes: Iterable[str]) -> list[Path]:

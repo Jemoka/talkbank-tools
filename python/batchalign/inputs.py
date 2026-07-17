@@ -98,7 +98,16 @@ def paired_from_paths(
 def sibling_media_for_chat(
     chat_path: str | Path,
     *,
-    extensions: Iterable[str] = (".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4"),
+    extensions: Iterable[str] = (
+        ".wav",
+        ".mp3",
+        ".m4a",
+        ".flac",
+        ".ogg",
+        ".mp4",
+        ".mov",
+        ".m4v",
+    ),
 ) -> Path | None:
     """Locate the sibling media file for a CHAT transcript.
 
@@ -145,7 +154,16 @@ def sibling_media_for_chat(
 def iter_media(
     root: str | Path,
     *,
-    extensions: Iterable[str] = (".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4"),
+    extensions: Iterable[str] = (
+        ".wav",
+        ".mp3",
+        ".m4a",
+        ".flac",
+        ".ogg",
+        ".mp4",
+        ".mov",
+        ".m4v",
+    ),
 ) -> Iterator[_CoreMediaInput]:
     """Walk `root` for media files and yield `MediaInput` instances.
 

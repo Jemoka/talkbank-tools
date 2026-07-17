@@ -69,7 +69,8 @@ fn build_media_header(desc: &TranscriptDescription) -> Option<MediaHeader> {
     let normalized_media_name = normalize_media_name(media_name);
     let media_type = match desc.media_type.as_deref() {
         Some("video") => MediaType::Video,
-        Some("audio") | None => MediaType::Audio,
+        Some("audio") => MediaType::Audio,
+        None => infer_media_type(media_name),
         other => {
             tracing::warn!(media_type = ?other, "unrecognized media_type, defaulting to audio");
             MediaType::Audio
@@ -77,6 +78,27 @@ fn build_media_header(desc: &TranscriptDescription) -> Option<MediaHeader> {
     };
 
     Some(MediaHeader::new(normalized_media_name.as_str(), media_type))
+}
+
+/// Infer the CHAT capture modality while the media filename still has its
+/// extension. `@Media` serialization intentionally drops that extension, so
+/// this is the last reliable construction boundary at which to distinguish a
+/// movie from an audio recording without carrying duplicate metadata.
+fn infer_media_type(media_name: &str) -> MediaType {
+    let extension = Path::new(media_name)
+        .extension()
+        .and_then(|extension| extension.to_str());
+
+    if extension.is_some_and(|extension| {
+        matches!(
+            extension.to_ascii_lowercase().as_str(),
+            "mp4" | "mov" | "m4v" | "avi" | "mpg" | "mpeg"
+        )
+    }) {
+        MediaType::Video
+    } else {
+        MediaType::Audio
+    }
 }
 
 fn normalize_media_name(raw: &str) -> String {

@@ -14,7 +14,8 @@ pub struct TranscriptDescription {
     pub participants: Vec<ParticipantDesc>,
     /// Optional media filename (e.g. `"recording.mp3"`).
     pub media_name: Option<String>,
-    /// Optional media type (`"audio"` or `"video"`). Defaults to `"audio"`.
+    /// Optional media type (`"audio"` or `"video"`). When omitted, video is
+    /// inferred from a recognized movie extension; all other inputs are audio.
     pub media_type: Option<String>,
     /// Utterances to include in the transcript.
     #[serde(default)]

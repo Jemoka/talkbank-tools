@@ -14,9 +14,9 @@ use crate::base::TaskInput;
 use crate::base::{Dispatcher, TaskRunner};
 use crate::base::{ProgressEvent, ProgressSink};
 use crate::proto::asr::{AsrInput, AsrOutput, AsrWord, LanguageSpec};
-use crate::utils::SourceId;
 use crate::utils::SpeakerLabel;
 use crate::utils::{BAError, BAResult};
+use crate::utils::MediaInput;
 use async_trait::async_trait;
 use smol_str::SmolStr;
 use std::collections::BTreeMap;
@@ -88,8 +88,8 @@ impl TaskRunner for AsrTaskRunner {
         progress.finish();
         let output: AsrOutput = output_raw.try_into()?;
 
-        let chat = build_chat_from_asr(&media.source_id, &language, &output)?
-            .with_media(media.clone());
+        let chat =
+            build_chat_from_asr(&media, &language, &output)?.with_media(media.clone());
         *value = BAValue::Chat(chat);
 
         sink.emit(ProgressEvent::stage_injected(&media.source_id, Task::Asr));
@@ -106,7 +106,7 @@ impl TaskRunner for AsrTaskRunner {
 /// CHAT text is assembled by hand — building CHAT by string concatenation is
 /// forbidden (see `CLAUDE.md`).
 fn build_chat_from_asr(
-    source_id: &SourceId,
+    media: &MediaInput,
     language: &LanguageSpec,
     output: &AsrOutput,
 ) -> BAResult<Chat> {
@@ -186,16 +186,18 @@ fn build_chat_from_asr(
         });
     }
 
-    // Emit `@Media: <source_id>, audio` so downstream consumers
-    // (BA2's align, third-party tools) can resolve the audio file.
+    // Emit `@Media: <media stem>, <audio|video>` so downstream consumers
+    // (BA2's align, third-party tools) can resolve the media file. The CHAT
+    // builder infers capture modality from the path extension before it
+    // removes that extension from the serialized header.
     // BA3 + our align resolve by filename stem regardless, but BA2's
     // align refuses input without an explicit `@Media:` tier.
     // Bug #11 fix (parity test 2026-05-31).
     let desc = TranscriptDescription {
         langs: vec![lang_code],
         participants,
-        media_name: Some(source_id.as_str().to_string()),
-        media_type: Some("audio".to_string()),
+        media_name: Some(media.path.to_string_lossy().into_owned()),
+        media_type: None,
         utterances,
         write_wor: true,
     };
@@ -209,7 +211,7 @@ fn build_chat_from_asr(
 
     let collector = ErrorCollector::new();
     let validated = chat_file.validate_into(&collector, None);
-    Ok(Chat::from_validated_ast(validated, source_id.clone()))
+    Ok(Chat::from_validated_ast(validated, media.source_id.clone()))
 }
 
 fn asr_words_to_word_descs(words: &[AsrWord]) -> Vec<WordDesc> {
@@ -267,7 +269,7 @@ mod tests {
     use crate::base::NullSink;
     use crate::base::TaskOutput;
     use crate::proto::asr::{AsrSegment, AsrWord};
-    use crate::utils::MediaInput;
+    use crate::utils::{MediaInput, SourceId};
     use std::path::PathBuf;
     use std::sync::Mutex;
 
@@ -331,6 +333,10 @@ mod tests {
         }
     }
 
+    fn fake_media(source_id: &SourceId, extension: &str) -> MediaInput {
+        MediaInput::new(source_id.clone(), PathBuf::from(format!("tst.{extension}")))
+    }
+
     #[test]
     fn build_chat_emits_validated_typed_doc() {
         let sid = SourceId::try_new("tst").expect("sid");
@@ -341,8 +347,9 @@ mod tests {
                 fake_segment("spk_1", "general kenobi", 1000, 2200),
             ],
         };
-        let chat = build_chat_from_asr(&sid, &LanguageSpec::Code("eng".into()), &out)
-            .expect("chat");
+        let media = fake_media(&sid, "wav");
+        let chat =
+            build_chat_from_asr(&media, &LanguageSpec::Code("eng".into()), &out).expect("chat");
         let text = chat.to_chat();
         assert!(text.contains("@Languages:\teng"));
         assert!(text.contains("@Participants:"));
@@ -363,8 +370,9 @@ mod tests {
             source_id: sid.clone(),
             segments: vec![fake_timed_segment("spk_0")],
         };
+        let media = fake_media(&sid, "wav");
         let chat =
-            build_chat_from_asr(&sid, &LanguageSpec::Code("eng".into()), &out).expect("chat");
+            build_chat_from_asr(&media, &LanguageSpec::Code("eng".into()), &out).expect("chat");
         let text = chat.to_chat();
         assert!(text.contains("%wor:"), "expected %wor tier, got {text}");
         assert!(
@@ -384,11 +392,29 @@ mod tests {
             source_id: sid.clone(),
             segments: vec![fake_segment("spk_0", "hola", 0, 500)],
         };
+        let media = fake_media(&sid, "wav");
         let chat =
-            build_chat_from_asr(&sid, &LanguageSpec::Code("spa".into()), &out).expect("chat");
+            build_chat_from_asr(&media, &LanguageSpec::Code("spa".into()), &out).expect("chat");
         let text = chat.to_chat();
         assert!(text.contains("@Languages:\tspa"), "expected spa header, got {text}");
         assert!(text.contains("@ID:\tspa|batchalign|PAR0"), "expected spa ID, got {text}");
+    }
+
+    #[test]
+    fn build_chat_marks_movie_input_as_video() {
+        let sid = SourceId::try_new("tst").expect("sid");
+        let media = fake_media(&sid, "MOV");
+        let out = AsrOutput {
+            source_id: sid,
+            segments: vec![fake_segment("spk_0", "hello", 0, 500)],
+        };
+
+        let chat =
+            build_chat_from_asr(&media, &LanguageSpec::Code("eng".into()), &out).expect("chat");
+        assert!(
+            chat.to_chat().contains("@Media:\ttst, video"),
+            "MOV input should produce a video @Media header"
+        );
     }
 
     #[tokio::test]

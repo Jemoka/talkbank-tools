@@ -49,3 +49,11 @@ def test_finds_flac(tmp_path: Path) -> None:
     flac = tmp_path / "session.flac"
     flac.write_bytes(b"fLaC")
     assert sibling_media_for_chat(cha) == flac
+
+
+def test_finds_mov_video(tmp_path: Path) -> None:
+    cha = tmp_path / "session.cha"
+    cha.write_text("@Begin\n@Media:\tsession, video\n*CHI:\thello .\n@End\n")
+    mov = tmp_path / "session.mov"
+    mov.write_bytes(b"movie")
+    assert sibling_media_for_chat(cha) == mov

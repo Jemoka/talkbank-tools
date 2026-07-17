@@ -88,6 +88,33 @@ fn test_build_chat_with_timing() {
 }
 
 #[test]
+fn test_build_chat_infers_video_from_media_extension() {
+    let desc = TranscriptDescription {
+        langs: vec!["eng".to_string()],
+        participants: vec![ParticipantDesc {
+            id: "PAR".to_string(),
+            name: None,
+            role: "Participant".to_string(),
+            corpus: String::new(),
+        }],
+        media_name: Some("nested/session.MP4".to_string()),
+        media_type: None,
+        utterances: vec![UtteranceDesc {
+            speaker: "PAR".to_string(),
+            words: None,
+            text: Some("hello .".to_string()),
+            start_ms: Some(0),
+            end_ms: Some(1000),
+            lang: None,
+        }],
+        write_wor: false,
+    };
+
+    let output = to_chat_string(&build_chat(&desc).expect("build CHAT"));
+    assert!(output.contains("@Media:\tsession, video"), "got: {output}");
+}
+
+#[test]
 fn test_build_chat_from_json() {
     let json = r#"{
         "langs": ["eng"],

@@ -53,6 +53,19 @@ impl TaskRunner for UtSegTaskRunner {
 
         // Preserve any attached media + the file's languages across the rebuild.
         let media = chat.media().cloned();
+        let existing_media_header = chat.ast().media.as_deref().cloned();
+        let media_name = existing_media_header
+            .as_ref()
+            .map(|header| header.filename.to_string())
+            .or_else(|| {
+                media
+                    .as_ref()
+                    .map(|media| media.path.to_string_lossy().into_owned())
+            })
+            .unwrap_or_else(|| source_id.as_str().to_string());
+        let media_type = existing_media_header
+            .as_ref()
+            .map(|header| header.media_type.as_str().to_string());
         let langs: Vec<String> = chat
             .ast()
             .languages
@@ -85,7 +98,13 @@ impl TaskRunner for UtSegTaskRunner {
             ));
         }
 
-        let mut new_chat = build_chat_from_utterances(&source_id, &langs, &new_utts)?;
+        let mut new_chat = build_chat_from_utterances(
+            &source_id,
+            &langs,
+            &media_name,
+            media_type.as_deref(),
+            &new_utts,
+        )?;
         if let Some(m) = media {
             new_chat = new_chat.with_media(m);
         }
@@ -261,6 +280,8 @@ fn collect_split(
 fn build_chat_from_utterances(
     source_id: &SourceId,
     langs: &[String],
+    media_name: &str,
+    media_type: Option<&str>,
     utts: &[NewUtterance],
 ) -> BAResult<Chat> {
     use talkbank_model::ErrorCollector;
@@ -301,8 +322,7 @@ fn build_chat_from_utterances(
         })
         .collect();
 
-    // Preserve @Media on the rebuilt CHAT — UtSeg fires AFTER ASR, and
-    // ASR sets media_name = source_id stem (Bug #11 / commit 850c87d).
+    // Preserve @Media on the rebuilt CHAT — UtSeg fires AFTER ASR.
     // Without forwarding it here, the rebuilt CHAT loses the @Media line
     // and downstream BA2 align refuses to consume our output.
     let desc = TranscriptDescription {
@@ -312,8 +332,8 @@ fn build_chat_from_utterances(
             langs.to_vec()
         },
         participants,
-        media_name: Some(source_id.as_str().to_string()),
-        media_type: Some("audio".to_string()),
+        media_name: Some(media_name.to_string()),
+        media_type: media_type.map(str::to_string),
         utterances,
         write_wor: false,
     };
@@ -332,8 +352,8 @@ fn build_chat_from_utterances(
                     role: "Participant".to_string(),
                     corpus: "batchalign".to_string(),
                 }],
-                media_name: Some(source_id.as_str().to_string()),
-                media_type: Some("audio".to_string()),
+                media_name: Some(media_name.to_string()),
+                media_type: media_type.map(str::to_string),
                 utterances: vec![UtteranceDesc {
                     speaker: utt.speaker.clone(),
                     words: None,
@@ -483,6 +503,45 @@ mod tests {
         assert_eq!(main_lines.len(), 2, "expected 2 utterances, got {text}");
         assert!(main_lines[0].contains("hello there"));
         assert!(main_lines[1].contains("general kenobi"));
+    }
+
+    #[tokio::test]
+    async fn preserves_video_media_type_through_rebuild() {
+        const VIDEO_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR1 Participant\n@ID:\teng|batchalign|PAR1|||||Participant|||\n\
+@Media:\tsession, video\n*PAR1:\thello there . \u{15}1_100\u{15}\n@End\n";
+
+        let sid = SourceId::try_new("session").expect("sid");
+        let chat = Chat::parse(VIDEO_CHAT, sid.clone()).expect("parse video CHAT");
+        let mut value = BAValue::Chat(chat);
+        let disp = ScriptedDispatcher {
+            assert_input_words: false,
+            outputs: Mutex::new(vec![UtSegOutput {
+                source_id: sid,
+                utterances: vec![UtteranceSpan {
+                    start_ms: 1,
+                    end_ms: 100,
+                    text: "hello there .".into(),
+                    words: vec![],
+                }],
+            }]),
+        };
+
+        UtSegTaskRunner
+            .apply(
+                &mut value,
+                &disp,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
+            .await
+            .expect("apply");
+        let BAValue::Chat(chat) = value else {
+            panic!("expected chat");
+        };
+        assert!(
+            chat.to_chat().contains("@Media:\tsession, video"),
+            "UtSeg must preserve the typed video @Media header"
+        );
     }
 
     const TIMED_BLOB_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\

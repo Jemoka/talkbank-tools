@@ -23,7 +23,9 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // try_init is a no-op if a subscriber is already installed.
     let filter = tracing_subscriber::EnvFilter::try_from_env("BATCHALIGN_LOG")
         .or_else(|_| tracing_subscriber::EnvFilter::try_from_default_env())
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+        .unwrap_or_else(|_| {
+            tracing_subscriber::EnvFilter::new("warn,symphonia_format_isomp4::atoms::stbl=error")
+        });
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
