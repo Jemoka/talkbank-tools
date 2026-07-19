@@ -34,7 +34,7 @@ use async_trait::async_trait;
 use smol_str::SmolStr;
 use std::path::Path;
 use talkbank_model::Line;
-use talkbank_model::alignment::helpers::{WordItem, walk_words};
+use talkbank_model::alignment::helpers::{TierDomain, WordItem, counts_for_tier, walk_words};
 use talkbank_model::model::UtteranceContent;
 
 use super::utr::extraction::split_compound_filler;
@@ -247,7 +247,9 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
         };
         let mut main_words = Vec::new();
         walk_words(&utterance.main.content.content.0, None, &mut |item| {
-            if let Some(word) = source_word(&item) {
+            if let Some(word) = source_word(&item)
+                && counts_for_tier(word, TierDomain::Wor)
+            {
                 main_words.push(word.cleaned_text().to_string());
             }
         });
@@ -382,7 +384,9 @@ fn collect_reusable_wor_segments(chat: &Chat) -> Vec<Option<AsrSegment>> {
         .map(|(index, utterance)| {
             let mut main_words = Vec::new();
             walk_words(&utterance.main.content.content.0, None, &mut |item| {
-                if let Some(word) = source_word(&item) {
+                if let Some(word) = source_word(&item)
+                    && counts_for_tier(word, TierDomain::Wor)
+                {
                     main_words.push(word.cleaned_text().to_string());
                 }
             });
@@ -478,7 +482,9 @@ fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
         let Line::Utterance(u) = line else { continue };
         let mut words = Vec::new();
         walk_words(&u.main.content.content.0, None, &mut |w| {
-            if let Some(word) = source_word(&w) {
+            if let Some(word) = source_word(&w)
+                && counts_for_tier(word, TierDomain::Wor)
+            {
                 for text in split_compound_filler(word) {
                     if text.is_empty() {
                         continue;
@@ -723,7 +729,9 @@ fn collapse_aligned_words(
 
     let mut source_words: Vec<(String, usize)> = Vec::new();
     walk_words(content, None, &mut |item| {
-        if let Some(word) = source_word(&item) {
+        if let Some(word) = source_word(&item)
+            && counts_for_tier(word, TierDomain::Wor)
+        {
             source_words.push((
                 word.cleaned_text().to_string(),
                 split_compound_filler(word).len(),
@@ -782,7 +790,9 @@ fn has_untimed_leading_filler_coverage(
 
     let mut source_categories = Vec::new();
     walk_words(content, None, &mut |item| {
-        if let Some(word) = source_word(&item) {
+        if let Some(word) = source_word(&item)
+            && counts_for_tier(word, TierDomain::Wor)
+        {
             source_categories.push(word.category.clone());
         }
     });
@@ -890,6 +900,57 @@ mod tests {
             .map(|word| word.text.as_str())
             .collect();
         assert_eq!(texts, ["you", "know", "today"]);
+    }
+
+    #[test]
+    fn fa_excludes_untranscribed_words_from_dispatch_and_wor() {
+        const UNTRANSCRIBED_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\thello xxx world . \u{15}100_600\u{15}\n@End\n";
+        let mut chat = Chat::parse(
+            UNTRANSCRIBED_CHAT,
+            SourceId::try_new("untranscribed.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let extracted = extract_utterances_for_fa(&chat);
+        assert_eq!(
+            extracted[0]
+                .words
+                .iter()
+                .map(|word| word.text.as_str())
+                .collect::<Vec<_>>(),
+            ["hello", "world"]
+        );
+
+        let aligned = vec![AsrSegment {
+            start_ms: 100,
+            end_ms: 600,
+            text: "hello world".into(),
+            speaker: None,
+            words: vec![
+                AsrWord {
+                    text: "hello".into(),
+                    start_ms: 100,
+                    end_ms: 300,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "world".into(),
+                    start_ms: 350,
+                    end_ms: 600,
+                    confidence: None,
+                },
+            ],
+        }];
+        inject_word_timings(&mut chat, &aligned).expect("inject timed result");
+        let wor_line = chat
+            .to_chat()
+            .lines()
+            .find(|line| line.starts_with("%wor:"))
+            .expect("wor tier")
+            .to_string();
+        assert!(!wor_line.contains("xxx"));
+        assert!(wor_line.contains("hello") && wor_line.contains("world"));
     }
 
     #[tokio::test]
