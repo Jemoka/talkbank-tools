@@ -413,16 +413,15 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             if let Some((word_start_ms, word_end_ms)) = timed_word_span {
                 // BA2 refines the main-tier utterance bullet to span the aligned
                 // words (first word start … last word end).
-                let (start_ms, end_ms) = if u
-                    .main
-                    .content
-                    .bullet
-                    .as_ref()
-                    .is_some_and(|bullet| bullet.source == BulletSource::Utr)
-                {
-                    (word_start_ms, word_end_ms)
-                } else {
-                    (seg.start_ms, seg.end_ms)
+                let (start_ms, end_ms) = match u.main.content.bullet.as_ref() {
+                    Some(bullet) if bullet.source == BulletSource::Utr => {
+                        (word_start_ms, word_end_ms)
+                    }
+                    Some(bullet) if bullet.source == BulletSource::Authoritative => (
+                        bullet.timing.start_ms.min(word_start_ms),
+                        bullet.timing.end_ms.max(word_end_ms),
+                    ),
+                    _ => (seg.start_ms, seg.end_ms),
                 };
                 u.main.content.bullet = Some(Bullet::new(start_ms, end_ms));
             } else if u.main.content.bullet.as_ref().is_some_and(|bullet| {
@@ -898,6 +897,43 @@ mod tests {
 
         assert!(chat.to_chat().contains("\u{15}1000_2000\u{15}"));
         assert!(!chat.to_chat().contains("\u{15}800_3000\u{15}"));
+    }
+
+    #[test]
+    fn timed_fa_words_preserve_authoritative_bullet_envelope() {
+        const AUTHORITATIVE_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\thello world . \u{15}800_3000\u{15}\n@End\n";
+        let mut chat = Chat::parse(
+            AUTHORITATIVE_CHAT,
+            SourceId::try_new("authoritative-window.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let aligned = vec![AsrSegment {
+            start_ms: 900,
+            end_ms: 2_200,
+            text: "hello world".into(),
+            speaker: None,
+            words: vec![
+                AsrWord {
+                    text: "hello".into(),
+                    start_ms: 1_000,
+                    end_ms: 1_500,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "world".into(),
+                    start_ms: 1_500,
+                    end_ms: 2_000,
+                    confidence: None,
+                },
+            ],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timed result");
+
+        assert!(chat.to_chat().contains("\u{15}800_3000\u{15}"));
+        assert!(!chat.to_chat().contains("\u{15}900_2200\u{15}"));
     }
 
     #[test]
