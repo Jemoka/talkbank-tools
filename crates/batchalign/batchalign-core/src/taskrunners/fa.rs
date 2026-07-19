@@ -204,6 +204,8 @@ fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
 /// Returns `false` without mutation when any alignable utterance is missing a
 /// word, has different text, or contains an absent/zero-duration word span.
 fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
+    const MAX_REUSABLE_WORD_DURATION_PROPORTION: f64 = 0.4;
+    const MIN_WORDS_FOR_DOMINANCE_CHECK: usize = 3;
     const MIN_REUSABLE_WORD_DURATION_MS: u64 = 40;
 
     let mut refreshed = Vec::new();
@@ -239,6 +241,10 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
 
         let mut first_start = None;
         let mut last_end = None;
+        let mut minimum_start = None;
+        let mut maximum_end = None;
+        let mut maximum_duration_ms = 0;
+        let word_count = wor_words.len();
         for word in wor_words {
             let Some(bullet) = word.inline_bullet.as_ref() else {
                 return false;
@@ -248,8 +254,27 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
             {
                 return false;
             }
+            let duration_ms = bullet.timing.end_ms - bullet.timing.start_ms;
+            minimum_start = Some(minimum_start.map_or(bullet.timing.start_ms, |start: u64| {
+                start.min(bullet.timing.start_ms)
+            }));
+            maximum_end = Some(maximum_end.map_or(bullet.timing.end_ms, |end: u64| {
+                end.max(bullet.timing.end_ms)
+            }));
+            maximum_duration_ms = maximum_duration_ms.max(duration_ms);
             first_start.get_or_insert(bullet.timing.start_ms);
             last_end = Some(bullet.timing.end_ms);
+        }
+        if word_count >= MIN_WORDS_FOR_DOMINANCE_CHECK {
+            let utterance_span_ms = maximum_end
+                .expect("non-empty word list has a maximum end")
+                .saturating_sub(minimum_start.expect("non-empty word list has a minimum start"));
+            if utterance_span_ms > 0
+                && maximum_duration_ms as f64 / utterance_span_ms as f64
+                    > MAX_REUSABLE_WORD_DURATION_PROPORTION
+            {
+                return false;
+            }
         }
         refreshed.push((
             line_index,
@@ -645,6 +670,23 @@ mod tests {
 
         assert!(!refresh_complete_wor_alignment(&mut chat));
         assert!(chat.to_chat().contains("\u{15}100_900\u{15}"));
+    }
+
+    #[test]
+    fn complete_wor_reuse_rejects_dominant_word_span() {
+        const DOMINANT_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\tmissing, audio\n\
+*PAR:\tone dominant word . \u{15}100_1000\u{15}\n\
+%wor:\tone \u{15}100_250\u{15} dominant \u{15}250_800\u{15} word \u{15}800_900\u{15} .\n@End\n";
+        let mut chat = Chat::parse(
+            DOMINANT_CHAT,
+            SourceId::try_new("dominant.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+
+        assert!(!refresh_complete_wor_alignment(&mut chat));
+        assert!(chat.to_chat().contains("\u{15}100_1000\u{15}"));
     }
 
     #[test]
