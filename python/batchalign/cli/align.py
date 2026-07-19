@@ -22,7 +22,7 @@ import typer
 
 from ..lang import LanguageCode
 from ._common import CHAT_EXTENSIONS, _walk, collect_chat_inputs, write_outcome
-from ._options import cli_options
+from ._options import cli_options, inference_device
 from .tui import Interface, Task
 
 
@@ -99,6 +99,11 @@ def register(app: typer.Typer) -> None:
             help="Run the FA model on CPU (BA2's --force-cpu). Needed for whisper_fa "
             "on Apple MPS, where Whisper's bfloat16 attention kernel is unsupported.",
         ),
+        allow_mps: bool = typer.Option(
+            False, "--allow-mps",
+            help="Explicitly allow local alignment models to use Apple MPS. "
+            "Off by default because sustained MPS inference can be unstable.",
+        ),
         utr_engine: UtrEngine = typer.Option(
             UtrEngine.rev, "--utr-engine", case_sensitive=False,
             help="Utterance Timing Recovery backend: rev | whisper | off. "
@@ -126,7 +131,7 @@ def register(app: typer.Typer) -> None:
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
-            device = "cpu" if force_cpu else None
+            device = inference_device(force_cpu=force_cpu, allow_mps=allow_mps)
             fa_backend: Any
             if engine is FaEngine.wav2vec:
                 # Language (hence model) comes from each file's @Languages header.

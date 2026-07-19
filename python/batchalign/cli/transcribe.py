@@ -23,7 +23,7 @@ import typer
 
 from ..lang import LanguageCode
 from ._common import collect_media_inputs, write_outcome
-from ._options import cli_options
+from ._options import cli_options, inference_device
 from .tui import Interface, Task
 
 
@@ -97,6 +97,12 @@ def register(app: typer.Typer) -> None:
             help="Run the ASR model on CPU (BA2's --force-cpu). Needed on Apple "
             "MPS, where Whisper's bfloat16 attention kernel is unsupported.",
         ),
+        allow_mps: bool = typer.Option(
+            False, "--allow-mps",
+            help="Explicitly allow local ASR models to use Apple MPS. Off by "
+            "default because sustained MPS inference can be unstable; "
+            "CHATWhisper remains float32 when selected.",
+        ),
         nowor: bool = typer.Option(False, "--nowor", help="Omit word-level timing (`%wor` and inline word bullets)."),
     ) -> None:
         """Transcribe media into CHAT (.cha) files.
@@ -123,7 +129,7 @@ def register(app: typer.Typer) -> None:
             plain=opts.plain,
             quiet=opts.quiet,
         ) as ui:
-            device = "cpu" if force_cpu else None
+            device = inference_device(force_cpu=force_cpu, allow_mps=allow_mps)
             asr_backend, native_diarization = _build_asr(
                 ba, engine, model, lang_code, num_speakers, device
             )

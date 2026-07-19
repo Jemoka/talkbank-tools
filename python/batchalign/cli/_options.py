@@ -7,6 +7,7 @@ load — can pull these types without triggering a circular import.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import typer
@@ -31,4 +32,29 @@ def cli_options(ctx: typer.Context) -> CLIOptions:
     return obj if isinstance(obj, CLIOptions) else CLIOptions()
 
 
-__all__ = ["CLIOptions", "cli_options"]
+def inference_device(*, force_cpu: bool, allow_mps: bool) -> str | None:
+    """Resolve mutually exclusive CLI device switches for local ML backends.
+
+    CPU remains the safe default when a backend does not select CUDA itself.
+    Apple MPS is therefore explicit: callers must request it, and model
+    loaders receive the concrete ``"mps"`` selector so the choice is not
+    dependent on ambient Torch defaults.
+    """
+    if force_cpu and allow_mps:
+        raise typer.BadParameter(
+            "--force-cpu and --allow-mps cannot be used together",
+            param_hint="--allow-mps",
+        )
+    if force_cpu:
+        return "cpu"
+    if allow_mps:
+        logging.getLogger(__name__).warning(
+            "--allow-mps: using the Apple GPU for local inference; sustained "
+            "MPS workloads can trigger rare driver stalls. Models that "
+            "select a dtype explicitly remain on float32."
+        )
+        return "mps"
+    return None
+
+
+__all__ = ["CLIOptions", "cli_options", "inference_device"]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from batchalign.cli import app
@@ -56,6 +57,7 @@ def test_transcribe_exposes_all_ba2_asr_engines():
     assert "--lang" in help_text
     assert "--engine" in help_text
     assert "--nowor" in help_text
+    assert "--allow-mps" in help_text
 
 
 def test_align_exposes_fa_engines():
@@ -63,6 +65,17 @@ def test_align_exposes_fa_engines():
     assert "--engine" in help_text
     for engine in ("wav2vec", "whisper_fa", "qwen"):
         assert engine in help_text, f"align --engine missing {engine}"
+    assert "--allow-mps" in help_text
+
+
+def test_local_inference_device_requires_explicit_mps_opt_in():
+    from batchalign.cli._options import inference_device
+
+    assert inference_device(force_cpu=False, allow_mps=False) is None
+    assert inference_device(force_cpu=True, allow_mps=False) == "cpu"
+    assert inference_device(force_cpu=False, allow_mps=True) == "mps"
+    with pytest.raises(typer.BadParameter, match="cannot be used together"):
+        inference_device(force_cpu=True, allow_mps=True)
 
 
 def test_ai_exposes_dspy_engine():
