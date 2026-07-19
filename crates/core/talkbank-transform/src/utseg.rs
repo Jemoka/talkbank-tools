@@ -1373,6 +1373,46 @@ mod tests {
     }
 
     #[test]
+    fn utseg_split_preserves_metadata_while_replaced_word_stays_atomic() {
+        let chat_text = "@UTF8\n@Begin\n@Languages:\teng, spa\n\
+            @Participants:\tCHI Child\n\
+            @ID:\teng|test|CHI|||||Child|||\n\
+            *CHI:\t+, [- spa] I wanna [: want to] go now . [+ exc] \u{15}1000_5000\u{15}\n\
+            @End\n";
+        let chat = parse_chat(chat_text);
+        let parent = get_utterance(&chat, 0).clone();
+        let parent_span = parent.main.span;
+        let parent_speaker_span = parent.main.speaker_span;
+        let parent_language = parent.main.content.language_code.clone();
+        let parent_bullet = parent.main.content.bullet.clone();
+
+        // TierDomain::Mor sees I, want, to, go, now. The group boundary is
+        // deliberately inconsistent inside the replacement phrase.
+        let children = split_utterance(parent, &[0, 0, 1, 1, 1]);
+        assert_eq!(children.len(), 2);
+
+        let first = &children[0];
+        let last = &children[1];
+        let first_text = first.to_chat_string();
+        let last_text = last.to_chat_string();
+
+        assert!(!first.main.content.linkers.is_empty());
+        assert!(last.main.content.linkers.is_empty());
+        assert_eq!(first.main.content.language_code, parent_language);
+        assert_eq!(last.main.content.language_code, parent_language);
+        assert_eq!(first.main.span, parent_span);
+        assert_eq!(last.main.span, parent_span);
+        assert_eq!(first.main.speaker_span, parent_speaker_span);
+        assert_eq!(last.main.speaker_span, parent_speaker_span);
+        assert!(first.main.content.postcodes.is_empty());
+        assert!(!last.main.content.postcodes.is_empty());
+        assert!(first.main.content.bullet.is_none());
+        assert_eq!(last.main.content.bullet, parent_bullet);
+        assert!(first_text.contains("wanna [: want to]"));
+        assert!(!last_text.contains("wanna") && !last_text.contains("want"));
+    }
+
+    #[test]
     fn snapshot_utseg_batch_item() {
         let item = UtsegBatchItem {
             words: vec!["I".into(), "eat".into(), "cookies".into()],
