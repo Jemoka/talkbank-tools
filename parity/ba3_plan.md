@@ -56,6 +56,7 @@
 - [x] 33/40 Preserves authoritative bullet envelopes across successful FA.
 - [x] 34/40 Creates missing main bullets from successful FA word spans.
 - [x] 35/40 Strips stale FA review tiers unconditionally on rerun.
+- [x] 36/40 Discards implausibly large stale authoritative start leads on FA rerun.
 
 ## done
 
@@ -825,3 +826,16 @@ When no prior bullet exists, there is no source envelope to preserve and the ali
 - **new**: yes
 
 Review tiers describe decisions made by one particular FA run and cannot safely survive into a later run. The fork strips them before applying any new result, including a clean run that emits no new decisions. Pre-edit BA3's complete-`%wor` fast path returned with the old `%xalign` and `%xrev` intact, so stale audit state could persist or later duplicate. Post-edit cleanup runs after the strict `NoAlign` pass-through check but before both reuse and backend alignment, ensuring every actual align rerun starts with no obsolete decision tiers. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::clean_fa_rerun_strips_stale_review_tiers` (1 passed); file-local Rust formatting passed.
+
+### Discard implausibly large stale authoritative start leads on FA rerun
+- **component**: `batchalign-core` forced-alignment result injection
+- **summary**: Snaps a prior authoritative bullet start to the new first aligned word when a rerun exposes more than two seconds of stale leading coverage.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/ba3-post-output/result.txt
+- **depends on**: [96d78ca]
+- **commit**: 9f9832a
+- **new**: yes
+
+Authoritative union protects deliberate transcript coverage, but blindly applying it on an FA rerun can preserve a grossly stale start inherited from the previous alignment. The existing `%wor` tier identifies this as a rerun, and the fork treats a lead over 2000 ms as implausible unless separate leading-content evidence applies. Pre-edit BA3 retained `2000_9970` around new words beginning at `9443`; post-edit it resets the start to `9443` while continuing to preserve or expand the authoritative end. First runs and leads at or below the threshold retain ordinary union behavior. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::fa_rerun_discards_large_stale_authoritative_start` (1 passed); file-local Rust formatting passed.
