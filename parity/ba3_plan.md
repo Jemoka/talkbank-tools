@@ -47,6 +47,7 @@
 - [x] 24/40 Preserves CHAT's virtual zero head for `%gra` root relations.
 - [x] 25/40 Rejects UD analyses without exactly one dependency root.
 - [x] 26/40 Reuses complete exact-match `%wor` timing without rerunning FA.
+- [x] 27/40 Rejects reusable `%wor` spans that overrun the next utterance.
 
 ## done
 
@@ -699,3 +700,16 @@ The fork treats the absence of a dependency root as a mapping error, because no 
 - **new**: yes
 
 The fork has a cheap rerun path for already aligned files, whereas BA3 previously decoded the complete recording and invoked the FA model on every run. Post-edit BA3 requires every alignable utterance to have the same number and text of `%wor` words, with a positive-duration inline bullet on each; any mismatch falls through without mutation. A clean file refreshes its main bullets from the first and last word and succeeds even when the referenced media is unavailable, proving that no media or backend work occurred. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_skips_media_and_backend` (1 passed); `rustfmt --edition 2024 --check` passed for the changed file.
+
+### Reject reusable `%wor` spans that overrun the next utterance
+- **component**: `batchalign-core` forced-alignment reuse validation
+- **summary**: Refuses the cheap rerun path when an utterance's final reused word ends after the next timed utterance begins.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/input/spans.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/ba3-post-output/result.txt
+- **depends on**: [031cc38]
+- **commit**: 93f4048
+- **new**: yes
+
+An exact word match is not enough to trust old timing: stale `%wor` data can claim audio already anchored to the next utterance. The fork excludes that utterance from reuse. Immediately after adding BA3's base fast path, the same input was accepted and widened the first main bullet from `100_900` to `100_1200`, overlapping the next `1000` start. Post-edit the runner finds the next available timed main-tier start across intervening lines and falls through to realignment when the reused end exceeds it. The check runs before any mutation, so a rejected whole-file reuse attempt leaves every original bullet intact. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_rejects_span_past_next_utterance_start` (1 passed); file-local Rust formatting passed.
