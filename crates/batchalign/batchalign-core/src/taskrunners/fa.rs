@@ -204,6 +204,8 @@ fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
 /// Returns `false` without mutation when any alignable utterance is missing a
 /// word, has different text, or contains an absent/zero-duration word span.
 fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
+    const MIN_REUSABLE_WORD_DURATION_MS: u64 = 40;
+
     let mut refreshed = Vec::new();
     let mut saw_words = false;
 
@@ -241,7 +243,9 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
             let Some(bullet) = word.inline_bullet.as_ref() else {
                 return false;
             };
-            if bullet.timing.end_ms <= bullet.timing.start_ms {
+            if bullet.timing.end_ms.saturating_sub(bullet.timing.start_ms)
+                < MIN_REUSABLE_WORD_DURATION_MS
+            {
                 return false;
             }
             first_start.get_or_insert(bullet.timing.start_ms);
@@ -619,6 +623,23 @@ mod tests {
         let mut chat = Chat::parse(
             OVERRUN_CHAT,
             SourceId::try_new("overrun.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+
+        assert!(!refresh_complete_wor_alignment(&mut chat));
+        assert!(chat.to_chat().contains("\u{15}100_900\u{15}"));
+    }
+
+    #[test]
+    fn complete_wor_reuse_rejects_near_zero_word_span() {
+        const COLLAPSED_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\tmissing, audio\n\
+*PAR:\thello tiny world . \u{15}100_900\u{15}\n\
+%wor:\thello \u{15}100_250\u{15} tiny \u{15}300_330\u{15} world \u{15}400_600\u{15} .\n@End\n";
+        let mut chat = Chat::parse(
+            COLLAPSED_CHAT,
+            SourceId::try_new("collapsed.cha").expect("source id"),
         )
         .expect("parse fixture");
 
