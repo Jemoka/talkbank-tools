@@ -14,7 +14,7 @@
 - [ ] Applies numbered, retireable Stanza workarounds for Italian compound imperatives and related defects.
 - [ ] Corrects known English transcribe patterns, Chinese bogus lemmas, and Japanese token merging.
 - [ ] Preflights large Rev.AI batches up front instead of submitting every file independently. (Please do this without moving revai to rust; keep it in Python.)
-- [ ] Avoids Whisper MPS `bfloat16` crashes on Apple Silicon. 
+- [x] Avoids Whisper MPS `bfloat16` crashes on Apple Silicon.
 - [ ] Coordinates transcribe memory, splits work safely, and prevents OOM-created zombie workers.
 - [ ] Supports Qwen3-ASR plus Qwen3-ForcedAligner and fixes HK_QWEN backend/type-stub integration.
 - [ ] Propagates utterance metadata to children and keeps `ReplacedWord` atomic across splits.
@@ -47,3 +47,16 @@ Discussion here, notes, things for me to review. Please keep this example block 
 - **new**: no
 
 The fixture is deliberately `srp`: the local Stanza 1.12 installation can tag it, so pre-edit BA3 reported success and generated `%mor`/`%gra`; the fork intentionally admits only its known-complete static language set and fails the file. Post-edit BA3 now matches that deterministic gate. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors` and the Bazel-backed `just batchalign cli` fixture run.
+
+### Use float32 for CHATWhisper on Apple MPS
+- **component**: Python CHATWhisper ASR backend
+- **summary**: Selects `torch.float32` before constructing a CHATWhisper pipeline on MPS, avoiding a late `bfloat16` attention crash while preserving the existing `bfloat16` to `float16` fallback on other devices.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/input/device.json
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/tbt-output/dtype.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/ba3-pre-output/dtype.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/ba3-post-output/dtype.txt
+- **depends on**: []
+- **commit**: c425fe8
+- **new**: no
+
+The example isolates the loader policy so it is deterministic on machines without Apple GPU access and does not require downloading a model. Targeted verification: `bazel test //python/batchalign:pytest --test_arg=-q --test_arg=python/batchalign/tests/test_chatwhisper_device.py --test_output=errors`.
