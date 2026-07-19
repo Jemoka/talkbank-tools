@@ -438,6 +438,48 @@ fn collect_payloads_resolves_at_s_against_file_languages_not_batch_default() {
     );
 }
 
+fn assert_empty_stanza_synthesizes_special_form(main_tier: &str, expected_mor: &str) {
+    let parser = TreeSitterParser::new().expect("parser init");
+    let (mut chat_file, _) = parse_lenient(&parser, &one_utterance(main_tier));
+    let primary = LanguageCode::new("eng");
+    let langs = declared_languages(&chat_file, &primary);
+    let items =
+        collect_payloads(&chat_file, &primary, &langs, MultilingualPolicy::ProcessAll).batch_items;
+    assert_eq!(items.len(), 1, "fixture should dispatch one utterance");
+
+    inject_results(
+        &parser,
+        &mut chat_file,
+        items,
+        vec![UdResponse { sentences: vec![] }],
+        &primary,
+        TokenizationMode::Preserve,
+        &MwtDict::new(),
+    )
+    .expect("typed special-form synthesis should not need a Stanza sentence");
+    validate_morphosyntax(&mut chat_file);
+
+    let output = talkbank_model::WriteChat::to_chat_string(&chat_file);
+    assert!(
+        output.contains(expected_mor),
+        "expected synthesized morphology {expected_mor:?}: {output}"
+    );
+    assert!(
+        output.contains("%gra:\t1|0|ROOT 2|1|PUNCT"),
+        "synthetic special-form root must satisfy the joint GRA invariant: {output}"
+    );
+}
+
+#[test]
+fn empty_stanza_synthesizes_quotation_form_from_typed_form_type() {
+    assert_empty_stanza_synthesizes_special_form("poker@q .", "%mor:\tmeta|poker .");
+}
+
+#[test]
+fn empty_stanza_synthesizes_neologism_from_typed_form_type() {
+    assert_empty_stanza_synthesizes_special_form("haho@n .", "%mor:\tneo|haho .");
+}
+
 #[test]
 fn lang2_normalizes_common_codes() {
     assert_eq!(lang2("eng"), "en");
