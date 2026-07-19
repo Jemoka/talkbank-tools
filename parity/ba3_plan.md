@@ -62,6 +62,7 @@
 - [x] 39/40 Repairs near-zero FA words by borrowing from the following span.
 - [x] 40/40 Repairs near-zero FA words by borrowing from the preceding span.
 - [x] 41 (beyond minimum) Reuses clean `%wor` utterances inside mixed files.
+- [x] 42 (beyond minimum) Applies the CHAT `%wor` word-domain policy to FA.
 
 ## done
 
@@ -909,3 +910,16 @@ A short final word has no following donor, and an internal short word may likewi
 - **new**: yes
 
 The all-file fast path cannot help after a manual edit makes only one utterance stale: pre-edit BA3 sent every utterance back through the expensive model. The fork validates reuse per utterance with the same exact text, positive-duration, monotonicity, dominance, and next-boundary guards used by whole-file reuse. Post-edit BA3 removes clean segments from the backend request, aligns only stale segments, and merges the two result streams in original utterance order before ordinary injection and repair. A mixed two-utterance fixture therefore reduces model work from two utterances to one without trusting the mismatched `%wor`. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::mixed_file_reuses_only_clean_wor_utterances` (1 passed); file-local Rust formatting passed.
+
+### Apply the CHAT `%wor` word-domain policy to FA
+- **component**: `batchalign-core` FA extraction, injection, and reuse validation
+- **summary**: Uses the model's canonical `%wor` inclusion policy so untranscribed and other non-alignable word forms never become model labels or generated `%wor` entries.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/input/untranscribed.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/ba3-post-output/result.txt
+- **depends on**: []
+- **commit**: 377b8a6
+- **new**: yes
+
+CHAT words are not all members of the durable word-timing domain. In particular, `xxx` describes untranscribed audio and cannot be forced against a lexical label. Pre-edit BA3 extracted `hello xxx world`, expected three backend timings, and regenerated a bogus `xxx` item in `%wor`. Post-edit extraction, aligned-token collapse, complete reuse, partial reuse, and leading-filler mapping all share `counts_for_tier(..., Wor)`, yielding only `hello world` and keeping every cursor/count policy consistent. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::fa_excludes_untranscribed_words_from_dispatch_and_wor` (1 passed); file-local Rust formatting passed.
