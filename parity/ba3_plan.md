@@ -31,6 +31,7 @@
 - [x] 8/10 Skips AppleDouble CHAT sidecars in CLI discovery and align preflight.
 - [x] 9/10 Removes wrapped `%mor`/`%gra` tiers without orphan continuations.
 - [x] 10/10 Schedules the largest batch inputs first.
+- [x] 11/40 Places generated provenance after constant participant headers.
 
 ## done
 
@@ -475,3 +476,16 @@ The default refresh path stages a copy without old analysis so the engine cannot
 - **new**: yes
 
 The fork explicitly sorts batch discovery largest-first to avoid makespan dominated by a large file launched at the end. Pre-edit BA3 used lexicographic path order; the focused regression names its 5-, 11-, and 16-byte inputs `a-small.cha`, `m-medium.cha`, and `z-large.cha`, forcing alphabetical and size order to disagree. Post-edit the shared collector applies largest-first scheduling to morphotag, align, utseg, translate, AI, and transcribe inputs while retaining deterministic path ordering for equal sizes. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_chat_discovery.py -q` (3 passed).
+
+### Place generated provenance after constant participant headers
+- **component**: `batchalign-core` provenance stamping
+- **summary**: Inserts generated provenance immediately after the last `@ID`, `@Birth of`, `@Birthplace of`, or `@L1 of` header and before later changeable metadata, matching the fork's canonical CHAT header order.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/input/constant-headers.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/tbt-output/header-order.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/ba3-pre-output/header-order.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/ba3-post-output/header-order.txt
+- **depends on**: []
+- **commit**: 9e431a7
+- **new**: yes
+
+The fork's provenance regression identifies constant participant headers as the boundary between fixed participant metadata and changeable headers. Pre-edit BA3 appended provenance immediately before the first main tier, after `@Date` and any other session metadata. Post-edit BA3 selects the same constant-header boundary; documents without participant headers retain the prior safe fallback before the first utterance or `@End`. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors` (55 passed, 1 ignored).
