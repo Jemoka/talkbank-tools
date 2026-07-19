@@ -27,9 +27,13 @@ This project supports UD `%mor` syntax only (see CLAUDE.md). Legacy CLAN-mor
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import re
 import threading
+import urllib.request
+from pathlib import Path
 from typing import Any
 
 _log = logging.getLogger("batchalign.stanza")
@@ -94,6 +98,66 @@ _pipeline_cache_lock = threading.Lock()
 # (and for every file with that language) — one warning per language, then
 # fast empty-result fallback. Maps key → reason for the warning.
 _pipeline_failures: dict[tuple, str] = {}
+
+# An existing Stanza resources.json can become stale when Stanford republishes
+# model artifacts under the same resources version. Refresh it once at this
+# process's backend boundary before any pipeline verifies downloaded models.
+_manifest_refresh_lock = threading.Lock()
+_manifest_refresh_attempted = False
+_MANIFEST_REFRESH_TIMEOUT_S = 10
+
+
+def _refresh_stanza_resources_manifest_if_present(
+    stanza: Any,
+    *,
+    urlopen: Any = urllib.request.urlopen,
+) -> None:
+    """Atomically refresh an existing Stanza catalog, failing open offline.
+
+    A missing manifest belongs to Stanza's normal first-run bootstrap and is
+    deliberately left alone. Any fetch, validation, or filesystem failure
+    preserves the cached file so an offline installation keeps working.
+    """
+    common = stanza.resources.common
+    manifest_path = Path(common.DEFAULT_MODEL_DIR) / "resources.json"
+    if not manifest_path.exists():
+        return
+
+    url = (
+        f"{common.DEFAULT_RESOURCES_URL.rstrip('/')}"
+        f"/resources_{common.DEFAULT_RESOURCES_VERSION}.json"
+    )
+    temporary_path = manifest_path.with_name(
+        f".{manifest_path.name}.{os.getpid()}.tmp-refresh"
+    )
+    try:
+        with urlopen(url, timeout=_MANIFEST_REFRESH_TIMEOUT_S) as response:
+            data = response.read()
+        json.loads(data)
+        with temporary_path.open("wb") as output:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary_path, manifest_path)
+        _log.info("refreshed Stanza resource catalog from %s", url)
+    except Exception as exc:
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        _log.warning(
+            "could not refresh Stanza resource catalog; using cached manifest: %s",
+            exc,
+        )
+
+
+def _refresh_stanza_resources_manifest_once(stanza: Any) -> None:
+    global _manifest_refresh_attempted
+    with _manifest_refresh_lock:
+        if _manifest_refresh_attempted:
+            return
+        _manifest_refresh_attempted = True
+        _refresh_stanza_resources_manifest_if_present(stanza)
 
 # Languages for which Stanza's MWT splitter is disabled (BA2 ud.py:1034-1036).
 _MWT_EXCLUSION = frozenset(
@@ -184,6 +248,7 @@ class StanzaBackend(Morphosyntax):
         import stanza  # type: ignore[import-not-found]
 
         self._stanza = stanza
+        _refresh_stanza_resources_manifest_once(stanza)
         # `lang` (optional override) may arrive as ISO-639-3 (`eng`), already
         # Stanza-shaped (`en`), or a comma/space-separated list for
         # code-switching (`en,es`). When None, every `call()` resolves the
