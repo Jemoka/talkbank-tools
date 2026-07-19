@@ -28,6 +28,7 @@
 - [x] 5/10 Projects comparison candidates to one majority utterance.
 - [x] 6/10 Attributes matched comparison POS from the gold transcript.
 - [x] 7/10 Keeps experimental review tiers off by default.
+- [x] 8/10 Skips AppleDouble CHAT sidecars during every discovery pass.
 
 ## done
 
@@ -420,3 +421,16 @@ Pre-edit identical surfaces with disagreeing morphology produced `NOUN ADJ`, mas
 - **new**: yes
 
 Pre-edit UTR hardcoded `ReviewLevel::All`, so any unmatched or zero-duration decision leaked experimental dependent tiers into finished research files. Post-edit `ReviewLevel::default()` is `None` and UTR uses that default; callers that explicitly pass `LowConfidence` or `All` to the retained injection API still receive review tiers. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test //crates/batchalign/batchalign-core:batchalign_core_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact decisions::tests::default_review_level_produces_no_output_tiers` (1 passed).
+
+### Skip AppleDouble CHAT sidecars during discovery
+- **component**: Python CLI CHAT discovery and align language preflight
+- **summary**: Routes align's language inference through the shared hidden-file filter and rejects explicitly supplied dotfiles, so macOS `._*.cha` metadata cannot be parsed as transcript text.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/input/corpus.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/tbt-output/discovered.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/ba3-pre-output/discovered.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/ba3-post-output/discovered.txt
+- **depends on**: []
+- **commit**: 565c0bc
+- **new**: yes
+
+The normal input collector already ignored directory dotfiles, but align independently scanned `*.cha` to choose its UTR language. Since `._session.cha` sorts before `session.cha`, binary metadata raised `UnicodeDecodeError` before any real input ran. Post-edit both preflight and collection share `_walk`, and a sidecar passed as the explicit path yields a clear no-language error rather than entering the pipeline. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_chat_discovery.py -q` (2 passed).
