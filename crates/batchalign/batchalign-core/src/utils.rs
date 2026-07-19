@@ -483,7 +483,8 @@ pub fn clear_media_unlinked(lines: &mut [talkbank_model::Line]) {
 }
 
 /// Insert one `@Comment: batchalign3 <sha> | <stage>: <engine> | <ts>`
-/// header per pipeline stage, just before the first utterance.
+/// header per pipeline stage, immediately after the constant participant
+/// headers.
 ///
 /// One stage → one comment line. A full UTR → FA run therefore produces:
 ///
@@ -542,15 +543,36 @@ pub fn stamp_provenance(
     let comment = Line::header(Header::Comment {
         content: BulletContent::from_text(stamp),
     });
+    // CHAT requires @Birth of / @Birthplace of / @L1 of to remain adjacent
+    // to the @ID block. Generated comments are changeable headers, so place
+    // them after the last constant participant header rather than at the end
+    // of all metadata. This also matches the fork's stable header ordering.
     let insert_at = lines
         .iter()
-        .position(Line::is_utterance)
+        .enumerate()
+        .rev()
+        .find_map(|(index, line)| {
+            matches!(
+                line.as_header(),
+                Some(
+                    Header::ID(_)
+                        | Header::Birth { .. }
+                        | Header::Birthplace { .. }
+                        | Header::L1Of { .. }
+                )
+            )
+            .then_some(index + 1)
+        })
         .unwrap_or_else(|| {
-            // No utterances: place before `@End`, or append if no `@End`.
-            lines
-                .iter()
-                .rposition(|l| matches!(l.as_header(), Some(Header::End)))
-                .unwrap_or(lines.len())
+            // Synthetic/incomplete documents may omit participant headers.
+            // Keep their prior safe placement before the first utterance (or
+            // @End) rather than inserting before @UTF8.
+            lines.iter().position(Line::is_utterance).unwrap_or_else(|| {
+                lines
+                    .iter()
+                    .rposition(|line| matches!(line.as_header(), Some(Header::End)))
+                    .unwrap_or(lines.len())
+            })
         });
     lines.insert(insert_at, comment);
 }
@@ -614,6 +636,7 @@ mod stamp_provenance_tests {
     //! comment carries its own UTC date so stages run on different days
     //! stay auditable.
     use super::*;
+    use crate::base::Chat;
     use talkbank_model::Line;
     use talkbank_model::model::Header;
 
@@ -683,6 +706,38 @@ mod stamp_provenance_tests {
         let comments = ba_comments(&lines);
         assert_eq!(comments.len(), 1);
         assert!(comments[0].contains("asr: <unknown>"));
+    }
+
+    #[test]
+    fn comment_follows_constant_participant_headers_before_changeable_metadata() {
+        const CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|test|CHI|||||Child|||\n@Birth of CHI:\t15-DEC-1970\n@Birthplace of CHI:\tBoston\n@L1 of CHI:\teng\n@Date:\t19-JUL-2026\n*CHI:\thello .\n@End\n";
+        let source_id = SourceId::try_new("constant-headers.cha").unwrap();
+        let mut chat = Chat::parse(CHAT, source_id).unwrap();
+
+        stamp_provenance(&mut chat.ast_mut().lines.0, "morphotag", Some("stanza"));
+
+        let lines = &chat.ast().lines.0;
+        let l1_index = lines
+            .iter()
+            .position(|line| matches!(line.as_header(), Some(Header::L1Of { .. })))
+            .unwrap();
+        let comment_index = lines
+            .iter()
+            .position(|line| {
+                matches!(
+                    line.as_header(),
+                    Some(Header::Comment { content })
+                        if content.to_chat_string().starts_with(PROVENANCE_PREFIX)
+                )
+            })
+            .unwrap();
+        let date_index = lines
+            .iter()
+            .position(|line| matches!(line.as_header(), Some(Header::Date { .. })))
+            .unwrap();
+
+        assert!(l1_index < comment_index, "constant headers precede provenance");
+        assert!(comment_index < date_index, "provenance precedes changeable metadata");
     }
 
     /// True iff `s` ends with ` | YYYY-MM-DDTHH:MM:SSZ`.
