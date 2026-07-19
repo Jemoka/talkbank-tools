@@ -4,7 +4,7 @@
 - [ ] Runs typed pre- and post-stage gates and treats pre-serialization failure as a hard error.
 - [ ] Fixes single-word replacement retraces, `@Media` hashing, parser recovery spans, and Japanese token merging.
 - [ ] Fixed BA3 output passes `chatter validate`, making the validator the final output-integrity gate.
-- [ ] Expands compound fillers and recovers their audio spans between recognized words.
+- [x] Expands compound fillers and recovers their audio spans between recognized words.
 - [ ] Detects long-file drift and monotonicity violations, then re-anchors or repairs timing. | FA recovery and repair passes
 - [ ] Integrates Cantonese FA through Jyutping and wav2vec2 (no need for the common recovery layer).
 - [x] Fails unsupported primary languages per file instead of silently skipping them.
@@ -73,3 +73,16 @@ The example isolates the loader policy so it is deterministic on machines withou
 - **new**: no
 
 The regression blocks 100 synthetic per-input futures immediately after their first poll. Pre-edit scheduling admitted all 100 even though only eight could execute; post-edit scheduling admits exactly eight, then slides forward as slots complete, and still returns `0..99` in input order. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-engine:batchalign_engine_unit_test --test_output=errors`.
+
+### Expand compound fillers for FA and restore one source span
+- **component**: `batchalign-core` forced-alignment task runner
+- **summary**: Sends underscore-separated compound filler parts to FA as independently recognizable words, then consumes and merges their returned timings into one `%wor` word spanning the first recognized onset through the last recognized offset.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/input/compound-filler.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/tbt-output/fa-seam.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/ba3-pre-output/fa-seam.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/ba3-post-output/fa-seam.txt
+- **depends on**: []
+- **commit**: 503525d
+- **new**: no
+
+The fixture exercises `&-you_know`: FA now receives `you`, `know`, `today`, while typed injection restores the source word domain as `you_know` at `100_350` and `today` at `400_600`. The same cursor policy applies to original words inside `ReplacedWord`. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors`.
