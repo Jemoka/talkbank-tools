@@ -24,6 +24,7 @@
 - [x] 1/10 Sanitizes CHAT-illegal ASR tokens without failing the transcript.
 - [x] 2/10 Suppresses terminator-only translation tiers.
 - [x] 3/10 Excludes paired CA segment repetitions from lexical text.
+- [x] 4/10 Keeps retraces with their retry across utterance splits.
 
 ## done
 
@@ -364,3 +365,16 @@ Translator APIs can answer with only the source terminator when a turn has no le
 - **new**: yes
 
 In CHAT, `↫sch↫schaap` records a repeated onset followed by the lexical Dutch word `schaap`. Pre-edit cleaned text concatenated every text node and sent `schschaap` to morphology, alignment, comparison, and frequency consumers. Post-edit both CST conversion paths toggle a segment-repetition state and omit only bracketed material; the regression also proves ordinary CA content such as `∆snel∆` remains lexical. Targeted verification: `bazel build --config=dev //crates/core/talkbank-model:talkbank_model_unit_test //crates/core/talkbank-parser-re2c:talkbank_parser_re2c_unit_test && bazel-bin/crates/core/talkbank-model/talkbank_model_unit_test --exact model::content::word::word_type::cleaned_text_tests::segment_repetition_is_excluded_but_other_ca_content_is_lexical` (1 passed).
+
+### Keep retraces with their following retry during UtSeg
+- **component**: `talkbank-transform` utterance splitting
+- **summary**: Assigns uncounted `Retrace` content forward to the next word-bearing child before generic marker back-fill, preventing `[/]`, `[//]`, or `[///]` from being stranded at the end of the preceding child.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/input/retrace.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/tbt-output/split.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/ba3-pre-output/split.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/ba3-post-output/split.txt
+- **depends on**: [5ebd4cc]
+- **commit**: a309006
+- **new**: yes
+
+Retraced words are deliberately absent from the morphology word domain, so their top-level `Retrace` nodes receive no classifier assignment. Pre-edit generic back-fill attached those nodes to the preceding assigned word, creating a dangling retrace when the classifier boundary fell before the kept retry. Post-edit retraces first inherit the next assigned content group; genuinely utterance-final retraces still use the existing fallback. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact utseg::tests::utseg_split_keeps_retrace_with_following_retry` (1 passed).
