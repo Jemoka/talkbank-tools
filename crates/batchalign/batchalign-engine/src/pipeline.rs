@@ -16,13 +16,14 @@
 
 use std::backtrace::Backtrace;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::future::Future;
 use std::sync::Arc;
 
 use batchalign_core::{
     AiChatInput, BAError, BAValue, Chat, ChatInput, DynTaskRunner, MediaInput, Paired, PairedInput,
     ProgressEvent, ProgressKind, ProgressSink, SourceId, Task,
 };
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::stream::{self, StreamExt};
 use pyo3::Py;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -36,6 +37,7 @@ use crate::py_outcome::PyOutcome;
 
 const VERBOSE_TRACEBACK_ENV: &str = "BATCHALIGN_CLI_VERBOSE_TRACEBACKS";
 const RUST_TRACE_MARKER: &str = "Rust stack trace (captured at file failure):";
+const DISPATCH_WINDOW: usize = 8;
 
 /// The Python-facing pipeline object.
 #[pyclass]
@@ -506,7 +508,22 @@ async fn run_inner(
             run_one(me, value, sink).await
         }
     });
-    futures::future::join_all(futures).await
+    collect_with_dispatch_window(futures).await
+}
+
+/// Collect an ordered input stream while constructing/polling only a bounded
+/// number of per-file futures at once. The pipeline semaphore still owns the
+/// execution limit; this window prevents a huge input list from also becoming
+/// a huge resident set of waiting futures and captured `BAValue`s.
+async fn collect_with_dispatch_window<I, F, T>(futures: I) -> Vec<T>
+where
+    I: IntoIterator<Item = F>,
+    F: Future<Output = T>,
+{
+    stream::iter(futures)
+        .buffered(DISPATCH_WINDOW)
+        .collect()
+        .await
 }
 
 async fn run_inner_with_outcome_callback(
@@ -516,12 +533,10 @@ async fn run_inner_with_outcome_callback(
     outcome_callback: Py<PyAny>,
 ) -> PyResult<Vec<Py<PyOutcome>>> {
     let total = inputs.len();
-    let mut futures = FuturesUnordered::new();
-
-    for (idx, value) in inputs.into_iter().enumerate() {
+    let futures = inputs.into_iter().enumerate().map(|(idx, value)| {
         let me = inner.clone();
         let sink = sink.clone();
-        futures.push(async move {
+        async move {
             let permit = me.sem.clone().acquire_owned().await;
             let _permit = match permit {
                 Ok(p) => p,
@@ -538,8 +553,9 @@ async fn run_inner_with_outcome_callback(
                 }
             };
             (idx, run_one(me, value, sink).await)
-        });
-    }
+        }
+    });
+    let mut futures = stream::iter(futures).buffer_unordered(DISPATCH_WINDOW);
 
     let mut outcomes: Vec<Option<Py<PyOutcome>>> = (0..total).map(|_| None).collect();
     while let Some((idx, value)) = futures.next().await {
@@ -558,6 +574,49 @@ async fn run_inner_with_outcome_callback(
         .into_iter()
         .map(|outcome| outcome.expect("one outcome per input"))
         .collect())
+}
+
+#[cfg(test)]
+mod dispatch_window_tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn dispatch_window_does_not_poll_the_whole_input_list() {
+        let started = Arc::new(AtomicUsize::new(0));
+        let release = Arc::new(Semaphore::new(0));
+        let future_started = started.clone();
+        let future_release = release.clone();
+        let futures = (0..100).map(move |index| {
+            let started = future_started.clone();
+            let release = future_release.clone();
+            async move {
+                started.fetch_add(1, Ordering::SeqCst);
+                release
+                    .acquire()
+                    .await
+                    .expect("semaphore remains open")
+                    .forget();
+                index
+            }
+        });
+
+        let collector = tokio::spawn(collect_with_dispatch_window(futures));
+        for _ in 0..100 {
+            if started.load(Ordering::SeqCst) == DISPATCH_WINDOW {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        assert_eq!(started.load(Ordering::SeqCst), DISPATCH_WINDOW);
+        release.add_permits(100);
+        assert_eq!(
+            collector.await.expect("collector task succeeds"),
+            (0..100).collect::<Vec<_>>()
+        );
+    }
 }
 
 async fn run_one(
