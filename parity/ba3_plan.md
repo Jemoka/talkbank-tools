@@ -255,3 +255,16 @@ A dispatch item may own an entire decoded PCM file, so an unbounded route could 
 - **new**: no
 
 Audit note: runtime parity was already supplied by the historical focused fix, and a six-case regression existed under `crates/utils/tests`; however, that integration-test directory is explicitly deferred in `crates/utils/BUILD.bazel` and therefore was invisible to the required Bazel workflow. The new parser-local contract makes the critical AST shape part of `//crates/core/talkbank-parser:talkbank_parser_unit_test`. Targeted verification: `bazel build --config=dev //crates/core/talkbank-parser:talkbank_parser_unit_test && bazel-bin/crates/core/talkbank-parser/talkbank_parser_unit_test --exact parser::tree_parsing::main_tier::content::word::tests::replacement_with_retrace_marker_stays_a_retrace` (1 passed).
+
+### Retain source locations on parser recovery tiers
+- **component**: `talkbank-parser` malformed dependent-tier recovery
+- **summary**: Carries the CST byte range into recovered empty `%mor` and `%gra` placeholders, including the synthetic morphology terminator, so later validation and regeneration diagnostics point at the malformed source tier instead of byte zero.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/input/recovery-seam.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/tbt-output/spans.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/ba3-pre-output/spans.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/ba3-post-output/spans.txt
+- **depends on**: []
+- **commit**: 4578546
+- **new**: no
+
+Pre-edit recovery intentionally retained the dependent-tier slot but constructed its tier and morphology terminator with `Span::DUMMY`. Post-edit uses one exact `tree_sitter::Node` range for the recovered typed objects; the fallback remains empty and ordering-preserving, but it no longer fabricates a source location. Targeted verification: `bazel build --config=dev //crates/core/talkbank-parser:talkbank_parser_unit_test && bazel-bin/crates/core/talkbank-parser/talkbank_parser_unit_test --exact parser::chat_file_parser::dependent_tier_dispatch::parsed::tests::recovered_tier_placeholders_keep_source_spans` (1 passed).
