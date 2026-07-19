@@ -16,7 +16,7 @@
 - [x] Preflights large Rev.AI batches up front instead of submitting every file independently. (Please do this without moving revai to rust; keep it in Python.)
 - [x] Avoids Whisper MPS `bfloat16` crashes on Apple Silicon.
 - [ ] Coordinates transcribe memory, splits work safely, and prevents OOM-created zombie workers.
-- [ ] Supports Qwen3-ASR plus Qwen3-ForcedAligner and fixes HK_QWEN backend/type-stub integration.
+- [x] Supports Qwen3-ASR plus Qwen3-ForcedAligner and fixes HK_QWEN backend/type-stub integration.
 - [x] Propagates utterance metadata to children and keeps `ReplacedWord` atomic across splits.
 - [x] Uses a sliding dispatch window so huge ASR input lists do not become huge in-flight sets.
 
@@ -203,3 +203,16 @@ The conversion is local to the direct MMS input seam, so this language-specific 
 - **new**: no
 
 The implementation dependency made full reparsing a hard pre-write gate; this independent regression pins a realistic successful output instead of testing only rejection. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_filter=serialized_batchalign_output_passes_chatter_validation_pipeline --test_output=errors` (1 passed). The fixture also passed the actual Bazel-built CLI with `bazel-bin/crates/chatter/chatter-cli/chatter validate --force --tui-mode disable --quiet /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/ba3-post-output/annotated.cha`.
+
+### Use the typed Qwen class for standalone forced alignment
+- **component**: Python Qwen3 ASR/FA backends and public backend surface
+- **summary**: Keeps Qwen3-ASR paired with its companion forced aligner for word timestamps, but constructs standalone FA directly as one `Qwen3ForcedAligner`; both backend types remain reachable through the lazy typed package surface.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/input/backend-seam.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/tbt-output/backend-seam.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/ba3-pre-output/backend-seam.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/ba3-post-output/backend-seam.txt
+- **depends on**: []
+- **commit**: a0b8601
+- **new**: no
+
+Pre-edit standalone FA constructed `Qwen3ASRModel` from the alignment checkpoint and also passed that checkpoint as its nested `forced_aligner`, loading the same large model twice through the wrong outer class. The locked `qwen-asr` API exposes `Qwen3ForcedAligner.from_pretrained` directly; post-edit uses that supported surface with its correct `dtype` parameter. The regression also pins the ASR companion-aligner argument and the two public re-exports, covering the fork's HK_QWEN/type-stub intent in BA3's backend architecture. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_qwen3_contract.py -q` (3 passed).
