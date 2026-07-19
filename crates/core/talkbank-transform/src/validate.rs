@@ -16,6 +16,7 @@
 
 use talkbank_model::ParseError;
 use talkbank_model::model::{ChatFile, ChatOptionFlag, Line};
+use talkbank_model::validation::ValidationState;
 pub use talkbank_model::{GateValidationError as ValidationError, ValidityLevel};
 
 /// Validate a CHAT file to the specified minimum validity level.
@@ -28,8 +29,8 @@ pub use talkbank_model::{GateValidationError as ValidationError, ValidityLevel};
 /// first error's code, source excerpt, and byte span in its message,
 /// so end-users can locate and diagnose the problem without reading
 /// daemon logs.
-pub fn validate_to_level(
-    file: &ChatFile,
+pub fn validate_to_level<S: ValidationState>(
+    file: &ChatFile<S>,
     parse_errors: &[ParseError],
     level: ValidityLevel,
 ) -> Result<(), Vec<ValidationError>> {
@@ -94,7 +95,10 @@ fn format_l0_message(first: &ParseError, total: usize) -> String {
 }
 
 /// L1 checks: structural completeness.
-fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError>) {
+fn check_structurally_complete<S: ValidationState>(
+    file: &ChatFile<S>,
+    errors: &mut Vec<ValidationError>,
+) {
     // Check @Participants present with at least one participant
     if file.participants.is_empty() {
         errors.push(ValidationError {
@@ -141,7 +145,10 @@ fn check_structurally_complete(file: &ChatFile, errors: &mut Vec<ValidationError
 }
 
 /// L2 checks: main tier content validity.
-fn check_main_tier_valid(file: &ChatFile, errors: &mut Vec<ValidationError>) {
+fn check_main_tier_valid<S: ValidationState>(
+    file: &ChatFile<S>,
+    errors: &mut Vec<ValidationError>,
+) {
     for line in &file.lines {
         if let Line::Utterance(utt) = line {
             // Check for empty main tiers (no content at all)
@@ -161,7 +168,10 @@ fn check_main_tier_valid(file: &ChatFile, errors: &mut Vec<ValidationError>) {
 
 /// Post-validation: verify that the output file is at least as valid as the
 /// input (no degradation). Returns diagnostics if the command corrupted the file.
-pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<ValidationError>> {
+pub fn validate_output<S: ValidationState>(
+    file: &ChatFile<S>,
+    command: &str,
+) -> Result<(), Vec<ValidationError>> {
     let mut errors = Vec::new();
 
     // Check every utterance still has a terminator.
@@ -199,7 +209,10 @@ pub fn validate_output(file: &ChatFile, command: &str) -> Result<(), Vec<Validat
 }
 
 /// Post-validation for morphotag: %mor word count must match main tier.
-fn validate_morphotag_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
+fn validate_morphotag_output<S: ValidationState>(
+    file: &ChatFile<S>,
+    errors: &mut Vec<ValidationError>,
+) {
     use talkbank_model::alignment::helpers::TierDomain;
 
     for line in &file.lines {
@@ -239,7 +252,10 @@ fn validate_morphotag_output(file: &ChatFile, errors: &mut Vec<ValidationError>)
 /// over each other) and is valid CHAT. The real validator in talkbank-tools
 /// handles all E362/E704 checks. We only flag clearly broken output here
 /// (end < start within a single utterance).
-fn validate_align_output(file: &ChatFile, errors: &mut Vec<ValidationError>) {
+fn validate_align_output<S: ValidationState>(
+    file: &ChatFile<S>,
+    errors: &mut Vec<ValidationError>,
+) {
     for line in &file.lines {
         if let Line::Utterance(utt) = line
             && let Some(ref bullet) = utt.main.content.bullet

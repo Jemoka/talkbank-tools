@@ -27,6 +27,7 @@ use talkbank_model::ChatFile;
 use talkbank_model::ParseValidateOptions;
 use talkbank_model::validation::Validated as ModelValidated;
 use talkbank_transform::parse_and_validate;
+use talkbank_transform::validate::{ValidityLevel, validate_output, validate_to_level};
 
 // ---------------------------------------------------------------------------
 // Task — the DAG node enum
@@ -362,9 +363,40 @@ impl Chat<Validated> {
         &mut self.ast
     }
 
+    /// Enforce the typed input contract immediately before a task runs.
+    ///
+    /// Inputs have already passed the parser's full validation on admission,
+    /// but an earlier task may have mutated the AST. Rechecking the cumulative
+    /// L2 gate here prevents a later backend from receiving corrupted CHAT.
+    pub fn validate_stage_input(&self, task: Task) -> BAResult<()> {
+        validate_to_level(&self.ast, &[], ValidityLevel::MainTierValid).map_err(|errors| {
+            BAError::Validation(format_validation_errors(task, "pre-stage", &errors))
+        })
+    }
+
+    /// Enforce the typed output contract immediately after a task runs.
+    pub fn validate_stage_output(&self, task: Task) -> BAResult<()> {
+        validate_output(&self.ast, validation_command(task)).map_err(|errors| {
+            BAError::Validation(format_validation_errors(task, "post-stage", &errors))
+        })
+    }
+
+    /// Serialize and prove that the exact emitted bytes still parse and pass
+    /// the full CHAT validator. This is the hard boundary before disk I/O.
+    fn validated_chat_text(&self) -> BAResult<String> {
+        let text = self.ast.to_chat();
+        Self::parse(&text, self.source_id.clone()).map_err(|error| {
+            BAError::Serialize(format!(
+                "pre-serialization validation failed for {}: {error}",
+                self.source_id
+            ))
+        })?;
+        Ok(text)
+    }
+
     /// Serialize back to CHAT text and write to disk.
     pub fn write(&self, path: &Path) -> BAResult<()> {
-        let text = self.ast.to_chat();
+        let text = self.validated_chat_text()?;
         std::fs::write(path, text)?;
         Ok(())
     }
@@ -373,6 +405,27 @@ impl Chat<Validated> {
     pub fn to_chat(&self) -> String {
         self.ast.to_chat()
     }
+}
+
+fn validation_command(task: Task) -> &'static str {
+    match task {
+        Task::Morphosyntax => "morphotag",
+        Task::Fa => "align",
+        other => other.as_str(),
+    }
+}
+
+fn format_validation_errors(
+    task: Task,
+    phase: &str,
+    errors: &[talkbank_transform::validate::ValidationError],
+) -> String {
+    let details = errors
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ");
+    format!("{} {phase} validation failed: {details}", task.as_str())
 }
 
 // ---------------------------------------------------------------------------
@@ -1096,6 +1149,54 @@ mod tests {
         let chat = Chat::parse(FIXTURE, sid)?;
         let s = chat.to_chat();
         assert!(s.contains("*CHI:"));
+        Ok(())
+    }
+
+    #[test]
+    fn stage_gates_reject_typed_ast_corruption() -> BAResult<()> {
+        use talkbank_model::Line;
+
+        const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
+        let mut chat = Chat::parse(FIXTURE, SourceId::try_new("stage-gate")?)?;
+        for line in &mut chat.ast_mut().lines.0 {
+            if let Line::Utterance(utterance) = line {
+                utterance.main.content.terminator = None;
+            }
+        }
+
+        let pre = chat
+            .validate_stage_input(Task::Morphosyntax)
+            .expect_err("pre-stage gate must reject a missing terminator");
+        assert!(pre.to_string().contains("pre-stage validation failed"));
+
+        let post = chat
+            .validate_stage_output(Task::Morphosyntax)
+            .expect_err("post-stage gate must reject a lost terminator");
+        assert!(post.to_string().contains("post-stage validation failed"));
+        Ok(())
+    }
+
+    #[test]
+    fn serialization_validation_is_a_hard_error() -> BAResult<()> {
+        use talkbank_model::Line;
+
+        const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
+        let mut chat = Chat::parse(FIXTURE, SourceId::try_new("serialize-gate")?)?;
+        for line in &mut chat.ast_mut().lines.0 {
+            if let Line::Utterance(utterance) = line {
+                utterance.main.content.terminator = None;
+            }
+        }
+
+        let error = chat
+            .validated_chat_text()
+            .expect_err("invalid serialized CHAT must not reach disk I/O");
+        assert!(matches!(error, BAError::Serialize(_)));
+        assert!(
+            error
+                .to_string()
+                .contains("pre-serialization validation failed")
+        );
         Ok(())
     }
 }

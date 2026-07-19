@@ -714,11 +714,43 @@ async fn try_step(
             };
         }
     };
+
+    if let Err(error) = validate_value_for_stage(&value, task, StageGate::Pre) {
+        sink.emit(ProgressEvent {
+            source_id: source_id.clone(),
+            task: Some(task),
+            kind: ProgressKind::StageFailed,
+            completed: 0,
+            total: 0,
+            label: format_stage_failure_error(&error),
+        });
+        return BAValue::Failed {
+            source_id,
+            error,
+            partial: Some(Box::new(value)),
+        };
+    }
+
     let engine: &dyn batchalign_core::base::Dispatcher = inner.engine.as_ref();
     let result = runner.apply(&mut value, engine, sink.clone()).await;
 
     match result {
         Ok(()) => {
+            if let Err(error) = validate_value_for_stage(&value, task, StageGate::Post) {
+                sink.emit(ProgressEvent {
+                    source_id: source_id.clone(),
+                    task: Some(task),
+                    kind: ProgressKind::StageFailed,
+                    completed: 0,
+                    total: 0,
+                    label: format_stage_failure_error(&error),
+                });
+                return BAValue::Failed {
+                    source_id,
+                    error,
+                    partial: Some(Box::new(value)),
+                };
+            }
             sink.emit(ProgressEvent {
                 source_id,
                 task: Some(task),
@@ -744,6 +776,63 @@ async fn try_step(
                 partial: Some(Box::new(value)),
             }
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum StageGate {
+    Pre,
+    Post,
+}
+
+/// Validate every CHAT artifact carried by a pipeline value. Keeping this at
+/// the shared task boundary makes the gate impossible for an individual
+/// runner to forget, including list-producing and paired workflows.
+fn validate_value_for_stage(value: &BAValue, task: Task, gate: StageGate) -> Result<(), BAError> {
+    let validate_chat = |chat: &Chat| match gate {
+        StageGate::Pre => chat.validate_stage_input(task),
+        StageGate::Post => chat.validate_stage_output(task),
+    };
+
+    match value {
+        BAValue::Chat(chat) | BAValue::Ai { chat, .. } => validate_chat(chat),
+        BAValue::Paired(paired) => {
+            validate_chat(paired.main())?;
+            validate_chat(paired.gold())
+        }
+        BAValue::Cons { head, tail } => {
+            validate_value_for_stage(head, task, gate)?;
+            validate_value_for_stage(tail, task, gate)
+        }
+        BAValue::Media(_) | BAValue::Metrics(_) | BAValue::Nil | BAValue::Failed { .. } => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod stage_gate_tests {
+    use super::*;
+    use talkbank_model::Line;
+
+    const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
+
+    #[test]
+    fn shared_stage_boundary_rejects_corrupt_chat_values() {
+        let source_id = SourceId::try_new("stage-boundary").expect("valid source id");
+        let mut chat = Chat::parse(FIXTURE, source_id).expect("valid fixture");
+        for line in &mut chat.ast_mut().lines.0 {
+            if let Line::Utterance(utterance) = line {
+                utterance.main.content.terminator = None;
+            }
+        }
+        let value = BAValue::Chat(chat);
+
+        let pre = validate_value_for_stage(&value, Task::Morphosyntax, StageGate::Pre)
+            .expect_err("shared pre-stage gate must reject corrupt CHAT");
+        assert!(pre.to_string().contains("pre-stage validation failed"));
+
+        let post = validate_value_for_stage(&value, Task::Morphosyntax, StageGate::Post)
+            .expect_err("shared post-stage gate must reject corrupt CHAT");
+        assert!(post.to_string().contains("post-stage validation failed"));
     }
 }
 
