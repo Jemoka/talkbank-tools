@@ -18,7 +18,7 @@
 //!
 //! Same as the previous redb cache:
 //!
-//! - Key: `blake3("v2|" || format!("{task:?}|{backend_name}|") || CacheKey::hash(input))`
+//! - Key: `blake3("v3|" || build identity || task/backend || CacheKey::hash(input))`
 //! - Value: `serde_json(TaskOutput)` UTF-8 bytes
 //!
 //! Routing-only fields (`source_id`, `utterance_id`) are excluded from
@@ -70,22 +70,10 @@
 //! old `batchaligncache.redb`. `nuke_cache()` removes the whole
 //! directory.
 //!
-//! ## Known caveat — no backend-code-version stamp
-//!
-//! The cache keys on `task`, `backend.name()`, and the serialized input.
-//! It does NOT include a hash of the backend's *implementation*. Two
-//! consequences:
-//!
-//! 1. If a backend's `name()` is stable across a code change (which it
-//!    usually is — backend names are user-visible), edits to the algorithm
-//!    silently serve old outputs.
-//! 2. Bump the backend's `name` suffix (e.g. `compare:rust:v1` → `:v2`)
-//!    every time you change behaviour, or call `nuke_cache()` after a
-//!    rebuild.
-//!
-//! TODO(spec2.md follow-up): add a `code_version: u64` field to
-//! `BackendMeta` and include it in the cache key so this discipline isn't
-//! manual.
+//! The compiled git identity namespaces every entry, so an algorithm change
+//! cannot silently serve output produced by an older build. Release builds
+//! retain reuse for their full lifetime; development builds naturally miss
+//! after the source identity changes.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -322,12 +310,12 @@ impl Cache {
         Ok(Self { env, db, policy })
     }
 
-    /// Builds the cache key from (task, backend_name, input).
+    /// Builds the cache key from (build, task, backend_name, input).
     ///
     /// Format:
-    /// `blake3(v2 || "{task:?}|{backend_name}|" || CacheKey::hash(input))`.
+    /// `blake3(v3 || build || "{task:?}|{backend_name}|" || CacheKey::hash(input))`.
     ///
-    /// The `v2` prefix is a schema epoch — bump it whenever the trait
+    /// The `v3` prefix is a schema epoch — bump it whenever the trait
     /// contract changes (e.g. a proto adds a new content-identifying
     /// field). Bumping invalidates the old keyspace cleanly instead of
     /// silently mixing two semantics in the same database.
@@ -338,11 +326,18 @@ impl Cache {
     /// content from different files / utterance slots collapses to one
     /// cache entry.
     fn key(task: Task, backend_name: &str, input: &TaskInput) -> Vec<u8> {
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(b"v2|");
-        hasher.update(format!("{task:?}|{backend_name}|").as_bytes());
+        let mut hasher = Self::key_namespace(task, backend_name, build_identity());
         input.hash(&mut hasher);
         hasher.finalize().as_bytes().to_vec()
+    }
+
+    fn key_namespace(task: Task, backend_name: &str, code_version: &str) -> blake3::Hasher {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"v3|");
+        hasher.update(code_version.as_bytes());
+        hasher.update(b"|");
+        hasher.update(format!("{task:?}|{backend_name}|").as_bytes());
+        hasher
     }
 
     /// Looks up an entry. Returns None on miss or under Bypass/Refresh.
@@ -426,6 +421,13 @@ impl Cache {
     }
 }
 
+fn build_identity() -> &'static str {
+    match option_env!("VERGEN_GIT_SHA") {
+        Some(sha) if !sha.is_empty() && sha != "unknown" => sha,
+        _ => env!("CARGO_PKG_VERSION"),
+    }
+}
+
 /// Convenience: open from a `CacheSpec`, returning `Arc<Cache>`.
 pub fn open_from_spec(spec: &CacheSpec) -> Result<Arc<Cache>> {
     Ok(Arc::new(Cache::open(&spec.path, spec.policy)?))
@@ -438,6 +440,15 @@ pub fn open_from_spec(spec: &CacheSpec) -> Result<Arc<Cache>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cache_namespace_changes_with_code_version() {
+        let old = Cache::key_namespace(Task::Compare, "compare:rust", "build-a")
+            .finalize();
+        let new = Cache::key_namespace(Task::Compare, "compare:rust", "build-b")
+            .finalize();
+        assert_ne!(old, new);
+    }
 
     /// Two `Cache` instances opened against the same path can both read
     /// and write without one of them erroring on `open` — this is the
