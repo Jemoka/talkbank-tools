@@ -411,6 +411,10 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             )));
         };
         if !seg.words.is_empty() {
+            let had_wor_tier = u
+                .dependent_tiers
+                .iter()
+                .any(|tier| matches!(tier, DependentTier::Wor(_)));
             let words = collapse_aligned_words(&u.main.content.content.0, &seg.words)?;
             // Carry the utterance's own terminator onto `%wor` (BA2 parity);
             // the typed writer renders the bullets and the terminator.
@@ -441,10 +445,17 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
                     Some(bullet) if bullet.source == BulletSource::Utr => {
                         (word_start_ms, word_end_ms)
                     }
-                    Some(bullet) if bullet.source == BulletSource::Authoritative => (
-                        bullet.timing.start_ms.min(word_start_ms),
-                        bullet.timing.end_ms.max(word_end_ms),
-                    ),
+                    Some(bullet) if bullet.source == BulletSource::Authoritative => {
+                        const MAX_AUTHORITATIVE_START_LEAD_MS: u64 = 2_000;
+                        let start_lead_ms = word_start_ms.saturating_sub(bullet.timing.start_ms);
+                        let start_ms =
+                            if had_wor_tier && start_lead_ms > MAX_AUTHORITATIVE_START_LEAD_MS {
+                                word_start_ms
+                            } else {
+                                bullet.timing.start_ms.min(word_start_ms)
+                            };
+                        (start_ms, bullet.timing.end_ms.max(word_end_ms))
+                    }
                     _ => (word_start_ms, word_end_ms),
                 };
                 u.main.content.bullet = Some(Bullet::new(start_ms, end_ms));
@@ -1024,6 +1035,50 @@ mod tests {
 
         assert!(chat.to_chat().contains("\u{15}1000_2000\u{15}"));
         assert!(!chat.to_chat().contains("\u{15}800_3000\u{15}"));
+    }
+
+    #[test]
+    fn fa_rerun_discards_large_stale_authoritative_start() {
+        const STALE_START_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\thow this happened ? \u{15}2000_9970\u{15}\n\
+%wor:\thow this happened ?\n@End\n";
+        let mut chat = Chat::parse(
+            STALE_START_CHAT,
+            SourceId::try_new("stale-start.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let aligned = vec![AsrSegment {
+            start_ms: 2_000,
+            end_ms: 9_970,
+            text: "how this happened".into(),
+            speaker: None,
+            words: vec![
+                AsrWord {
+                    text: "how".into(),
+                    start_ms: 9_443,
+                    end_ms: 9_643,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "this".into(),
+                    start_ms: 9_643,
+                    end_ms: 9_783,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "happened".into(),
+                    start_ms: 9_783,
+                    end_ms: 9_970,
+                    confidence: None,
+                },
+            ],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timed result");
+
+        assert!(chat.to_chat().contains("\u{15}9443_9970\u{15}"));
+        assert!(!chat.to_chat().contains("\u{15}2000_9970\u{15}"));
     }
 
     #[test]
