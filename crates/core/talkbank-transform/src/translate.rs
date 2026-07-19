@@ -90,7 +90,8 @@ pub fn inject_translation(
     utterance: &mut talkbank_model::model::Utterance,
     translation_text: &str,
 ) -> Result<(), String> {
-    if translation_text.is_empty() {
+    let trimmed = translation_text.trim();
+    if trimmed.is_empty() || matches!(trimmed, "." | "!" | "?") {
         return Ok(());
     }
 
@@ -384,6 +385,19 @@ mod tests {
 
         let output_after = chat.to_chat_string();
         assert_eq!(output_before, output_after);
+    }
+
+    #[test]
+    fn test_inject_bare_terminator_translation_is_noop() {
+        let chat_text = include_str!("../../../../resources/fixtures/eng_hello_female.cha");
+        let mut chat = parse_chat(chat_text);
+        let output_before = chat.to_chat_string();
+
+        for noise in [".", "!", "?", "  .  ", " ", "\t"] {
+            let utt = get_utterance_mut(&mut chat, 0);
+            inject_translation(utt, noise).unwrap();
+            assert_eq!(output_before, chat.to_chat_string(), "noise={noise:?}");
+        }
     }
 
     #[test]
