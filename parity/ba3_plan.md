@@ -242,3 +242,16 @@ The missing runtime gap was the FA entry point: pre-edit a NoAlign transcript wi
 - **new**: no
 
 A dispatch item may own an entire decoded PCM file, so an unbounded route could defeat the earlier sliding future window when callers dispatch directly or future admission widths grow. Post-edit queue capacity comes from `EngineConfig.max_concurrent_values` (with a safe minimum of one), and closing the route causes blocked `send().await` producers to fail cleanly. BA3 runs Python model objects in-process behind one Rust batcher loop rather than spawning one process per input, so there is no OOM-created child-worker population to orphan. Targeted verification: `bazel build --config=dev //crates/batchalign/batchalign-engine:batchalign_engine_unit_test && bazel-bin/crates/batchalign/batchalign-engine/batchalign_engine_unit_test --exact engine::tests::backend_route_capacity_matches_memory_admission_budget` (1 passed); `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_utseg_sliding_window.py -q` (6 passed).
+
+### Exercise replacement retraces inside the Bazel parser target
+- **component**: `talkbank-parser` replacement/retrace lowering
+- **summary**: Locks the existing parser correction into the actual Bazel unit-test graph: a word carrying both `[: replacement]` and `[//]` lowers to a full `Retrace` containing a `ReplacedWord`, never a bare replacement that pollutes morphology alignment.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/input/retrace.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/tbt-output/shape.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/ba3-pre-output/shape.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/ba3-post-output/shape.txt
+- **depends on**: [c90b9bff]
+- **commit**: 0b010c0
+- **new**: no
+
+Audit note: runtime parity was already supplied by the historical focused fix, and a six-case regression existed under `crates/utils/tests`; however, that integration-test directory is explicitly deferred in `crates/utils/BUILD.bazel` and therefore was invisible to the required Bazel workflow. The new parser-local contract makes the critical AST shape part of `//crates/core/talkbank-parser:talkbank_parser_unit_test`. Targeted verification: `bazel build --config=dev //crates/core/talkbank-parser:talkbank_parser_unit_test && bazel-bin/crates/core/talkbank-parser/talkbank_parser_unit_test --exact parser::tree_parsing::main_tier::content::word::tests::replacement_with_retrace_marker_stays_a_retrace` (1 passed).
