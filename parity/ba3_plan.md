@@ -27,6 +27,7 @@
 - [x] 4/10 Keeps retraces with their retry across utterance splits.
 - [x] 5/10 Projects comparison candidates to one majority utterance.
 - [x] 6/10 Attributes matched comparison POS from the gold transcript.
+- [x] 7/10 Keeps experimental review tiers off by default.
 
 ## done
 
@@ -406,3 +407,16 @@ Pre-edit bag-of-words scoring selected `the sky this dog ran` and counted `the` 
 - **new**: yes
 
 Pre-edit identical surfaces with disagreeing morphology produced `NOUN ADJ`, masking the gold annotation `INTJ NOUN` and charging matches to the wrong POS buckets. Post-edit matched and gold-only tokens both derive POS from gold, while main-only insertions continue to retain main POS; gold files without `%mor` correctly produce `?` instead of borrowing a tag. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test compare::tests::` (32 passed).
+
+### Keep experimental review tiers off by default
+- **component**: `talkbank-transform` decision reporting and `batchalign-core` UTR
+- **summary**: Defaults decision-tier emission to `None`, preserving structured UTR decisions internally without adding `%xalign` or `%xrev` cleanup noise to ordinary CHAT output.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/input/decision.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/tbt-output/decision.cha
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/ba3-pre-output/decision.cha
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/ba3-post-output/decision.cha
+- **depends on**: []
+- **commit**: f0aa660
+- **new**: yes
+
+Pre-edit UTR hardcoded `ReviewLevel::All`, so any unmatched or zero-duration decision leaked experimental dependent tiers into finished research files. Post-edit `ReviewLevel::default()` is `None` and UTR uses that default; callers that explicitly pass `LowConfidence` or `All` to the retained injection API still receive review tiers. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test //crates/batchalign/batchalign-core:batchalign_core_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact decisions::tests::default_review_level_produces_no_output_tiers` (1 passed).
