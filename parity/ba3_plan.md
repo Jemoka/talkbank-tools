@@ -50,6 +50,7 @@
 - [x] 27/40 Rejects reusable `%wor` spans that overrun the next utterance.
 - [x] 28/40 Rejects near-zero word spans from FA timing reuse.
 - [x] 29/40 Rejects one-word dominance in reusable FA timing.
+- [x] 30/40 Rejects backward word order in reusable FA timing.
 
 ## done
 
@@ -741,3 +742,16 @@ Positive duration alone does not make old word timing reusable. The fork uses a 
 - **new**: yes
 
 Some bad prior alignments have no zero or tiny word: instead, one token absorbs most of the utterance and leaves plausible positive spans for its neighbors. The fork treats that distribution as unreusable once at least three words provide enough context. Pre-edit BA3 accepted a 550 ms word inside an 800 ms total word span and skipped FA. Post-edit it measures the largest word against the minimum-start/maximum-end envelope and rejects proportions strictly above 0.4; one- and two-word utterances deliberately avoid the heuristic. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_rejects_dominant_word_span` (1 passed); file-local Rust formatting passed.
+
+### Reject backward word order in reusable FA timing
+- **component**: `batchalign-core` forced-alignment reuse validation
+- **summary**: Requires reused `%wor` spans to advance monotonically, preventing positive-duration but backward word timing from entering the cheap rerun path.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/input/spans.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/ba3-post-output/result.txt
+- **depends on**: [031cc38]
+- **commit**: 475563d
+- **new**: yes
+
+Word spans can each be positive yet still form a backward sequence. The base BA3 reuse path accepted `hello 500_600; world 400_480`, then derived the invalid main bullet `500_480` and returned before the normal post-FA monotonicity repair. Post-edit every word start must be at or after the preceding word end; otherwise reuse is rejected without mutation and the normal FA path replaces the stale tier. This check is independent of the 40 ms floor, dominance ratio, and next-utterance boundary. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_rejects_backward_word_timing` (1 passed); file-local Rust formatting passed.
