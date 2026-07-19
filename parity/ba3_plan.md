@@ -49,6 +49,7 @@
 - [x] 26/40 Reuses complete exact-match `%wor` timing without rerunning FA.
 - [x] 27/40 Rejects reusable `%wor` spans that overrun the next utterance.
 - [x] 28/40 Rejects near-zero word spans from FA timing reuse.
+- [x] 29/40 Rejects one-word dominance in reusable FA timing.
 
 ## done
 
@@ -727,3 +728,16 @@ An exact word match is not enough to trust old timing: stale `%wor` data can cla
 - **new**: yes
 
 Positive duration alone does not make old word timing reusable. The fork uses a 40 ms floor because failed alignment often leaves one internal or final word with a tiny residual span that survives zero-duration validation. With only the base BA3 reuse path, a 30 ms `tiny` token was accepted and the file skipped FA. Post-edit duration is checked with saturating arithmetic for every `%wor` word; a sub-floor span rejects the whole fast-path attempt before any main bullet changes. The same invariant covers short utterances and position-independent internal/final failures. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_rejects_near_zero_word_span` (1 passed); file-local Rust formatting passed.
+
+### Reject one-word dominance in reusable FA timing
+- **component**: `batchalign-core` forced-alignment reuse validation
+- **summary**: Rejects old timing when one word occupies more than 40% of a three-or-more-word utterance span, forcing a fresh alignment instead of preserving a characteristic stale distribution.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/input/spans.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/ba3-post-output/result.txt
+- **depends on**: [031cc38]
+- **commit**: 1a3287e
+- **new**: yes
+
+Some bad prior alignments have no zero or tiny word: instead, one token absorbs most of the utterance and leaves plausible positive spans for its neighbors. The fork treats that distribution as unreusable once at least three words provide enough context. Pre-edit BA3 accepted a 550 ms word inside an 800 ms total word span and skipped FA. Post-edit it measures the largest word against the minimum-start/maximum-end envelope and rejects proportions strictly above 0.4; one- and two-word utterances deliberately avoid the heuristic. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_rejects_dominant_word_span` (1 passed); file-local Rust formatting passed.
