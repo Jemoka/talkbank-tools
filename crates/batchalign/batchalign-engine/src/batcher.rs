@@ -50,7 +50,7 @@ pub async fn batcher_loop(
     backend: Arc<BackendImpl>,
     policy: BatchPolicy,
     cache: Arc<Cache>,
-    mut rx: mpsc::UnboundedReceiver<BatchItem>,
+    mut rx: mpsc::Receiver<BatchItem>,
 ) {
     let window = std::time::Duration::from_millis(policy.window_ms);
     let max_size = policy.max_size.max(1);

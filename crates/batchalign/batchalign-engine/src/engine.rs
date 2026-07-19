@@ -35,12 +35,16 @@ impl Default for EngineConfig {
     }
 }
 
+fn route_queue_capacity(config: EngineConfig) -> usize {
+    config.max_concurrent_values.max(1)
+}
+
 /// Routing table: `Task` → sender into the backend's batcher channel.
 ///
 /// Mutated only at register-time and shutdown-time. Wrapped in `Arc` so the
 /// engine can be shared across the Pipeline + per-value futures.
 struct RouteTable {
-    by_task: HashMap<Task, mpsc::UnboundedSender<BatchItem>>,
+    by_task: HashMap<Task, mpsc::Sender<BatchItem>>,
 }
 
 /// The engine.
@@ -52,7 +56,7 @@ pub struct BatchalignEngine {
     /// Routes are mutated only at register/shutdown time and read by every
     /// dispatch. `RwLock` gives us "many readers, infrequent writers". The
     /// inner HashMap holds `Sender` clones; cheap to copy out before await.
-    routes: RwLock<HashMap<Task, mpsc::UnboundedSender<BatchItem>>>,
+    routes: RwLock<HashMap<Task, mpsc::Sender<BatchItem>>>,
     /// Backend display name for each registered task. Read at runtime by
     /// runners that want to stamp provenance into generated artifacts
     /// (e.g. ASR's `@Comment` header). Populated alongside `routes`.
@@ -114,7 +118,13 @@ impl BatchalignEngine {
         let name = backend.name().to_string();
         let tasks: Vec<Task> = backend.tasks().to_vec();
         let backend = Arc::new(backend);
-        let (tx, rx) = mpsc::unbounded_channel::<BatchItem>();
+        // A dispatch item can own an entire decoded PCM file. Bound the
+        // per-backend queue to the same admission budget as the pipeline so
+        // callers outside `Pipeline::run` cannot accumulate an unbounded
+        // resident set behind one slow model. `send().await` below supplies
+        // backpressure, and dropping routes during shutdown wakes waiters.
+        let queue_capacity = route_queue_capacity(self.config);
+        let (tx, rx) = mpsc::channel::<BatchItem>(queue_capacity);
 
         handle.spawn(batcher_loop(
             backend.clone(),
@@ -202,6 +212,7 @@ impl BatchalignEngine {
             reply,
             progress,
         })
+        .await
         .map_err(|_| {
             BAError::Worker(format!(
                 "engine batcher for {task:?} is gone (engine shut down?)"
@@ -244,5 +255,27 @@ impl Dispatcher for BatchalignEngine {
 
     fn engine_name(&self, task: Task) -> Option<String> {
         self.backend_names.read().ok()?.get(&task).cloned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backend_route_capacity_matches_memory_admission_budget() {
+        assert_eq!(
+            route_queue_capacity(EngineConfig {
+                max_concurrent_values: 3,
+            }),
+            3
+        );
+        assert_eq!(
+            route_queue_capacity(EngineConfig {
+                max_concurrent_values: 0,
+            }),
+            1,
+            "a zero-sized configuration must still admit one item"
+        );
     }
 }
