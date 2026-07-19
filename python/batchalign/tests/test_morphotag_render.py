@@ -318,6 +318,43 @@ def test_italian_defect7_sentence_initial_la_collapses_to_article():
     assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_7"]
 
 
+def test_italian_defect9_dagliela_rewrites_only_mwt_head():
+    words = [
+        FakeWord("da", "da", "ADP", None, 0, "root", id=1),
+        FakeWord(
+            "glie",
+            "gli",
+            "PRON",
+            "Gender=Masc|Number=Sing|Person=3|PronType=Prs",
+            1,
+            "iobj",
+            id=2,
+        ),
+        FakeWord(
+            "la",
+            "la",
+            "PRON",
+            "Gender=Fem|Number=Sing|Person=3|PronType=Prs",
+            1,
+            "obj",
+            id=3,
+        ),
+    ]
+    tokens = [FakeToken("dagliela", [1, 2, 3])]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=tokens), ".", [], "it"
+    )
+
+    assert (
+        _mor_str(analysis, ".")
+        == "verb|dare-Fin-Imp-S2~pron|gli-Prs-S3~pron|la-Prs-S3 ."
+    )
+    assert _gra_str(analysis) == "1|3|ROOT 2|1|IOBJ 3|1|OBJ 4|1|PUNCT"
+    assert len(analysis.words[0].units) == 3
+    assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_9"]
+
+
 def test_question_terminator_is_carried_through():
     # The terminator is applied downstream; %gra still ends with a PUNCT.
     sent = _sentence(

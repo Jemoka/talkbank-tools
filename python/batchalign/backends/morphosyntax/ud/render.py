@@ -447,6 +447,54 @@ def _collapse_italian_false_mwts(
     return rewritten_words, rewritten_tokens
 
 
+def _rewrite_italian_mwt_components(
+    words: list[_NormalizedWord],
+    tokens: list[Any],
+    anomalies: list[AnalysisAnomaly],
+) -> list[_NormalizedWord]:
+    """Rewrite the head of a closed set of shape-correct Italian MWTs."""
+    from .it.workarounds import component_rewrite_rule_for
+
+    rewrites: dict[int, tuple[Any, Any]] = {}
+    word_ids = {word.id for word in words}
+    for token in tokens:
+        ids = list(getattr(token, "id", []) or [])
+        rule = component_rewrite_rule_for(str(getattr(token, "text", "")))
+        if rule is not None and len(ids) > 1 and ids[0] in word_ids:
+            rewrites[ids[0]] = (token, rule)
+    if not rewrites:
+        return words
+
+    rewritten_words: list[_NormalizedWord] = []
+    for word in words:
+        rewrite = rewrites.get(word.id)
+        if rewrite is None:
+            rewritten_words.append(word)
+            continue
+        token, rule = rewrite
+        rewritten_words.append(
+            _NormalizedWord(
+                word.text,
+                rule.head_lemma,
+                rule.head_upos,
+                rule.head_feats,
+                word.head,
+                word.deprel,
+                word.id,
+            )
+        )
+        _anomaly(
+            anomalies,
+            word.id,
+            str(token.text),
+            f"italian_defect_{rule.defect}",
+            {"upos": word.upos, "lemma": word.lemma},
+            {"upos": rule.head_upos, "lemma": rule.head_lemma},
+            rule.retire_when,
+        )
+    return rewritten_words
+
+
 def _apply_english_copula_progressive(
     words: list[_NormalizedWord],
     tokens: list[Any],
@@ -934,6 +982,9 @@ def parse_sentence(
     sentence_tokens = list(getattr(sentence, "tokens", []) or [])
     if lang == "it":
         normalized_words, sentence_tokens = _apply_italian_compound_imperatives(
+            normalized_words, sentence_tokens, anomalies
+        )
+        normalized_words = _rewrite_italian_mwt_components(
             normalized_words, sentence_tokens, anomalies
         )
         normalized_words, sentence_tokens = _collapse_italian_false_mwts(

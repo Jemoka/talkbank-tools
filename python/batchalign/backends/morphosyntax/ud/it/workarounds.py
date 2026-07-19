@@ -40,6 +40,18 @@ class FalseMwtRule:
     retire_when: str
 
 
+@dataclass(frozen=True)
+class ComponentRewriteRule:
+    """One MWT whose first component needs a curated lexical analysis."""
+
+    defect: int
+    surface: str
+    head_upos: str
+    head_lemma: str
+    head_feats: str
+    retire_when: str
+
+
 _ME = CliticRule("me", "me", "Number=Sing|Person=1|PronType=Prs", "iobj")
 _LA = CliticRule("la", "la", "Gender=Fem|Number=Sing|Person=3|PronType=Prs", "obj")
 _LO = CliticRule("lo", "lo", "Gender=Masc|Number=Sing|Person=3|PronType=Prs", "obj")
@@ -111,6 +123,21 @@ FALSE_MWT_RULES: tuple[FalseMwtRule, ...] = (
 
 _FALSE_MWT_BY_SURFACE = {rule.surface: rule for rule in FALSE_MWT_RULES}
 
+COMPONENT_REWRITE_RULES: tuple[ComponentRewriteRule, ...] = (
+    ComponentRewriteRule(
+        9,
+        "dagliela",
+        "VERB",
+        "dare",
+        "Mood=Imp|Number=Sing|Person=2|VerbForm=Fin",
+        _REPROBE,
+    ),
+)
+
+_COMPONENT_REWRITE_BY_SURFACE = {
+    rule.surface: rule for rule in COMPONENT_REWRITE_RULES
+}
+
 
 def rule_for(surface: str, upos: str) -> CompoundImperativeRule | None:
     """Return a confirmed rule only for an observed bad POS/surface pair."""
@@ -123,3 +150,8 @@ def rule_for(surface: str, upos: str) -> CompoundImperativeRule | None:
 def false_mwt_rule_for(surface: str) -> FalseMwtRule | None:
     """Return a closed Defect-6 collapse rule for an original token surface."""
     return _FALSE_MWT_BY_SURFACE.get(surface.casefold())
+
+
+def component_rewrite_rule_for(surface: str) -> ComponentRewriteRule | None:
+    """Return a closed component rewrite for an original MWT surface."""
+    return _COMPONENT_REWRITE_BY_SURFACE.get(surface.casefold())
