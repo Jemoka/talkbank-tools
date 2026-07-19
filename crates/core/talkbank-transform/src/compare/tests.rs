@@ -507,10 +507,30 @@ fn inject_comparison_rejects_empty_compare_tokens() {
 }
 
 #[test]
-fn compare_uses_mor_pos_for_xsmor_output() {
+fn compare_does_not_borrow_main_pos_when_gold_has_no_mor() {
     let parser = TreeSitterParser::new().unwrap();
     let main = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI|||||Target_Child|||\n*CHI:\thello world .\n%mor:\tintj|hello noun|world .\n@End\n";
     let gold = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI|||||Target_Child|||\n*CHI:\thello world .\n@End\n";
+    let (main_file, _) = parse_lenient(&parser, main);
+    let (gold_file, _) = parse_lenient(&parser, gold);
+
+    let result = compare(&main_file, &gold_file);
+    assert_eq!(
+        XsmorTierContent::try_from(&result.main_utterances[0])
+            .expect("xsmor tier")
+            .to_chat_string(),
+        "? ?"
+    );
+    assert_eq!(result.metrics.pos_counts["?"].matches, 2);
+    assert!(!result.metrics.pos_counts.contains_key("INTJ"));
+    assert!(!result.metrics.pos_counts.contains_key("NOUN"));
+}
+
+#[test]
+fn compare_attributes_gold_pos_to_matches() {
+    let parser = TreeSitterParser::new().unwrap();
+    let main = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI|||||Target_Child|||\n*CHI:\thello world .\n%mor:\tnoun|hello adj|world .\n@End\n";
+    let gold = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child\n@ID:\teng|test|CHI|||||Target_Child|||\n*CHI:\thello world .\n%mor:\tintj|hello noun|world .\n@End\n";
     let (main_file, _) = parse_lenient(&parser, main);
     let (gold_file, _) = parse_lenient(&parser, gold);
 
@@ -523,6 +543,7 @@ fn compare_uses_mor_pos_for_xsmor_output() {
     );
     assert_eq!(result.metrics.pos_counts["INTJ"].matches, 1);
     assert_eq!(result.metrics.pos_counts["NOUN"].matches, 1);
+    assert!(!result.metrics.pos_counts.contains_key("ADJ"));
 }
 
 #[test]
@@ -579,7 +600,7 @@ fn batchalign2_master_simple_gold_projection_shape() {
         XsmorTierContent::try_from(&result.gold_utterances[0])
             .expect("xsmor tier")
             .to_chat_string(),
-        "INTJ +ADJ NOUN -? ."
+        "? +ADJ ? -? ."
     );
     assert_eq!(result.metrics.matches, 2);
     assert_eq!(result.metrics.insertions, 1);
@@ -587,6 +608,7 @@ fn batchalign2_master_simple_gold_projection_shape() {
     assert!((result.metrics.wer - (2.0 / 3.0)).abs() < 0.001);
     assert_eq!(result.metrics.pos_counts["ADJ"].insertions, 1);
     assert_eq!(result.metrics.pos_counts["?"].deletions, 1);
+    assert_eq!(result.metrics.pos_counts["?"].matches, 2);
 }
 
 #[test]
@@ -612,7 +634,7 @@ fn batchalign2_master_windowed_alignment_ignores_skipped_prefix_tokens() {
         XsmorTierContent::try_from(&result.gold_utterances[0])
             .expect("xsmor tier")
             .to_chat_string(),
-        "DET NOUN ."
+        "? ? ."
     );
 }
 
@@ -635,7 +657,7 @@ fn batchalign2_master_multi_utterance_compare_metrics() {
         XsmorTierContent::try_from(&result.gold_utterances[0])
             .expect("xsmor tier")
             .to_chat_string(),
-        "NUM NOUN +NUM NOUN ."
+        "? ? +NUM ? ."
     );
     assert_eq!(
         XsrepTierContent::try_from(&result.gold_utterances[1])
@@ -647,7 +669,7 @@ fn batchalign2_master_multi_utterance_compare_metrics() {
         XsmorTierContent::try_from(&result.gold_utterances[1])
             .expect("xsmor tier")
             .to_chat_string(),
-        "ADJ NOUN -? +ADJ NOUN ."
+        "? ? -? +ADJ ? ."
     );
     assert_eq!(result.metrics.matches, 6);
     assert_eq!(result.metrics.insertions, 2);

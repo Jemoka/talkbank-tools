@@ -297,7 +297,7 @@ pub fn compare(main_file: &ChatFile, gold_file: &ChatFile) -> ComparisonBundle {
 
                     let token = CompareToken {
                         text: key,
-                        pos: main_word.pos.clone(),
+                        pos: gold_word.pos.clone(),
                         status: CompareStatus::Match,
                     };
                     metrics.record(&token);
