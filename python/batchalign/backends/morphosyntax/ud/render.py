@@ -494,6 +494,16 @@ def _rewrite_italian_mwt_components(
     return rewritten_words
 
 
+def _validate_root_structure(words: list[_NormalizedWord]) -> None:
+    """Require the single virtual-root arc expected by generated `%gra`."""
+    roots = [word for word in words if word.head == 0 and word.deprel.lower() == "root"]
+    if words and len(roots) != 1:
+        raise ValueError(
+            "UD analysis must contain exactly one root; "
+            f"found {len(roots)} across {len(words)} words"
+        )
+
+
 def _apply_english_copula_progressive(
     words: list[_NormalizedWord],
     tokens: list[Any],
@@ -993,6 +1003,7 @@ def parse_sentence(
         normalized_words = _apply_english_copula_progressive(
             normalized_words, sentence_tokens, anomalies
         )
+    _validate_root_structure(normalized_words)
 
     # Per Stanza-word (chunk) parallel arrays, mirroring BA2's `mor`.
     analyses: list[tuple[str, str, list[str]] | None] = []

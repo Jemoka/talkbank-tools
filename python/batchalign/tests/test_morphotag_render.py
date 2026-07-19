@@ -23,6 +23,8 @@ import logging
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
+import pytest
+
 from batchalign.backends.morphosyntax import stanza
 from batchalign.backends.morphosyntax.ud import render
 
@@ -408,6 +410,30 @@ def test_question_terminator_is_carried_through():
     assert _mor_str(analysis, "?").endswith(" ?")
     assert analysis.terminator is not None
     assert analysis.terminator[2] == "PUNCT"
+
+
+def test_rootless_ud_analysis_is_rejected():
+    sent = _sentence(
+        [
+            ("the", "the", "DET", "Definite=Def|PronType=Art", 2, "det"),
+            ("dog", "dog", "NOUN", "Number=Sing", 1, "nsubj"),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="exactly one root; found 0"):
+        render.parse_sentence(sent, ".", [], "en")
+
+
+def test_multiple_ud_roots_are_rejected():
+    sent = _sentence(
+        [
+            ("hello", "hello", "INTJ", None, 0, "root"),
+            ("world", "world", "NOUN", "Number=Sing", 0, "root"),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="exactly one root; found 2"):
+        render.parse_sentence(sent, ".", [], "en")
 
 
 def test_invalid_stanza_fields_preserve_surface_and_record_repairs():
