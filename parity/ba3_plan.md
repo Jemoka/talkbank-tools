@@ -22,6 +22,7 @@
 
 ## additional differences
 - [x] 1/10 Sanitizes CHAT-illegal ASR tokens without failing the transcript.
+- [x] 2/10 Suppresses terminator-only translation tiers.
 
 ## done
 
@@ -336,3 +337,16 @@ Pre-edit every constituent media field was already hashable, but the composite h
 - **new**: yes
 
 Whisper and Tencent can emit bare CHAT separators such as `:` and `~`, or glue invalid Unicode to otherwise useful text. Pre-edit the downstream typed transcript gate rejected the whole utterance. Post-edit sanitization runs only after currency/percent expansion, preserves every already-valid word byte-for-byte, keeps timestamps on repaired residue, and prevents an all-dropped utterance from becoming an invalid empty main tier. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact build_chat::tests::chat_illegal_asr_separator_does_not_fail_transcription` (1 passed).
+
+### Suppress terminator-only translation noise
+- **component**: `talkbank-transform` translation injection
+- **summary**: Treats whitespace-only and bare `.`, `!`, or `?` backend responses as no translation, leaving the utterance unchanged instead of emitting a meaningless `%xtra` tier.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/input/translation.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/tbt-output/tiers.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/ba3-pre-output/tiers.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/ba3-post-output/tiers.txt
+- **depends on**: []
+- **commit**: be2b98b
+- **new**: yes
+
+Translator APIs can answer with only the source terminator when a turn has no lexical material. Pre-edit BA3 accepted nonempty `.` and serialized `%xtra:\t.`; BA2 and the fork omit it. The trim-first guard handles all three CHAT terminators and whitespace variants without changing genuine translations or replacement of an existing tier. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact translate::tests::test_inject_bare_terminator_translation_is_noop` (1 passed).
