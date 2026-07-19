@@ -42,6 +42,7 @@
 - [x] 19/40 Exposes standalone speaker diarization as deterministic turns JSON.
 - [x] 20/40 Collapses known Italian Stanza Defect 6 false MWT expansions.
 - [x] 21/40 Repairs the Italian sentence-initial `la` false MWT expansion.
+- [x] 22/40 Rewrites the mis-tagged verb head in Italian `dagliela` MWTs.
 
 ## done
 
@@ -629,3 +630,16 @@ The fork carries a closed, retireable Defect 6 table for common words such as `p
 - **new**: yes
 
 The fork records a distinct Defect 7 failure in which Stanza analyzes sentence-initial `la` as masculine-singular `il` plus masculine-plural `i`. Pre-edit BA3 retained both components as a `~`-joined MWT and introduced an extra dependency unit. Post-edit the closed Italian range table synthesizes `det|il-Fem-Def-Art-Sing`, collapses the range, renumbers the following noun and punctuation, and reports `italian_defect_7`; ordinary one-component `la` tokens remain untouched because the repair requires an actual MWT range. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg=italian_defect7` (Bazel target passed) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
+
+### Rewrite the mis-tagged verb head in Italian `dagliela` MWTs
+- **component**: Python UD-to-CHAT Italian morphosyntax renderer
+- **summary**: Changes only the head of Stanza's shape-correct `dagliela` expansion from `ADP/da` to imperative `VERB/dare`, retaining both clitic units and their arcs.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/input/stanza-analysis.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/tbt-output/tiers.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/ba3-pre-output/tiers.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/ba3-post-output/tiers.txt
+- **depends on**: []
+- **commit**: b717b1e
+- **new**: yes
+
+Stanza's `dagliela` range has the correct three-piece shape but analyzes its imperative head as the homographic adposition `da`, yielding `adp|da~pron|gli~pron|la`. The fork treats this separately from false-MWT collapse: only component zero's POS, canonical lemma, and imperative features change. Post-edit BA3 follows that invariant and leaves component ids, heads, relations, and clitic analyses intact, producing `verb|dare-Fin-Imp-S2~pron|gli-Prs-S3~pron|la-Prs-S3` plus an `italian_defect_9` anomaly. The closed lookup excludes correctly analyzed siblings such as `digliela` and `portagliela`. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg=italian_defect9` (Bazel target passed) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
