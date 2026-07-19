@@ -48,6 +48,7 @@
 - [x] 25/40 Rejects UD analyses without exactly one dependency root.
 - [x] 26/40 Reuses complete exact-match `%wor` timing without rerunning FA.
 - [x] 27/40 Rejects reusable `%wor` spans that overrun the next utterance.
+- [x] 28/40 Rejects near-zero word spans from FA timing reuse.
 
 ## done
 
@@ -713,3 +714,16 @@ The fork has a cheap rerun path for already aligned files, whereas BA3 previousl
 - **new**: yes
 
 An exact word match is not enough to trust old timing: stale `%wor` data can claim audio already anchored to the next utterance. The fork excludes that utterance from reuse. Immediately after adding BA3's base fast path, the same input was accepted and widened the first main bullet from `100_900` to `100_1200`, overlapping the next `1000` start. Post-edit the runner finds the next available timed main-tier start across intervening lines and falls through to realignment when the reused end exceeds it. The check runs before any mutation, so a rejected whole-file reuse attempt leaves every original bullet intact. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_rejects_span_past_next_utterance_start` (1 passed); file-local Rust formatting passed.
+
+### Reject near-zero word spans from FA timing reuse
+- **component**: `batchalign-core` forced-alignment reuse validation
+- **summary**: Requires every reused `%wor` bullet to span at least 40 ms, catching collapsed internal and final words before the cheap rerun path.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/input/spans.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/ba3-post-output/result.txt
+- **depends on**: [031cc38]
+- **commit**: 7bddd99
+- **new**: yes
+
+Positive duration alone does not make old word timing reusable. The fork uses a 40 ms floor because failed alignment often leaves one internal or final word with a tiny residual span that survives zero-duration validation. With only the base BA3 reuse path, a 30 ms `tiny` token was accepted and the file skipped FA. Post-edit duration is checked with saturating arithmetic for every `%wor` word; a sub-floor span rejects the whole fast-path attempt before any main bullet changes. The same invariant covers short utterances and position-independent internal/final failures. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_rejects_near_zero_word_span` (1 passed); file-local Rust formatting passed.
