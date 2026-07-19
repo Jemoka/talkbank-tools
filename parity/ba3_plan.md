@@ -37,6 +37,7 @@
 - [x] 14/40 Makes unsupported-language Stanza UtSeg fallback explicit and functional.
 - [x] 15/40 Rescues English contracted copula progressives in `%mor` and `%gra` together.
 - [x] 16/40 Makes batch input concurrency explicitly configurable.
+- [x] 17/40 Invalidates cached task output when the compiled engine changes.
 
 ## done
 
@@ -559,3 +560,16 @@ Stanza can interpret `sink's overflowing` as possessive `sink` plus `PART/case` 
 - **new**: yes
 
 The fork exposes an operator worker limit and recently fixed a path where another concurrency cap silently overrode it. Pre-edit BA3 had the more fundamental gap: its Tokio runtime, semaphore, and resident dispatch window were three independent hardcoded eights. Post-edit one Pipeline setting controls all three, defaults compatibly to eight, rejects zero, and is forwarded by transcribe, align, morphotag, translate, AI, UtSeg, and compare. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-engine:batchalign_engine_unit_test --test_output=errors`; `bazel test //python/batchalign:pytest --test_output=errors --test_arg=python/batchalign/tests/test_cli.py`; and Bazel-backed `just batchalign cli --help`.
+
+### Invalidate cached outputs across engine builds
+- **component**: Rust LMDB task-output cache
+- **summary**: Includes the compiled git/build identity in the central cache namespace so unchanged task input cannot retrieve output produced by older algorithm code.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/ba3-post-output/result.txt
+- **depends on**: []
+- **commit**: 35e9aad
+- **new**: yes
+
+The fork requires its cache engine version to match before returning a hit. BA3's cache documentation instead acknowledged that code changes under a stable backend name silently served old output and required a manual name bump or cache purge. Post-edit the schema-v3 key includes the build's stamped git identity, with the package version as the non-stamped fallback, before task/backend/input identity. A released build retains normal reuse, while a new implementation cannot inherit its predecessor's transcript or analysis result. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-engine:batchalign_engine_unit_test --test_output=errors` (including distinct namespace digests for two code versions).
