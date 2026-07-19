@@ -15,7 +15,7 @@
 - [ ] Corrects known English transcribe patterns, Chinese bogus lemmas, and Japanese token merging.
 - [x] Preflights large Rev.AI batches up front instead of submitting every file independently. (Please do this without moving revai to rust; keep it in Python.)
 - [x] Avoids Whisper MPS `bfloat16` crashes on Apple Silicon.
-- [ ] Coordinates transcribe memory, splits work safely, and prevents OOM-created zombie workers.
+- [x] Coordinates transcribe memory, splits work safely, and prevents OOM-created zombie workers.
 - [x] Supports Qwen3-ASR plus Qwen3-ForcedAligner and fixes HK_QWEN backend/type-stub integration.
 - [x] Propagates utterance metadata to children and keeps `ReplacedWord` atomic across splits.
 - [x] Uses a sliding dispatch window so huge ASR input lists do not become huge in-flight sets.
@@ -229,3 +229,16 @@ Pre-edit standalone FA constructed `Qwen3ASRModel` from the alignment checkpoint
 - **new**: no
 
 The missing runtime gap was the FA entry point: pre-edit a NoAlign transcript without media failed sibling lookup, while post-edit it reaches neither media nor a panic-on-call dispatcher and serializes identically. The existing typed L2 transaction was separately verified against an invalid secondary head into the host terminator (rollback/fallback), and the Python harness was verified across a missing secondary Stanza pipeline (five cache/fallback cases). Targeted verification used Bazel-built executables: `bazel-bin/crates/batchalign/batchalign-core/batchalign_core_unit_test --exact taskrunners::fa::tests::no_align_is_strict_pass_through_without_media_or_dispatch` (1 passed); `bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact morphosyntax::l2::splice::cardinality_tests::family_c_secondary_head_into_host_terminator_falls_back` (1 passed); `bazel-bin/python/batchalign/pytest python/batchalign/tests/test_stanza_pipeline_cache.py -q` (5 passed).
+
+### Bound decoded-audio admission at each backend route
+- **component**: `batchalign-engine` backend dispatcher and transcribe chunking contracts
+- **summary**: Replaces the unbounded per-backend channel with an admission-budget-sized queue whose async send applies backpressure; one backend loop continues to own model calls, long BERT inputs use bounded overlapping splits, and route shutdown wakes pending producers rather than leaving model-worker processes behind.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/input/dispatch-seam.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/tbt-output/dispatch-seam.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/ba3-pre-output/dispatch-seam.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/ba3-post-output/dispatch-seam.txt
+- **depends on**: [d7c5d49]
+- **commit**: 04ea516
+- **new**: no
+
+A dispatch item may own an entire decoded PCM file, so an unbounded route could defeat the earlier sliding future window when callers dispatch directly or future admission widths grow. Post-edit queue capacity comes from `EngineConfig.max_concurrent_values` (with a safe minimum of one), and closing the route causes blocked `send().await` producers to fail cleanly. BA3 runs Python model objects in-process behind one Rust batcher loop rather than spawning one process per input, so there is no OOM-created child-worker population to orphan. Targeted verification: `bazel build --config=dev //crates/batchalign/batchalign-engine:batchalign_engine_unit_test && bazel-bin/crates/batchalign/batchalign-engine/batchalign_engine_unit_test --exact engine::tests::backend_route_capacity_matches_memory_admission_budget` (1 passed); `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_utseg_sliding_window.py -q` (6 passed).
