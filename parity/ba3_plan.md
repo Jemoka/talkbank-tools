@@ -41,6 +41,7 @@
 - [x] 18/40 Keeps experimental two-pass overlap UTR out of automatic selection.
 - [x] 19/40 Exposes standalone speaker diarization as deterministic turns JSON.
 - [x] 20/40 Collapses known Italian Stanza Defect 6 false MWT expansions.
+- [x] 21/40 Repairs the Italian sentence-initial `la` false MWT expansion.
 
 ## done
 
@@ -615,3 +616,16 @@ The fork makes its Pyannote speaker stage independently useful for acoustic spea
 - **new**: yes
 
 The fork carries a closed, retireable Defect 6 table for common words such as `piccolo`, `parla`, `pallone`, and `coccole` that Stanza can split into a spurious stem plus pronoun. Pre-edit BA3 rendered `piccolo` as `verb|picco~pron|il-S3`, adding a fake lexical unit and corrupting both tiers. Post-edit it recognizes only an actual MWT range whose original surface is in the same closed table, synthesizes the curated POS, lemma, and features, renumbers dependencies and token spans together, and emits an operator-visible anomaly. Genuine `dammela` remains a three-unit compound. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg=italian_defect6` (Bazel target passed); Ruff passed on changed files apart from the repository's pre-existing E721 diagnostic outside this change.
+
+### Repair the Italian sentence-initial `la` false MWT expansion
+- **component**: Python UD-to-CHAT Italian morphosyntax renderer
+- **summary**: Collapses Stanza's sentence-initial `la → il + i` expansion to one feminine singular definite article with consistent dependencies.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/input/stanza-analysis.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/tbt-output/tiers.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/ba3-pre-output/tiers.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/ba3-post-output/tiers.txt
+- **depends on**: [751cd4b]
+- **commit**: ad229ab
+- **new**: yes
+
+The fork records a distinct Defect 7 failure in which Stanza analyzes sentence-initial `la` as masculine-singular `il` plus masculine-plural `i`. Pre-edit BA3 retained both components as a `~`-joined MWT and introduced an extra dependency unit. Post-edit the closed Italian range table synthesizes `det|il-Fem-Def-Art-Sing`, collapses the range, renumbers the following noun and punctuation, and reports `italian_defect_7`; ordinary one-component `la` tokens remain untouched because the repair requires an actual MWT range. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg=italian_defect7` (Bazel target passed) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
