@@ -257,6 +257,23 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
     if !saw_words {
         return false;
     }
+    for (line_index, _, end_ms) in &refreshed {
+        let next_start_ms =
+            chat.ast().lines.0[line_index + 1..]
+                .iter()
+                .find_map(|line| match line {
+                    Line::Utterance(utterance) => utterance
+                        .main
+                        .content
+                        .bullet
+                        .as_ref()
+                        .map(|bullet| bullet.timing.start_ms),
+                    _ => None,
+                });
+        if next_start_ms.is_some_and(|next_start| *end_ms > next_start) {
+            return false;
+        }
+    }
     for (line_index, start_ms, end_ms) in refreshed {
         let Line::Utterance(utterance) = &mut chat.ast_mut().lines.0[line_index] else {
             unreachable!("recorded line index must remain an utterance")
@@ -588,6 +605,25 @@ mod tests {
         };
         assert!(chat.to_chat().contains("\u{15}100_500\u{15}"));
         Ok(())
+    }
+
+    #[test]
+    fn complete_wor_reuse_rejects_span_past_next_utterance_start() {
+        const OVERRUN_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\tmissing, audio\n\
+*PAR:\thello world . \u{15}100_900\u{15}\n\
+%wor:\thello \u{15}100_200\u{15} world \u{15}300_1200\u{15} .\n\
+*PAR:\tgoodbye . \u{15}1000_1300\u{15}\n\
+%wor:\tgoodbye \u{15}1000_1200\u{15} .\n@End\n";
+        let mut chat = Chat::parse(
+            OVERRUN_CHAT,
+            SourceId::try_new("overrun.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+
+        assert!(!refresh_complete_wor_alignment(&mut chat));
+        assert!(chat.to_chat().contains("\u{15}100_900\u{15}"));
     }
 
     #[test]
