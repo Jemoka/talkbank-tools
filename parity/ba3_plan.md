@@ -54,6 +54,7 @@
 - [x] 31/40 Clears stale zero-duration authoritative bullets after untimed FA.
 - [x] 32/40 Replaces provisional UTR windows with successful FA word spans.
 - [x] 33/40 Preserves authoritative bullet envelopes across successful FA.
+- [x] 34/40 Creates missing main bullets from successful FA word spans.
 
 ## done
 
@@ -797,3 +798,16 @@ UTR boundaries are search hints, not authoritative transcript timing. The fork d
 - **new**: yes
 
 Unlike provisional UTR hints, an existing authoritative bullet can intentionally include non-lexical or non-alignable audio around its words. The fork therefore unions its bounds with the successful FA word span. Pre-edit BA3 replaced `800_3000` with the narrower backend segment `900_2200`, losing both parts of that asserted envelope. Post-edit it retains `min(existing start, word start)` through `max(existing end, word end)` while still writing the newly aligned `%wor` tier. This is source-sensitive and does not weaken the UTR replacement rule. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::timed_fa_words_preserve_authoritative_bullet_envelope` (1 passed); file-local Rust formatting passed.
+
+### Create missing main bullets from successful FA word spans
+- **component**: `batchalign-core` forced-alignment result injection
+- **summary**: Derives a previously absent utterance bullet from the exact envelope of successfully timed words instead of the backend segment's search bounds.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/ba3-post-output/result.txt
+- **depends on**: [be1af15]
+- **commit**: 9eae69e
+- **new**: yes
+
+When no prior bullet exists, there is no source envelope to preserve and the aligned words are the strongest timing evidence. The fork uses their minimum start and maximum end. Pre-edit BA3 copied the broader backend segment `800_3000` even though the actual word evidence occupied `1000_2000`; this embedded search padding in the final CHAT output. Post-edit the missing-bullet branch creates `1000_2000`, matching the `%wor` envelope and remaining distinct from both UTR replacement and authoritative union behavior. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::timed_fa_words_create_main_bullet_from_word_span` (1 passed); file-local Rust formatting passed.
