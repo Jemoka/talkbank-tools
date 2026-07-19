@@ -416,6 +416,8 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
                 .iter()
                 .any(|tier| matches!(tier, DependentTier::Wor(_)));
             let words = collapse_aligned_words(&u.main.content.content.0, &seg.words)?;
+            let has_untimed_leading_filler =
+                has_untimed_leading_filler_coverage(&u.main.content.content.0, &words);
             // Carry the utterance's own terminator onto `%wor` (BA2 parity);
             // the typed writer renders the bullets and the terminator.
             let wor = WorTier::from_words(words).with_terminator(u.main.content.terminator.clone());
@@ -448,12 +450,14 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
                     Some(bullet) if bullet.source == BulletSource::Authoritative => {
                         const MAX_AUTHORITATIVE_START_LEAD_MS: u64 = 2_000;
                         let start_lead_ms = word_start_ms.saturating_sub(bullet.timing.start_ms);
-                        let start_ms =
-                            if had_wor_tier && start_lead_ms > MAX_AUTHORITATIVE_START_LEAD_MS {
-                                word_start_ms
-                            } else {
-                                bullet.timing.start_ms.min(word_start_ms)
-                            };
+                        let start_ms = if had_wor_tier
+                            && !has_untimed_leading_filler
+                            && start_lead_ms > MAX_AUTHORITATIVE_START_LEAD_MS
+                        {
+                            word_start_ms
+                        } else {
+                            bullet.timing.start_ms.min(word_start_ms)
+                        };
                         (start_ms, bullet.timing.end_ms.max(word_end_ms))
                     }
                     _ => (word_start_ms, word_end_ms),
@@ -625,6 +629,34 @@ fn source_word<'a>(w: &WordItem<'a>) -> Option<&'a talkbank_model::model::Word> 
         WordItem::ReplacedWord(r) => Some(&r.word),
         WordItem::Separator(_) => None,
     }
+}
+
+fn has_untimed_leading_filler_coverage(
+    content: &[UtteranceContent],
+    aligned_words: &[talkbank_model::model::Word],
+) -> bool {
+    use talkbank_model::model::WordCategory;
+
+    let mut source_categories = Vec::new();
+    walk_words(content, None, &mut |item| {
+        if let Some(word) = source_word(&item) {
+            source_categories.push(word.category.clone());
+        }
+    });
+
+    for (category, aligned_word) in source_categories.iter().zip(aligned_words) {
+        if aligned_word
+            .inline_bullet
+            .as_ref()
+            .is_some_and(|bullet| bullet.timing.end_ms > bullet.timing.start_ms)
+        {
+            break;
+        }
+        if category.as_ref() == Some(&WordCategory::Filler) {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -1079,6 +1111,54 @@ mod tests {
 
         assert!(chat.to_chat().contains("\u{15}9443_9970\u{15}"));
         assert!(!chat.to_chat().contains("\u{15}2000_9970\u{15}"));
+    }
+
+    #[test]
+    fn fa_rerun_preserves_start_for_untimed_leading_filler() {
+        const LEADING_FILLER_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\t&-um happened . \u{15}2000_9970\u{15}\n\
+%wor:\t&-um happened .\n@End\n";
+        let mut chat = Chat::parse(
+            LEADING_FILLER_CHAT,
+            SourceId::try_new("leading-filler.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let aligned = vec![AsrSegment {
+            start_ms: 2_000,
+            end_ms: 9_970,
+            text: "um happened".into(),
+            speaker: None,
+            words: vec![
+                AsrWord {
+                    text: "um".into(),
+                    start_ms: 0,
+                    end_ms: 0,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "happened".into(),
+                    start_ms: 9_443,
+                    end_ms: 9_970,
+                    confidence: None,
+                },
+            ],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timed result");
+
+        let bullet = chat
+            .ast()
+            .lines
+            .0
+            .iter()
+            .find_map(|line| match line {
+                Line::Utterance(utterance) => utterance.main.content.bullet.as_ref(),
+                _ => None,
+            })
+            .expect("main bullet");
+        assert_eq!(bullet.timing.start_ms, 2_000);
+        assert_eq!(bullet.timing.end_ms, 9_970);
     }
 
     #[test]
