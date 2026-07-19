@@ -203,6 +203,47 @@ def test_mwt_contraction_groups_into_one_word():
     assert _gra_str(analysis) == "1|5|NSUBJ 2|5|COP 3|5|DET 4|5|AMOD 5|5|ROOT 6|5|PUNCT"
 
 
+def test_possessive_gerund_mwt_is_rescued_as_copula_progressive():
+    # Stanza has emitted this analysis for "sink's overflowing": possessive
+    # sink + PART 's + nominal gerund.  The structured rescue must update both
+    # morphology and dependencies before MWT grouping.
+    words = [
+        FakeWord("sink", "sink", "NOUN", "Number=Sing", 3, "nmod:poss", id=1),
+        FakeWord("'s", "'s", "PART", None, 1, "case", id=2),
+        FakeWord("overflowing", "overflow", "NOUN", "Number=Sing", 0, "root", id=3),
+    ]
+    tokens = [FakeToken("sink's", [1, 2]), FakeToken("overflowing", [3])]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=tokens), ".", [], "en"
+    )
+
+    assert (
+        _mor_str(analysis, ".")
+        == "noun|sink~aux|be-Fin-Ind-Pres-S3 verb|overflow-Part-Pres-S ."
+    )
+    assert _gra_str(analysis) == "1|3|NSUBJ 2|3|AUX 3|3|ROOT 4|3|PUNCT"
+    assert [anomaly.field for anomaly in analysis.anomalies] == [
+        "english_copula_progressive"
+    ]
+
+
+def test_copula_progressive_rescue_does_not_rewrite_genuine_possessive():
+    words = [
+        FakeWord("boy", "boy", "NOUN", "Number=Sing", 3, "nmod:poss", id=1),
+        FakeWord("'s", "'s", "PART", None, 1, "case", id=2),
+        FakeWord("coat", "coat", "NOUN", "Number=Sing", 0, "root", id=3),
+    ]
+    tokens = [FakeToken("boy's", [1, 2]), FakeToken("coat", [3])]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=tokens), ".", [], "en"
+    )
+
+    assert "~part|s" in _mor_str(analysis, ".")
+    assert analysis.anomalies == []
+
+
 def test_question_terminator_is_carried_through():
     # The terminator is applied downstream; %gra still ends with a PUNCT.
     sent = _sentence(

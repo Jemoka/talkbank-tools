@@ -354,6 +354,132 @@ def _apply_italian_compound_imperatives(
     return expanded_words, expanded_tokens
 
 
+def _apply_english_copula_progressive(
+    words: list[_NormalizedWord],
+    tokens: list[Any],
+    anomalies: list[AnalysisAnomaly],
+) -> list[_NormalizedWord]:
+    """Rescue Stanza's possessive reading of ``<subject>'s <verb-ing>``.
+
+    Stanza can analyze a contracted copula as possessive ``PART/case`` and the
+    progressive verb as a noun.  Keep this deliberately narrow: the sentence
+    must have an MWT, no finite verb, one possessive ``'s``, and exactly one
+    ``-ing`` noun.  This mirrors the fork's grammatical invariant and repairs
+    dependencies together with morphology so ``%mor`` and ``%gra`` agree.
+    """
+    if any(
+        word.feats is not None and "VerbForm=Fin" in word.feats
+        for word in words
+    ):
+        return words
+    if not any(len(list(getattr(token, "id", []) or [])) > 1 for token in tokens):
+        return words
+
+    parts = [
+        word
+        for word in words
+        if word.upos == "PART"
+        and word.lemma == "'s"
+        and word.deprel.lower() == "case"
+    ]
+    ing_nouns = [
+        word
+        for word in words
+        if word.upos == "NOUN"
+        and len(word.text) >= 4
+        and word.text.lower().endswith("ing")
+    ]
+    if len(parts) != 1 or len(ing_nouns) != 1:
+        return words
+
+    part = parts[0]
+    verb = ing_nouns[0]
+    by_id = {word.id: word for word in words}
+    possessor = by_id.get(part.head)
+    if (
+        possessor is None
+        or possessor.upos not in {"NOUN", "PROPN"}
+        or possessor.deprel.lower() != "nmod:poss"
+    ):
+        return words
+    roots = [
+        word for word in words if word.head == 0 and word.deprel.lower() == "root"
+    ]
+    if len(roots) != 1:
+        return words
+    old_root = roots[0]
+
+    rewritten: list[_NormalizedWord] = []
+    for word in words:
+        replacement = word
+        if word.id == part.id:
+            replacement = _NormalizedWord(
+                word.text,
+                "be",
+                "AUX",
+                "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin",
+                verb.id,
+                "aux",
+                word.id,
+            )
+        elif word.id == possessor.id:
+            replacement = _NormalizedWord(
+                word.text,
+                word.lemma,
+                word.upos,
+                word.feats,
+                verb.id,
+                "nsubj",
+                word.id,
+            )
+        elif word.id == verb.id:
+            replacement = _NormalizedWord(
+                word.text,
+                word.lemma,
+                "VERB",
+                "Tense=Pres|VerbForm=Part",
+                0,
+                "root",
+                word.id,
+            )
+        elif word.id == old_root.id and old_root.id != verb.id:
+            replacement = _NormalizedWord(
+                word.text,
+                word.lemma,
+                word.upos,
+                word.feats,
+                verb.id,
+                "obj",
+                word.id,
+            )
+        elif (
+            old_root.id != verb.id
+            and word.head == old_root.id
+            and word.deprel.lower() in {"cc", "punct", "discourse", "mark"}
+        ):
+            replacement = _NormalizedWord(
+                word.text,
+                word.lemma,
+                word.upos,
+                word.feats,
+                verb.id,
+                word.deprel,
+                word.id,
+            )
+        rewritten.append(replacement)
+
+    _anomaly(
+        anomalies,
+        part.id,
+        part.text,
+        "english_copula_progressive",
+        {"upos": part.upos, "lemma": part.lemma, "deprel": part.deprel},
+        {"upos": "AUX", "lemma": "be", "deprel": "aux"},
+        "possessive-gerund analysis violates the finite-clause invariant",
+    )
+    return rewritten
+
+
 # --- feature helpers (BA2 ud.py:44-54) ------------------------------------
 
 
@@ -715,6 +841,10 @@ def parse_sentence(
     sentence_tokens = list(getattr(sentence, "tokens", []) or [])
     if lang == "it":
         normalized_words, sentence_tokens = _apply_italian_compound_imperatives(
+            normalized_words, sentence_tokens, anomalies
+        )
+    elif lang == "en":
+        normalized_words = _apply_english_copula_progressive(
             normalized_words, sentence_tokens, anomalies
         )
 
