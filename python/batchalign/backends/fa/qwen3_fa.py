@@ -1,9 +1,9 @@
 """Qwen3FaBackend: standalone forced-alignment via Qwen3 ForcedAligner.
 
-Wraps `qwen_asr.Qwen3ASRModel(forced_aligner="Qwen/Qwen3-ForcedAligner-
-0.6B")` in standalone FA-only mode: the ASR side is not used; the
-backend treats the existing CHAT main-tier text as the reference and
-asks the Qwen3 aligner for word-level timestamps relative to the audio.
+Wraps `qwen_asr.Qwen3ForcedAligner` in standalone FA-only mode: the ASR
+model is not loaded; the backend treats the existing CHAT main-tier text
+as the reference and asks the aligner for word-level timestamps relative
+to the audio.
 
 This is the standalone counterpart to the FA already wired in
 `backends/asr/qwen3_asr.py` (where the aligner runs as part of ASR).
@@ -69,7 +69,7 @@ class Qwen3FaBackend(FA):
         batch_window_ms: int = 0,
     ) -> None:
         import torch  # type: ignore[import-not-found]
-        from qwen_asr import Qwen3ASRModel  # type: ignore[import-not-found]
+        from qwen_asr import Qwen3ForcedAligner  # type: ignore[import-not-found]
 
         self._model_id = model_id
         self._device = device
@@ -88,15 +88,13 @@ class Qwen3FaBackend(FA):
         else:
             dtype = torch.float32
 
-        # Load ONLY the forced aligner — `forced_aligner=` keyword on
-        # Qwen3ASRModel.from_pretrained loads the alignment head; we
-        # don't issue any transcribe() calls, just align(). Per the
-        # qwen_asr API the same model object hosts both surfaces; we
-        # treat ASR transcribe as off and call only the aligner side.
-        self._model = Qwen3ASRModel.from_pretrained(
+        # Standalone FA owns only the alignment model. Constructing an
+        # ASR model with this checkpoint and `forced_aligner=model_id`
+        # loads the same large checkpoint twice and exposes the aligner only
+        # as a nested field. qwen-asr provides the direct typed surface.
+        self._aligner = Qwen3ForcedAligner.from_pretrained(
             self._model_id,
-            forced_aligner=model_id,
-            torch_dtype=dtype,
+            dtype=dtype,
             device_map=device,
         )
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
@@ -174,7 +172,7 @@ class Qwen3FaBackend(FA):
             try:
                 # qwen_asr resamples + downmixes the `(chunk, sr)` tuple
                 # internally — no pre-processing required on our side.
-                results = self._model.forced_aligner.align(
+                results = self._aligner.align(
                     audio=(chunk, sr),
                     text=reference,
                     language=language,
