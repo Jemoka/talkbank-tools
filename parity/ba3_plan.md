@@ -52,6 +52,7 @@
 - [x] 29/40 Rejects one-word dominance in reusable FA timing.
 - [x] 30/40 Rejects backward word order in reusable FA timing.
 - [x] 31/40 Clears stale zero-duration authoritative bullets after untimed FA.
+- [x] 32/40 Replaces provisional UTR windows with successful FA word spans.
 
 ## done
 
@@ -769,3 +770,16 @@ Word spans can each be positive yet still form a backward sequence. The base BA3
 - **new**: yes
 
 The fork distinguishes a usable UTR hint from a stale authoritative bullet left by an earlier bad FA run. When every returned word is untimed, there is no new span with which to repair an authoritative `245986_245986` anchor; retaining it guarantees temporal validation failure. Pre-edit BA3 copied the segment bounds back unconditionally and preserved the invalid bullet. Post-edit the no-timing branch removes only a zero/backward authoritative bullet, leaves valid existing windows unchanged, and still replaces `%wor` with the current untimed word structure. The strict parser regression constructs the stale state in the typed AST because serialized `T_T` input is correctly rejected as E362. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::untimed_fa_result_clears_zero_duration_authoritative_bullet` (1 passed); file-local Rust formatting passed.
+
+### Replace provisional UTR windows with successful FA word spans
+- **component**: `batchalign-core` forced-alignment result injection
+- **summary**: Replaces a broad UTR-generated main-tier hint with the minimum and maximum timestamps of the words that FA actually aligned.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/ba3-post-output/result.txt
+- **depends on**: []
+- **commit**: be1af15
+- **new**: yes
+
+UTR boundaries are search hints, not authoritative transcript timing. The fork discards that broad window after successful forced alignment and derives the utterance bullet from the actual timed-word envelope. Pre-edit BA3 retained the segment bounds `800_3000` even though both aligned words occupied only `1000_2000`, leaving avoidable leading and trailing silence. Post-edit the injector tracks the minimum word start and maximum word end and overwrites only bullets marked as UTR-sourced; untimed results and authoritative transcript bullets retain their separate policies. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::timed_fa_words_overwrite_provisional_utr_window` (1 passed); file-local Rust formatting passed.
