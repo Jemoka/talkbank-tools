@@ -264,6 +264,23 @@ mod tests {
     }
 
     #[test]
+    fn test_japanese_split_tokens_merge_back_to_chat_word() {
+        // Japanese Stanza can split one CHAT surface into a lexical stem and
+        // auxiliary. The postprocessor must restore the source word without
+        // marking it as an MWT for Stanza to expand again.
+        let words = vec!["食べちゃう".into(), "よ".into()];
+        let tokens = vec!["食べ".into(), "ちゃう".into(), "よ".into()];
+        let result = align_tokens(&words, &tokens, "ja");
+        assert_eq!(
+            result,
+            vec![
+                PatchedToken::Hint("食べちゃう".into(), false),
+                PatchedToken::Plain("よ".into()),
+            ]
+        );
+    }
+
+    #[test]
     fn test_english_contraction_merge() {
         // Stanza splits "don't" into ["do", "n't"]
         let words = vec!["don't".into()];
