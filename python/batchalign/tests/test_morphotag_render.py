@@ -245,6 +245,21 @@ def test_missing_lemma_preserves_surface_without_changing_valid_analysis():
     assert [anomaly.field for anomaly in analysis.anomalies] == ["lemma"]
 
 
+def test_chinese_bogus_punctuation_lemma_preserves_han_surface():
+    sent = _sentence(
+        [
+            ("苹果", "。", "NOUN", None, 0, "root"),
+        ]
+    )
+
+    analysis = render.parse_sentence(sent, ".", [], "zh")
+
+    assert _mor_str(analysis, ".") == "noun|苹果 ."
+    assert analysis.words[0].units[0].deprel == "ROOT"
+    assert [anomaly.field for anomaly in analysis.anomalies] == ["lemma"]
+    assert analysis.anomalies[0].text == "苹果"
+
+
 def test_stanza_repairs_are_logged_with_source_and_field(caplog):
     sent = _sentence(
         [
