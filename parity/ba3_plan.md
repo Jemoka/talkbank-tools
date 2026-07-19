@@ -36,6 +36,7 @@
 - [x] 13/40 Refreshes stale same-version Stanza resource catalogs safely.
 - [x] 14/40 Makes unsupported-language Stanza UtSeg fallback explicit and functional.
 - [x] 15/40 Rescues English contracted copula progressives in `%mor` and `%gra` together.
+- [x] 16/40 Makes batch input concurrency explicitly configurable.
 
 ## done
 
@@ -545,3 +546,16 @@ Pre-edit transcribe returned `None` from its UtSeg builder for unsupported langu
 - **new**: yes
 
 Stanza can interpret `sink's overflowing` as possessive `sink` plus `PART/case` and a nominal `overflowing`, producing `~part|s` and possessive dependencies. Post-edit BA3 ports the fork's guarded finite-clause invariant before structured rendering: it requires an MWT, no existing finite verb, one possessive `'s`, and exactly one `-ing` noun, then emits the finite `~aux|be-Fin-Ind-Pres-S3`, progressive verb features, and matching `NSUBJ/AUX/ROOT` relations. Genuine possessives such as `boy's coat` remain unchanged. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=python/batchalign/tests/test_morphotag_render.py` (Bazel target passed).
+
+### Make batch worker concurrency configurable end to end
+- **component**: Python CLI and Rust pipeline scheduler
+- **summary**: Adds a validated global `--workers` option and uses the requested value for runtime threads, execution permits, and the bounded dispatch window across every batch-processing command.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/input/invocation.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/tbt-output/concurrency.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/ba3-pre-output/concurrency.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/ba3-post-output/concurrency.txt
+- **depends on**: [d7c5d49]
+- **commit**: 4d12e89
+- **new**: yes
+
+The fork exposes an operator worker limit and recently fixed a path where another concurrency cap silently overrode it. Pre-edit BA3 had the more fundamental gap: its Tokio runtime, semaphore, and resident dispatch window were three independent hardcoded eights. Post-edit one Pipeline setting controls all three, defaults compatibly to eight, rejects zero, and is forwarded by transcribe, align, morphotag, translate, AI, UtSeg, and compare. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-engine:batchalign_engine_unit_test --test_output=errors`; `bazel test //python/batchalign:pytest --test_output=errors --test_arg=python/batchalign/tests/test_cli.py`; and Bazel-backed `just batchalign cli --help`.
