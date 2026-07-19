@@ -34,6 +34,7 @@
 - [x] 11/40 Places generated provenance after constant participant headers.
 - [x] 12/40 Exposes Apple MPS only through an explicit, warned opt-in.
 - [x] 13/40 Refreshes stale same-version Stanza resource catalogs safely.
+- [x] 14/40 Makes unsupported-language Stanza UtSeg fallback explicit and functional.
 
 ## done
 
@@ -517,3 +518,16 @@ The fork changed MPS from an implicit hardware possibility into an explicit perf
 - **new**: yes
 
 Stanford has republished Stanza model artifacts without changing the resources version, so `REUSE_RESOURCES` can verify a new model payload against an old cached checksum and make morphotag unavailable. Pre-edit BA3 never refreshed a present manifest. Post-edit it follows the fork's worker-boundary repair at BA3's backend boundary: missing manifests remain Stanza's responsibility, successful refreshes use same-directory atomic replacement, and failures leave the old catalog intact. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors` (Python Bazel target passed, including online-success, offline-fallback, and missing-manifest regressions).
+
+### Make unsupported-language Stanza UtSeg fallback explicit and functional
+- **component**: Python UtSeg backend and transcribe/utseg CLI wiring
+- **summary**: Refuses to silently omit utterance segmentation when no TalkBank boundary model exists and makes `--utseg-fallback-stanza` select a real constituency backend that applies the fork's coordinated-clause grouping policy.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/ba3-post-output/result.txt
+- **depends on**: [68575ff]
+- **commit**: b498ac0
+- **new**: yes
+
+Pre-edit transcribe returned `None` from its UtSeg builder for unsupported languages, silently keeping vendor ASR segmentation, while the standalone fallback switch was explicitly inert. Post-edit both command paths refuse that silent output change by default and expose the fork's named opt-in. The fallback groups coordinated `S` clauses, merges fragments shorter than three words, carries fixed word timings, and proportionally projects a timed parent window when word timing is absent. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors` (240 passed, 1 skipped).
