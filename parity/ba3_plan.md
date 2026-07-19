@@ -59,6 +59,7 @@
 - [x] 36/40 Discards implausibly large stale authoritative start leads on FA rerun.
 - [x] 37/40 Preserves authoritative start coverage for untimed leading fillers.
 - [x] 38/40 Replaces `%wor` in place without reordering dependent tiers.
+- [x] 39/40 Repairs near-zero FA words by borrowing from the following span.
 
 ## done
 
@@ -867,3 +868,16 @@ The two-second stale-start heuristic needs a content-aware exception: fillers su
 - **new**: yes
 
 Rerunning FA should update timing, not reorder unrelated dependent tiers. The fork's replace-or-add operation remembers the existing `%wor` slot. Pre-edit BA3 removed every `%wor` and appended the replacement, turning `%wor` then `%mor` into `%mor` then `%wor` and creating noisy corpus-wide diffs. Post-edit the first old `%wor` position is retained while duplicates are still collapsed; a transcript with no prior `%wor` continues to append the newly generated tier. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::fa_replaces_wor_tier_at_its_original_position` (1 passed); file-local Rust formatting passed.
+
+### Repair near-zero FA words by borrowing from the following span
+- **component**: `batchalign-core` forced-alignment timing postprocessing
+- **summary**: Expands a positive but sub-40 ms word to the minimum duration by moving its shared boundary into a sufficiently long following word.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/tbt-output/wor.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/ba3-pre-output/wor.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/ba3-post-output/wor.txt
+- **depends on**: []
+- **commit**: a1bd8d8
+- **new**: yes
+
+FA can return a formally positive span that is too short to represent a plausible lexical word. The fork repairs a contiguous boundary when the following word has enough duration to lend without collapsing itself. Pre-edit BA3 serialized `a 100_120; boat 120_500`; post-edit it moves the boundary to produce `a 100_140; boat 140_500`, satisfying the same 40 ms floor used to decide whether old `%wor` timing is reusable. Zero-duration/untimed words and noncontiguous gaps remain untouched by this bounded repair. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::fa_rebalances_near_zero_word_from_following_span` (1 passed); file-local Rust formatting passed.
