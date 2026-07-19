@@ -35,6 +35,7 @@
 - [x] 12/40 Exposes Apple MPS only through an explicit, warned opt-in.
 - [x] 13/40 Refreshes stale same-version Stanza resource catalogs safely.
 - [x] 14/40 Makes unsupported-language Stanza UtSeg fallback explicit and functional.
+- [x] 15/40 Rescues English contracted copula progressives in `%mor` and `%gra` together.
 
 ## done
 
@@ -531,3 +532,16 @@ Stanford has republished Stanza model artifacts without changing the resources v
 - **new**: yes
 
 Pre-edit transcribe returned `None` from its UtSeg builder for unsupported languages, silently keeping vendor ASR segmentation, while the standalone fallback switch was explicitly inert. Post-edit both command paths refuse that silent output change by default and expose the fork's named opt-in. The fallback groups coordinated `S` clauses, merges fragments shorter than three words, carries fixed word timings, and proportionally projects a timed parent window when word timing is absent. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors` (240 passed, 1 skipped).
+
+### Rescue contracted copula progressives structurally
+- **component**: Python UD-to-CHAT morphosyntax renderer
+- **summary**: Rewrites Stanza's possessive-gerund analysis of English `<subject>'s <verb-ing>` MWTs into a finite copula plus progressive verb, updating morphology and dependencies together.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/input/stanza-analysis.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/tbt-output/tiers.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/ba3-pre-output/tiers.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/ba3-post-output/tiers.txt
+- **depends on**: []
+- **commit**: e44b6d9
+- **new**: yes
+
+Stanza can interpret `sink's overflowing` as possessive `sink` plus `PART/case` and a nominal `overflowing`, producing `~part|s` and possessive dependencies. Post-edit BA3 ports the fork's guarded finite-clause invariant before structured rendering: it requires an MWT, no existing finite verb, one possessive `'s`, and exactly one `-ing` noun, then emits the finite `~aux|be-Fin-Ind-Pres-S3`, progressive verb features, and matching `NSUBJ/AUX/ROOT` relations. Genuine possessives such as `boy's coat` remain unchanged. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=python/batchalign/tests/test_morphotag_render.py` (Bazel target passed).
