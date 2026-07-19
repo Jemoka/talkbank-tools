@@ -425,9 +425,19 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             // shipped a `%wor:` tier), drop the old one so we don't end up
             // with two `%wor:` lines per utterance. BA2 mutates word timings
             // in place; the typed-tier equivalent is replace-not-append.
+            let original_wor_position = u
+                .dependent_tiers
+                .iter()
+                .position(|tier| matches!(tier, DependentTier::Wor(_)));
             u.dependent_tiers
-                .retain(|t| !matches!(t, DependentTier::Wor(_)));
-            u.dependent_tiers.push(DependentTier::Wor(wor));
+                .retain(|tier| !matches!(tier, DependentTier::Wor(_)));
+            match original_wor_position {
+                Some(position) => u.dependent_tiers.insert(
+                    position.min(u.dependent_tiers.len()),
+                    DependentTier::Wor(wor),
+                ),
+                None => u.dependent_tiers.push(DependentTier::Wor(wor)),
+            }
             let timed_word_span = seg
                 .words
                 .iter()
@@ -993,6 +1003,38 @@ mod tests {
 
         assert!(chat.to_chat().contains("\u{15}1000_2000\u{15}"));
         assert!(!chat.to_chat().contains("\u{15}800_3000\u{15}"));
+    }
+
+    #[test]
+    fn fa_replaces_wor_tier_at_its_original_position() {
+        const ORDERED_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\thello . \u{15}100_500\u{15}\n\
+%wor:\thello \u{15}100_500\u{15} .\n\
+%mor:\tintj|hello .\n@End\n";
+        let mut chat = Chat::parse(
+            ORDERED_CHAT,
+            SourceId::try_new("wor-order.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let aligned = vec![AsrSegment {
+            start_ms: 100,
+            end_ms: 500,
+            text: "hello".into(),
+            speaker: None,
+            words: vec![AsrWord {
+                text: "hello".into(),
+                start_ms: 150,
+                end_ms: 450,
+                confidence: None,
+            }],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timed result");
+
+        let output = chat.to_chat();
+        assert!(output.find("%wor:").expect("wor tier") < output.find("%mor:").expect("mor tier"));
+        assert!(output.contains("%wor:\thello \u{15}150_450\u{15} ."));
     }
 
     #[test]
