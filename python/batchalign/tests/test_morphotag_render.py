@@ -261,3 +261,63 @@ def test_stanza_repairs_are_logged_with_source_and_field(caplog):
     assert "source=bad.cha utterance=4" in caplog.text
     for field_name in ("lemma", "upos", "head", "deprel"):
         assert f"field={field_name}" in caplog.text
+
+
+def test_italian_defect_8_expands_dammela_to_verb_and_clitics():
+    sent = _sentence(
+        [
+            ("dammela", "dammelo", "ADJ", "Gender=Masc|Number=Sing", 0, "root"),
+        ]
+    )
+
+    analysis = render.parse_sentence(sent, ".", [], "it")
+
+    assert len(analysis.words) == 1
+    assert _mor_str(analysis, ".") == (
+        "verb|dare-Fin-Imp-S2~pron|me-Prs-S1~pron|la-Prs-S3 ."
+    )
+    assert _gra_str(analysis) == "1|3|ROOT 2|1|IOBJ 3|1|OBJ 4|1|PUNCT"
+    assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_8"]
+
+
+def test_italian_defects_12_and_13_restore_missing_clitic_expansions():
+    cases = (
+        ("aprilo", "aprire", "aprire", "lo", "italian_defect_12"),
+        ("leggila", "leggilare", "leggere", "la", "italian_defect_13"),
+    )
+
+    for surface, observed_lemma, verb_lemma, pronoun, anomaly_field in cases:
+        sent = _sentence([(surface, observed_lemma, "VERB", "VerbForm=Fin", 0, "root")])
+
+        analysis = render.parse_sentence(sent, ".", [], "it")
+
+        assert _mor_str(analysis, ".") == (
+            f"verb|{verb_lemma}-Fin-Imp-S2~pron|{pronoun}-Prs-S3 ."
+        )
+        assert _gra_str(analysis) == "1|2|ROOT 2|1|OBJ 3|1|PUNCT"
+        assert [anomaly.field for anomaly in analysis.anomalies] == [anomaly_field]
+
+
+def test_italian_workaround_registry_is_numbered_and_retireable():
+    from batchalign.backends.morphosyntax.ud.it.workarounds import (
+        COMPOUND_IMPERATIVE_RULES,
+    )
+
+    assert {rule.defect for rule in COMPOUND_IMPERATIVE_RULES} == {8, 12, 13}
+    assert len({rule.surface for rule in COMPOUND_IMPERATIVE_RULES}) == len(
+        COMPOUND_IMPERATIVE_RULES
+    )
+    assert all("retire" in rule.retire_when for rule in COMPOUND_IMPERATIVE_RULES)
+
+
+def test_italian_unknown_surface_is_not_rewritten():
+    sent = _sentence(
+        [
+            ("bella", "bello", "ADJ", "Gender=Fem|Number=Sing", 0, "root"),
+        ]
+    )
+
+    analysis = render.parse_sentence(sent, ".", [], "it")
+
+    assert _mor_str(analysis, ".") == "adj|bello-S1 ."
+    assert not analysis.anomalies

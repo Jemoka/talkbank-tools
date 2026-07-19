@@ -97,6 +97,12 @@ class _NormalizedWord:
     id: int
 
 
+@dataclass
+class _NormalizedToken:
+    text: str
+    id: list[int]
+
+
 _UD_POS = {
     "ADJ",
     "ADP",
@@ -251,6 +257,101 @@ def _normalize_words(
         )
 
     return normalized, anomalies
+
+
+def _apply_italian_compound_imperatives(
+    words: list[_NormalizedWord],
+    tokens: list[Any],
+    anomalies: list[AnalysisAnomaly],
+) -> tuple[list[_NormalizedWord], list[Any]]:
+    """Expand confirmed single-token Stanza defects into verb+clitic MWTs."""
+    from .it.workarounds import rule_for
+
+    # These rules target Stanza's missing-MWT shape. If this sentence already
+    # contains an MWT or token/word cardinality differs, leave it untouched.
+    if len(tokens) != len(words):
+        return words, tokens
+    token_ids: list[int] = []
+    for token in tokens:
+        ids = list(getattr(token, "id", []) or [])
+        if len(ids) != 1 or not isinstance(ids[0], int):
+            return words, tokens
+        token_ids.append(ids[0])
+    if token_ids != list(range(1, len(words) + 1)):
+        return words, tokens
+
+    rules = [rule_for(word.text, word.upos) for word in words]
+    if not any(rules):
+        return words, tokens
+
+    old_to_new: dict[int, int] = {}
+    next_id = 1
+    for old_id, rule in enumerate(rules, start=1):
+        old_to_new[old_id] = next_id
+        next_id += 1 + (len(rule.clitics) if rule is not None else 0)
+
+    expanded_words: list[_NormalizedWord] = []
+    expanded_tokens: list[Any] = []
+    imperative_feats = "Mood=Imp|Number=Sing|Person=2|VerbForm=Fin"
+
+    for old_id, (word, token, rule) in enumerate(
+        zip(words, tokens, rules, strict=True), start=1
+    ):
+        main_id = old_to_new[old_id]
+        mapped_head = old_to_new.get(word.head, word.head)
+        if rule is None:
+            expanded_words.append(
+                _NormalizedWord(
+                    word.text,
+                    word.lemma,
+                    word.upos,
+                    word.feats,
+                    mapped_head,
+                    word.deprel,
+                    main_id,
+                )
+            )
+            expanded_tokens.append(_NormalizedToken(token.text, [main_id]))
+            continue
+
+        expanded_words.append(
+            _NormalizedWord(
+                rule.stem_surface,
+                rule.verb_lemma,
+                "VERB",
+                imperative_feats,
+                mapped_head,
+                word.deprel,
+                main_id,
+            )
+        )
+        span_ids = [main_id]
+        for offset, clitic in enumerate(rule.clitics, start=1):
+            clitic_id = main_id + offset
+            span_ids.append(clitic_id)
+            expanded_words.append(
+                _NormalizedWord(
+                    clitic.surface,
+                    clitic.lemma,
+                    "PRON",
+                    clitic.feats,
+                    main_id,
+                    clitic.deprel,
+                    clitic_id,
+                )
+            )
+        expanded_tokens.append(_NormalizedToken(rule.surface, span_ids))
+        _anomaly(
+            anomalies,
+            old_id,
+            word.text,
+            f"italian_defect_{rule.defect}",
+            {"upos": word.upos, "lemma": word.lemma},
+            {"upos": "VERB", "lemma": rule.verb_lemma, "chunks": len(span_ids)},
+            rule.retire_when,
+        )
+
+    return expanded_words, expanded_tokens
 
 
 # --- feature helpers (BA2 ud.py:44-54) ------------------------------------
@@ -611,6 +712,11 @@ def parse_sentence(
         special_forms = []
 
     normalized_words, anomalies = _normalize_words(sentence)
+    sentence_tokens = list(getattr(sentence, "tokens", []) or [])
+    if lang == "it":
+        normalized_words, sentence_tokens = _apply_italian_compound_imperatives(
+            normalized_words, sentence_tokens, anomalies
+        )
 
     # Per Stanza-word (chunk) parallel arrays, mirroring BA2's `mor`.
     analyses: list[tuple[str, str, list[str]] | None] = []
@@ -625,7 +731,7 @@ def parse_sentence(
     auxiliaries: list[int] = []
 
     # get mwts / clitics / auxiliaries (BA2 ud.py:369-411)
-    for indx, token in enumerate(sentence.tokens):
+    for indx, token in enumerate(sentence_tokens):
         if token.text[0] == "-":
             auxiliaries.append(token.id[0] - 1)
 
@@ -665,7 +771,7 @@ def parse_sentence(
             and token.text.strip() == "au"
             and type(token.id) == tuple
             and indx != 0
-            and sentence.tokens[indx - 1].text != "jusqu'"
+            and sentence_tokens[indx - 1].text != "jusqu'"
         ):
             auxiliaries.append(token.id[0])
         elif (
