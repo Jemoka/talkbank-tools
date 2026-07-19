@@ -558,6 +558,21 @@ pub fn split_utterance(utt: Utterance, assignments: &[usize]) -> Vec<Utterance> 
         }
     }
 
+    // Retraced material is excluded from the morphology word domain, so a
+    // Retrace node has no direct assignment. It binds forward to the retry or
+    // correction; assign it before generic back-fill can strand it with the
+    // preceding child as a dangling marker.
+    for idx in 0..num_content_items {
+        if content_item_group[idx].is_some()
+            || !matches!(content_items[idx], UtteranceContent::Retrace(_))
+        {
+            continue;
+        }
+        if let Some(next_group) = content_item_group[idx + 1..].iter().find_map(|group| *group) {
+            content_item_group[idx] = Some(next_group);
+        }
+    }
+
     // Back-fill unassigned items
     let mut last_group: Option<usize> = None;
     for group in content_item_group.iter_mut() {
@@ -1410,6 +1425,31 @@ mod tests {
         assert_eq!(last.main.content.bullet, parent_bullet);
         assert!(first_text.contains("wanna [: want to]"));
         assert!(!last_text.contains("wanna") && !last_text.contains("want"));
+    }
+
+    #[test]
+    fn utseg_split_keeps_retrace_with_following_retry() {
+        let chat = parse_chat(
+            "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tPAR Participant\n\
+             @ID:\teng|test|PAR|||||Participant|||\n\
+             *PAR:\tmud dig [/] dig [/] dig fire .\n@End\n",
+        );
+        let result = split_utterance(get_utterance(&chat, 0).clone(), &[0, 1, 1]);
+        assert_eq!(result.len(), 2);
+
+        for child in result {
+            let output = child.to_chat_string();
+            for marker in ["[/]", "[//]", "[///]"] {
+                let mut remainder = output.as_str();
+                while let Some((_, after)) = remainder.split_once(marker) {
+                    assert!(
+                        !after.trim_start().starts_with(['.', '?', '!']),
+                        "retrace marker was stranded: {output}"
+                    );
+                    remainder = after;
+                }
+            }
+        }
     }
 
     #[test]
