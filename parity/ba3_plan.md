@@ -9,7 +9,7 @@
 - [x] Integrates Cantonese FA through Jyutping and wav2vec2 (no need for the common recovery layer).
 - [x] Fails unsupported primary languages per file instead of silently skipping them.
 - [x] Synthesizes non-analyzable special forms such as `@q` and `@n` from typed `form_type` data.
-- [ ] Rolls back invalid L2 splices, skips `NoAlign` words, and provides a fallback harness where secondary Stanza coverage is absent.
+- [x] Rolls back invalid L2 splices, skips `NoAlign` words, and provides a fallback harness where secondary Stanza coverage is absent.
 - [x] Detects bogus Stanza lemmas, missing fields, and invalid analyses, preserving the surface form and recording anomalies.
 - [x] Applies numbered, retireable Stanza workarounds for Italian compound imperatives and related defects.
 - [ ] Corrects known English transcribe patterns, Chinese bogus lemmas, and Japanese token merging.
@@ -216,3 +216,16 @@ The implementation dependency made full reparsing a hard pre-write gate; this in
 - **new**: no
 
 Pre-edit standalone FA constructed `Qwen3ASRModel` from the alignment checkpoint and also passed that checkpoint as its nested `forced_aligner`, loading the same large model twice through the wrong outer class. The locked `qwen-asr` API exposes `Qwen3ForcedAligner.from_pretrained` directly; post-edit uses that supported surface with its correct `dtype` parameter. The regression also pins the ASR companion-aligner argument and the two public re-exports, covering the fork's HK_QWEN/type-stub intent in BA3's backend architecture. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_qwen3_contract.py -q` (3 passed).
+
+### Honor NoAlign before FA work and retain safe L2 fallbacks
+- **component**: `batchalign-core` FA task runner and typed L2 morphosyntax splice
+- **summary**: Treats `@Options: NoAlign` as strict byte-stable pass-through before media lookup or backend dispatch; audited L2 splice transactions restore snapshots on invalid dependency output, while missing secondary Stanza coverage yields empty responses and `L2|xxx` fallback instead of aborting the batch.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/input/no-align.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/tbt-output/no-align.cha
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/ba3-pre-output/no-align.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/ba3-post-output/no-align.cha
+- **depends on**: []
+- **commit**: b390560
+- **new**: no
+
+The missing runtime gap was the FA entry point: pre-edit a NoAlign transcript without media failed sibling lookup, while post-edit it reaches neither media nor a panic-on-call dispatcher and serializes identically. The existing typed L2 transaction was separately verified against an invalid secondary head into the host terminator (rollback/fallback), and the Python harness was verified across a missing secondary Stanza pipeline (five cache/fallback cases). Targeted verification used Bazel-built executables: `bazel-bin/crates/batchalign/batchalign-core/batchalign_core_unit_test --exact taskrunners::fa::tests::no_align_is_strict_pass_through_without_media_or_dispatch` (1 passed); `bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact morphosyntax::l2::splice::cardinality_tests::family_c_secondary_head_into_host_terminator_falls_back` (1 passed); `bazel-bin/python/batchalign/pytest python/batchalign/tests/test_stanza_pipeline_cache.py -q` (5 passed).
