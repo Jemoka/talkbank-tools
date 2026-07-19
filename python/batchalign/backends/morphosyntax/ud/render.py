@@ -18,8 +18,7 @@ string concatenation is forbidden (see ``CLAUDE.md``); the analysis here stays
 structured end to end.
 
 Parity over elegance: the per-POS feature logic and BA2's quirks (the
-``door zogen`` fix, the ROOT-head ``actual_indicies[head-1]`` wrap, the FLAT
-override for special forms) are mirrored so the resulting tiers are
+``door zogen`` fix and the FLAT override for special forms) are mirrored so the resulting tiers are
 byte-identical. Do not "clean this up" without a parity test proving the output
 is unchanged.
 
@@ -1108,15 +1107,15 @@ def parse_sentence(
             num_skipped += 1
             actual_indicies.append(root)
 
-    # Resolve each chunk's %gra triple (BA2 ud.py:450-455). The ROOT-head wrap
-    # (`actual_indicies[head-1]` with head==0 → actual_indicies[-1]) is
-    # preserved verbatim.
+    # Resolve each chunk's %gra triple. A UD head of zero is CHAT's virtual
+    # root and must remain zero; applying BA2's `head - 1` lookup here turns it
+    # into Python's last-item index and produces a spurious lexical head.
     chunk_gra: dict[int, tuple[int, int, str]] = {}
     for elem in gra_tmp:
         index, raw_head, deprel = elem
         if index in special_form_ids:
             deprel = "FLAT"
-        head = actual_indicies[raw_head - 1]
+        head = 0 if raw_head == 0 else actual_indicies[raw_head - 1]
         chunk_gra[index] = (index, head, deprel)
 
     terminator = (len(normalized_words) + 1 - num_skipped, root, "PUNCT")

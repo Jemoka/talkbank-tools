@@ -121,7 +121,7 @@ def test_english_declarative_matches_ba2():
         _mor_str(analysis, ".")
         == "pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres-S1 det|the-Def-Art adj|red-S1 noun|ball-Acc ."
     )
-    assert _gra_str(analysis) == "1|2|NSUBJ 2|5|ROOT 3|5|DET 4|5|AMOD 5|2|OBJ 6|2|PUNCT"
+    assert _gra_str(analysis) == "1|2|NSUBJ 2|0|ROOT 3|5|DET 4|5|AMOD 5|2|OBJ 6|2|PUNCT"
 
 
 def test_english_aux_participle_matches_ba2():
@@ -156,7 +156,7 @@ def test_english_aux_participle_matches_ba2():
     )
     assert (
         _gra_str(analysis)
-        == "1|3|NSUBJ 2|3|AUX 3|5|ROOT 4|5|ADVMOD 5|3|ADVMOD 6|3|PUNCT"
+        == "1|3|NSUBJ 2|3|AUX 3|0|ROOT 4|5|ADVMOD 5|3|ADVMOD 6|3|PUNCT"
     )
 
 
@@ -200,7 +200,7 @@ def test_mwt_contraction_groups_into_one_word():
         _mor_str(analysis, ".")
         == "pron|it-Prs-Nom-S3~aux|be-Fin-Ind-Pres-S3 det|a-Ind-Art adj|big-S1 noun|dog ."
     )
-    assert _gra_str(analysis) == "1|5|NSUBJ 2|5|COP 3|5|DET 4|5|AMOD 5|5|ROOT 6|5|PUNCT"
+    assert _gra_str(analysis) == "1|5|NSUBJ 2|5|COP 3|5|DET 4|5|AMOD 5|0|ROOT 6|5|PUNCT"
 
 
 def test_possessive_gerund_mwt_is_rescued_as_copula_progressive():
@@ -222,7 +222,7 @@ def test_possessive_gerund_mwt_is_rescued_as_copula_progressive():
         _mor_str(analysis, ".")
         == "noun|sink~aux|be-Fin-Ind-Pres-S3 verb|overflow-Part-Pres-S ."
     )
-    assert _gra_str(analysis) == "1|3|NSUBJ 2|3|AUX 3|3|ROOT 4|3|PUNCT"
+    assert _gra_str(analysis) == "1|3|NSUBJ 2|3|AUX 3|0|ROOT 4|3|PUNCT"
     assert [anomaly.field for anomaly in analysis.anomalies] == [
         "english_copula_progressive"
     ]
@@ -257,7 +257,7 @@ def test_italian_defect6_false_mwt_collapses_to_one_lexical_word():
     )
 
     assert _mor_str(analysis, ".") == "adj|piccolo-S1 adj|rosso-S1 ."
-    assert _gra_str(analysis) == "1|2|ROOT 2|1|AMOD 3|1|PUNCT"
+    assert _gra_str(analysis) == "1|0|ROOT 2|1|AMOD 3|1|PUNCT"
     assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_6"]
 
 
@@ -314,7 +314,7 @@ def test_italian_defect7_sentence_initial_la_collapses_to_article():
     )
 
     assert _mor_str(analysis, ".") == "det|il-Fem-Def-Art-Sing noun|storia-Fem ."
-    assert _gra_str(analysis) == "1|2|DET 2|2|ROOT 3|2|PUNCT"
+    assert _gra_str(analysis) == "1|2|DET 2|0|ROOT 3|2|PUNCT"
     assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_7"]
 
 
@@ -350,7 +350,7 @@ def test_italian_defect9_dagliela_rewrites_only_mwt_head():
         _mor_str(analysis, ".")
         == "verb|dare-Fin-Imp-S2~pron|gli-Prs-S3~pron|la-Prs-S3 ."
     )
-    assert _gra_str(analysis) == "1|3|ROOT 2|1|IOBJ 3|1|OBJ 4|1|PUNCT"
+    assert _gra_str(analysis) == "1|0|ROOT 2|1|IOBJ 3|1|OBJ 4|1|PUNCT"
     assert len(analysis.words[0].units) == 3
     assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_9"]
 
@@ -391,7 +391,7 @@ def test_italian_defect10_posa_clitics_use_canonical_verb_lemma():
             _mor_str(analysis, ".")
             == f"verb|posare-Fin-Imp-S2~pron|{clitic}-Prs-S3 ."
         )
-        assert _gra_str(analysis) == "1|2|ROOT 2|1|OBJ 3|1|PUNCT"
+        assert _gra_str(analysis) == "1|0|ROOT 2|1|OBJ 3|1|PUNCT"
         assert [anomaly.field for anomaly in analysis.anomalies] == [
             "italian_defect_10"
         ]
@@ -485,7 +485,7 @@ def test_italian_defect_8_expands_dammela_to_verb_and_clitics():
     assert _mor_str(analysis, ".") == (
         "verb|dare-Fin-Imp-S2~pron|me-Prs-S1~pron|la-Prs-S3 ."
     )
-    assert _gra_str(analysis) == "1|3|ROOT 2|1|IOBJ 3|1|OBJ 4|1|PUNCT"
+    assert _gra_str(analysis) == "1|0|ROOT 2|1|IOBJ 3|1|OBJ 4|1|PUNCT"
     assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_8"]
 
 
@@ -503,7 +503,7 @@ def test_italian_defects_12_and_13_restore_missing_clitic_expansions():
         assert _mor_str(analysis, ".") == (
             f"verb|{verb_lemma}-Fin-Imp-S2~pron|{pronoun}-Prs-S3 ."
         )
-        assert _gra_str(analysis) == "1|2|ROOT 2|1|OBJ 3|1|PUNCT"
+        assert _gra_str(analysis) == "1|0|ROOT 2|1|OBJ 3|1|PUNCT"
         assert [anomaly.field for anomaly in analysis.anomalies] == [anomaly_field]
 
 
