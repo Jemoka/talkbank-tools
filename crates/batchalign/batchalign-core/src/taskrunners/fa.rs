@@ -124,7 +124,12 @@ impl TaskRunner for FaTaskRunner {
         let audio =
             prepare_pcm(&media).map_err(|e| BAError::Internal(format!("audio_prep: {e:#}")))?;
 
-        let utterances = extract_utterances_for_fa(chat);
+        let reusable_segments = collect_reusable_wor_segments(chat);
+        let utterances = extract_utterances_for_fa(chat)
+            .into_iter()
+            .zip(reusable_segments.iter())
+            .filter_map(|(segment, reusable)| reusable.is_none().then_some(segment))
+            .collect();
 
         let input = FaInput {
             source_id: chat.source_id().clone(),
@@ -158,7 +163,8 @@ impl TaskRunner for FaTaskRunner {
             .await?;
         let output: FaOutput = output_raw.try_into()?;
 
-        inject_word_timings(chat, &output.utterances)?;
+        let aligned = merge_reused_and_fresh_segments(reusable_segments, output.utterances)?;
+        inject_word_timings(chat, &aligned)?;
         let repairs = enforce_fa_monotonicity(chat);
         if repairs.stripped > 0 || repairs.clamped > 0 {
             tracing::warn!(
@@ -339,6 +345,131 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
         utterance.main.content.bullet = Some(talkbank_model::model::Bullet::new(start_ms, end_ms));
     }
     true
+}
+
+/// Collect clean per-utterance `%wor` timing for selective FA reuse.
+///
+/// The whole-file fast path above handles the all-clean case before media
+/// decoding. This per-utterance form lets a mixed file dispatch only stale
+/// utterances while preserving trustworthy existing timing for the rest.
+fn collect_reusable_wor_segments(chat: &Chat) -> Vec<Option<AsrSegment>> {
+    const MAX_REUSABLE_WORD_DURATION_PROPORTION: f64 = 0.4;
+    const MIN_WORDS_FOR_DOMINANCE_CHECK: usize = 3;
+    const MIN_REUSABLE_WORD_DURATION_MS: u64 = 40;
+
+    let utterances: Vec<_> = chat
+        .ast()
+        .lines
+        .0
+        .iter()
+        .filter_map(|line| match line {
+            Line::Utterance(utterance) => Some(utterance),
+            _ => None,
+        })
+        .collect();
+    let mut next_timed_start = None;
+    let mut next_starts = vec![None; utterances.len()];
+    for index in (0..utterances.len()).rev() {
+        next_starts[index] = next_timed_start;
+        if let Some(bullet) = utterances[index].main.content.bullet.as_ref() {
+            next_timed_start = Some(bullet.timing.start_ms);
+        }
+    }
+
+    utterances
+        .into_iter()
+        .enumerate()
+        .map(|(index, utterance)| {
+            let mut main_words = Vec::new();
+            walk_words(&utterance.main.content.content.0, None, &mut |item| {
+                if let Some(word) = source_word(&item) {
+                    main_words.push(word.cleaned_text().to_string());
+                }
+            });
+            if main_words.is_empty() {
+                return None;
+            }
+            let wor = utterance.wor_tier()?;
+            let wor_words: Vec<_> = wor.words().collect();
+            if wor_words.len() != main_words.len()
+                || wor_words
+                    .iter()
+                    .zip(&main_words)
+                    .any(|(word, expected)| word.cleaned_text() != expected)
+            {
+                return None;
+            }
+
+            let mut words = Vec::with_capacity(wor_words.len());
+            let mut maximum_duration_ms = 0;
+            let mut previous_end_ms = None;
+            for word in wor_words {
+                let bullet = word.inline_bullet.as_ref()?;
+                let duration_ms = bullet.timing.end_ms.saturating_sub(bullet.timing.start_ms);
+                if duration_ms < MIN_REUSABLE_WORD_DURATION_MS
+                    || previous_end_ms
+                        .is_some_and(|previous_end| bullet.timing.start_ms < previous_end)
+                {
+                    return None;
+                }
+                maximum_duration_ms = maximum_duration_ms.max(duration_ms);
+                previous_end_ms = Some(bullet.timing.end_ms);
+                words.push(AsrWord {
+                    text: word.cleaned_text().to_string(),
+                    start_ms: bullet.timing.start_ms,
+                    end_ms: bullet.timing.end_ms,
+                    confidence: None,
+                });
+            }
+            let start_ms = words.first()?.start_ms;
+            let end_ms = words.last()?.end_ms;
+            if words.len() >= MIN_WORDS_FOR_DOMINANCE_CHECK {
+                let span_ms = end_ms.saturating_sub(start_ms);
+                if span_ms > 0
+                    && maximum_duration_ms as f64 / span_ms as f64
+                        > MAX_REUSABLE_WORD_DURATION_PROPORTION
+                {
+                    return None;
+                }
+            }
+            if next_starts[index].is_some_and(|next_start| end_ms > next_start) {
+                return None;
+            }
+            Some(AsrSegment {
+                start_ms,
+                end_ms,
+                text: words
+                    .iter()
+                    .map(|word| word.text.clone())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                speaker: Some(SpeakerLabel::new(utterance.main.speaker.as_str())),
+                words,
+            })
+        })
+        .collect()
+}
+
+fn merge_reused_and_fresh_segments(
+    reused: Vec<Option<AsrSegment>>,
+    fresh: Vec<AsrSegment>,
+) -> BAResult<Vec<AsrSegment>> {
+    let mut fresh = fresh.into_iter();
+    let mut merged = Vec::with_capacity(reused.len());
+    for reusable in reused {
+        match reusable {
+            Some(segment) => merged.push(segment),
+            None => merged.push(fresh.next().ok_or_else(|| {
+                BAError::Internal("FA: missing fresh segment during partial reuse".into())
+            })?),
+        }
+    }
+    if fresh.next().is_some() {
+        return Err(BAError::Internal(
+            "FA: extra fresh segment during partial reuse".into(),
+        ));
+    }
+    Ok(merged)
 }
 
 fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
@@ -854,6 +985,52 @@ mod tests {
 
         assert!(!refresh_complete_wor_alignment(&mut chat));
         assert!(chat.to_chat().contains("\u{15}100_900\u{15}"));
+    }
+
+    #[test]
+    fn mixed_file_reuses_only_clean_wor_utterances() {
+        const MIXED_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\thello world . \u{15}100_500\u{15}\n\
+%wor:\thello \u{15}100_200\u{15} world \u{15}300_500\u{15} .\n\
+*PAR:\tgoodbye friend . \u{15}1000_1500\u{15}\n\
+%wor:\tgoodbye \u{15}1000_1200\u{15} .\n@End\n";
+        let chat = Chat::parse(
+            MIXED_CHAT,
+            SourceId::try_new("mixed-reuse.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+
+        let reusable = collect_reusable_wor_segments(&chat);
+        assert_eq!(reusable.len(), 2);
+        assert!(reusable[0].is_some());
+        assert!(reusable[1].is_none());
+
+        let fresh = AsrSegment {
+            start_ms: 1_000,
+            end_ms: 1_500,
+            text: "goodbye friend".into(),
+            speaker: Some(SpeakerLabel::new("PAR")),
+            words: vec![
+                AsrWord {
+                    text: "goodbye".into(),
+                    start_ms: 1_000,
+                    end_ms: 1_200,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "friend".into(),
+                    start_ms: 1_250,
+                    end_ms: 1_500,
+                    confidence: None,
+                },
+            ],
+        };
+        let merged = merge_reused_and_fresh_segments(reusable, vec![fresh])
+            .expect("merge one reused and one fresh utterance");
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].text, "hello world");
+        assert_eq!(merged[1].text, "goodbye friend");
     }
 
     #[test]
