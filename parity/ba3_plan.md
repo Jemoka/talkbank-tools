@@ -18,7 +18,7 @@
 - [ ] Coordinates transcribe memory, splits work safely, and prevents OOM-created zombie workers.
 - [ ] Supports Qwen3-ASR plus Qwen3-ForcedAligner and fixes HK_QWEN backend/type-stub integration.
 - [ ] Propagates utterance metadata to children and keeps `ReplacedWord` atomic across splits.
-- [ ] Uses a sliding dispatch window so huge ASR input lists do not become huge in-flight sets.
+- [x] Uses a sliding dispatch window so huge ASR input lists do not become huge in-flight sets.
 
 ## done
 
@@ -60,3 +60,16 @@ The fixture is deliberately `srp`: the local Stanza 1.12 installation can tag it
 - **new**: no
 
 The example isolates the loader policy so it is deterministic on machines without Apple GPU access and does not require downloading a model. Targeted verification: `bazel test //python/batchalign:pytest --test_arg=-q --test_arg=python/batchalign/tests/test_chatwhisper_device.py --test_output=errors`.
+
+### Bound the pipeline dispatch-future window
+- **component**: `batchalign-engine` pipeline scheduler
+- **summary**: Feeds inputs through an eight-item ordered/unordered stream window instead of eagerly polling or retaining a future for every file; the existing semaphore remains the execution limit and result ordering remains stable.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/input/manifest.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/tbt-output/dispatch.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/ba3-pre-output/dispatch.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/ba3-post-output/dispatch.txt
+- **depends on**: []
+- **commit**: d7c5d49
+- **new**: no
+
+The regression blocks 100 synthetic per-input futures immediately after their first poll. Pre-edit scheduling admitted all 100 even though only eight could execute; post-edit scheduling admits exactly eight, then slides forward as slots complete, and still returns `0..99` in input order. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-engine:batchalign_engine_unit_test --test_output=errors`.
