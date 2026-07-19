@@ -11,7 +11,7 @@
 - [x] Synthesizes non-analyzable special forms such as `@q` and `@n` from typed `form_type` data.
 - [ ] Rolls back invalid L2 splices, skips `NoAlign` words, and provides a fallback harness where secondary Stanza coverage is absent.
 - [x] Detects bogus Stanza lemmas, missing fields, and invalid analyses, preserving the surface form and recording anomalies.
-- [ ] Applies numbered, retireable Stanza workarounds for Italian compound imperatives and related defects.
+- [x] Applies numbered, retireable Stanza workarounds for Italian compound imperatives and related defects.
 - [ ] Corrects known English transcribe patterns, Chinese bogus lemmas, and Japanese token merging.
 - [ ] Preflights large Rev.AI batches up front instead of submitting every file independently. (Please do this without moving revai to rust; keep it in Python.)
 - [x] Avoids Whisper MPS `bfloat16` crashes on Apple Silicon.
@@ -112,3 +112,16 @@ Audit note: runtime parity was already present before this item, so pre- and pos
 - **new**: no
 
 The seam deliberately combines a lexical `hello` with lemma `.`, null UPOS, out-of-range head `99`, and `<pad>` relation. Pre-edit BA3 silently classified it as punctuation and emitted no analysis. Post-edit BA3 preserves it as `x|hello`, repairs a validator-safe ROOT tree, and records four structured warnings. The fork's focused raw-Stanza regression proves its surface-lemma fallback; BA3 additionally repairs the invalid dependency fields instead of carrying them toward a later mapping failure. Targeted verification: `bazel test //python/batchalign:pytest --test_arg=-q --test_arg=python/batchalign/tests/test_morphotag_render.py --test_output=errors`; fork verification: `RUSTUP_TOOLCHAIN=1.95.0 cargo test -p batchalign-transform parse_raw_stanza_bogus_lemma`.
+
+### Apply numbered, retireable Italian Stanza workarounds
+- **component**: Python Stanza morphology renderer and Italian compatibility registry
+- **summary**: Expands the fork's closed Defects 8, 12, and 13 allowlist into synthetic verb-plus-clitic MWTs, reindexes following dependency heads, records the numbered repair, and leaves every unknown surface unchanged.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/input/raw-stanza.json
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/tbt-output/renderer-seam.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/ba3-pre-output/renderer-seam.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/ba3-post-output/renderer-seam.txt
+- **depends on**: []
+- **commit**: 21c30bb
+- **new**: no
+
+The regression reproduces the confirmed mid-sentence `dammela` shape (`ADJ`, lemma `dammelo`) and pins the full three-chunk output. Separate cases exercise missing-MWT `aprilo` and fabricated-lemma `leggila`; the registry test requires explicit defect numbers and retirement criteria. Targeted verification uses the Bazel-built test executable without the rule's fixed whole-suite argument: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_morphotag_render.py -q` (11 passed). Fork verification: `RUSTUP_TOOLCHAIN=1.95.0 cargo test -p batchalign test_italian_defect8_dammela` (2 passed).
