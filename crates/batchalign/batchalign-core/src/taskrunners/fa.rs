@@ -83,6 +83,19 @@ impl TaskRunner for FaTaskRunner {
             }
         };
 
+        // `@Options: NoAlign` is a strict per-file pass-through contract.
+        // Check it before media resolution, audio decoding, progress, or
+        // backend dispatch so an intentionally unaligned transcript does not
+        // even require a sibling media file and remains byte-stable.
+        if chat
+            .ast()
+            .options
+            .iter()
+            .any(|option| option.skips_alignment())
+        {
+            return Ok(());
+        }
+
         let media = match chat.media().cloned() {
             Some(m) => m,
             // No media attached at load — resolve the transcript's sibling
@@ -425,6 +438,15 @@ fn source_word<'a>(w: &WordItem<'a>) -> Option<&'a talkbank_model::model::Word> 
 mod tests {
     use super::*;
 
+    struct PanicDispatcher;
+
+    #[async_trait]
+    impl Dispatcher for PanicDispatcher {
+        async fn dispatch(&self, _input: TaskInput) -> BAResult<crate::base::TaskOutput> {
+            panic!("NoAlign must return before backend dispatch")
+        }
+    }
+
     const COMPOUND_FILLER_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
 *PAR:\t&-you_know today .\n@End\n";
@@ -443,6 +465,28 @@ mod tests {
             .map(|word| word.text.as_str())
             .collect();
         assert_eq!(texts, ["you", "know", "today"]);
+    }
+
+    #[tokio::test]
+    async fn no_align_is_strict_pass_through_without_media_or_dispatch() -> BAResult<()> {
+        const NO_ALIGN_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tPAR Participant\n@Options:\tNoAlign\n@ID:\teng|test|PAR|||||Participant|||\n*PAR:\tdo not align me .\n@End\n";
+        let chat = Chat::parse(NO_ALIGN_CHAT, SourceId::try_new("no-align.cha")?)?;
+        let before = chat.to_chat();
+        let mut value = BAValue::Chat(chat);
+
+        FaTaskRunner
+            .apply(
+                &mut value,
+                &PanicDispatcher,
+                std::sync::Arc::new(crate::base::NullSink),
+            )
+            .await?;
+
+        let BAValue::Chat(chat) = value else {
+            panic!("expected CHAT pass-through")
+        };
+        assert_eq!(chat.to_chat(), before);
+        Ok(())
     }
 
     #[test]
