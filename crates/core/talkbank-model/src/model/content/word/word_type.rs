@@ -283,11 +283,19 @@ impl Word {
     /// All prosodic/analytical markers (lengthening, stress, CA elements, overlap
     /// points, compound markers, underline markers) are excluded.
     pub fn compute_cleaned_text(&self) -> String {
+        use super::ca::CADelimiterType;
+
         let mut result = String::new();
+        let mut in_segment_repetition = false;
         for item in &self.content {
             match item {
-                WordContent::Text(t) => result.push_str(t.as_ref()),
-                WordContent::Shortening(s) => result.push_str(s.as_ref()),
+                WordContent::CADelimiter(delimiter)
+                    if delimiter.delimiter_type == CADelimiterType::SegmentRepetition =>
+                {
+                    in_segment_repetition = !in_segment_repetition;
+                }
+                WordContent::Text(t) if !in_segment_repetition => result.push_str(t.as_ref()),
+                WordContent::Shortening(s) if !in_segment_repetition => result.push_str(s.as_ref()),
                 _ => {}
             }
         }
@@ -341,5 +349,35 @@ impl Word {
         let mut s = String::new();
         let _ = self.write_chat(&mut s);
         s
+    }
+}
+
+#[cfg(test)]
+mod cleaned_text_tests {
+    use super::super::ca::{CADelimiter, CADelimiterType};
+    use super::super::content::{WordContent, WordText};
+    use super::Word;
+
+    fn delimiter(kind: CADelimiterType) -> WordContent {
+        WordContent::CADelimiter(CADelimiter::new(kind))
+    }
+
+    fn text(value: &str) -> WordContent {
+        WordContent::Text(WordText::new_unchecked(value))
+    }
+
+    #[test]
+    fn segment_repetition_is_excluded_but_other_ca_content_is_lexical() {
+        let word = Word::new_unchecked("↫sch↫schaap∆snel∆", "ignored").with_content(vec![
+            delimiter(CADelimiterType::SegmentRepetition),
+            text("sch"),
+            delimiter(CADelimiterType::SegmentRepetition),
+            text("schaap"),
+            delimiter(CADelimiterType::Faster),
+            text("snel"),
+            delimiter(CADelimiterType::Faster),
+        ]);
+
+        assert_eq!(word.compute_cleaned_text(), "schaapsnel");
     }
 }
