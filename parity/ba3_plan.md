@@ -23,6 +23,7 @@
 ## additional differences
 - [x] 1/10 Sanitizes CHAT-illegal ASR tokens without failing the transcript.
 - [x] 2/10 Suppresses terminator-only translation tiers.
+- [x] 3/10 Excludes paired CA segment repetitions from lexical text.
 
 ## done
 
@@ -350,3 +351,16 @@ Whisper and Tencent can emit bare CHAT separators such as `:` and `~`, or glue i
 - **new**: yes
 
 Translator APIs can answer with only the source terminator when a turn has no lexical material. Pre-edit BA3 accepted nonempty `.` and serialized `%xtra:\t.`; BA2 and the fork omit it. The trim-first guard handles all three CHAT terminators and whitespace variants without changing genuine translations or replacement of an existing tier. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact translate::tests::test_inject_bare_terminator_translation_is_noop` (1 passed).
+
+### Exclude paired CA segment repetitions from lexical text
+- **component**: `talkbank-model` cleaned words and `talkbank-parser-re2c` conversion
+- **summary**: Treats text bracketed by paired `↫` markers as a repeated non-lexical fragment while preserving text inside every other CA delimiter, keeping both parser implementations consistent.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/input/stutter.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/tbt-output/lexical.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/ba3-pre-output/lexical.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/ba3-post-output/lexical.txt
+- **depends on**: []
+- **commit**: dec565c
+- **new**: yes
+
+In CHAT, `↫sch↫schaap` records a repeated onset followed by the lexical Dutch word `schaap`. Pre-edit cleaned text concatenated every text node and sent `schschaap` to morphology, alignment, comparison, and frequency consumers. Post-edit both CST conversion paths toggle a segment-repetition state and omit only bracketed material; the regression also proves ordinary CA content such as `∆snel∆` remains lexical. Targeted verification: `bazel build --config=dev //crates/core/talkbank-model:talkbank_model_unit_test //crates/core/talkbank-parser-re2c:talkbank_parser_re2c_unit_test && bazel-bin/crates/core/talkbank-model/talkbank_model_unit_test --exact model::content::word::word_type::cleaned_text_tests::segment_repetition_is_excluded_but_other_ca_content_is_lexical` (1 passed).
