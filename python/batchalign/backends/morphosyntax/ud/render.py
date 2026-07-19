@@ -354,6 +354,99 @@ def _apply_italian_compound_imperatives(
     return expanded_words, expanded_tokens
 
 
+def _collapse_italian_false_mwts(
+    words: list[_NormalizedWord],
+    tokens: list[Any],
+    anomalies: list[AnalysisAnomaly],
+) -> tuple[list[_NormalizedWord], list[Any]]:
+    """Collapse closed Defect-6 false MWT expansions into one lexical word."""
+    from .it.workarounds import false_mwt_rule_for
+
+    by_id = {word.id: word for word in words}
+    collapses: dict[int, tuple[list[int], Any, Any]] = {}
+    for token in tokens:
+        ids = list(getattr(token, "id", []) or [])
+        rule = false_mwt_rule_for(str(getattr(token, "text", "")))
+        if (
+            rule is not None
+            and len(ids) > 1
+            and all(isinstance(word_id, int) and word_id in by_id for word_id in ids)
+        ):
+            collapses[ids[0]] = (ids, token, rule)
+    if not collapses:
+        return words, tokens
+
+    old_to_new: dict[int, int] = {}
+    next_id = 1
+    for word in words:
+        containing = next(
+            (ids for ids, _token, _rule in collapses.values() if word.id in ids),
+            None,
+        )
+        if containing is not None:
+            if containing[0] not in old_to_new:
+                for old_id in containing:
+                    old_to_new[old_id] = next_id
+                next_id += 1
+        else:
+            old_to_new[word.id] = next_id
+            next_id += 1
+
+    collapsed_ids = {
+        word_id for ids, _token, _rule in collapses.values() for word_id in ids
+    }
+    rewritten_words: list[_NormalizedWord] = []
+    for word in words:
+        collapse = collapses.get(word.id)
+        if collapse is not None:
+            ids, token, rule = collapse
+            sample = by_id[ids[0]]
+            rewritten_words.append(
+                _NormalizedWord(
+                    str(token.text),
+                    rule.lemma,
+                    rule.upos,
+                    rule.feats,
+                    old_to_new.get(sample.head, sample.head),
+                    sample.deprel,
+                    old_to_new[sample.id],
+                )
+            )
+            _anomaly(
+                anomalies,
+                sample.id,
+                str(token.text),
+                "italian_defect_6",
+                {"chunks": len(ids)},
+                {"upos": rule.upos, "lemma": rule.lemma, "chunks": 1},
+                rule.retire_when,
+            )
+        elif word.id not in collapsed_ids:
+            rewritten_words.append(
+                _NormalizedWord(
+                    word.text,
+                    word.lemma,
+                    word.upos,
+                    word.feats,
+                    old_to_new.get(word.head, word.head),
+                    word.deprel,
+                    old_to_new[word.id],
+                )
+            )
+
+    rewritten_tokens: list[Any] = []
+    for token in tokens:
+        ids = list(getattr(token, "id", []) or [])
+        if ids and ids[0] in collapses:
+            rewritten_tokens.append(_NormalizedToken(token.text, [old_to_new[ids[0]]]))
+        else:
+            mapped = list(
+                dict.fromkeys(old_to_new.get(word_id, word_id) for word_id in ids)
+            )
+            rewritten_tokens.append(_NormalizedToken(token.text, mapped))
+    return rewritten_words, rewritten_tokens
+
+
 def _apply_english_copula_progressive(
     words: list[_NormalizedWord],
     tokens: list[Any],
@@ -841,6 +934,9 @@ def parse_sentence(
     sentence_tokens = list(getattr(sentence, "tokens", []) or [])
     if lang == "it":
         normalized_words, sentence_tokens = _apply_italian_compound_imperatives(
+            normalized_words, sentence_tokens, anomalies
+        )
+        normalized_words, sentence_tokens = _collapse_italian_false_mwts(
             normalized_words, sentence_tokens, anomalies
         )
     elif lang == "en":

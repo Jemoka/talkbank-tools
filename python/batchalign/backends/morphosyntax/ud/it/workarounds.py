@@ -28,6 +28,18 @@ class CompoundImperativeRule:
     observed_upos: frozenset[str] = frozenset({"ADJ", "NOUN", "VERB"})
 
 
+@dataclass(frozen=True)
+class FalseMwtRule:
+    """One ordinary word Stanza incorrectly expands as an Italian MWT."""
+
+    defect: int
+    surface: str
+    upos: str
+    lemma: str
+    feats: str
+    retire_when: str
+
+
 _ME = CliticRule("me", "me", "Number=Sing|Person=1|PronType=Prs", "iobj")
 _LA = CliticRule("la", "la", "Gender=Fem|Number=Sing|Person=3|PronType=Prs", "obj")
 _LO = CliticRule("lo", "lo", "Gender=Masc|Number=Sing|Person=3|PronType=Prs", "obj")
@@ -54,6 +66,43 @@ COMPOUND_IMPERATIVE_RULES: tuple[CompoundImperativeRule, ...] = (
 
 _BY_SURFACE = {rule.surface: rule for rule in COMPOUND_IMPERATIVE_RULES}
 
+FALSE_MWT_RULES: tuple[FalseMwtRule, ...] = (
+    FalseMwtRule(
+        6,
+        "parla",
+        "VERB",
+        "parlare",
+        "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin",
+        _REPROBE,
+    ),
+    FalseMwtRule(
+        6, "arancione", "NOUN", "arancione", "Gender=Masc|Number=Sing", _REPROBE
+    ),
+    FalseMwtRule(6, "piccolo", "ADJ", "piccolo", "Gender=Masc|Number=Sing", _REPROBE),
+    FalseMwtRule(
+        6, "gomitolo", "NOUN", "gomitolo", "Gender=Masc|Number=Sing", _REPROBE
+    ),
+    FalseMwtRule(6, "divano", "NOUN", "divano", "Gender=Masc|Number=Sing", _REPROBE),
+    FalseMwtRule(6, "pallone", "NOUN", "pallone", "Gender=Masc|Number=Sing", _REPROBE),
+    FalseMwtRule(6, "bastone", "NOUN", "bastone", "Gender=Masc|Number=Sing", _REPROBE),
+    FalseMwtRule(
+        6, "cappello", "NOUN", "cappello", "Gender=Masc|Number=Sing", _REPROBE
+    ),
+    FalseMwtRule(6, "difficile", "ADJ", "difficile", "Number=Sing", _REPROBE),
+    FalseMwtRule(6, "seggiola", "NOUN", "seggiola", "Gender=Fem|Number=Sing", _REPROBE),
+    FalseMwtRule(6, "piccola", "ADJ", "piccolo", "Gender=Fem|Number=Sing", _REPROBE),
+    FalseMwtRule(6, "trottola", "NOUN", "trottola", "Gender=Fem|Number=Sing", _REPROBE),
+    FalseMwtRule(6, "bottone", "NOUN", "bottone", "Gender=Masc|Number=Sing", _REPROBE),
+    FalseMwtRule(6, "cielo", "NOUN", "cielo", "Gender=Masc|Number=Sing", _REPROBE),
+    FalseMwtRule(6, "normale", "ADJ", "normale", "Number=Sing", _REPROBE),
+    FalseMwtRule(
+        6, "cavallone", "NOUN", "cavallone", "Gender=Masc|Number=Sing", _REPROBE
+    ),
+    FalseMwtRule(6, "coccole", "NOUN", "coccole", "Gender=Fem|Number=Plur", _REPROBE),
+)
+
+_FALSE_MWT_BY_SURFACE = {rule.surface: rule for rule in FALSE_MWT_RULES}
+
 
 def rule_for(surface: str, upos: str) -> CompoundImperativeRule | None:
     """Return a confirmed rule only for an observed bad POS/surface pair."""
@@ -61,3 +110,8 @@ def rule_for(surface: str, upos: str) -> CompoundImperativeRule | None:
     if rule is None or upos.upper() not in rule.observed_upos:
         return None
     return rule
+
+
+def false_mwt_rule_for(surface: str) -> FalseMwtRule | None:
+    """Return a closed Defect-6 collapse rule for an original token surface."""
+    return _FALSE_MWT_BY_SURFACE.get(surface.casefold())

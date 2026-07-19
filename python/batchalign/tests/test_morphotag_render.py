@@ -244,6 +244,39 @@ def test_copula_progressive_rescue_does_not_rewrite_genuine_possessive():
     assert analysis.anomalies == []
 
 
+def test_italian_defect6_false_mwt_collapses_to_one_lexical_word():
+    words = [
+        FakeWord("picco", "picco", "VERB", None, 0, "root", id=1),
+        FakeWord("lo", "il", "PRON", "Number=Sing|Person=3", 1, "obj", id=2),
+        FakeWord("rosso", "rosso", "ADJ", "Gender=Masc|Number=Sing", 1, "amod", id=3),
+    ]
+    tokens = [FakeToken("piccolo", [1, 2]), FakeToken("rosso", [3])]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=tokens), ".", [], "it"
+    )
+
+    assert _mor_str(analysis, ".") == "adj|piccolo-S1 adj|rosso-S1 ."
+    assert _gra_str(analysis) == "1|2|ROOT 2|1|AMOD 3|1|PUNCT"
+    assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_6"]
+
+
+def test_italian_genuine_compound_mwt_is_not_defect6_collapsed():
+    words = [
+        FakeWord("da", "dare", "VERB", "Mood=Imp|VerbForm=Fin", 0, "root", id=1),
+        FakeWord("me", "me", "PRON", "Number=Sing|Person=1", 1, "iobj", id=2),
+        FakeWord("la", "la", "PRON", "Gender=Fem|Number=Sing", 1, "obj", id=3),
+    ]
+    tokens = [FakeToken("dammela", [1, 2, 3])]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=tokens), ".", [], "it"
+    )
+
+    assert len(analysis.words[0].units) == 3
+    assert not any(a.field == "italian_defect_6" for a in analysis.anomalies)
+
+
 def test_question_terminator_is_carried_through():
     # The terminator is applied downstream; %gra still ends with a PUNCT.
     sent = _sentence(
