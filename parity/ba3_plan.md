@@ -44,6 +44,7 @@
 - [x] 21/40 Repairs the Italian sentence-initial `la` false MWT expansion.
 - [x] 22/40 Rewrites the mis-tagged verb head in Italian `dagliela` MWTs.
 - [x] 23/40 Canonicalizes the verb lemma in Italian `posala` and `posalo` MWTs.
+- [x] 24/40 Preserves CHAT's virtual zero head for `%gra` root relations.
 
 ## done
 
@@ -657,3 +658,16 @@ Stanza's `dagliela` range has the correct three-piece shape but analyzes its imp
 - **new**: yes
 
 Unlike Defect 9, Stanza already tags the head of `posala` and `posalo` as an imperative verb; only the lemma is the inflected surface `posa`. Pre-edit BA3 therefore emitted `verb|posa-Fin-Imp-S2` and made lemma-based corpus searches disagree with the fork. Post-edit the component-rewrite table gives both confirmed surfaces the canonical `posare` lemma and retains their `la`/`lo` post-clitic, ids, and dependency arcs. The regression exercises both genders and requires the distinct `italian_defect_10` anomaly. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg=italian_defect10` (Bazel target passed) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
+
+### Preserve CHAT's virtual zero head for `%gra` root relations
+- **component**: Python UD-to-CHAT morphosyntax dependency renderer
+- **summary**: Maps UD `head=0` directly to CHAT's virtual root instead of applying Python's `-1` list index and attaching `ROOT` to the sentence's last lexical chunk.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/input/ud-analysis.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/tbt-output/gra.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/ba3-pre-output/gra.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/ba3-post-output/gra.txt
+- **depends on**: []
+- **commit**: 135a622
+- **new**: yes
+
+The fork's generated-GRA contract requires exactly one `ROOT` relation whose head is the virtual node zero. BA3's faithful BA2 port indexed `actual_indicies[raw_head - 1]` for every arc; for `raw_head == 0`, Python silently selected the final lexical item, so a two-word sentence emitted `2|2|ROOT`. Post-edit the zero case bypasses lexical reindexing, while non-root heads and the terminator's attachment to the lexical root are unchanged. This also corrects roots inside MWTs and after Italian range repairs. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors` (249 passed, 1 skipped) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
