@@ -5,7 +5,7 @@
 - [ ] Fixes single-word replacement retraces, `@Media` hashing, parser recovery spans, and Japanese token merging.
 - [ ] Fixed BA3 output passes `chatter validate`, making the validator the final output-integrity gate.
 - [x] Expands compound fillers and recovers their audio spans between recognized words.
-- [ ] Detects long-file drift and monotonicity violations, then re-anchors or repairs timing. | FA recovery and repair passes
+- [x] Detects long-file drift and monotonicity violations, then re-anchors or repairs timing. | FA recovery and repair passes
 - [ ] Integrates Cantonese FA through Jyutping and wav2vec2 (no need for the common recovery layer).
 - [x] Fails unsupported primary languages per file instead of silently skipping them.
 - [x] Synthesizes non-analyzable special forms such as `@q` and `@n` from typed `form_type` data.
@@ -164,3 +164,16 @@ Audit note: the Python backend already had the intended batched runtime behavior
 - **new**: no
 
 Audit note: the individual propagation and atomicity rules were already present; the new independent regression exercises their interaction in one typed split. Its five-word morphology domain assigns `I, want` to child 0 and `to, go, now` to child 1, forcing the boundary inside `wanna [: want to]`. The replacement remains wholly on child 0; utterance-scope language and spans reach both children, the prior-turn linker stays first, and end-scope postcode/bullet stay last. Targeted verification: `bazel test --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test --test_output=errors`.
+
+### Repair long-file FA monotonicity before validation
+- **component**: `batchalign-core` forced-alignment task runner
+- **summary**: Runs a typed timing repair immediately after FA injection: backward utterance anchors lose both their unsafe main bullet and stale `%wor`, while forward anchors whose end crosses the next start are clamped to that start.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/input/timing-seam.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/tbt-output/repair.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/ba3-pre-output/repair.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/ba3-post-output/repair.txt
+- **depends on**: []
+- **commit**: 5b412fa
+- **new**: no
+
+The synthetic 500-utterance regression includes one ordinary end overlap and one severe backward anchor at utterance 400. The post-pass reports one clamp and one strip, removes `%wor` together with the untrustworthy drifted main bullet, and reparses the complete 500-utterance serialization through the full CHAT validator. This follows the fork's conservative rule: preserve forward-moving conversational overlap starts, but never invent a location for a backward anchor. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors`.
