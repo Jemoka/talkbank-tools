@@ -135,6 +135,15 @@ impl TaskRunner for FaTaskRunner {
         let output: FaOutput = output_raw.try_into()?;
 
         inject_word_timings(chat, &output.utterances)?;
+        let repairs = enforce_fa_monotonicity(chat);
+        if repairs.stripped > 0 || repairs.clamped > 0 {
+            tracing::warn!(
+                source_id = %chat.source_id(),
+                stripped = repairs.stripped,
+                clamped = repairs.clamped,
+                "repaired non-monotonic FA timing"
+            );
+        }
         // Ceiling tick — FA bar lands at 100% once the call returns and
         // word timings are injected. A backend that didn't tick still
         // sees the bar move from 0 → 100 here.
@@ -262,6 +271,92 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
         )));
     }
     Ok(())
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct MonotonicityRepairs {
+    stripped: usize,
+    clamped: usize,
+}
+
+/// Repair timing corruption before the typed output reaches validation.
+///
+/// A backward utterance anchor is not safely guessable, so its main bullet
+/// and `%wor` tier are removed together for a later recovery pass. For the
+/// remaining monotonic anchors, an earlier end that crosses the next start is
+/// clamped to that start. This mirrors the fork's E362 repair boundary while
+/// preserving legitimate cross-speaker overlap starts that still move forward.
+fn enforce_fa_monotonicity(chat: &mut Chat) -> MonotonicityRepairs {
+    use talkbank_model::DependentTier;
+
+    let mut repairs = MonotonicityRepairs::default();
+    let mut last_start_ms = 0;
+    for line in &mut chat.ast_mut().lines.0 {
+        let Line::Utterance(utterance) = line else {
+            continue;
+        };
+        let Some(start_ms) = utterance
+            .main
+            .content
+            .bullet
+            .as_ref()
+            .map(|bullet| bullet.timing.start_ms)
+        else {
+            continue;
+        };
+        if start_ms < last_start_ms {
+            utterance.main.content.bullet = None;
+            utterance
+                .dependent_tiers
+                .retain(|tier| !matches!(tier, DependentTier::Wor(_)));
+            repairs.stripped += 1;
+        } else {
+            last_start_ms = start_ms;
+        }
+    }
+
+    let timed: Vec<(usize, u64)> = chat
+        .ast()
+        .lines
+        .0
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let Line::Utterance(utterance) = line else {
+                return None;
+            };
+            Some((
+                index,
+                utterance.main.content.bullet.as_ref()?.timing.start_ms,
+            ))
+        })
+        .collect();
+
+    for pair in timed.windows(2) {
+        let (previous_index, _) = pair[0];
+        let (_, next_start_ms) = pair[1];
+        let Line::Utterance(previous) = &mut chat.ast_mut().lines.0[previous_index] else {
+            continue;
+        };
+        let Some(bullet) = previous.main.content.bullet.as_mut() else {
+            continue;
+        };
+        if bullet.timing.end_ms <= next_start_ms {
+            continue;
+        }
+        if next_start_ms <= bullet.timing.start_ms {
+            previous.main.content.bullet = None;
+            previous
+                .dependent_tiers
+                .retain(|tier| !matches!(tier, DependentTier::Wor(_)));
+            repairs.stripped += 1;
+        } else {
+            bullet.timing.end_ms = next_start_ms;
+            repairs.clamped += 1;
+        }
+    }
+
+    repairs
 }
 
 /// Collapse the backend's expanded FA tokens back onto the source word domain.
@@ -400,5 +495,93 @@ mod tests {
             4,
             "two source words should carry exactly two bullet pairs"
         );
+    }
+
+    #[test]
+    fn long_file_monotonicity_repairs_backward_anchor_and_overlap() {
+        use std::fmt::Write as _;
+        use talkbank_model::DependentTier;
+
+        let mut source = String::from(
+            "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tPAR Participant\n\
+             @ID:\teng|test|PAR|||||Participant|||\n",
+        );
+        for _ in 0..500 {
+            writeln!(&mut source, "*PAR:\thello .").expect("write fixture");
+        }
+        source.push_str("@End\n");
+        let mut chat = Chat::parse(
+            &source,
+            SourceId::try_new("long-monotonicity").expect("source id"),
+        )
+        .expect("parse long fixture");
+
+        let aligned: Vec<AsrSegment> = (0..500)
+            .map(|index| {
+                let start_ms = if index == 400 {
+                    1_000
+                } else {
+                    index as u64 * 1_000
+                };
+                let end_ms = start_ms + if index == 250 { 1_500 } else { 500 };
+                AsrSegment {
+                    start_ms,
+                    end_ms,
+                    text: "hello".into(),
+                    speaker: None,
+                    words: vec![AsrWord {
+                        text: "hello".into(),
+                        start_ms,
+                        end_ms,
+                        confidence: None,
+                    }],
+                }
+            })
+            .collect();
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timings");
+        let repairs = enforce_fa_monotonicity(&mut chat);
+
+        assert_eq!(
+            repairs,
+            MonotonicityRepairs {
+                stripped: 1,
+                clamped: 1
+            }
+        );
+        let utterances: Vec<_> = chat
+            .ast()
+            .lines
+            .0
+            .iter()
+            .filter_map(|line| match line {
+                Line::Utterance(utterance) => Some(utterance),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            utterances[250]
+                .main
+                .content
+                .bullet
+                .as_ref()
+                .expect("clamped bullet")
+                .timing
+                .end_ms,
+            251_000
+        );
+        assert!(utterances[400].main.content.bullet.is_none());
+        assert!(
+            !utterances[400]
+                .dependent_tiers
+                .iter()
+                .any(|tier| matches!(tier, DependentTier::Wor(_))),
+            "stripped drift anchor must not retain stale word timing"
+        );
+        Chat::parse(
+            &chat.to_chat(),
+            SourceId::try_new("long-monotonicity-output").expect("source id"),
+        )
+        .expect("repaired long-file output must pass the full CHAT validator");
     }
 }
