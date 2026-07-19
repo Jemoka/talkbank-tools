@@ -58,3 +58,27 @@ def test_strip_preserves_unrelated_tiers(tmp_path: Path) -> None:
     assert "%mor:" not in out
     assert "%com:\tnote on this utterance" in out
     assert "%pho:\tw3rd ." in out
+
+
+def test_strip_drops_wrapped_mor_and_gra_continuations(tmp_path: Path) -> None:
+    src = tmp_path / "in.cha"
+    dst = tmp_path / "out.cha"
+    src.write_text(
+        "@Begin\n"
+        "*CHI:\tone two three .\n"
+        "%mor:\tnum|one num|two\n"
+        "\tnum|three .\n"
+        "%gra:\t1|2|NUMMOD 2|0|ROOT\n"
+        "\t3|2|NUMMOD\n"
+        "%com:\tpreserve me\n"
+        "@End\n"
+    )
+
+    _strip_existing_mor_gra(src, dst)
+
+    assert dst.read_text() == (
+        "@Begin\n"
+        "*CHI:\tone two three .\n"
+        "%com:\tpreserve me\n"
+        "@End\n"
+    )

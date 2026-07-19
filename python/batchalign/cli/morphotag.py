@@ -20,12 +20,15 @@ def _strip_existing_mor_gra(src: Path, dst: Path) -> None:
     on a file that already has those tiers regenerates them from scratch
     instead of being skipped by the engine's "already tagged" guard.
     """
+    dropping_continuations = False
     with src.open("r", encoding="utf-8") as fin, dst.open("w", encoding="utf-8") as fout:
         for line in fin:
+            if line.startswith("\t") and dropping_continuations:
+                continue
+            dropping_continuations = False
             stripped = line.lstrip()
             if stripped.startswith("%mor:") or stripped.startswith("%gra:"):
-                # Multi-line tiers (continuation lines start with tab); drop
-                # only the header. The engine re-injects whole tiers.
+                dropping_continuations = True
                 continue
             fout.write(line)
 
