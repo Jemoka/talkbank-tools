@@ -17,7 +17,7 @@
 - [x] Avoids Whisper MPS `bfloat16` crashes on Apple Silicon.
 - [ ] Coordinates transcribe memory, splits work safely, and prevents OOM-created zombie workers.
 - [ ] Supports Qwen3-ASR plus Qwen3-ForcedAligner and fixes HK_QWEN backend/type-stub integration.
-- [ ] Propagates utterance metadata to children and keeps `ReplacedWord` atomic across splits.
+- [x] Propagates utterance metadata to children and keeps `ReplacedWord` atomic across splits.
 - [x] Uses a sliding dispatch window so huge ASR input lists do not become huge in-flight sets.
 
 ## done
@@ -151,3 +151,16 @@ The seam deliberately mutates an already-validated typed AST after admission by 
 - **new**: no
 
 Audit note: the Python backend already had the intended batched runtime behavior before this item was audited; the independent commit supplies the missing large-batch regression and explicitly prevents a later return to per-file submit-and-wait. Rev.AI remains Python-owned. The hermetic fake makes no provider calls and asserts 32 submit events precede the single poll event. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_revai_preflight.py -q` (1 passed).
+
+### Lock utterance metadata and atomic replacement splitting together
+- **component**: typed `talkbank-transform` utterance segmentation
+- **summary**: Pins the child-propagation policy for linkers, language code, postcodes, timing bullets, and source spans while a classifier boundary falls inside a multiword replacement; the complete `ReplacedWord` follows its first assignment.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/input/split.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/tbt-output/split-contract.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/ba3-pre-output/split-contract.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/ba3-post-output/split-contract.txt
+- **depends on**: []
+- **commit**: 5ebd4cc
+- **new**: no
+
+Audit note: the individual propagation and atomicity rules were already present; the new independent regression exercises their interaction in one typed split. Its five-word morphology domain assigns `I, want` to child 0 and `to, go, now` to child 1, forcing the boundary inside `wanna [: want to]`. The replacement remains wholly on child 0; utterance-scope language and spans reach both children, the prior-turn linker stays first, and end-scope postcode/bullet stay last. Targeted verification: `bazel test --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test --test_output=errors`.
