@@ -40,6 +40,7 @@
 - [x] 17/40 Invalidates cached task output when the compiled engine changes.
 - [x] 18/40 Keeps experimental two-pass overlap UTR out of automatic selection.
 - [x] 19/40 Exposes standalone speaker diarization as deterministic turns JSON.
+- [x] 20/40 Collapses known Italian Stanza Defect 6 false MWT expansions.
 
 ## done
 
@@ -601,3 +602,16 @@ The fork previously auto-selected two-pass UTR for `+<` and bottom-overlap marke
 - **new**: yes
 
 The fork makes its Pyannote speaker stage independently useful for acoustic speaker-attribution repair. Pre-edit BA3 already had the same typed speaker input/output and backend, but users could reach it only while transcribing. Post-edit the command decodes through BA3's existing 16 kHz mono Rust seam, preserves millisecond spans, maps sorted backend labels deterministically to anonymous `PAR0`… tracks, supports speaker-count hints, and mirrors directory outputs as `.turns.json`. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=python/batchalign/tests/test_diarize_cli.py --test_arg=python/batchalign/tests/test_cli.py`; core Bazel target; and `just batchalign cli diarize --help`.
+
+### Collapse Italian Stanza Defect 6 false MWT expansions
+- **component**: Python UD-to-CHAT Italian morphosyntax renderer
+- **summary**: Replaces a closed set of ordinary Italian words that Stanza expands as fake verb-clitic MWTs with one curated lexical analysis while preserving genuine compound imperatives.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/input/stanza-analysis.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/tbt-output/tiers.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/ba3-pre-output/tiers.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/ba3-post-output/tiers.txt
+- **depends on**: []
+- **commit**: 751cd4b
+- **new**: yes
+
+The fork carries a closed, retireable Defect 6 table for common words such as `piccolo`, `parla`, `pallone`, and `coccole` that Stanza can split into a spurious stem plus pronoun. Pre-edit BA3 rendered `piccolo` as `verb|picco~pron|il-S3`, adding a fake lexical unit and corrupting both tiers. Post-edit it recognizes only an actual MWT range whose original surface is in the same closed table, synthesizes the curated POS, lemma, and features, renumbers dependencies and token spans together, and emits an operator-visible anomaly. Genuine `dammela` remains a three-unit compound. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg=italian_defect6` (Bazel target passed); Ruff passed on changed files apart from the repository's pre-existing E721 diagnostic outside this change.
