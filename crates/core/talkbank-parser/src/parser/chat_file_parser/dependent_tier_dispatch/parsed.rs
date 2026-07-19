@@ -22,6 +22,7 @@ use crate::parser::tier_parsers::text::{
 use crate::parser::tier_parsers::wor::parse_wor_tier;
 use talkbank_model::model::Terminator;
 use talkbank_model::model::dependent_tier::{GraTier, MorTier};
+use talkbank_model::Span;
 use tree_sitter::Node;
 
 /// Parse and attach tiers handled by typed tier parsers (`%mor`, `%gra`, `%pho`, etc.).
@@ -38,7 +39,7 @@ pub(super) fn apply_parsed_tier(
                 report_tier_parse_error(tier_node, input, "mor", errors);
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Mor(empty_mor_placeholder()));
+                    .push(DependentTier::Mor(empty_mor_placeholder(node_span(tier_node))));
             } else {
                 // Diagnostics for Rejected go through ErrorSink; the
                 // recovered utterance still keeps the %mor slot in place so
@@ -51,7 +52,7 @@ pub(super) fn apply_parsed_tier(
                     talkbank_model::ParseOutcome::Rejected => {
                         utterance
                             .dependent_tiers
-                            .push(DependentTier::Mor(empty_mor_placeholder()));
+                            .push(DependentTier::Mor(empty_mor_placeholder(node_span(tier_node))));
                     }
                 }
             }
@@ -61,7 +62,7 @@ pub(super) fn apply_parsed_tier(
                 report_tier_parse_error(tier_node, input, "gra", errors);
                 utterance
                     .dependent_tiers
-                    .push(DependentTier::Gra(empty_gra_placeholder()));
+                    .push(DependentTier::Gra(empty_gra_placeholder(node_span(tier_node))));
             } else {
                 let tier = parse_gra_tier(tier_node, input, errors);
                 utterance.dependent_tiers.push(DependentTier::Gra(tier));
@@ -164,15 +165,34 @@ fn report_tier_parse_error(tier_node: Node, input: &str, tier_name: &str, errors
     }
 }
 
-fn empty_mor_placeholder() -> MorTier {
-    MorTier::new_mor(
-        Vec::new(),
-        Terminator::Period {
-            span: talkbank_model::Span::DUMMY,
-        },
-    )
+fn node_span(node: Node<'_>) -> Span {
+    Span::from_usize(node.start_byte(), node.end_byte())
 }
 
-fn empty_gra_placeholder() -> GraTier {
-    GraTier::new_gra(Vec::new())
+fn empty_mor_placeholder(span: Span) -> MorTier {
+    MorTier::new_mor(
+        Vec::new(),
+        Terminator::Period { span },
+    )
+    .with_span(span)
+}
+
+fn empty_gra_placeholder(span: Span) -> GraTier {
+    GraTier::new_gra(Vec::new()).with_span(span)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recovered_tier_placeholders_keep_source_spans() {
+        let span = Span::new(17, 42);
+        let mor = empty_mor_placeholder(span);
+        let gra = empty_gra_placeholder(span);
+
+        assert_eq!(mor.span, span);
+        assert_eq!(mor.terminator.span(), span);
+        assert_eq!(gra.span, span);
+    }
 }
