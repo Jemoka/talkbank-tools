@@ -9,7 +9,7 @@
 //! runs a Hirschberg-DP strategy (`GlobalUtr` or `TwoPassOverlapUtr`,
 //! auto-picked by CA / `+<` marker presence) to inject
 //! `BulletSource::Utr` utterance bullets on every untimed utterance.
-//! Decision provenance is emitted as `%xalign` dependent tiers.
+//! Decision provenance remains available for opt-in `%xalign` tiers.
 //!
 //! Behavioural parity targets the tbtbt UTR stack:
 //! - Strategy core: `tbtbt/crates/batchalign/src/chat_ops/fa/utr.rs`
@@ -49,9 +49,8 @@
 //!    TwoPassOverlap based on CA / `+<` markers.
 //! 6. **Inject bullets** via `Bullet::utr_hint` so downstream FA
 //!    overwrites them rather than union-expanding.
-//! 7. **Audit.** Writes `%xalign` dependent tiers for zero-duration-
-//!    skipped and unmatched utterances via
-//!    `talkbank_transform::decisions::inject_decision_tiers`.
+//! 7. **Audit.** Records decisions for zero-duration-skipped and unmatched
+//!    utterances without adding experimental review tiers by default.
 //! 8. **Clear `, unlinked`** from the `@Media` header — UTR just injected
 //!    bullets so the E544-mandated `unlinked` status is now stale.
 //! 9. **Stamp provenance** with the registered UTR backend name.
@@ -244,9 +243,7 @@ impl TaskRunner for UtrTaskRunner {
         let result = strategy.inject(chat.ast_mut(), &tokens);
 
         if !result.decisions.is_empty() {
-            // ReviewLevel::All — UTR's audit tier should reflect every
-            // skipped / unmatched utterance for downstream review.
-            inject_decision_tiers(chat.ast_mut(), &result.decisions, ReviewLevel::All);
+            inject_decision_tiers(chat.ast_mut(), &result.decisions, ReviewLevel::default());
         }
 
         progress.finish();

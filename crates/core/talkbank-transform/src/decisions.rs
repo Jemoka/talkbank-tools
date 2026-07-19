@@ -365,9 +365,9 @@ impl DecisionRecord {
 #[serde(rename_all = "snake_case")]
 pub enum ReviewLevel {
     /// No review tiers at all.
-    None,
-    /// Only `%xrev: [?]` on low-confidence utterances (default).
     #[default]
+    None,
+    /// Only `%xrev: [?]` on low-confidence utterances.
     LowConfidence,
     /// `%xalign` on every bulleted utterance + `%xrev: [?]` on low-confidence.
     All,
@@ -526,7 +526,7 @@ mod tests {
     }
 
     #[test]
-    fn inject_decision_tiers_none_produces_nothing() {
+    fn default_review_level_produces_no_output_tiers() {
         let chat_text = "\
 @UTF8
 @Begin
@@ -548,10 +548,12 @@ mod tests {
             needs_review: true,
         }];
 
-        inject_decision_tiers(&mut chat, &decisions, ReviewLevel::None);
+        assert_eq!(ReviewLevel::default(), ReviewLevel::None);
+        inject_decision_tiers(&mut chat, &decisions, ReviewLevel::default());
 
         let output = chat.to_chat_string();
         assert!(!output.contains("%xalign:"), "output:\n{output}");
+        assert!(!output.contains("%xrev:"), "output:\n{output}");
     }
 
     #[test]
