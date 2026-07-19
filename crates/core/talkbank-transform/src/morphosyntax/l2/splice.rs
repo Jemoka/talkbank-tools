@@ -2108,6 +2108,66 @@ mod cardinality_tests {
         );
     }
 
+    #[test]
+    fn invalid_post_splice_tree_restores_complete_tier_snapshots() {
+        let chat_text = "@UTF8\n\
+                         @Begin\n\
+                         @Languages:\tfra, eng\n\
+                         @Participants:\tPAR Participant\n\
+                         @ID:\tfra|test|PAR|||||Participant|||\n\
+                         *PAR:\tle foreign .\n\
+                         %mor:\tdet|le L2|xxx .\n\
+                         %gra:\t1|2|DET 2|0|ROOT 3|2|PUNCT\n\
+                         @End\n";
+        let parser = TreeSitterParser::new().unwrap();
+        let (chat_file, _errors) = parse_lenient(&parser, chat_text);
+        let (mor_snapshot, gra_snapshot) = chat_file
+            .lines
+            .iter()
+            .find_map(|line| {
+                let talkbank_model::model::Line::Utterance(utterance) = line else {
+                    return None;
+                };
+                let mor = utterance.dependent_tiers.iter().find_map(|tier| match tier {
+                    talkbank_model::model::DependentTier::Mor(mor) => Some(mor.clone()),
+                    _ => None,
+                })?;
+                let gra = utterance.dependent_tiers.iter().find_map(|tier| match tier {
+                    talkbank_model::model::DependentTier::Gra(gra) => Some(gra.clone()),
+                    _ => None,
+                })?;
+                Some((mor, gra))
+            })
+            .expect("fixture has morphology and dependency tiers");
+
+        let mut mutated_mor = mor_snapshot.clone();
+        mutated_mor.items_mut()[1].main = MorWord::new(
+            PosCategory::new("noun"),
+            MorStem::new("foreign"),
+        );
+        let mut invalid_gra = gra_snapshot.clone();
+        invalid_gra.relations_mut()[1] = GrammaticalRelation::new(2, 99, "NMOD");
+        let reset_indices = [1usize];
+
+        let result = validate_or_rollback_splice(
+            &mut mutated_mor,
+            &mut invalid_gra,
+            mor_snapshot.clone(),
+            gra_snapshot.clone(),
+            || vec!["2|99|NMOD".to_string()],
+            SpliceFallbackContext {
+                line_idx: 5,
+                target_lang: &LanguageCode::new("eng"),
+                word_indices_to_reset: &reset_indices,
+                position: SplicePositionDescriptor::SingleWord { word_idx: 1 },
+            },
+        );
+
+        assert!(matches!(result, SpliceValidationResult::RolledBack));
+        assert_eq!(mutated_mor, mor_snapshot);
+        assert_eq!(invalid_gra, gra_snapshot);
+    }
+
     /// **Family C, C6** — multi-position contiguous span where
     /// `splice_range_coordinated` succeeds with invalid output.
     /// Mirrors the wild `por@s favor@s` shape at
