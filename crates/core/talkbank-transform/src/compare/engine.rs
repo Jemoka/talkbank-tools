@@ -72,7 +72,9 @@ pub(in crate::compare) fn conform_with_mapping(words: &[String]) -> (Vec<String>
 pub(in crate::compare) fn find_best_segment(
     gold_tokens: &[String],
     main_tokens: &[String],
+    main_utterances: &[usize],
 ) -> (usize, usize) {
+    debug_assert_eq!(main_tokens.len(), main_utterances.len());
     if gold_tokens.is_empty() || main_tokens.is_empty() {
         return (0, 0);
     }
@@ -93,13 +95,19 @@ pub(in crate::compare) fn find_best_segment(
     for span in min_window..=max_window {
         for start in 0..=(main_len - span) {
             let end = start + span;
-            let overlap = token_overlap(&main_tokens[start..end], &gold_counts);
-            let waste = span.saturating_sub(overlap);
-            let align_matches = count_alignment_matches(&main_tokens[start..end], gold_tokens);
+            let Some((projected_start, projected_end)) =
+                majority_utterance_window(main_utterances, start, end)
+            else {
+                continue;
+            };
+            let projected = &main_tokens[projected_start..projected_end];
+            let overlap = token_overlap(projected, &gold_counts);
+            let waste = projected.len().saturating_sub(overlap);
+            let align_matches = count_alignment_matches(projected, gold_tokens);
 
-            let key = (overlap, align_matches, Reverse(waste), end);
+            let key = (overlap, align_matches, Reverse(waste), projected_end);
             if best_key.is_none_or(|best| key > best) {
-                best_window = (start, end);
+                best_window = (projected_start, projected_end);
                 best_key = Some(key);
             }
         }
@@ -112,6 +120,36 @@ pub(in crate::compare) fn find_best_segment(
     }
 
     best_window
+}
+
+fn majority_utterance_window(
+    utterances: &[usize],
+    start: usize,
+    end: usize,
+) -> Option<(usize, usize)> {
+    if start >= end {
+        return None;
+    }
+    let mut counts: Vec<(usize, usize)> = Vec::new();
+    for &utterance in &utterances[start..end] {
+        match counts.iter_mut().find(|(index, _)| *index == utterance) {
+            Some(entry) => entry.1 += 1,
+            None => counts.push((utterance, 1)),
+        }
+    }
+    let majority = counts
+        .iter()
+        .fold(None::<(usize, usize)>, |best, &candidate| match best {
+            Some(current) if current.1 >= candidate.1 => Some(current),
+            _ => Some(candidate),
+        })?
+        .0;
+    let projected_start = (start..end).find(|&index| utterances[index] == majority)?;
+    let projected_end = (projected_start..end)
+        .rev()
+        .find(|&index| utterances[index] == majority)?
+        + 1;
+    Some((projected_start, projected_end))
 }
 
 fn count_alignment_matches(window: &[String], gold_tokens: &[String]) -> usize {
@@ -182,6 +220,10 @@ pub fn compare(main_file: &ChatFile, gold_file: &ChatFile) -> ComparisonBundle {
     // 3. Apply conform with index mapping
     let (conformed_main, main_map) = conform_with_mapping(&main_words);
     let (conformed_gold, gold_map) = conform_with_mapping(&gold_words);
+    let conformed_main_utterances: Vec<usize> = main_map
+        .iter()
+        .map(|&original_index| main_info[original_index].utterance_index)
+        .collect();
 
     // 4. Partition conformed gold tokens by utterance so compare can work
     // sequentially, one gold utterance at a time.
@@ -214,7 +256,9 @@ pub fn compare(main_file: &ChatFile, gold_file: &ChatFile) -> ComparisonBundle {
         }
 
         let remaining_main = &conformed_main[search_start..];
-        let (win_start, win_end) = find_best_segment(g_tokens, remaining_main);
+        let remaining_utterances = &conformed_main_utterances[search_start..];
+        let (win_start, win_end) =
+            find_best_segment(g_tokens, remaining_main, remaining_utterances);
         let abs_start = search_start + win_start;
         let abs_end = search_start + win_end;
 
