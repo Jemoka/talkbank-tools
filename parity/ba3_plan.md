@@ -39,6 +39,7 @@
 - [x] 16/40 Makes batch input concurrency explicitly configurable.
 - [x] 17/40 Invalidates cached task output when the compiled engine changes.
 - [x] 18/40 Keeps experimental two-pass overlap UTR out of automatic selection.
+- [x] 19/40 Exposes standalone speaker diarization as deterministic turns JSON.
 
 ## done
 
@@ -587,3 +588,16 @@ The fork requires its cache engine version to match before returning a hit. BA3'
 - **new**: yes
 
 The fork previously auto-selected two-pass UTR for `+<` and bottom-overlap markers, but now deliberately keeps `Auto` on global UTR until the pass-2 end-time bug is resolved and operator files validate the experiment. Pre-edit BA3 retained the older automatic behavior and even documented its incomplete FA-group tiebreaker. Post-edit the two-pass implementation remains available for future calibrated opt-in work, while the default selector consistently returns the global monotonic strategy for overlap and non-overlap files. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors` (56 passed, 1 ignored, including a parsed `+<` regression).
+
+### Expose standalone speaker diarization as turns JSON
+- **component**: Python CLI, Pyannote speaker backend, and Rust audio preparation binding
+- **summary**: Adds `diarize` for media-only speaker-turn detection, writing deterministic anonymous `PAR0`… track spans without paying for transcription.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/tbt-output/session.turns.json
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/ba3-post-output/session.turns.json
+- **depends on**: []
+- **commit**: 26fa3f7
+- **new**: yes
+
+The fork makes its Pyannote speaker stage independently useful for acoustic speaker-attribution repair. Pre-edit BA3 already had the same typed speaker input/output and backend, but users could reach it only while transcribing. Post-edit the command decodes through BA3's existing 16 kHz mono Rust seam, preserves millisecond spans, maps sorted backend labels deterministically to anonymous `PAR0`… tracks, supports speaker-count hints, and mirrors directory outputs as `.turns.json`. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=python/batchalign/tests/test_diarize_cli.py --test_arg=python/batchalign/tests/test_cli.py`; core Bazel target; and `just batchalign cli diarize --help`.
