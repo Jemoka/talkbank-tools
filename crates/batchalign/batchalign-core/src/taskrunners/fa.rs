@@ -35,6 +35,9 @@ use smol_str::SmolStr;
 use std::path::Path;
 use talkbank_model::Line;
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
+use talkbank_model::model::UtteranceContent;
+
+use super::utr::extraction::split_compound_filler;
 
 /// Audio container extensions to probe for a transcript's sibling media,
 /// in priority order (BA2/ffmpeg accept all of these).
@@ -171,10 +174,13 @@ fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
         let Line::Utterance(u) = line else { continue };
         let mut words = Vec::new();
         walk_words(&u.main.content.content.0, None, &mut |w| {
-            if let Some(text) = word_text(&w) {
-                if !text.is_empty() {
+            if let Some(word) = source_word(&w) {
+                for text in split_compound_filler(word) {
+                    if text.is_empty() {
+                        continue;
+                    }
                     words.push(AsrWord {
-                        text: text.to_string(),
+                        text,
                         start_ms: 0,
                         end_ms: 0,
                         confidence: None,
@@ -221,7 +227,7 @@ fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
 /// in-memory tier-attachment loop.
 fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> {
     use talkbank_model::DependentTier;
-    use talkbank_model::model::{Bullet, WorTier, Word};
+    use talkbank_model::model::{Bullet, WorTier};
 
     let mut idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
@@ -232,20 +238,7 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             )));
         };
         if !seg.words.is_empty() {
-            let words: Vec<Word> = seg
-                .words
-                .iter()
-                .map(|w| {
-                    let word = Word::simple(w.text.as_str());
-                    // An untimed word (FA found no span) renders as a bare word
-                    // with no bullet — matching BA2, which omits the timing.
-                    if w.start_ms == 0 && w.end_ms == 0 {
-                        word
-                    } else {
-                        word.with_inline_bullet(Bullet::new(w.start_ms, w.end_ms))
-                    }
-                })
-                .collect();
+            let words = collapse_aligned_words(&u.main.content.content.0, &seg.words)?;
             // Carry the utterance's own terminator onto `%wor` (BA2 parity);
             // the typed writer renders the bullets and the terminator.
             let wor = WorTier::from_words(words).with_terminator(u.main.content.terminator.clone());
@@ -271,10 +264,141 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
     Ok(())
 }
 
-fn word_text<'a>(w: &WordItem<'a>) -> Option<&'a str> {
+/// Collapse the backend's expanded FA tokens back onto the source word domain.
+/// A compound filler is one CHAT/%wor word even though each underscore-separated
+/// component is independently recognizable in the audio.
+fn collapse_aligned_words(
+    content: &[UtteranceContent],
+    aligned: &[AsrWord],
+) -> BAResult<Vec<talkbank_model::model::Word>> {
+    use talkbank_model::model::{Bullet, Word};
+
+    let mut source_words: Vec<(String, usize)> = Vec::new();
+    walk_words(content, None, &mut |item| {
+        if let Some(word) = source_word(&item) {
+            source_words.push((
+                word.cleaned_text().to_string(),
+                split_compound_filler(word).len(),
+            ));
+        }
+    });
+
+    let mut cursor = 0usize;
+    let mut words = Vec::with_capacity(source_words.len());
+    for (text, part_count) in source_words {
+        let end = cursor.saturating_add(part_count);
+        let parts = aligned.get(cursor..end).ok_or_else(|| {
+            BAError::Internal(format!(
+                "FA: missing aligned token(s) for source word {text:?} at expanded range {cursor}..{end}"
+            ))
+        })?;
+        cursor = end;
+
+        let timing = parts
+            .iter()
+            .filter(|part| part.end_ms > part.start_ms)
+            .fold(None, |span: Option<(u64, u64)>, part| {
+                Some(match span {
+                    Some((start, end)) => (start.min(part.start_ms), end.max(part.end_ms)),
+                    None => (part.start_ms, part.end_ms),
+                })
+            });
+        let word = Word::simple(text.as_str());
+        words.push(match timing {
+            Some((start_ms, end_ms)) => word.with_inline_bullet(Bullet::new(start_ms, end_ms)),
+            None => word,
+        });
+    }
+    if cursor != aligned.len() {
+        return Err(BAError::Internal(format!(
+            "FA: expanded word/output count mismatch ({cursor} vs {})",
+            aligned.len()
+        )));
+    }
+    Ok(words)
+}
+
+fn source_word<'a>(w: &WordItem<'a>) -> Option<&'a talkbank_model::model::Word> {
     match w {
-        WordItem::Word(word) => Some(word.cleaned_text()),
-        WordItem::ReplacedWord(r) => Some(r.word.cleaned_text()),
+        WordItem::Word(word) => Some(word),
+        WordItem::ReplacedWord(r) => Some(&r.word),
         WordItem::Separator(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const COMPOUND_FILLER_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\t&-you_know today .\n@End\n";
+
+    #[test]
+    fn compound_filler_expands_for_fa_dispatch() {
+        let chat = Chat::parse(
+            COMPOUND_FILLER_CHAT,
+            SourceId::try_new("compound").expect("source id"),
+        )
+        .expect("parse fixture");
+        let utterances = extract_utterances_for_fa(&chat);
+        let texts: Vec<&str> = utterances[0]
+            .words
+            .iter()
+            .map(|word| word.text.as_str())
+            .collect();
+        assert_eq!(texts, ["you", "know", "today"]);
+    }
+
+    #[test]
+    fn compound_filler_parts_collapse_to_one_source_span() {
+        let mut chat = Chat::parse(
+            COMPOUND_FILLER_CHAT,
+            SourceId::try_new("compound").expect("source id"),
+        )
+        .expect("parse fixture");
+        let aligned = vec![AsrSegment {
+            start_ms: 100,
+            end_ms: 600,
+            text: "you know today".into(),
+            speaker: None,
+            words: vec![
+                AsrWord {
+                    text: "you".into(),
+                    start_ms: 100,
+                    end_ms: 200,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "know".into(),
+                    start_ms: 225,
+                    end_ms: 350,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "today".into(),
+                    start_ms: 400,
+                    end_ms: 600,
+                    confidence: None,
+                },
+            ],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timings");
+        let output = chat.to_chat();
+        assert!(
+            output.contains("you_know \u{15}100_350\u{15}"),
+            "compound span should cover its first through last recognized part: {output}"
+        );
+        assert_eq!(
+            output
+                .lines()
+                .find(|line| line.starts_with("%wor:"))
+                .expect("wor tier")
+                .matches('\u{15}')
+                .count(),
+            4,
+            "two source words should carry exactly two bullet pairs"
+        );
     }
 }
