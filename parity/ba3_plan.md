@@ -30,6 +30,7 @@
 - [x] 7/10 Keeps experimental review tiers off by default.
 - [x] 8/10 Skips AppleDouble CHAT sidecars during every discovery pass.
 - [x] 9/10 Removes wrapped `%mor`/`%gra` tiers without orphan continuations.
+- [x] 10/10 Schedules the largest batch inputs first.
 
 ## done
 
@@ -448,3 +449,16 @@ The normal input collector already ignored directory dotfiles, but align indepen
 - **new**: yes
 
 The default refresh path stages a copy without old analysis so the engine cannot skip already-tagged utterances. Pre-edit it removed only `%mor:` and `%gra:` header lines, leaving wrapped payload lines as orphan CHAT continuations; the staged file could then fail parsing before regeneration. Post-edit a small state machine consumes the complete logical analysis tiers and stops at the next non-continuation line. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_morphotag_clear.py -q` (3 passed).
+
+### Schedule the largest batch inputs first
+- **component**: Python CLI shared CHAT/media discovery
+- **summary**: Orders discovered inputs by descending byte size with a stable path tie-breaker, starting long-running work early so small files can fill later worker slots instead of leaving one tail straggler.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/input/files.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/tbt-output/order.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/ba3-pre-output/order.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/ba3-post-output/order.txt
+- **depends on**: []
+- **commit**: e00f548
+- **new**: yes
+
+The fork explicitly sorts batch discovery largest-first to avoid makespan dominated by a large file launched at the end. Pre-edit BA3 used lexicographic path order; the focused regression names its 5-, 11-, and 16-byte inputs `a-small.cha`, `m-medium.cha`, and `z-large.cha`, forcing alphabetical and size order to disagree. Post-edit the shared collector applies largest-first scheduling to morphotag, align, utseg, translate, AI, and transcribe inputs while retaining deterministic path ordering for equal sizes. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_chat_discovery.py -q` (3 passed).
