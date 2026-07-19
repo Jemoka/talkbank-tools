@@ -19,8 +19,11 @@ regressions.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
+from batchalign.backends.morphosyntax import stanza
 from batchalign.backends.morphosyntax.ud import render
 
 
@@ -90,37 +93,94 @@ def _gra_str(analysis: render.SentenceAnalysis) -> str:
 
 def test_english_declarative_matches_ba2():
     # "I want the red ball ."
-    sent = _sentence([
-        ("I", "I", "PRON", "Case=Nom|Number=Sing|Person=1|PronType=Prs", 2, "nsubj"),
-        ("want", "want", "VERB", "Mood=Ind|Number=Sing|Person=1|Tense=Pres|VerbForm=Fin", 0, "root"),
-        ("the", "the", "DET", "Definite=Def|PronType=Art", 5, "det"),
-        ("red", "red", "ADJ", "Degree=Pos", 5, "amod"),
-        ("ball", "ball", "NOUN", "Number=Sing", 2, "obj"),
-    ])
+    sent = _sentence(
+        [
+            (
+                "I",
+                "I",
+                "PRON",
+                "Case=Nom|Number=Sing|Person=1|PronType=Prs",
+                2,
+                "nsubj",
+            ),
+            (
+                "want",
+                "want",
+                "VERB",
+                "Mood=Ind|Number=Sing|Person=1|Tense=Pres|VerbForm=Fin",
+                0,
+                "root",
+            ),
+            ("the", "the", "DET", "Definite=Def|PronType=Art", 5, "det"),
+            ("red", "red", "ADJ", "Degree=Pos", 5, "amod"),
+            ("ball", "ball", "NOUN", "Number=Sing", 2, "obj"),
+        ]
+    )
     analysis = render.parse_sentence(sent, ".", [], "en")
-    assert _mor_str(analysis, ".") == "pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres-S1 det|the-Def-Art adj|red-S1 noun|ball-Acc ."
+    assert (
+        _mor_str(analysis, ".")
+        == "pron|I-Prs-Nom-S1 verb|want-Fin-Ind-Pres-S1 det|the-Def-Art adj|red-S1 noun|ball-Acc ."
+    )
     assert _gra_str(analysis) == "1|2|NSUBJ 2|5|ROOT 3|5|DET 4|5|AMOD 5|2|OBJ 6|2|PUNCT"
 
 
 def test_english_aux_participle_matches_ba2():
     # "he is running very fast ."
-    sent = _sentence([
-        ("he", "he", "PRON", "Case=Nom|Gender=Masc|Number=Sing|Person=3|PronType=Prs", 3, "nsubj"),
-        ("is", "be", "AUX", "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin", 3, "aux"),
-        ("running", "run", "VERB", "Tense=Pres|VerbForm=Part", 0, "root"),
-        ("very", "very", "ADV", None, 5, "advmod"),
-        ("fast", "fast", "ADV", "Degree=Pos", 3, "advmod"),
-    ])
+    sent = _sentence(
+        [
+            (
+                "he",
+                "he",
+                "PRON",
+                "Case=Nom|Gender=Masc|Number=Sing|Person=3|PronType=Prs",
+                3,
+                "nsubj",
+            ),
+            (
+                "is",
+                "be",
+                "AUX",
+                "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin",
+                3,
+                "aux",
+            ),
+            ("running", "run", "VERB", "Tense=Pres|VerbForm=Part", 0, "root"),
+            ("very", "very", "ADV", None, 5, "advmod"),
+            ("fast", "fast", "ADV", "Degree=Pos", 3, "advmod"),
+        ]
+    )
     analysis = render.parse_sentence(sent, ".", [], "en")
-    assert _mor_str(analysis, ".") == "pron|he-Prs-Nom-S3 aux|be-Fin-Ind-Pres-S3 verb|run-Part-Pres-S adv|very adv|fast ."
-    assert _gra_str(analysis) == "1|3|NSUBJ 2|3|AUX 3|5|ROOT 4|5|ADVMOD 5|3|ADVMOD 6|3|PUNCT"
+    assert (
+        _mor_str(analysis, ".")
+        == "pron|he-Prs-Nom-S3 aux|be-Fin-Ind-Pres-S3 verb|run-Part-Pres-S adv|very adv|fast ."
+    )
+    assert (
+        _gra_str(analysis)
+        == "1|3|NSUBJ 2|3|AUX 3|5|ROOT 4|5|ADVMOD 5|3|ADVMOD 6|3|PUNCT"
+    )
 
 
 def test_mwt_contraction_groups_into_one_word():
     # "it's a big dog ." — the MWT "it's" → one word with a `~` post-clitic.
     words = [
-        FakeWord("it", "it", "PRON", "Case=Nom|Number=Sing|Person=3|PronType=Prs", 5, "nsubj", id=1),
-        FakeWord("'s", "be", "AUX", "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin", 5, "cop", id=2),
+        FakeWord(
+            "it",
+            "it",
+            "PRON",
+            "Case=Nom|Number=Sing|Person=3|PronType=Prs",
+            5,
+            "nsubj",
+            id=1,
+        ),
+        FakeWord(
+            "'s",
+            "be",
+            "AUX",
+            "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin",
+            5,
+            "cop",
+            id=2,
+        ),
         FakeWord("a", "a", "DET", "Definite=Ind|PronType=Art", 5, "det", id=3),
         FakeWord("big", "big", "ADJ", "Degree=Pos", 5, "amod", id=4),
         FakeWord("dog", "dog", "NOUN", "Number=Sing", 0, "root", id=5),
@@ -136,16 +196,68 @@ def test_mwt_contraction_groups_into_one_word():
     # First word carries two units (it + 's) joined with `~`.
     assert len(analysis.words) == 4
     assert len(analysis.words[0].units) == 2
-    assert _mor_str(analysis, ".") == "pron|it-Prs-Nom-S3~aux|be-Fin-Ind-Pres-S3 det|a-Ind-Art adj|big-S1 noun|dog ."
+    assert (
+        _mor_str(analysis, ".")
+        == "pron|it-Prs-Nom-S3~aux|be-Fin-Ind-Pres-S3 det|a-Ind-Art adj|big-S1 noun|dog ."
+    )
     assert _gra_str(analysis) == "1|5|NSUBJ 2|5|COP 3|5|DET 4|5|AMOD 5|5|ROOT 6|5|PUNCT"
 
 
 def test_question_terminator_is_carried_through():
     # The terminator is applied downstream; %gra still ends with a PUNCT.
-    sent = _sentence([
-        ("who", "who", "PRON", "PronType=Int", 0, "root"),
-    ])
+    sent = _sentence(
+        [
+            ("who", "who", "PRON", "PronType=Int", 0, "root"),
+        ]
+    )
     analysis = render.parse_sentence(sent, "?", [], "en")
     assert _mor_str(analysis, "?").endswith(" ?")
     assert analysis.terminator is not None
     assert analysis.terminator[2] == "PUNCT"
+
+
+def test_invalid_stanza_fields_preserve_surface_and_record_repairs():
+    sent = _sentence(
+        [
+            ("hello", ".", None, None, 99, "<pad>"),
+        ]
+    )
+
+    analysis = render.parse_sentence(sent, ".", [], "en")
+
+    assert _mor_str(analysis, ".") == "x|hello ."
+    assert analysis.words[0].units[0].deprel == "ROOT"
+    repaired_fields = {anomaly.field for anomaly in analysis.anomalies}
+    assert repaired_fields == {"lemma", "upos", "head", "deprel"}
+    assert all(anomaly.text == "hello" for anomaly in analysis.anomalies)
+
+
+def test_missing_lemma_preserves_surface_without_changing_valid_analysis():
+    sent = _sentence(
+        [
+            ("world", None, "NOUN", "Number=Sing", 0, "root"),
+        ]
+    )
+
+    analysis = render.parse_sentence(sent, ".", [], "en")
+
+    assert _mor_str(analysis, ".") == "noun|world ."
+    assert [anomaly.field for anomaly in analysis.anomalies] == ["lemma"]
+
+
+def test_stanza_repairs_are_logged_with_source_and_field(caplog):
+    sent = _sentence(
+        [
+            ("hello", ".", None, None, 99, "<pad>"),
+        ]
+    )
+    analysis = render.parse_sentence(sent, ".", [], "en")
+
+    with caplog.at_level(logging.WARNING, logger="batchalign.stanza"):
+        stanza._log_analysis_anomalies(
+            SimpleNamespace(source_id="bad.cha", utterance_id=4), analysis
+        )
+
+    assert "source=bad.cha utterance=4" in caplog.text
+    for field_name in ("lemma", "upos", "head", "deprel"):
+        assert f"field={field_name}" in caplog.text

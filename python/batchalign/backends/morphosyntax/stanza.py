@@ -40,6 +40,22 @@ from batchalign.backends.morphosyntax.ud.lang import to_stanza
 from batchalign.backends.morphosyntax.ud.tokenize import tokenizer_processor
 
 
+def _log_analysis_anomalies(item: Any, analysis: "render.SentenceAnalysis") -> None:
+    for anomaly in analysis.anomalies:
+        _log.warning(
+            "morphotag: repaired Stanza field source=%s utterance=%d "
+            "word=%d text=%r field=%s original=%r replacement=%r reason=%s",
+            item.source_id,
+            item.utterance_id,
+            anomaly.word_index,
+            anomaly.text,
+            anomaly.field,
+            anomaly.original,
+            anomaly.replacement,
+            anomaly.reason,
+        )
+
+
 # Module-level thread-local for the "current sentences" the tokenizer
 # postprocessor should see. The closure registered with a Stanza pipeline
 # reads from this rather than from a captured `self`, so a pipeline can
@@ -82,8 +98,25 @@ _pipeline_failures: dict[tuple, str] = {}
 # Languages for which Stanza's MWT splitter is disabled (BA2 ud.py:1034-1036).
 _MWT_EXCLUSION = frozenset(
     {
-        "hr", "zh", "zh-hans", "zh-hant", "ja", "ko", "sl", "sr", "bg", "ru",
-        "et", "hu", "eu", "el", "he", "af", "ga", "da", "ro",
+        "hr",
+        "zh",
+        "zh-hans",
+        "zh-hant",
+        "ja",
+        "ko",
+        "sl",
+        "sr",
+        "bg",
+        "ru",
+        "et",
+        "hu",
+        "eu",
+        "el",
+        "he",
+        "af",
+        "ga",
+        "da",
+        "ro",
     }
 )
 
@@ -124,9 +157,9 @@ _CA_NOTATION_RE = re.compile(
     # the %mor count by one per arrow. Estonian33 alone uses ↘ 148× in
     # the multilingual fixture — one of the dominant skip causes.
     r"[↗↘↖↙]|"
-    r"\bH\*|"                 # high pitch accent (word-start anchored)
-    r"\bL\*|"                 # low pitch accent (word-start anchored)
-    r"[‐-―]+"                 # Unicode dashes used as CA continuations
+    r"\bH\*|"  # high pitch accent (word-start anchored)
+    r"\bL\*|"  # low pitch accent (word-start anchored)
+    r"[‐-―]+"  # Unicode dashes used as CA continuations
 )
 
 
@@ -170,9 +203,7 @@ class StanzaBackend(Morphosyntax):
         # Eager-build only when a language was pinned; otherwise defer until
         # the first input arrives (header-driven dispatch).
         if self._pinned_langs is not None:
-            self._nlp: Any | None = self._build_pipeline_for(
-                stanza, self._pinned_langs
-            )
+            self._nlp: Any | None = self._build_pipeline_for(stanza, self._pinned_langs)
         else:
             self._nlp = None
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
@@ -241,18 +272,14 @@ class StanzaBackend(Morphosyntax):
             if hit is not None:
                 return hit
             if len(langs) > 1:
-                configs = {
-                    lang: self._lang_config(lang, langs, key) for lang in langs
-                }
+                configs = {lang: self._lang_config(lang, langs, key) for lang in langs}
                 nlp = stanza.MultilingualPipeline(
                     lang_configs=configs,
                     lang_id_config={"langid_lang_subset": list(langs)},
                 )
             else:
                 lang = langs[0]
-                nlp = stanza.Pipeline(
-                    lang=lang, **self._lang_config(lang, langs, key)
-                )
+                nlp = stanza.Pipeline(lang=lang, **self._lang_config(lang, langs, key))
             _pipeline_cache[key] = nlp
             return nlp
 
@@ -291,7 +318,9 @@ class StanzaBackend(Morphosyntax):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
-    def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
+    def call(
+        self, batch: list[Any], *, progress: Any = None, **_kwargs: Any
+    ) -> list[Any]:
         """Process a batch of utterances.
 
         Inputs are grouped by language so utterances sharing a pipeline can
@@ -334,7 +363,9 @@ class StanzaBackend(Morphosyntax):
             except Exception as exc:  # noqa: BLE001 — never crash the batch.
                 _log.warning(
                     "morphotag: skipping utterance %d in %s: language resolution failed (%s)",
-                    item.utterance_id, item.source_id, exc,
+                    item.utterance_id,
+                    item.source_id,
+                    exc,
                 )
                 outputs[idx] = self._empty_output(item)
                 continue
@@ -359,7 +390,8 @@ class StanzaBackend(Morphosyntax):
                 _log.warning(
                     "morphotag: Stanza pipeline init failed for langs=%s (%s); "
                     "skipping %%mor/%%gra for all utterances with this language",
-                    langs, exc,
+                    langs,
+                    exc,
                 )
                 for idx, item, _ in items:
                     outputs[idx] = self._empty_output(item)
@@ -392,7 +424,9 @@ class StanzaBackend(Morphosyntax):
         # as "no analysis" up front so they don't dilute the batched call.
         # `special_forms` rides along per utterance so the renderer can
         # re-inject the original `tag|stem` for each `xbxxx` mask.
-        prepared: list[tuple[int, Any, str, list[list[str]]]] = []  # (idx, item, line, sf)
+        prepared: list[
+            tuple[int, Any, str, list[list[str]]]
+        ] = []  # (idx, item, line, sf)
         for idx, item, _ in items:
             text = item.text or " ".join(item.tokens)
             line_cut, special_forms = self._preprocess_text(text)
@@ -423,7 +457,9 @@ class StanzaBackend(Morphosyntax):
             _log.warning(
                 "morphotag: Stanza batched call failed for langs=%s (%d utts, %s); "
                 "falling back to per-utterance",
-                langs, len(prepared), exc,
+                langs,
+                len(prepared),
+                exc,
             )
             self._tag_per_input_fallback(key, langs, nlp, prepared, outputs)
             return
@@ -435,19 +471,25 @@ class StanzaBackend(Morphosyntax):
             _log.warning(
                 "morphotag: Stanza returned %d sentences for %d batched inputs "
                 "(langs=%s); falling back to per-utterance",
-                len(stanza_sents), len(prepared), langs,
+                len(stanza_sents),
+                len(prepared),
+                langs,
             )
             self._tag_per_input_fallback(key, langs, nlp, prepared, outputs)
             return
 
-        for (idx, item, _, special_forms), sent in zip(prepared, stanza_sents, strict=False):
+        for (idx, item, _, special_forms), sent in zip(
+            prepared, stanza_sents, strict=False
+        ):
             try:
                 analysis = render.parse_sentence(sent, ".", special_forms, langs[0])
                 outputs[idx] = self._analysis_to_output(item, analysis)
             except Exception as exc:  # noqa: BLE001 — render fault on one utt.
                 _log.warning(
                     "morphotag: render failed for utterance %d in %s: %s",
-                    item.utterance_id, item.source_id, exc,
+                    item.utterance_id,
+                    item.source_id,
+                    exc,
                 )
                 outputs[idx] = self._empty_output(item)
 
@@ -474,7 +516,10 @@ class StanzaBackend(Morphosyntax):
             except Exception as exc:  # noqa: BLE001 — give up on just this one.
                 _log.warning(
                     "morphotag: skipping utterance %d in %s (langs=%s) in fallback: %s",
-                    item.utterance_id, item.source_id, langs, exc,
+                    item.utterance_id,
+                    item.source_id,
+                    langs,
+                    exc,
                 )
                 outputs[idx] = self._empty_output(item)
 
@@ -497,6 +542,8 @@ class StanzaBackend(Morphosyntax):
             MorphosyntaxToken,
             MorphosyntaxUnit,
         )
+
+        _log_analysis_anomalies(item, analysis)
 
         tokens: list[Any] = []
         for word in analysis.words:

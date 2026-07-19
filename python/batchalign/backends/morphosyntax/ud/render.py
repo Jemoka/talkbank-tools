@@ -61,6 +61,18 @@ class MorWordGroup:
     units: list[MorUnit]
 
 
+@dataclass(frozen=True)
+class AnalysisAnomaly:
+    """One repaired Stanza field, retained for operator-visible logging."""
+
+    word_index: int
+    text: str
+    field: str
+    original: Any
+    replacement: Any
+    reason: str
+
+
 @dataclass
 class SentenceAnalysis:
     """Structured analysis of one utterance: the word groups plus the trailing
@@ -69,6 +81,176 @@ class SentenceAnalysis:
 
     words: list[MorWordGroup]
     terminator: tuple[int, int, str] | None  # (index, head, deprel)
+    anomalies: list[AnalysisAnomaly] = field(default_factory=list)
+
+
+@dataclass
+class _NormalizedWord:
+    """Renderer-owned copy of the Stanza fields consumed below."""
+
+    text: str
+    lemma: str
+    upos: str
+    feats: str | None
+    head: int
+    deprel: str
+    id: int
+
+
+_UD_POS = {
+    "ADJ",
+    "ADP",
+    "ADV",
+    "AUX",
+    "CCONJ",
+    "DET",
+    "INTJ",
+    "NOUN",
+    "NUM",
+    "PART",
+    "PRON",
+    "PROPN",
+    "PUNCT",
+    "SCONJ",
+    "SYM",
+    "VERB",
+    "X",
+}
+
+
+def _anomaly(
+    sink: list[AnalysisAnomaly],
+    index: int,
+    text: str,
+    field_name: str,
+    original: Any,
+    replacement: Any,
+    reason: str,
+) -> None:
+    sink.append(AnalysisAnomaly(index, text, field_name, original, replacement, reason))
+
+
+def _normalize_words(
+    sentence: Any,
+) -> tuple[list[_NormalizedWord], list[AnalysisAnomaly]]:
+    """Repair missing/invalid Stanza fields without losing lexical surfaces."""
+    raw_words = list(getattr(sentence, "words", []) or [])
+    anomalies: list[AnalysisAnomaly] = []
+    root_id = next(
+        (
+            index
+            for index, word in enumerate(raw_words, start=1)
+            if getattr(word, "head", None) == 0
+            and str(getattr(word, "deprel", "")).lower() == "root"
+        ),
+        1 if raw_words else 0,
+    )
+    normalized: list[_NormalizedWord] = []
+
+    for index, word in enumerate(raw_words, start=1):
+        raw_text = getattr(word, "text", None)
+        text = raw_text if isinstance(raw_text, str) else ""
+        if not text:
+            _anomaly(
+                anomalies, index, text, "text", raw_text, "", "missing lexical surface"
+            )
+
+        raw_lemma = getattr(word, "lemma", None)
+        lemma = raw_lemma if isinstance(raw_lemma, str) else ""
+        missing_lemma = not lemma
+        bogus_lemma = (
+            bool(text)
+            and any(char.isalnum() for char in text)
+            and not any(char.isalnum() for char in lemma)
+        )
+        if missing_lemma or bogus_lemma:
+            _anomaly(
+                anomalies,
+                index,
+                text,
+                "lemma",
+                raw_lemma,
+                text,
+                "missing lemma or punctuation-only lemma for a lexical surface",
+            )
+            lemma = text
+
+        raw_upos = getattr(word, "upos", None)
+        upos = raw_upos.upper() if isinstance(raw_upos, str) else ""
+        if upos not in _UD_POS:
+            _anomaly(
+                anomalies,
+                index,
+                text,
+                "upos",
+                raw_upos,
+                "X",
+                "missing or unknown universal POS",
+            )
+            upos = "X"
+
+        raw_head = getattr(word, "head", None)
+        head_valid = (
+            isinstance(raw_head, int)
+            and not isinstance(raw_head, bool)
+            and 0 <= raw_head <= len(raw_words)
+        )
+        if head_valid:
+            head = raw_head
+        else:
+            head = 0 if index == root_id else root_id
+            _anomaly(
+                anomalies,
+                index,
+                text,
+                "head",
+                raw_head,
+                head,
+                "missing or out-of-range dependency head",
+            )
+
+        raw_deprel = getattr(word, "deprel", None)
+        deprel = raw_deprel if isinstance(raw_deprel, str) else ""
+        deprel_invalid = not deprel or (deprel.startswith("<") and deprel.endswith(">"))
+        expected_root = head == 0
+        joint_invariant_invalid = (deprel.lower() == "root") != expected_root
+        if deprel_invalid or joint_invariant_invalid:
+            replacement = "root" if expected_root else "dep"
+            _anomaly(
+                anomalies,
+                index,
+                text,
+                "deprel",
+                raw_deprel,
+                replacement,
+                "missing/sentinel relation or head/root invariant violation",
+            )
+            deprel = replacement
+
+        raw_id = getattr(word, "id", None)
+        word_id = (
+            raw_id
+            if isinstance(raw_id, int) and not isinstance(raw_id, bool)
+            else index
+        )
+        if word_id != raw_id:
+            _anomaly(
+                anomalies,
+                index,
+                text,
+                "id",
+                raw_id,
+                word_id,
+                "missing or non-scalar word id",
+            )
+
+        raw_feats = getattr(word, "feats", None)
+        feats = raw_feats if isinstance(raw_feats, str) else None
+        normalized.append(
+            _NormalizedWord(text, lemma, upos, feats, head, deprel, word_id)
+        )
+
+    return normalized, anomalies
 
 
 # --- feature helpers (BA2 ud.py:44-54) ------------------------------------
@@ -189,11 +371,15 @@ def handler__PRON(word: Any, lang: str | None = None) -> tuple[str, str, list[st
         number_string = ""
 
     pos, lemma = handler(word, lang)
-    return pos, lemma, feat_list(
-        feats.get("PronType", "Int"),
-        case.replace(",", ""),
-        reflex,
-        number_string,
+    return (
+        pos,
+        lemma,
+        feat_list(
+            feats.get("PronType", "Int"),
+            case.replace(",", ""),
+            reflex,
+            number_string,
+        ),
     )
 
 
@@ -424,10 +610,12 @@ def parse_sentence(
     if special_forms is None:
         special_forms = []
 
+    normalized_words, anomalies = _normalize_words(sentence)
+
     # Per Stanza-word (chunk) parallel arrays, mirroring BA2's `mor`.
     analyses: list[tuple[str, str, list[str]] | None] = []
     surfaces: list[str] = []
-    gra_tmp: list[tuple[int, int, str]] = []   # (index, raw_head, deprel)
+    gra_tmp: list[tuple[int, int, str]] = []  # (index, raw_head, deprel)
     actual_indicies: list[int] = []
     num_skipped = 0
     root = 0
@@ -456,7 +644,9 @@ def parse_sentence(
             auxiliaries.append(token.id[-1])
         elif lang == "it" and token.text.strip() == "d'":
             auxiliaries.append(token.id[-1])
-        elif lang == "it" and (token.text.strip() == "c’" or token.text.strip() == "c'"):
+        elif lang == "it" and (
+            token.text.strip() == "c’" or token.text.strip() == "c'"
+        ):
             auxiliaries.append(token.id[-1])
         elif lang == "it" and token.text.strip() == "qual'":
             auxiliaries.append(token.id[-1])
@@ -478,13 +668,23 @@ def parse_sentence(
             and sentence.tokens[indx - 1].text != "jusqu'"
         ):
             auxiliaries.append(token.id[0])
-        elif lang == "fr" and len(token.text.strip()) == 2 and token.text.strip()[-1] == "'":
+        elif (
+            lang == "fr"
+            and len(token.text.strip()) == 2
+            and token.text.strip()[-1] == "'"
+        ):
             auxiliaries.append(token.id[-1])
 
     special_forms = special_forms.copy()
     special_form_ids: list[Any] = []
 
-    for indx, word in enumerate(sentence.words):
+    for indx, word in enumerate(normalized_words):
+        if not word.text:
+            analyses.append(None)
+            surfaces.append("")
+            num_skipped += 1
+            actual_indicies.append(root)
+            continue
         unit = handle(word, lang)
         text = getattr(word, "text", "")
         if text.strip() == "0":
@@ -512,7 +712,9 @@ def parse_sentence(
             analyses.append(unit)
             surfaces.append(text)
 
-            deprel = word.deprel.upper().replace(":", "-").replace("<", "").replace(">", "")
+            deprel = (
+                word.deprel.upper().replace(":", "-").replace("<", "").replace(">", "")
+            )
             gra_tmp.append(((indx + 1) - num_skipped, word.head, deprel))
             actual_indicies.append((indx + 1) - num_skipped)
             if word.deprel.upper() == "ROOT":
@@ -534,7 +736,7 @@ def parse_sentence(
         head = actual_indicies[raw_head - 1]
         chunk_gra[index] = (index, head, deprel)
 
-    terminator = (len(sentence.words) + 1 - num_skipped, root, "PUNCT")
+    terminator = (len(normalized_words) + 1 - num_skipped, root, "PUNCT")
 
     # Word grouping: each surviving chunk starts as its own word; clitic ($),
     # auxiliary (~), and MWT (~) joins merge groups. Mirrors BA2's mor_clone
@@ -591,9 +793,9 @@ def parse_sentence(
             words.append(MorWordGroup("".join(texts), units))
 
     if not words:
-        return SentenceAnalysis([], None)
+        return SentenceAnalysis([], None, anomalies)
 
-    return SentenceAnalysis(words, terminator)
+    return SentenceAnalysis(words, terminator, anomalies)
 
 
 def clean_sentence(sent: str) -> str:
@@ -607,6 +809,7 @@ def clean_sentence(sent: str) -> str:
 __all__ = [
     "MorUnit",
     "MorWordGroup",
+    "AnalysisAnomaly",
     "SentenceAnalysis",
     "parse_feats",
     "feat_list",
