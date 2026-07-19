@@ -415,7 +415,8 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
                 .dependent_tiers
                 .iter()
                 .any(|tier| matches!(tier, DependentTier::Wor(_)));
-            let words = collapse_aligned_words(&u.main.content.content.0, &seg.words)?;
+            let mut words = collapse_aligned_words(&u.main.content.content.0, &seg.words)?;
+            rebalance_near_zero_words_from_following(&mut words);
             let has_untimed_leading_filler =
                 has_untimed_leading_filler_coverage(&u.main.content.content.0, &words);
             // Carry the utterance's own terminator onto `%wor` (BA2 parity);
@@ -667,6 +668,32 @@ fn has_untimed_leading_filler_coverage(
         }
     }
     false
+}
+
+fn rebalance_near_zero_words_from_following(words: &mut [talkbank_model::model::Word]) {
+    const MIN_WORD_DURATION_MS: u64 = 40;
+
+    for index in 0..words.len().saturating_sub(1) {
+        let (before, after) = words.split_at_mut(index + 1);
+        let Some(current) = before[index].inline_bullet.as_mut() else {
+            continue;
+        };
+        let Some(next) = after[0].inline_bullet.as_mut() else {
+            continue;
+        };
+        let duration_ms = current
+            .timing
+            .end_ms
+            .saturating_sub(current.timing.start_ms);
+        if duration_ms == 0 || duration_ms >= MIN_WORD_DURATION_MS {
+            continue;
+        }
+        let repaired_boundary = current.timing.start_ms + MIN_WORD_DURATION_MS;
+        if next.timing.start_ms <= current.timing.end_ms && repaired_boundary < next.timing.end_ms {
+            current.timing.end_ms = repaired_boundary;
+            next.timing.start_ms = repaired_boundary;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1035,6 +1062,43 @@ mod tests {
         let output = chat.to_chat();
         assert!(output.find("%wor:").expect("wor tier") < output.find("%mor:").expect("mor tier"));
         assert!(output.contains("%wor:\thello \u{15}150_450\u{15} ."));
+    }
+
+    #[test]
+    fn fa_rebalances_near_zero_word_from_following_span() {
+        const SHORT_WORD_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\ta boat . \u{15}100_500\u{15}\n@End\n";
+        let mut chat = Chat::parse(
+            SHORT_WORD_CHAT,
+            SourceId::try_new("short-word.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let aligned = vec![AsrSegment {
+            start_ms: 100,
+            end_ms: 500,
+            text: "a boat".into(),
+            speaker: None,
+            words: vec![
+                AsrWord {
+                    text: "a".into(),
+                    start_ms: 100,
+                    end_ms: 120,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "boat".into(),
+                    start_ms: 120,
+                    end_ms: 500,
+                    confidence: None,
+                },
+            ],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timed result");
+
+        let output = chat.to_chat();
+        assert!(output.contains("%wor:\ta \u{15}100_140\u{15} boat \u{15}140_500\u{15} ."));
     }
 
     #[test]
