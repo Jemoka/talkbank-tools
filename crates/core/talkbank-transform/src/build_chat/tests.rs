@@ -1253,6 +1253,44 @@ fn english_transcribe_rules_fire_end_to_end() {
 }
 
 #[test]
+fn english_transcribe_corrections_preserve_source_timings() {
+    let desc = run_transcribe_to_description(
+        &[
+            ("hello", 0.0, 0.3),
+            (".", 0.3, 0.4),
+            ("i", 0.5, 0.6),
+            ("said", 0.6, 0.9),
+            ("Dr.", 0.9, 1.2),
+            ("Smith", 1.2, 1.5),
+            (".", 1.5, 1.6),
+            ("i'll", 2.1, 2.4),
+            ("leave", 2.4, 2.7),
+            (".", 2.7, 2.8),
+        ],
+        "eng",
+    )
+    .expect("English corrections should produce a valid transcript");
+
+    let corrected: Vec<(&str, Option<u64>, Option<u64>)> = desc
+        .utterances
+        .iter()
+        .flat_map(|utterance| utterance.words.iter().flatten())
+        .filter(|word| matches!(word.text.as_str(), "Hello" | "I" | "Dr" | "I'll"))
+        .map(|word| (word.text.as_str(), word.start_ms, word.end_ms))
+        .collect();
+
+    assert_eq!(
+        corrected,
+        vec![
+            ("Hello", Some(0), Some(300)),
+            ("I", Some(500), Some(600)),
+            ("Dr", Some(900), Some(1200)),
+            ("I'll", Some(2100), Some(2400)),
+        ]
+    );
+}
+
+#[test]
 fn chat_illegal_asr_separator_does_not_fail_transcription() {
     let result = run_transcribe_to_description(
         &[
