@@ -12,7 +12,7 @@
 - [x] Rolls back invalid L2 splices, skips `NoAlign` words, and provides a fallback harness where secondary Stanza coverage is absent.
 - [x] Detects bogus Stanza lemmas, missing fields, and invalid analyses, preserving the surface form and recording anomalies.
 - [x] Applies numbered, retireable Stanza workarounds for Italian compound imperatives and related defects.
-- [ ] Corrects known English transcribe patterns, Chinese bogus lemmas, and Japanese token merging.
+- [x] Corrects known English transcribe patterns, Chinese bogus lemmas, and Japanese token merging.
 - [x] Preflights large Rev.AI batches up front instead of submitting every file independently. (Please do this without moving revai to rust; keep it in Python.)
 - [x] Avoids Whisper MPS `bfloat16` crashes on Apple Silicon.
 - [x] Coordinates transcribe memory, splits work safely, and prevents OOM-created zombie workers.
@@ -294,3 +294,16 @@ Audit note: BA3 and the fork already share the same realignment implementation, 
 - **new**: no
 
 Audit note: the fork-origin implementation and its end-to-end test were already present before this parity pass. The test starts from timed raw ASR elements, crosses `process_raw_asr`, retokenization, transcript description, typed CHAT construction, and serialization, and checks all three corrected utterances plus negative stale-form assertions. The separate evidence commit records the verified Bazel contract without perturbing working runtime code. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact build_chat::tests::english_transcribe_rules_fire_end_to_end` (1 passed).
+
+### Lock bogus Chinese lemmas to their Han surface
+- **component**: Python structured Stanza morphology renderer
+- **summary**: Proves a Chinese lexical word whose Stanza lemma is punctuation retains its Han surface as the lemma, remains a noun with a valid ROOT relation, and records a structured lemma anomaly rather than disappearing as punctuation.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/input/raw-stanza.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/tbt-output/analysis.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/ba3-pre-output/analysis.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/ba3-post-output/analysis.txt
+- **depends on**: [f2f60d0]
+- **commit**: bf3035a
+- **new**: no
+
+Audit note: the repair implementation was introduced by the earlier general invalid-Stanza fix, but only Latin lexical surfaces were pinned. This independent Chinese regression supplies `苹果` with the observed bogus lemma `。`, asserts exact `%mor` surface preservation and ROOT repair, and checks the anomaly retains the Han source text. Together with the English end-to-end evidence and Japanese realignment contract above, this closes the final three-language original TODO. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_morphotag_render.py -q -k chinese_bogus_punctuation_lemma` (1 passed, 11 deselected).
