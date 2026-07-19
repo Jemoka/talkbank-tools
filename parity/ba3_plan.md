@@ -28,7 +28,7 @@
 - [x] 5/10 Projects comparison candidates to one majority utterance.
 - [x] 6/10 Attributes matched comparison POS from the gold transcript.
 - [x] 7/10 Keeps experimental review tiers off by default.
-- [x] 8/10 Skips AppleDouble CHAT sidecars during every discovery pass.
+- [x] 8/10 Skips AppleDouble CHAT sidecars in CLI discovery and align preflight.
 - [x] 9/10 Removes wrapped `%mor`/`%gra` tiers without orphan continuations.
 - [x] 10/10 Schedules the largest batch inputs first.
 
@@ -229,9 +229,9 @@ The implementation dependency made full reparsing a hard pre-write gate; this in
 
 Pre-edit standalone FA constructed `Qwen3ASRModel` from the alignment checkpoint and also passed that checkpoint as its nested `forced_aligner`, loading the same large model twice through the wrong outer class. The locked `qwen-asr` API exposes `Qwen3ForcedAligner.from_pretrained` directly; post-edit uses that supported surface with its correct `dtype` parameter. The regression also pins the ASR companion-aligner argument and the two public re-exports, covering the fork's HK_QWEN/type-stub intent in BA3's backend architecture. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_qwen3_contract.py -q` (3 passed).
 
-### Honor NoAlign before FA work and retain safe L2 fallbacks
-- **component**: `batchalign-core` FA task runner and typed L2 morphosyntax splice
-- **summary**: Treats `@Options: NoAlign` as strict byte-stable pass-through before media lookup or backend dispatch; audited L2 splice transactions restore snapshots on invalid dependency output, while missing secondary Stanza coverage yields empty responses and `L2|xxx` fallback instead of aborting the batch.
+### Honor NoAlign before FA work
+- **component**: `batchalign-core` FA task runner
+- **summary**: Treats `@Options: NoAlign` as strict byte-stable pass-through before media lookup or backend dispatch.
 - **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/input/no-align.cha
 - **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/tbt-output/no-align.cha
 - **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/ba3-pre-output/no-align.txt
@@ -240,7 +240,20 @@ Pre-edit standalone FA constructed `Qwen3ASRModel` from the alignment checkpoint
 - **commit**: b390560
 - **new**: no
 
-The missing runtime gap was the FA entry point: pre-edit a NoAlign transcript without media failed sibling lookup, while post-edit it reaches neither media nor a panic-on-call dispatcher and serializes identically. The existing typed L2 transaction was separately verified against an invalid secondary head into the host terminator (rollback/fallback), and the Python harness was verified across a missing secondary Stanza pipeline (five cache/fallback cases). Targeted verification used Bazel-built executables: `bazel-bin/crates/batchalign/batchalign-core/batchalign_core_unit_test --exact taskrunners::fa::tests::no_align_is_strict_pass_through_without_media_or_dispatch` (1 passed); `bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact morphosyntax::l2::splice::cardinality_tests::family_c_secondary_head_into_host_terminator_falls_back` (1 passed); `bazel-bin/python/batchalign/pytest python/batchalign/tests/test_stanza_pipeline_cache.py -q` (5 passed).
+Pre-edit a NoAlign transcript without media failed sibling lookup, while post-edit it reaches neither media nor a panic-on-call dispatcher and serializes identically. Targeted verification used the Bazel-built executable: `bazel-bin/crates/batchalign/batchalign-core/batchalign_core_unit_test --exact taskrunners::fa::tests::no_align_is_strict_pass_through_without_media_or_dispatch` (1 passed).
+
+### Lock invalid L2 splice rollback snapshots
+- **component**: typed L2 morphosyntax splice and Python secondary-language fallback
+- **summary**: Pins the transactional fallback contract: an invalid post-splice dependency tree restores the complete host `%mor`/`%gra` snapshots and resets the affected analysis to `L2|xxx`; unavailable secondary Stanza pipelines return empty per-input responses instead of aborting the batch.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/input/invalid-secondary.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/tbt-output/tiers.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/ba3-pre-output/tiers.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/ba3-post-output/tiers.txt
+- **depends on**: []
+- **commit**: 9fc1358
+- **new**: no
+
+Runtime parity was already present, so the pre/post transcript evidence is intentionally identical. The independent audit commit proves the private transaction chokepoint rejects an out-of-bounds `2|99|NMOD` result, restores both typed tier snapshots exactly, and reports `RolledBack`. The existing Python fallback harness separately verifies one unavailable secondary language is attempted once, memoized, and represented by empty responses for every affected input. Targeted verification: `bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact morphosyntax::l2::splice::cardinality_tests::invalid_post_splice_tree_restores_complete_tier_snapshots` (1 passed); `bazel-bin/python/batchalign/pytest python/batchalign/tests/test_stanza_pipeline_cache.py -q` (5 passed).
 
 ### Bound decoded-audio admission at each backend route
 - **component**: `batchalign-engine` backend dispatcher and transcribe chunking contracts
@@ -302,10 +315,10 @@ Audit note: BA3 and the fork already share the same realignment implementation, 
 - **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/ba3-pre-output/transcript.txt
 - **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/ba3-post-output/transcript.txt
 - **depends on**: []
-- **commit**: e8235c13
+- **commit**: 92e60bd
 - **new**: no
 
-Audit note: the fork-origin implementation and its end-to-end test were already present before this parity pass. The test starts from timed raw ASR elements, crosses `process_raw_asr`, retokenization, transcript description, typed CHAT construction, and serialization, and checks all three corrected utterances plus negative stale-form assertions. The separate evidence commit records the verified Bazel contract without perturbing working runtime code. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact build_chat::tests::english_transcribe_rules_fire_end_to_end` (1 passed).
+Audit note: runtime parity was already present before this parity pass. The independent branch-local regression starts from timed raw ASR elements, crosses `process_raw_asr` and transcript description, and proves `Hello`, `I`, `Dr`, and `I'll` retain their exact source intervals after capitalization and title-period cleanup. The existing end-to-end serialization regression separately checks all three corrected utterances plus negative stale-form assertions. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact build_chat::tests::english_transcribe_corrections_preserve_source_timings` (1 passed).
 
 ### Lock bogus Chinese lemmas to their Han surface
 - **component**: Python structured Stanza morphology renderer
