@@ -706,10 +706,9 @@ The fork treats the absence of a dependency root as a mapping error, because no 
 ### Reuse complete exact-match `%wor` timing without rerunning FA
 - **component**: `batchalign-core` forced-alignment task runner
 - **summary**: Detects a fully timed `%wor` tier whose words exactly match each current main tier, refreshes utterance bullets from its spans, and returns before media decode or backend dispatch.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/input/reusable.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/tbt-output/reusable.cha
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/ba3-post-output/reusable.cha
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/input/reusable.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/trace.log
 - **depends on**: []
 - **commit**: 031cc38
 - **new**: yes
@@ -719,10 +718,9 @@ The fork has a cheap rerun path for already aligned files, whereas BA3 previousl
 ### Reject reusable `%wor` spans that overrun the next utterance
 - **component**: `batchalign-core` forced-alignment reuse validation
 - **summary**: Refuses the cheap rerun path when an utterance's final reused word ends after the next timed utterance begins.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/input/spans.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/input/overrun.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-next-start/trace.log
 - **depends on**: [031cc38]
 - **commit**: 93f4048
 - **new**: yes
@@ -732,10 +730,9 @@ An exact word match is not enough to trust old timing: stale `%wor` data can cla
 ### Reject near-zero word spans from FA timing reuse
 - **component**: `batchalign-core` forced-alignment reuse validation
 - **summary**: Requires every reused `%wor` bullet to span at least 40 ms, catching collapsed internal and final words before the cheap rerun path.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/input/spans.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/input/collapsed.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-collapsed-word/trace.log
 - **depends on**: [031cc38]
 - **commit**: 7bddd99
 - **new**: yes
@@ -745,10 +742,9 @@ Positive duration alone does not make old word timing reusable. The fork uses a 
 ### Reject one-word dominance in reusable FA timing
 - **component**: `batchalign-core` forced-alignment reuse validation
 - **summary**: Rejects old timing when one word occupies more than 40% of a three-or-more-word utterance span, forcing a fresh alignment instead of preserving a characteristic stale distribution.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/input/spans.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/input/dominant.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-dominant-word/trace.log
 - **depends on**: [031cc38]
 - **commit**: 1a3287e
 - **new**: yes
@@ -758,10 +754,9 @@ Some bad prior alignments have no zero or tiny word: instead, one token absorbs 
 ### Reject backward word order in reusable FA timing
 - **component**: `batchalign-core` forced-alignment reuse validation
 - **summary**: Requires reused `%wor` spans to advance monotonically, preventing positive-duration but backward word timing from entering the cheap rerun path.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/input/spans.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/input/backward.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-reuse-backward-words/trace.log
 - **depends on**: [031cc38]
 - **commit**: 475563d
 - **new**: yes
@@ -771,10 +766,9 @@ Word spans can each be positive yet still form a backward sequence. The base BA3
 ### Clear stale zero-duration authoritative bullets after untimed FA
 - **component**: `batchalign-core` forced-alignment result injection
 - **summary**: Removes an authoritative `T_T` main-tier bullet when FA returns no timed words, while retaining the untimed `%wor` structure for diagnostics.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/input/stale-zero.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/trace.log
 - **depends on**: []
 - **commit**: 438641c
 - **new**: yes
@@ -784,10 +778,9 @@ The fork distinguishes a usable UTR hint from a stale authoritative bullet left 
 ### Replace provisional UTR windows with successful FA word spans
 - **component**: `batchalign-core` forced-alignment result injection
 - **summary**: Replaces a broad UTR-generated main-tier hint with the minimum and maximum timestamps of the words that FA actually aligned.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/input/utr-window.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-overwrite-utr-hint/trace.log
 - **depends on**: []
 - **commit**: be1af15
 - **new**: yes
@@ -797,10 +790,9 @@ UTR boundaries are search hints, not authoritative transcript timing. The fork d
 ### Preserve authoritative bullet envelopes across successful FA
 - **component**: `batchalign-core` forced-alignment result injection
 - **summary**: Unions successful aligned-word timing with an authoritative transcript bullet so forced alignment can expand, but never shrink, its original envelope.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/input/authoritative-window.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/trace.log
 - **depends on**: [be1af15]
 - **commit**: 96d78ca
 - **new**: yes
@@ -810,10 +802,9 @@ Unlike provisional UTR hints, an existing authoritative bullet can intentionally
 ### Create missing main bullets from successful FA word spans
 - **component**: `batchalign-core` forced-alignment result injection
 - **summary**: Derives a previously absent utterance bullet from the exact envelope of successfully timed words instead of the backend segment's search bounds.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/input/untimed.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-create-word-span-bullet/trace.log
 - **depends on**: [be1af15]
 - **commit**: 9eae69e
 - **new**: yes
@@ -823,10 +814,9 @@ When no prior bullet exists, there is no source envelope to preserve and the ali
 ### Strip stale FA review tiers unconditionally on rerun
 - **component**: `batchalign-core` forced-alignment task runner
 - **summary**: Removes `%xalign` and `%xrev` tiers from an earlier alignment run even when the current clean rerun produces no replacement decisions.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/input/rerun.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/input/rerun.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/trace.log
 - **depends on**: [031cc38]
 - **commit**: 9b69119
 - **new**: yes
@@ -836,10 +826,9 @@ Review tiers describe decisions made by one particular FA run and cannot safely 
 ### Discard implausibly large stale authoritative start leads on FA rerun
 - **component**: `batchalign-core` forced-alignment result injection
 - **summary**: Snaps a prior authoritative bullet start to the new first aligned word when a rerun exposes more than two seconds of stale leading coverage.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/input/stale-start.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-discard-stale-start/trace.log
 - **depends on**: [96d78ca]
 - **commit**: 9f9832a
 - **new**: yes
@@ -849,10 +838,9 @@ Authoritative union protects deliberate transcript coverage, but blindly applyin
 ### Preserve authoritative start coverage for untimed leading fillers
 - **component**: `batchalign-core` forced-alignment result injection
 - **summary**: Retains a prior authoritative start despite a large rerun lead when an untimed leading filler explains audio before the first aligned lexical word.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-leading-filler/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-leading-filler/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-leading-filler/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-leading-filler/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-leading-filler/input/leading-filler.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-leading-filler/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-leading-filler/trace.log
 - **depends on**: [9f9832a]
 - **commit**: a9744bd
 - **new**: yes
@@ -862,10 +850,9 @@ The two-second stale-start heuristic needs a content-aware exception: fillers su
 ### Replace `%wor` in place without reordering dependent tiers
 - **component**: `batchalign-core` forced-alignment result injection
 - **summary**: Keeps a regenerated `%wor` tier at its original dependent-tier position instead of moving it after `%mor`, `%gra`, or user tiers.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-wor-position/input/ordered.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-wor-position/tbt-output/order.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-wor-position/ba3-pre-output/order.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-wor-position/ba3-post-output/order.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-wor-position/input/ordered.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-wor-position/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-wor-position/trace.log
 - **depends on**: []
 - **commit**: 005e197
 - **new**: yes
@@ -875,10 +862,9 @@ Rerunning FA should update timing, not reorder unrelated dependent tiers. The fo
 ### Repair near-zero FA words by borrowing from the following span
 - **component**: `batchalign-core` forced-alignment timing postprocessing
 - **summary**: Expands a positive but sub-40 ms word to the minimum duration by moving its shared boundary into a sufficiently long following word.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/tbt-output/wor.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/ba3-pre-output/wor.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/ba3-post-output/wor.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/input/short-following.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-following/trace.log
 - **depends on**: []
 - **commit**: a1bd8d8
 - **new**: yes
@@ -888,10 +874,9 @@ FA can return a formally positive span that is too short to represent a plausibl
 ### Repair near-zero FA words by borrowing from the preceding span
 - **component**: `batchalign-core` forced-alignment timing postprocessing
 - **summary**: Uses the preceding contiguous word as a fallback donor when a positive sub-40 ms word cannot borrow enough time from a following span.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/tbt-output/wor.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/ba3-pre-output/wor.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/ba3-post-output/wor.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/input/short-preceding.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/trace.log
 - **depends on**: [a1bd8d8]
 - **commit**: 9777a14
 - **new**: yes
@@ -901,10 +886,9 @@ A short final word has no following donor, and an internal short word may likewi
 ### Reuse clean `%wor` utterances inside mixed files
 - **component**: `batchalign-core` forced-alignment task runner
 - **summary**: Dispatches only stale utterances in a partially reusable file, then merges fresh backend results with clean exact-match `%wor` timing in transcript order.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/input/mixed.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/tbt-output/dispatch.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/ba3-pre-output/dispatch.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/ba3-post-output/dispatch.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/input/mixed.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/trace.log
 - **depends on**: [031cc38, 93f4048, 7bddd99, 1a3287e, 475563d]
 - **commit**: ba105d5
 - **new**: yes
@@ -914,10 +898,9 @@ The all-file fast path cannot help after a manual edit makes only one utterance 
 ### Apply the CHAT `%wor` word-domain policy to FA
 - **component**: `batchalign-core` FA extraction, injection, and reuse validation
 - **summary**: Uses the model's canonical `%wor` inclusion policy so untranscribed and other non-alignable word forms never become model labels or generated `%wor` entries.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/input/untranscribed.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/ba3-post-output/result.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/input/untranscribed.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-wor-domain-policy/trace.log
 - **depends on**: []
 - **commit**: 377b8a6
 - **new**: yes
