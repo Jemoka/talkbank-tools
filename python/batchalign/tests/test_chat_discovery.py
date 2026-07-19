@@ -25,3 +25,15 @@ def test_explicit_appledouble_sidecar_is_not_a_chat_input(tmp_path: Path) -> Non
     assert _walk(sidecar, CHAT_EXTENSIONS) == []
     with pytest.raises(typer.BadParameter, match="no @Languages"):
         _infer_lang(sidecar)
+
+
+def test_batch_discovery_schedules_largest_inputs_first(tmp_path: Path) -> None:
+    (tmp_path / "a-small.cha").write_text("small", encoding="utf-8")
+    (tmp_path / "z-large.cha").write_text("large transcript", encoding="utf-8")
+    (tmp_path / "m-medium.cha").write_text("medium text", encoding="utf-8")
+
+    assert [path.name for path in _walk(tmp_path, CHAT_EXTENSIONS)] == [
+        "z-large.cha",
+        "m-medium.cha",
+        "a-small.cha",
+    ]

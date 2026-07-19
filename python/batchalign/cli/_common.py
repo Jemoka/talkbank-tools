@@ -34,6 +34,7 @@ def _walk(folder: Path, suffixes: Iterable[str]) -> list[Path]:
             continue
         if p.suffix.lower() in sset:
             out.append(p.absolute())
+    out.sort(key=lambda path: (-path.stat().st_size, str(path)))
     return out
 
 
