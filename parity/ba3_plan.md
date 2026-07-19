@@ -82,10 +82,9 @@ Discussion here, notes, things for me to review. Please keep this example block 
 ### Fail unsupported primary morphotag languages per file
 - **component**: `batchalign-core` morphosyntax task runner
 - **summary**: Rejects unsupported primary `@Languages` values before backend dispatch with an actionable per-file validation error; `@Options: CA` remains a legitimate unchanged pass-through.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/input/unsupported-srp.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/tbt-output/cli-output.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/ba3-pre-output/unsupported-srp.cha
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/ba3-post-output/cli-output.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/input/unsupported-srp.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/trace.log
 - **depends on**: []
 - **commit**: 871c8d4
 - **new**: no
@@ -95,10 +94,9 @@ The fixture is deliberately `srp`: the local Stanza 1.12 installation can tag it
 ### Use float32 for CHATWhisper on Apple MPS
 - **component**: Python CHATWhisper ASR backend
 - **summary**: Selects `torch.float32` before constructing a CHATWhisper pipeline on MPS, avoiding a late `bfloat16` attention crash while preserving the existing `bfloat16` to `float16` fallback on other devices.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/input/device.json
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/tbt-output/dtype.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/ba3-pre-output/dtype.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/ba3-post-output/dtype.txt
+- **structured program input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/input/device.json
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/whisper-mps-dtype/trace.log
 - **depends on**: []
 - **commit**: c425fe8
 - **new**: no
@@ -108,10 +106,8 @@ The example isolates the loader policy so it is deterministic on machines withou
 ### Bound the pipeline dispatch-future window
 - **component**: `batchalign-engine` pipeline scheduler
 - **summary**: Feeds inputs through an eight-item ordered/unordered stream window instead of eagerly polling or retaining a future for every file; the existing semaphore remains the execution limit and result ordering remains stable.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/input/manifest.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/tbt-output/dispatch.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/ba3-pre-output/dispatch.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/ba3-post-output/dispatch.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/sliding-dispatch-window/trace.log
 - **depends on**: []
 - **commit**: d7c5d49
 - **new**: no
@@ -121,10 +117,9 @@ The regression blocks 100 synthetic per-input futures immediately after their fi
 ### Expand compound fillers for FA and restore one source span
 - **component**: `batchalign-core` forced-alignment task runner
 - **summary**: Sends underscore-separated compound filler parts to FA as independently recognizable words, then consumes and merges their returned timings into one `%wor` word spanning the first recognized onset through the last recognized offset.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/input/compound-filler.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/tbt-output/fa-seam.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/ba3-pre-output/fa-seam.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/ba3-post-output/fa-seam.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/input/compound-filler.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compound-filler-fa/trace.log
 - **depends on**: []
 - **commit**: 503525d
 - **new**: no
@@ -134,10 +129,9 @@ The fixture exercises `&-you_know`: FA now receives `you`, `know`, `today`, whil
 ### Lock typed special-form synthesis when Stanza returns no sentence
 - **component**: `talkbank-transform` morphosyntax injection
 - **summary**: Pins the existing typed synthesis path end to end: an empty Stanza response still maps `@q` to `meta` and `@n` to `neo`, preserves the surface lemma, and emits validator-safe ROOT/PUNCT relations.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/input/special-forms.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/tbt-output/special-forms.cha
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/ba3-pre-output/special-forms.cha
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/ba3-post-output/special-forms.cha
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/input/special-forms.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/trace.log
 - **depends on**: []
 - **commit**: 086894b
 - **new**: no
@@ -147,10 +141,9 @@ Audit note: runtime parity was already present before this item, so pre- and pos
 ### Repair invalid Stanza fields without losing lexical words
 - **component**: Python Stanza morphology renderer and backend diagnostics
 - **summary**: Normalizes missing or invalid lemma, UPOS, ID, head, and dependency-relation fields before rendering; lexical surfaces fall back to `x|surface`, dependency repairs satisfy the head/ROOT invariant, and every repair is logged with file and utterance identity.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/input/raw-stanza.json
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/tbt-output/renderer-seam.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/ba3-pre-output/renderer-seam.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/ba3-post-output/renderer-seam.txt
+- **structured program input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/input/raw-stanza.json
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/trace.log
 - **depends on**: []
 - **commit**: f2f60d0
 - **new**: no
@@ -160,10 +153,9 @@ The seam deliberately combines a lexical `hello` with lemma `.`, null UPOS, out-
 ### Apply numbered, retireable Italian Stanza workarounds
 - **component**: Python Stanza morphology renderer and Italian compatibility registry
 - **summary**: Expands the fork's closed Defects 8, 12, and 13 allowlist into synthetic verb-plus-clitic MWTs, reindexes following dependency heads, records the numbered repair, and leaves every unknown surface unchanged.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/input/raw-stanza.json
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/tbt-output/renderer-seam.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/ba3-pre-output/renderer-seam.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/ba3-post-output/renderer-seam.txt
+- **structured program input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/input/raw-stanza.json
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-stanza-workarounds/trace.log
 - **depends on**: []
 - **commit**: 21c30bb
 - **new**: no
@@ -173,10 +165,8 @@ The regression reproduces the confirmed mid-sentence `dammela` shape (`ADJ`, lem
 ### Enforce typed gates at every pipeline and serialization boundary
 - **component**: `batchalign-engine` pipeline boundary, `batchalign-core` CHAT writer, and typed validation API
 - **summary**: Validates every CHAT carried directly, in pairs, or in artifact lists before and after each task; stage violations become per-file failures, and the exact serialized bytes must reparse and pass full validation before any disk write.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/input/stage-seam.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/tbt-output/gate.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/ba3-pre-output/invalid-output.cha
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/ba3-post-output/gate.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/trace.log
 - **depends on**: []
 - **commit**: 6d1aaae
 - **new**: no
@@ -186,10 +176,8 @@ The seam deliberately mutates an already-validated typed AST after admission by 
 ### Lock Python-owned Rev.AI batch preflight ordering
 - **component**: Python Rev.AI ASR/speaker backend
 - **summary**: Pins the existing submit-then-poll path on a 32-file batch: every unique provider job is submitted before polling begins, and duplicate atomic ASR/speaker projections reuse one submission.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/input/manifest.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/tbt-output/order.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/ba3-pre-output/order.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/ba3-post-output/order.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/trace.log
 - **depends on**: []
 - **commit**: c39b3d5
 - **new**: no
@@ -199,10 +187,9 @@ Audit note: the Python backend already had the intended batched runtime behavior
 ### Lock utterance metadata and atomic replacement splitting together
 - **component**: typed `talkbank-transform` utterance segmentation
 - **summary**: Pins the child-propagation policy for linkers, language code, postcodes, timing bullets, and source spans while a classifier boundary falls inside a multiword replacement; the complete `ReplacedWord` follows its first assignment.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/input/split.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/tbt-output/split-contract.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/ba3-pre-output/split-contract.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/ba3-post-output/split-contract.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/input/split.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-metadata-atomic/trace.log
 - **depends on**: []
 - **commit**: 5ebd4cc
 - **new**: no
@@ -212,10 +199,8 @@ Audit note: the individual propagation and atomicity rules were already present;
 ### Repair long-file FA monotonicity before validation
 - **component**: `batchalign-core` forced-alignment task runner
 - **summary**: Runs a typed timing repair immediately after FA injection: backward utterance anchors lose both their unsafe main bullet and stale `%wor`, while forward anchors whose end crosses the next start are clamped to that start.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/input/timing-seam.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/tbt-output/repair.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/ba3-pre-output/repair.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/ba3-post-output/repair.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-long-file-monotonicity/trace.log
 - **depends on**: []
 - **commit**: 5b412fa
 - **new**: no
@@ -225,10 +210,9 @@ The synthetic 500-utterance regression includes one ordinary end overlap and one
 ### Romanize Cantonese only at the wav2vec2 alignment seam
 - **component**: Python `Wav2Vec2FaBackend`
 - **summary**: Converts resolved `yue` source words to tone-free, apostrophe-delimited Jyutping before MMS_FA while preserving the original Hanzi surfaces in returned CHAT; non-Cantonese and unresolved-language inputs retain the shared path unchanged.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/input/alignment-seam.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/tbt-output/alignment-seam.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/ba3-pre-output/alignment-seam.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/ba3-post-output/alignment-seam.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/trace.log
 - **depends on**: []
 - **commit**: 2ad0e3a
 - **new**: no
@@ -238,10 +222,8 @@ The conversion is local to the direct MMS input seam, so this language-specific 
 ### Prove serialized Batchalign output through the Chatter validator
 - **component**: `batchalign-core` final CHAT serialization gate
 - **summary**: Locks the final output contract with a representative annotated document containing media, utterance and word bullets, `%mor`, and `%gra`; the exact serialized bytes re-enter the same full validation pipeline used by `chatter validate` before disk I/O.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/input/output-contract.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/tbt-output/annotated.cha
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/ba3-pre-output/annotated.cha
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/ba3-post-output/annotated.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/trace.log
 - **depends on**: [6d1aaae]
 - **commit**: 21fb255
 - **new**: no
@@ -251,10 +233,8 @@ The implementation dependency made full reparsing a hard pre-write gate; this in
 ### Use the typed Qwen class for standalone forced alignment
 - **component**: Python Qwen3 ASR/FA backends and public backend surface
 - **summary**: Keeps Qwen3-ASR paired with its companion forced aligner for word timestamps, but constructs standalone FA directly as one `Qwen3ForcedAligner`; both backend types remain reachable through the lazy typed package surface.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/input/backend-seam.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/tbt-output/backend-seam.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/ba3-pre-output/backend-seam.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/ba3-post-output/backend-seam.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/qwen3-backend-contract/trace.log
 - **depends on**: []
 - **commit**: a0b8601
 - **new**: no
@@ -264,10 +244,9 @@ Pre-edit standalone FA constructed `Qwen3ASRModel` from the alignment checkpoint
 ### Honor NoAlign before FA work
 - **component**: `batchalign-core` FA task runner
 - **summary**: Treats `@Options: NoAlign` as strict byte-stable pass-through before media lookup or backend dispatch.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/input/no-align.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/tbt-output/no-align.cha
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/ba3-pre-output/no-align.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/ba3-post-output/no-align.cha
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/input/no-align.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-noalign-fallback/trace.log
 - **depends on**: []
 - **commit**: b390560
 - **new**: no
@@ -277,10 +256,8 @@ Pre-edit a NoAlign transcript without media failed sibling lookup, while post-ed
 ### Lock invalid L2 splice rollback snapshots
 - **component**: typed L2 morphosyntax splice and Python secondary-language fallback
 - **summary**: Pins the transactional fallback contract: an invalid post-splice dependency tree restores the complete host `%mor`/`%gra` snapshots and resets the affected analysis to `L2|xxx`; unavailable secondary Stanza pipelines return empty per-input responses instead of aborting the batch.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/input/invalid-secondary.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/tbt-output/tiers.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/ba3-pre-output/tiers.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/ba3-post-output/tiers.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/l2-rollback-snapshot/trace.log
 - **depends on**: []
 - **commit**: 9fc1358
 - **new**: no
@@ -290,10 +267,8 @@ Runtime parity was already present, so the pre/post transcript evidence is inten
 ### Bound decoded-audio admission at each backend route
 - **component**: `batchalign-engine` backend dispatcher and transcribe chunking contracts
 - **summary**: Replaces the unbounded per-backend channel with an admission-budget-sized queue whose async send applies backpressure; one backend loop continues to own model calls, long BERT inputs use bounded overlapping splits, and route shutdown wakes pending producers rather than leaving model-worker processes behind.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/input/dispatch-seam.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/tbt-output/dispatch-seam.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/ba3-pre-output/dispatch-seam.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/ba3-post-output/dispatch-seam.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/transcribe-memory-admission/trace.log
 - **depends on**: [d7c5d49]
 - **commit**: 04ea516
 - **new**: no
@@ -303,10 +278,9 @@ A dispatch item may own an entire decoded PCM file, so an unbounded route could 
 ### Exercise replacement retraces inside the Bazel parser target
 - **component**: `talkbank-parser` replacement/retrace lowering
 - **summary**: Locks the existing parser correction into the actual Bazel unit-test graph: a word carrying both `[: replacement]` and `[//]` lowers to a full `Retrace` containing a `ReplacedWord`, never a bare replacement that pollutes morphology alignment.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/input/retrace.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/tbt-output/shape.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/ba3-pre-output/shape.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/ba3-post-output/shape.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/input/retrace.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/replacement-retrace-bazel/trace.log
 - **depends on**: [c90b9bff]
 - **commit**: 0b010c0
 - **new**: no
@@ -316,10 +290,8 @@ Audit note: runtime parity was already supplied by the historical focused fix, a
 ### Retain source locations on parser recovery tiers
 - **component**: `talkbank-parser` malformed dependent-tier recovery
 - **summary**: Carries the CST byte range into recovered empty `%mor` and `%gra` placeholders, including the synthetic morphology terminator, so later validation and regeneration diagnostics point at the malformed source tier instead of byte zero.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/input/recovery-seam.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/tbt-output/spans.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/ba3-pre-output/spans.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/ba3-post-output/spans.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/parser-recovery-spans/trace.log
 - **depends on**: []
 - **commit**: 4578546
 - **new**: no
@@ -329,10 +301,9 @@ Pre-edit recovery intentionally retained the dependent-tier slot but constructed
 ### Lock Japanese Stanza splits back to one CHAT word
 - **component**: `talkbank-transform` tokenizer realignment
 - **summary**: Pins the character-alignment merge for Japanese: Stanza stem/auxiliary splits are recombined to the original CHAT surface and emitted with `expand_mwt=false`, preserving one morphology slot instead of allowing a second expansion.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/input/token-seam.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/tbt-output/tokens.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/ba3-pre-output/tokens.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/ba3-post-output/tokens.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/trace.log
 - **depends on**: []
 - **commit**: a97cdb4
 - **new**: no
@@ -342,10 +313,9 @@ Audit note: BA3 and the fork already share the same realignment implementation, 
 ### Audit known English transcribe corrections end to end
 - **component**: `talkbank-transform` ASR postprocessing and CHAT construction
 - **summary**: Verifies the three ordered English hooks in one output contract: pronoun-I and I-contraction capitalization, allowlisted title-period stripping before retokenization, and first lexical-word capitalization after utterance boundaries are known.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/input/raw-asr.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/tbt-output/transcript.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/ba3-pre-output/transcript.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/ba3-post-output/transcript.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/trace.log
 - **depends on**: []
 - **commit**: 92e60bd
 - **new**: no
@@ -355,10 +325,9 @@ Audit note: runtime parity was already present before this parity pass. The inde
 ### Lock bogus Chinese lemmas to their Han surface
 - **component**: Python structured Stanza morphology renderer
 - **summary**: Proves a Chinese lexical word whose Stanza lemma is punctuation retains its Han surface as the lemma, remains a noun with a valid ROOT relation, and records a structured lemma anomaly rather than disappearing as punctuation.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/input/raw-stanza.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/tbt-output/analysis.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/ba3-pre-output/analysis.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/ba3-post-output/analysis.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chinese-bogus-lemma/trace.log
 - **depends on**: [f2f60d0]
 - **commit**: bf3035a
 - **new**: no
@@ -368,10 +337,8 @@ Audit note: the repair implementation was introduced by the earlier general inva
 ### Hash the complete typed `@Media` identity
 - **component**: `talkbank-model` typed media header
 - **summary**: Adds `Eq` and `Hash` to `MediaHeader` so typed headers can safely key deduplication and memoization; the derived identity includes filename, capture modality, and optional linkage status.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/input/media-identities.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/tbt-output/hash-set.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/ba3-pre-output/hash-set.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/ba3-post-output/hash-set.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/trace.log
 - **depends on**: []
 - **commit**: dd92e0b
 - **new**: no
@@ -381,10 +348,9 @@ Pre-edit every constituent media field was already hashable, but the composite h
 ### Sanitize CHAT-illegal ASR tokens at the final word seam
 - **component**: `talkbank-transform` ASR postprocessing
 - **summary**: Uses the typed CHAT word parser as an oracle after number expansion, stripping illegal characters while retaining valid residue and timing; entirely structural tokens are dropped, and empty utterances created by sanitization are removed.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/input/raw-asr.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/tbt-output/transcript.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/ba3-pre-output/transcript.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/ba3-post-output/transcript.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/trace.log
 - **depends on**: []
 - **commit**: 3ccc897
 - **new**: yes
@@ -394,10 +360,9 @@ Whisper and Tencent can emit bare CHAT separators such as `:` and `~`, or glue i
 ### Suppress terminator-only translation noise
 - **component**: `talkbank-transform` translation injection
 - **summary**: Treats whitespace-only and bare `.`, `!`, or `?` backend responses as no translation, leaving the utterance unchanged instead of emitting a meaningless `%xtra` tier.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/input/translation.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/tbt-output/tiers.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/ba3-pre-output/tiers.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/ba3-post-output/tiers.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/translate-terminator-noise/trace.log
 - **depends on**: []
 - **commit**: be2b98b
 - **new**: yes
@@ -407,10 +372,9 @@ Translator APIs can answer with only the source terminator when a turn has no le
 ### Exclude paired CA segment repetitions from lexical text
 - **component**: `talkbank-model` cleaned words and `talkbank-parser-re2c` conversion
 - **summary**: Treats text bracketed by paired `↫` markers as a repeated non-lexical fragment while preserving text inside every other CA delimiter, keeping both parser implementations consistent.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/input/stutter.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/tbt-output/lexical.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/ba3-pre-output/lexical.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/ba3-post-output/lexical.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/input/stutter.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/ca-segment-repetition/trace.log
 - **depends on**: []
 - **commit**: dec565c
 - **new**: yes
@@ -420,10 +384,9 @@ In CHAT, `↫sch↫schaap` records a repeated onset followed by the lexical Dutc
 ### Keep retraces with their following retry during UtSeg
 - **component**: `talkbank-transform` utterance splitting
 - **summary**: Assigns uncounted `Retrace` content forward to the next word-bearing child before generic marker back-fill, preventing `[/]`, `[//]`, or `[///]` from being stranded at the end of the preceding child.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/input/retrace.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/tbt-output/split.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/ba3-pre-output/split.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/ba3-post-output/split.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/input/retrace.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utseg-retrace-binding/trace.log
 - **depends on**: [5ebd4cc]
 - **commit**: a309006
 - **new**: yes
@@ -433,10 +396,9 @@ Retraced words are deliberately absent from the morphology word domain, so their
 ### Project comparison candidates to one utterance
 - **component**: `talkbank-transform` transcript comparison
 - **summary**: Projects every candidate main-token window to its majority utterance before overlap and alignment scoring, preventing a single gold utterance from collecting matches across two main utterances.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/tbt-output/metrics.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/ba3-pre-output/metrics.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/ba3-post-output/metrics.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/input/main.cha (paired gold: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/input/gold.cha)
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/trace.log
 - **depends on**: []
 - **commit**: 6ac567d
 - **new**: yes
@@ -446,10 +408,9 @@ Pre-edit bag-of-words scoring selected `the sky this dog ran` and counted `the` 
 ### Attribute matched POS from the gold transcript
 - **component**: `talkbank-transform` comparison annotation and metrics
 - **summary**: Uses the gold word's morphology tag for every matched token, so `%xsmor` and per-POS match counts describe the reference annotation rather than silently copying a conflicting main-transcript tag.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/tbt-output/xsmor.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/ba3-pre-output/xsmor.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/ba3-post-output/xsmor.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/input/main.cha (paired gold: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/input/gold.cha)
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/trace.log
 - **depends on**: []
 - **commit**: 0064d0d
 - **new**: yes
@@ -459,10 +420,9 @@ Pre-edit identical surfaces with disagreeing morphology produced `NOUN ADJ`, mas
 ### Keep experimental review tiers off by default
 - **component**: `talkbank-transform` decision reporting and `batchalign-core` UTR
 - **summary**: Defaults decision-tier emission to `None`, preserving structured UTR decisions internally without adding `%xalign` or `%xrev` cleanup noise to ordinary CHAT output.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/input/decision.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/tbt-output/decision.cha
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/ba3-pre-output/decision.cha
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/ba3-post-output/decision.cha
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/input/decision.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-tiers-default/trace.log
 - **depends on**: []
 - **commit**: f0aa660
 - **new**: yes
@@ -472,10 +432,8 @@ Pre-edit UTR hardcoded `ReviewLevel::All`, so any unmatched or zero-duration dec
 ### Skip AppleDouble CHAT sidecars during discovery
 - **component**: Python CLI CHAT discovery and align language preflight
 - **summary**: Routes align's language inference through the shared hidden-file filter and rejects explicitly supplied dotfiles, so macOS `._*.cha` metadata cannot be parsed as transcript text.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/input/corpus.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/tbt-output/discovered.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/ba3-pre-output/discovered.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/ba3-post-output/discovered.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/appledouble-discovery/trace.log
 - **depends on**: []
 - **commit**: 565c0bc
 - **new**: yes
@@ -485,10 +443,9 @@ The normal input collector already ignored directory dotfiles, but align indepen
 ### Remove wrapped analysis tiers completely before morphotagging
 - **component**: Python morphotag `--clear-existing` staging
 - **summary**: Removes every tab-led continuation belonging to an existing `%mor` or `%gra` tier while preserving following main tiers, headers, and unrelated dependent tiers.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/input/wrapped.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/tbt-output/cleared.cha
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/ba3-pre-output/cleared.cha
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/ba3-post-output/cleared.cha
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/input/wrapped.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/trace.log
 - **depends on**: []
 - **commit**: 48655f8
 - **new**: yes
@@ -498,10 +455,8 @@ The default refresh path stages a copy without old analysis so the engine cannot
 ### Schedule the largest batch inputs first
 - **component**: Python CLI shared CHAT/media discovery
 - **summary**: Orders discovered inputs by descending byte size with a stable path tie-breaker, starting long-running work early so small files can fill later worker slots instead of leaving one tail straggler.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/input/files.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/tbt-output/order.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/ba3-pre-output/order.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/ba3-post-output/order.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/largest-first-scheduling/trace.log
 - **depends on**: []
 - **commit**: e00f548
 - **new**: yes
@@ -511,10 +466,9 @@ The fork explicitly sorts batch discovery largest-first to avoid makespan domina
 ### Place generated provenance after constant participant headers
 - **component**: `batchalign-core` provenance stamping
 - **summary**: Inserts generated provenance immediately after the last `@ID`, `@Birth of`, `@Birthplace of`, or `@L1 of` header and before later changeable metadata, matching the fork's canonical CHAT header order.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/input/constant-headers.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/tbt-output/header-order.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/ba3-pre-output/header-order.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/ba3-post-output/header-order.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/input/constant-headers.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/provenance-header-order/trace.log
 - **depends on**: []
 - **commit**: 9e431a7
 - **new**: yes
@@ -524,10 +478,8 @@ The fork's provenance regression identifies constant participant headers as the 
 ### Expose Apple MPS only through an explicit warned opt-in
 - **component**: Python align/transcribe CLI device selection
 - **summary**: Adds `--allow-mps` to local alignment and transcription commands, keeps Apple GPU use opt-in, warns when engaged, rejects contradictory CPU/MPS switches, and preserves CHATWhisper's float32 MPS policy.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/input/invocations.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/tbt-output/device-policy.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/ba3-pre-output/device-policy.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/ba3-post-output/device-policy.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/trace.log
 - **depends on**: [c425fe8]
 - **commit**: 1c926d2
 - **new**: yes
@@ -537,10 +489,8 @@ The fork changed MPS from an implicit hardware possibility into an explicit perf
 ### Refresh stale same-version Stanza resource catalogs safely
 - **component**: Python Stanza morphosyntax backend bootstrap
 - **summary**: Refreshes an existing Stanza `resources.json` once per process before pipeline construction, validates and atomically installs the response, and preserves the cached manifest on any offline or filesystem failure.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/ba3-post-output/result.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/trace.log
 - **depends on**: []
 - **commit**: 68575ff
 - **new**: yes
@@ -550,10 +500,8 @@ Stanford has republished Stanza model artifacts without changing the resources v
 ### Make unsupported-language Stanza UtSeg fallback explicit and functional
 - **component**: Python UtSeg backend and transcribe/utseg CLI wiring
 - **summary**: Refuses to silently omit utterance segmentation when no TalkBank boundary model exists and makes `--utseg-fallback-stanza` select a real constituency backend that applies the fork's coordinated-clause grouping policy.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/ba3-post-output/result.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/trace.log
 - **depends on**: [68575ff]
 - **commit**: b498ac0
 - **new**: yes
@@ -563,10 +511,9 @@ Pre-edit transcribe returned `None` from its UtSeg builder for unsupported langu
 ### Rescue contracted copula progressives structurally
 - **component**: Python UD-to-CHAT morphosyntax renderer
 - **summary**: Rewrites Stanza's possessive-gerund analysis of English `<subject>'s <verb-ing>` MWTs into a finite copula plus progressive verb, updating morphology and dependencies together.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/input/stanza-analysis.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/tbt-output/tiers.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/ba3-pre-output/tiers.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/ba3-post-output/tiers.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/copula-progressive-rescue/trace.log
 - **depends on**: []
 - **commit**: e44b6d9
 - **new**: yes
@@ -576,10 +523,8 @@ Stanza can interpret `sink's overflowing` as possessive `sink` plus `PART/case` 
 ### Make batch worker concurrency configurable end to end
 - **component**: Python CLI and Rust pipeline scheduler
 - **summary**: Adds a validated global `--workers` option and uses the requested value for runtime threads, execution permits, and the bounded dispatch window across every batch-processing command.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/input/invocation.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/tbt-output/concurrency.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/ba3-pre-output/concurrency.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/ba3-post-output/concurrency.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/configurable-workers/trace.log
 - **depends on**: [d7c5d49]
 - **commit**: 4d12e89
 - **new**: yes
@@ -589,10 +534,8 @@ The fork exposes an operator worker limit and recently fixed a path where anothe
 ### Invalidate cached outputs across engine builds
 - **component**: Rust LMDB task-output cache
 - **summary**: Includes the compiled git/build identity in the central cache namespace so unchanged task input cannot retrieve output produced by older algorithm code.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/ba3-post-output/result.txt
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cache-build-identity/trace.log
 - **depends on**: []
 - **commit**: 35e9aad
 - **new**: yes
@@ -602,10 +545,9 @@ The fork requires its cache engine version to match before returning a hit. BA3'
 ### Keep automatic UTR on the validated global strategy
 - **component**: `batchalign-core` utterance timing recovery strategy selection
 - **summary**: Stops overlap markers from automatically enabling experimental two-pass UTR and keeps ordinary recovery on the monotonic global alignment path.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/input/overlap.cha
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/tbt-output/strategy.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/ba3-pre-output/strategy.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/ba3-post-output/strategy.txt
+- **concrete CHAT input**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/input/overlap.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/trace.log
 - **depends on**: []
 - **commit**: 8767049
 - **new**: yes
@@ -615,10 +557,8 @@ The fork previously auto-selected two-pass UTR for `+<` and bottom-overlap marke
 ### Expose standalone speaker diarization as turns JSON
 - **component**: Python CLI, Pyannote speaker backend, and Rust audio preparation binding
 - **summary**: Adds `diarize` for media-only speaker-turn detection, writing deterministic anonymous `PAR0`… track spans without paying for transcription.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/input/scenario.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/tbt-output/session.turns.json
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/ba3-post-output/session.turns.json
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/standalone-diarize/trace.log
 - **depends on**: []
 - **commit**: 26fa3f7
 - **new**: yes
@@ -628,10 +568,9 @@ The fork makes its Pyannote speaker stage independently useful for acoustic spea
 ### Collapse Italian Stanza Defect 6 false MWT expansions
 - **component**: Python UD-to-CHAT Italian morphosyntax renderer
 - **summary**: Replaces a closed set of ordinary Italian words that Stanza expands as fake verb-clitic MWTs with one curated lexical analysis while preserving genuine compound imperatives.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/input/stanza-analysis.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/tbt-output/tiers.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/ba3-pre-output/tiers.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/ba3-post-output/tiers.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect6-collapse/trace.log
 - **depends on**: []
 - **commit**: 751cd4b
 - **new**: yes
@@ -641,10 +580,9 @@ The fork carries a closed, retireable Defect 6 table for common words such as `p
 ### Repair the Italian sentence-initial `la` false MWT expansion
 - **component**: Python UD-to-CHAT Italian morphosyntax renderer
 - **summary**: Collapses Stanza's sentence-initial `la → il + i` expansion to one feminine singular definite article with consistent dependencies.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/input/stanza-analysis.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/tbt-output/tiers.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/ba3-pre-output/tiers.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/ba3-post-output/tiers.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect7-article/trace.log
 - **depends on**: [751cd4b]
 - **commit**: ad229ab
 - **new**: yes
@@ -654,10 +592,9 @@ The fork records a distinct Defect 7 failure in which Stanza analyzes sentence-i
 ### Rewrite the mis-tagged verb head in Italian `dagliela` MWTs
 - **component**: Python UD-to-CHAT Italian morphosyntax renderer
 - **summary**: Changes only the head of Stanza's shape-correct `dagliela` expansion from `ADP/da` to imperative `VERB/dare`, retaining both clitic units and their arcs.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/input/stanza-analysis.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/tbt-output/tiers.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/ba3-pre-output/tiers.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/ba3-post-output/tiers.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect9-dagliela/trace.log
 - **depends on**: []
 - **commit**: b717b1e
 - **new**: yes
@@ -667,10 +604,9 @@ Stanza's `dagliela` range has the correct three-piece shape but analyzes its imp
 ### Canonicalize the verb lemma in Italian `posala` and `posalo` MWTs
 - **component**: Python UD-to-CHAT Italian morphosyntax renderer
 - **summary**: Replaces Stanza's surface-echo `posa` lemma with canonical `posare` for the two confirmed imperative-clitic ranges while preserving their component structure.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/input/stanza-analysis.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/tbt-output/tiers.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/ba3-pre-output/tiers.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/ba3-post-output/tiers.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/trace.log
 - **depends on**: [b717b1e]
 - **commit**: 4895eed
 - **new**: yes
@@ -680,10 +616,9 @@ Unlike Defect 9, Stanza already tags the head of `posala` and `posalo` as an imp
 ### Preserve CHAT's virtual zero head for `%gra` root relations
 - **component**: Python UD-to-CHAT morphosyntax dependency renderer
 - **summary**: Maps UD `head=0` directly to CHAT's virtual root instead of applying Python's `-1` list index and attaching `ROOT` to the sentence's last lexical chunk.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/input/ud-analysis.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/tbt-output/gra.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/ba3-pre-output/gra.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/ba3-post-output/gra.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/virtual-root-head/trace.log
 - **depends on**: []
 - **commit**: 135a622
 - **new**: yes
@@ -693,10 +628,9 @@ The fork's generated-GRA contract requires exactly one `ROOT` relation whose hea
 ### Reject UD analyses without exactly one dependency root
 - **component**: Python UD-to-CHAT morphosyntax dependency renderer
 - **summary**: Stops rootless and multiple-root Stanza analyses before tier assembly instead of serializing cyclic or ambiguous `%gra` structures.
-- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/input/rootless-analysis.txt
-- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/tbt-output/result.txt
-- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/ba3-pre-output/result.txt
-- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/ba3-post-output/result.txt
+- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/input/behavior.cha
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/trace.log
 - **depends on**: [135a622]
 - **commit**: b0ad6a2
 - **new**: yes
