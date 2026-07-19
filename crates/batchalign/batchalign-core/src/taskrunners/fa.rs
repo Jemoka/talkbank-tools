@@ -45,6 +45,16 @@ const SIBLING_AUDIO_EXTS: &[&str] = &[
     "wav", "mp3", "mp4", "m4a", "flac", "ogg", "aac", "wma", "mov", "avi", "mpg", "mpeg",
 ];
 
+#[cfg(debug_assertions)]
+fn fa_debug_trace(label: &str, payload: impl std::fmt::Display) {
+    if std::env::var_os("BATCHALIGN_PARITY_TRACE").is_some() {
+        eprintln!("[batchalign-fa-debug] {label}\n{payload}");
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn fa_debug_trace(_label: &str, _payload: impl std::fmt::Display) {}
+
 /// Locate an audio file sitting next to a transcript whose `source_id` is its
 /// absolute path. The CLI loads `.cha` files by path without scanning for
 /// media siblings (and the engine's loader is frozen), so the audio task
@@ -240,6 +250,7 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
 
     let mut refreshed = Vec::new();
     let mut saw_words = false;
+    fa_debug_trace("complete-reuse input", chat.to_chat());
 
     for (line_index, line) in chat.ast().lines.0.iter().enumerate() {
         let Line::Utterance(utterance) = line else {
@@ -259,6 +270,10 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
         saw_words = true;
 
         let Some(wor) = utterance.wor_tier() else {
+            fa_debug_trace(
+                "complete-reuse rejected",
+                format!("line={line_index} reason=missing-wor"),
+            );
             return false;
         };
         let wor_words: Vec<_> = wor.words().collect();
@@ -268,6 +283,10 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
                 .zip(main_words.iter())
                 .any(|(word, expected)| word.cleaned_text() != expected)
         {
+            fa_debug_trace(
+                "complete-reuse rejected",
+                format!("line={line_index} reason=word-mismatch"),
+            );
             return false;
         }
 
@@ -280,14 +299,32 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
         let word_count = wor_words.len();
         for word in wor_words {
             let Some(bullet) = word.inline_bullet.as_ref() else {
+                fa_debug_trace(
+                    "complete-reuse rejected",
+                    format!("line={line_index} reason=untimed-word"),
+                );
                 return false;
             };
             if bullet.timing.end_ms.saturating_sub(bullet.timing.start_ms)
                 < MIN_REUSABLE_WORD_DURATION_MS
             {
+                fa_debug_trace(
+                    "complete-reuse rejected",
+                    format!(
+                        "line={line_index} reason=short-word duration_ms={}",
+                        bullet.timing.end_ms.saturating_sub(bullet.timing.start_ms)
+                    ),
+                );
                 return false;
             }
             if previous_end_ms.is_some_and(|previous_end| bullet.timing.start_ms < previous_end) {
+                fa_debug_trace(
+                    "complete-reuse rejected",
+                    format!(
+                        "line={line_index} reason=backward-word start_ms={}",
+                        bullet.timing.start_ms
+                    ),
+                );
                 return false;
             }
             let duration_ms = bullet.timing.end_ms - bullet.timing.start_ms;
@@ -310,6 +347,12 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
                 && maximum_duration_ms as f64 / utterance_span_ms as f64
                     > MAX_REUSABLE_WORD_DURATION_PROPORTION
             {
+                fa_debug_trace(
+                    "complete-reuse rejected",
+                    format!(
+                        "line={line_index} reason=dominant-word max_duration_ms={maximum_duration_ms} utterance_span_ms={utterance_span_ms}"
+                    ),
+                );
                 return false;
             }
         }
@@ -321,6 +364,7 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
     }
 
     if !saw_words {
+        fa_debug_trace("complete-reuse rejected", "reason=no-alignable-words");
         return false;
     }
     for (line_index, _, end_ms) in &refreshed {
@@ -337,6 +381,13 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
                     _ => None,
                 });
         if next_start_ms.is_some_and(|next_start| *end_ms > next_start) {
+            fa_debug_trace(
+                "complete-reuse rejected",
+                format!(
+                    "line={line_index} reason=overruns-next end_ms={end_ms} next_start_ms={}",
+                    next_start_ms.expect("checked Some")
+                ),
+            );
             return false;
         }
     }
@@ -346,6 +397,7 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
         };
         utterance.main.content.bullet = Some(talkbank_model::model::Bullet::new(start_ms, end_ms));
     }
+    fa_debug_trace("complete-reuse output", chat.to_chat());
     true
 }
 
@@ -378,7 +430,7 @@ fn collect_reusable_wor_segments(chat: &Chat) -> Vec<Option<AsrSegment>> {
         }
     }
 
-    utterances
+    let segments: Vec<_> = utterances
         .into_iter()
         .enumerate()
         .map(|(index, utterance)| {
@@ -451,7 +503,17 @@ fn collect_reusable_wor_segments(chat: &Chat) -> Vec<Option<AsrSegment>> {
                 words,
             })
         })
-        .collect()
+        .collect();
+    fa_debug_trace(
+        "partial-reuse selection",
+        format!(
+            "reused={} fresh={} total={}",
+            segments.iter().filter(|segment| segment.is_some()).count(),
+            segments.iter().filter(|segment| segment.is_none()).count(),
+            segments.len()
+        ),
+    );
+    segments
 }
 
 fn merge_reused_and_fresh_segments(
@@ -539,6 +601,12 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
     use talkbank_model::DependentTier;
     use talkbank_model::model::{Bullet, BulletSource, WorTier};
 
+    fa_debug_trace("injection input CHAT", chat.to_chat());
+    fa_debug_trace(
+        "injection aligned payload",
+        serde_json::to_string_pretty(aligned)
+            .unwrap_or_else(|error| format!("<serialization failed: {error}>")),
+    );
     let mut idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
         let Line::Utterance(u) = line else { continue };
@@ -629,6 +697,7 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             aligned.len()
         )));
     }
+    fa_debug_trace("injection output CHAT", chat.to_chat());
     Ok(())
 }
 
