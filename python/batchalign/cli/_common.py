@@ -27,7 +27,7 @@ MEDIA_EXTENSIONS = (".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4", ".mov", ".m
 def _walk(folder: Path, suffixes: Iterable[str]) -> list[Path]:
     sset = {s.lower() for s in suffixes}
     if folder.is_file():
-        return [folder.absolute()]
+        return [] if folder.name.startswith(".") else [folder.absolute()]
     out: list[Path] = []
     for p in sorted(folder.rglob("*")):
         if not p.is_file() or p.name.startswith("."):

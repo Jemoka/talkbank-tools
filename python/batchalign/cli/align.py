@@ -21,7 +21,7 @@ from typing import Any
 import typer
 
 from ..lang import LanguageCode
-from ._common import collect_chat_inputs, write_outcome
+from ._common import CHAT_EXTENSIONS, _walk, collect_chat_inputs, write_outcome
 from ._options import cli_options
 from .tui import Interface, Task
 
@@ -34,12 +34,7 @@ def _infer_lang(folder: Path) -> LanguageCode:
     Used to construct the Rev.AI / Whisper UTR backend, which (unlike
     Stanza or Qwen3 FA) requires the language at construction time.
     """
-    files: list[Path]
-    if folder.is_file():
-        files = [folder]
-    else:
-        files = sorted(folder.rglob("*.cha"))
-    for path in files:
+    for path in _walk(folder, CHAT_EXTENSIONS):
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 for line in fh:
