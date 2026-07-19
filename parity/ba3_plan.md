@@ -60,6 +60,7 @@
 - [x] 37/40 Preserves authoritative start coverage for untimed leading fillers.
 - [x] 38/40 Replaces `%wor` in place without reordering dependent tiers.
 - [x] 39/40 Repairs near-zero FA words by borrowing from the following span.
+- [x] 40/40 Repairs near-zero FA words by borrowing from the preceding span.
 
 ## done
 
@@ -881,3 +882,16 @@ Rerunning FA should update timing, not reorder unrelated dependent tiers. The fo
 - **new**: yes
 
 FA can return a formally positive span that is too short to represent a plausible lexical word. The fork repairs a contiguous boundary when the following word has enough duration to lend without collapsing itself. Pre-edit BA3 serialized `a 100_120; boat 120_500`; post-edit it moves the boundary to produce `a 100_140; boat 140_500`, satisfying the same 40 ms floor used to decide whether old `%wor` timing is reusable. Zero-duration/untimed words and noncontiguous gaps remain untouched by this bounded repair. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::fa_rebalances_near_zero_word_from_following_span` (1 passed); file-local Rust formatting passed.
+
+### Repair near-zero FA words by borrowing from the preceding span
+- **component**: `batchalign-core` forced-alignment timing postprocessing
+- **summary**: Uses the preceding contiguous word as a fallback donor when a positive sub-40 ms word cannot borrow enough time from a following span.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/tbt-output/wor.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/ba3-pre-output/wor.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-rebalance-from-preceding/ba3-post-output/wor.txt
+- **depends on**: [a1bd8d8]
+- **commit**: 9777a14
+- **new**: yes
+
+A short final word has no following donor, and an internal short word may likewise fail the forward repair. The fork's fallback moves the shared boundary backward when the preceding span can lend enough time and remain positive. Pre-edit BA3 serialized `um 100_500; I 500_520`; post-edit it produces `um 100_480; I 480_520`, bringing the short word to the 40 ms floor without changing the utterance envelope. Untimed words, gaps, and a preceding donor too short to remain valid are left untouched. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::fa_rebalances_near_zero_word_from_preceding_span` (1 passed); file-local Rust formatting passed.
