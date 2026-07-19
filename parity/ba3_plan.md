@@ -281,3 +281,16 @@ Pre-edit recovery intentionally retained the dependent-tier slot but constructed
 - **new**: no
 
 Audit note: BA3 and the fork already share the same realignment implementation, but neither the generic compound case nor the English contraction case proved Japanese behavior. The focused contract uses `食べちゃう` split as `食べ + ちゃう`, checks exact surface restoration, and prevents accidental English-style MWT expansion. This one seam satisfies the Japanese-merging clause shared by both remaining original checklist lines. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact tokenizer_realign::tests::test_japanese_split_tokens_merge_back_to_chat_word` (1 passed).
+
+### Audit known English transcribe corrections end to end
+- **component**: `talkbank-transform` ASR postprocessing and CHAT construction
+- **summary**: Verifies the three ordered English hooks in one output contract: pronoun-I and I-contraction capitalization, allowlisted title-period stripping before retokenization, and first lexical-word capitalization after utterance boundaries are known.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/input/raw-asr.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/tbt-output/transcript.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/ba3-pre-output/transcript.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/english-transcribe-patterns/ba3-post-output/transcript.txt
+- **depends on**: []
+- **commit**: e8235c13
+- **new**: no
+
+Audit note: the fork-origin implementation and its end-to-end test were already present before this parity pass. The test starts from timed raw ASR elements, crosses `process_raw_asr`, retokenization, transcript description, typed CHAT construction, and serialization, and checks all three corrected utterances plus negative stale-form assertions. The separate evidence commit records the verified Bazel contract without perturbing working runtime code. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact build_chat::tests::english_transcribe_rules_fire_end_to_end` (1 passed).
