@@ -33,6 +33,7 @@
 - [x] 10/10 Schedules the largest batch inputs first.
 - [x] 11/40 Places generated provenance after constant participant headers.
 - [x] 12/40 Exposes Apple MPS only through an explicit, warned opt-in.
+- [x] 13/40 Refreshes stale same-version Stanza resource catalogs safely.
 
 ## done
 
@@ -503,3 +504,16 @@ The fork's provenance regression identifies constant participant headers as the 
 - **new**: yes
 
 The fork changed MPS from an implicit hardware possibility into an explicit performance/stability trade-off after rare sustained-load driver stalls. BA3's affected local backends already defaulted to CPU on Apple hosts, but offered no supported way to request MPS; users could only force CPU. Post-edit the shared resolver returns `mps` only for `--allow-mps`, emits a risk warning, and rejects combining it with `--force-cpu`. Pyannote remains untouched and therefore on its safe CPU path. Targeted verification: `bazel test //python/batchalign:pytest --test_arg=python/batchalign/tests/test_cli.py --test_arg=-q --test_output=errors` (Python Bazel target passed).
+
+### Refresh stale same-version Stanza resource catalogs safely
+- **component**: Python Stanza morphosyntax backend bootstrap
+- **summary**: Refreshes an existing Stanza `resources.json` once per process before pipeline construction, validates and atomically installs the response, and preserves the cached manifest on any offline or filesystem failure.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-catalog-refresh/ba3-post-output/result.txt
+- **depends on**: []
+- **commit**: 68575ff
+- **new**: yes
+
+Stanford has republished Stanza model artifacts without changing the resources version, so `REUSE_RESOURCES` can verify a new model payload against an old cached checksum and make morphotag unavailable. Pre-edit BA3 never refreshed a present manifest. Post-edit it follows the fork's worker-boundary repair at BA3's backend boundary: missing manifests remain Stanza's responsibility, successful refreshes use same-directory atomic replacement, and failures leave the old catalog intact. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors` (Python Bazel target passed, including online-success, offline-fallback, and missing-manifest regressions).
