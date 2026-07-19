@@ -3,7 +3,7 @@
 ## todo
 - [x] Runs typed pre- and post-stage gates and treats pre-serialization failure as a hard error.
 - [ ] Fixes single-word replacement retraces, `@Media` hashing, parser recovery spans, and Japanese token merging.
-- [ ] Fixed BA3 output passes `chatter validate`, making the validator the final output-integrity gate.
+- [x] Fixed BA3 output passes `chatter validate`, making the validator the final output-integrity gate.
 - [x] Expands compound fillers and recovers their audio spans between recognized words.
 - [x] Detects long-file drift and monotonicity violations, then re-anchors or repairs timing. | FA recovery and repair passes
 - [x] Integrates Cantonese FA through Jyutping and wav2vec2 (no need for the common recovery layer).
@@ -190,3 +190,16 @@ The synthetic 500-utterance regression includes one ordinary end overlap and one
 - **new**: no
 
 The conversion is local to the direct MMS input seam, so this language-specific route does not depend on the common recovery layer and does not alter typed output words. If the optional Cantonese dependency is absent, the backend reports an actionable extra requirement instead of silently sending Han characters to MMS. Targeted verification uses the Bazel-built test executable: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_cantonese_fa.py -q` (3 passed).
+
+### Prove serialized Batchalign output through the Chatter validator
+- **component**: `batchalign-core` final CHAT serialization gate
+- **summary**: Locks the final output contract with a representative annotated document containing media, utterance and word bullets, `%mor`, and `%gra`; the exact serialized bytes re-enter the same full validation pipeline used by `chatter validate` before disk I/O.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/input/output-contract.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/tbt-output/annotated.cha
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/ba3-pre-output/annotated.cha
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/ba3-post-output/annotated.cha
+- **depends on**: [6d1aaae]
+- **commit**: 21fb255
+- **new**: no
+
+The implementation dependency made full reparsing a hard pre-write gate; this independent regression pins a realistic successful output instead of testing only rejection. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_filter=serialized_batchalign_output_passes_chatter_validation_pipeline --test_output=errors` (1 passed). The fixture also passed the actual Bazel-built CLI with `bazel-bin/crates/chatter/chatter-cli/chatter validate --force --tui-mode disable --quiet /Users/houjun/Documents/Projects/talkbank-parity/ba3/chatter-final-gate/ba3-post-output/annotated.cha`.
