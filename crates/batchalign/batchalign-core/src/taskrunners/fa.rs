@@ -244,6 +244,7 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
         let mut minimum_start = None;
         let mut maximum_end = None;
         let mut maximum_duration_ms = 0;
+        let mut previous_end_ms = None;
         let word_count = wor_words.len();
         for word in wor_words {
             let Some(bullet) = word.inline_bullet.as_ref() else {
@@ -254,6 +255,9 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
             {
                 return false;
             }
+            if previous_end_ms.is_some_and(|previous_end| bullet.timing.start_ms < previous_end) {
+                return false;
+            }
             let duration_ms = bullet.timing.end_ms - bullet.timing.start_ms;
             minimum_start = Some(minimum_start.map_or(bullet.timing.start_ms, |start: u64| {
                 start.min(bullet.timing.start_ms)
@@ -262,6 +266,7 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
                 end.max(bullet.timing.end_ms)
             }));
             maximum_duration_ms = maximum_duration_ms.max(duration_ms);
+            previous_end_ms = Some(bullet.timing.end_ms);
             first_start.get_or_insert(bullet.timing.start_ms);
             last_end = Some(bullet.timing.end_ms);
         }
@@ -687,6 +692,23 @@ mod tests {
 
         assert!(!refresh_complete_wor_alignment(&mut chat));
         assert!(chat.to_chat().contains("\u{15}100_1000\u{15}"));
+    }
+
+    #[test]
+    fn complete_wor_reuse_rejects_backward_word_timing() {
+        const BACKWARD_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\tmissing, audio\n\
+*PAR:\thello world . \u{15}100_900\u{15}\n\
+%wor:\thello \u{15}500_600\u{15} world \u{15}400_480\u{15} .\n@End\n";
+        let mut chat = Chat::parse(
+            BACKWARD_CHAT,
+            SourceId::try_new("backward-wor.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+
+        assert!(!refresh_complete_wor_alignment(&mut chat));
+        assert!(chat.to_chat().contains("\u{15}100_900\u{15}"));
     }
 
     #[test]
