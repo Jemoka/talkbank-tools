@@ -13,7 +13,7 @@
 - [x] Detects bogus Stanza lemmas, missing fields, and invalid analyses, preserving the surface form and recording anomalies.
 - [x] Applies numbered, retireable Stanza workarounds for Italian compound imperatives and related defects.
 - [ ] Corrects known English transcribe patterns, Chinese bogus lemmas, and Japanese token merging.
-- [ ] Preflights large Rev.AI batches up front instead of submitting every file independently. (Please do this without moving revai to rust; keep it in Python.)
+- [x] Preflights large Rev.AI batches up front instead of submitting every file independently. (Please do this without moving revai to rust; keep it in Python.)
 - [x] Avoids Whisper MPS `bfloat16` crashes on Apple Silicon.
 - [ ] Coordinates transcribe memory, splits work safely, and prevents OOM-created zombie workers.
 - [ ] Supports Qwen3-ASR plus Qwen3-ForcedAligner and fixes HK_QWEN backend/type-stub integration.
@@ -138,3 +138,16 @@ The regression reproduces the confirmed mid-sentence `dammela` shape (`ADJ`, lem
 - **new**: no
 
 The seam deliberately mutates an already-validated typed AST after admission by removing its main-tier terminator. Pre-edit BA3 could serialize the invalid transcript; post-edit, the shared pre/post boundary rejects it and `Chat::write` independently reparses the exact output bytes as a final hard gate. The validation helpers are now generic over both CHAT typestates, avoiding a string round-trip inside stage checks. Targeted verification: `bazel test --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test //crates/batchalign/batchalign-core:batchalign_core_unit_test //crates/batchalign/batchalign-engine:batchalign_engine_unit_test --test_output=errors`; Bazel product build: `just batchalign build debug`.
+
+### Lock Python-owned Rev.AI batch preflight ordering
+- **component**: Python Rev.AI ASR/speaker backend
+- **summary**: Pins the existing submit-then-poll path on a 32-file batch: every unique provider job is submitted before polling begins, and duplicate atomic ASR/speaker projections reuse one submission.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/input/manifest.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/tbt-output/order.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/ba3-pre-output/order.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/revai-python-preflight/ba3-post-output/order.txt
+- **depends on**: []
+- **commit**: c39b3d5
+- **new**: no
+
+Audit note: the Python backend already had the intended batched runtime behavior before this item was audited; the independent commit supplies the missing large-batch regression and explicitly prevents a later return to per-file submit-and-wait. Rev.AI remains Python-owned. The hermetic fake makes no provider calls and asserts 32 submit events precede the single poll event. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_revai_preflight.py -q` (1 passed).
