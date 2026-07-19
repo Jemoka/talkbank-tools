@@ -46,6 +46,7 @@
 - [x] 23/40 Canonicalizes the verb lemma in Italian `posala` and `posalo` MWTs.
 - [x] 24/40 Preserves CHAT's virtual zero head for `%gra` root relations.
 - [x] 25/40 Rejects UD analyses without exactly one dependency root.
+- [x] 26/40 Reuses complete exact-match `%wor` timing without rerunning FA.
 
 ## done
 
@@ -685,3 +686,16 @@ The fork's generated-GRA contract requires exactly one `ROOT` relation whose hea
 - **new**: yes
 
 The fork treats the absence of a dependency root as a mapping error, because no terminator attachment or valid CHAT tree can be derived; the same one-root invariant also excludes ambiguous multi-root parses. Pre-edit BA3 accepted a two-node cycle, emitted no `ROOT` triple, and attached punctuation to virtual zero. Post-edit normalized analyses must contain exactly one `head=0`/`root` pair before chunk assembly. Existing field recovery remains intact: a missing or out-of-range head can still be repaired deterministically and recorded as an anomaly before validation. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg='rootless or multiple_ud_roots or invalid_stanza_fields'` (Bazel target passed) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
+
+### Reuse complete exact-match `%wor` timing without rerunning FA
+- **component**: `batchalign-core` forced-alignment task runner
+- **summary**: Detects a fully timed `%wor` tier whose words exactly match each current main tier, refreshes utterance bullets from its spans, and returns before media decode or backend dispatch.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/input/reusable.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/tbt-output/reusable.cha
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-complete-wor-reuse/ba3-post-output/reusable.cha
+- **depends on**: []
+- **commit**: 031cc38
+- **new**: yes
+
+The fork has a cheap rerun path for already aligned files, whereas BA3 previously decoded the complete recording and invoked the FA model on every run. Post-edit BA3 requires every alignable utterance to have the same number and text of `%wor` words, with a positive-duration inline bullet on each; any mismatch falls through without mutation. A clean file refreshes its main bullets from the first and last word and succeeds even when the referenced media is unavailable, proving that no media or backend work occurred. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_skips_media_and_backend` (1 passed); `rustfmt --edition 2024 --check` passed for the changed file.
