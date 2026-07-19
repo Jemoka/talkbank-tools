@@ -45,6 +45,7 @@
 - [x] 22/40 Rewrites the mis-tagged verb head in Italian `dagliela` MWTs.
 - [x] 23/40 Canonicalizes the verb lemma in Italian `posala` and `posalo` MWTs.
 - [x] 24/40 Preserves CHAT's virtual zero head for `%gra` root relations.
+- [x] 25/40 Rejects UD analyses without exactly one dependency root.
 
 ## done
 
@@ -671,3 +672,16 @@ Unlike Defect 9, Stanza already tags the head of `posala` and `posalo` as an imp
 - **new**: yes
 
 The fork's generated-GRA contract requires exactly one `ROOT` relation whose head is the virtual node zero. BA3's faithful BA2 port indexed `actual_indicies[raw_head - 1]` for every arc; for `raw_head == 0`, Python silently selected the final lexical item, so a two-word sentence emitted `2|2|ROOT`. Post-edit the zero case bypasses lexical reindexing, while non-root heads and the terminator's attachment to the lexical root are unchanged. This also corrects roots inside MWTs and after Italian range repairs. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors` (249 passed, 1 skipped) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
+
+### Reject UD analyses without exactly one dependency root
+- **component**: Python UD-to-CHAT morphosyntax dependency renderer
+- **summary**: Stops rootless and multiple-root Stanza analyses before tier assembly instead of serializing cyclic or ambiguous `%gra` structures.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/input/rootless-analysis.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/invalid-ud-root/ba3-post-output/result.txt
+- **depends on**: [135a622]
+- **commit**: b0ad6a2
+- **new**: yes
+
+The fork treats the absence of a dependency root as a mapping error, because no terminator attachment or valid CHAT tree can be derived; the same one-root invariant also excludes ambiguous multi-root parses. Pre-edit BA3 accepted a two-node cycle, emitted no `ROOT` triple, and attached punctuation to virtual zero. Post-edit normalized analyses must contain exactly one `head=0`/`root` pair before chunk assembly. Existing field recovery remains intact: a missing or out-of-range head can still be repaired deterministically and recorded as an anomaly before validation. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg='rootless or multiple_ud_roots or invalid_stanza_fields'` (Bazel target passed) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
