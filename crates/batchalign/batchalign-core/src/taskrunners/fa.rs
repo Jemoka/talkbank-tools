@@ -96,6 +96,15 @@ impl TaskRunner for FaTaskRunner {
             return Ok(());
         }
 
+        // A completed prior FA run already carries the most precise timing
+        // surface we can reuse: one timed `%wor` item per current main-tier
+        // word. Refresh its utterance bullets without decoding audio or
+        // dispatching the backend again.
+        if refresh_complete_wor_alignment(chat) {
+            clear_media_unlinked(&mut chat.ast_mut().lines.0);
+            return Ok(());
+        }
+
         let media = match chat.media().cloned() {
             Some(m) => m,
             // No media attached at load — resolve the transcript's sibling
@@ -188,6 +197,73 @@ fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
     } else {
         LanguageSpec::PerFile
     }
+}
+
+/// Refresh every alignable utterance from an exact, fully timed `%wor` tier.
+///
+/// Returns `false` without mutation when any alignable utterance is missing a
+/// word, has different text, or contains an absent/zero-duration word span.
+fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
+    let mut refreshed = Vec::new();
+    let mut saw_words = false;
+
+    for (line_index, line) in chat.ast().lines.0.iter().enumerate() {
+        let Line::Utterance(utterance) = line else {
+            continue;
+        };
+        let mut main_words = Vec::new();
+        walk_words(&utterance.main.content.content.0, None, &mut |item| {
+            if let Some(word) = source_word(&item) {
+                main_words.push(word.cleaned_text().to_string());
+            }
+        });
+        if main_words.is_empty() {
+            continue;
+        }
+        saw_words = true;
+
+        let Some(wor) = utterance.wor_tier() else {
+            return false;
+        };
+        let wor_words: Vec<_> = wor.words().collect();
+        if wor_words.len() != main_words.len()
+            || wor_words
+                .iter()
+                .zip(main_words.iter())
+                .any(|(word, expected)| word.cleaned_text() != expected)
+        {
+            return false;
+        }
+
+        let mut first_start = None;
+        let mut last_end = None;
+        for word in wor_words {
+            let Some(bullet) = word.inline_bullet.as_ref() else {
+                return false;
+            };
+            if bullet.timing.end_ms <= bullet.timing.start_ms {
+                return false;
+            }
+            first_start.get_or_insert(bullet.timing.start_ms);
+            last_end = Some(bullet.timing.end_ms);
+        }
+        refreshed.push((
+            line_index,
+            first_start.expect("non-empty word list has a first timing"),
+            last_end.expect("non-empty word list has a last timing"),
+        ));
+    }
+
+    if !saw_words {
+        return false;
+    }
+    for (line_index, start_ms, end_ms) in refreshed {
+        let Line::Utterance(utterance) = &mut chat.ast_mut().lines.0[line_index] else {
+            unreachable!("recorded line index must remain an utterance")
+        };
+        utterance.main.content.bullet = Some(talkbank_model::model::Bullet::new(start_ms, end_ms));
+    }
+    true
 }
 
 fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
@@ -486,6 +562,31 @@ mod tests {
             panic!("expected CHAT pass-through")
         };
         assert_eq!(chat.to_chat(), before);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn complete_wor_reuse_skips_media_and_backend() -> BAResult<()> {
+        const REUSABLE_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\tmissing, audio\n\
+*PAR:\thello world . \u{15}0_999\u{15}\n\
+%wor:\thello \u{15}100_200\u{15} world \u{15}300_500\u{15} .\n@End\n";
+        let chat = Chat::parse(REUSABLE_CHAT, SourceId::try_new("reusable.cha")?)?;
+        let mut value = BAValue::Chat(chat);
+
+        FaTaskRunner
+            .apply(
+                &mut value,
+                &PanicDispatcher,
+                std::sync::Arc::new(crate::base::NullSink),
+            )
+            .await?;
+
+        let BAValue::Chat(chat) = value else {
+            panic!("expected reused CHAT")
+        };
+        assert!(chat.to_chat().contains("\u{15}100_500\u{15}"));
         Ok(())
     }
 
