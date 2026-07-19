@@ -55,6 +55,7 @@
 - [x] 32/40 Replaces provisional UTR windows with successful FA word spans.
 - [x] 33/40 Preserves authoritative bullet envelopes across successful FA.
 - [x] 34/40 Creates missing main bullets from successful FA word spans.
+- [x] 35/40 Strips stale FA review tiers unconditionally on rerun.
 
 ## done
 
@@ -811,3 +812,16 @@ Unlike provisional UTR hints, an existing authoritative bullet can intentionally
 - **new**: yes
 
 When no prior bullet exists, there is no source envelope to preserve and the aligned words are the strongest timing evidence. The fork uses their minimum start and maximum end. Pre-edit BA3 copied the broader backend segment `800_3000` even though the actual word evidence occupied `1000_2000`; this embedded search padding in the final CHAT output. Post-edit the missing-bullet branch creates `1000_2000`, matching the `%wor` envelope and remaining distinct from both UTR replacement and authoritative union behavior. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::timed_fa_words_create_main_bullet_from_word_span` (1 passed); file-local Rust formatting passed.
+
+### Strip stale FA review tiers unconditionally on rerun
+- **component**: `batchalign-core` forced-alignment task runner
+- **summary**: Removes `%xalign` and `%xrev` tiers from an earlier alignment run even when the current clean rerun produces no replacement decisions.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/input/rerun.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-strip-stale-review-tiers/ba3-post-output/result.txt
+- **depends on**: [031cc38]
+- **commit**: 9b69119
+- **new**: yes
+
+Review tiers describe decisions made by one particular FA run and cannot safely survive into a later run. The fork strips them before applying any new result, including a clean run that emits no new decisions. Pre-edit BA3's complete-`%wor` fast path returned with the old `%xalign` and `%xrev` intact, so stale audit state could persist or later duplicate. Post-edit cleanup runs after the strict `NoAlign` pass-through check but before both reuse and backend alignment, ensuring every actual align rerun starts with no obsolete decision tiers. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::clean_fa_rerun_strips_stale_review_tiers` (1 passed); file-local Rust formatting passed.
