@@ -23,6 +23,7 @@ The DP aligner is BA2's (`backends/morphosyntax/ud/dp.py`, copied verbatim).
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from batchalign.backends.base import FA, BatchPolicy
@@ -46,6 +47,47 @@ def model_for_language(lang: str | None) -> str:
 def _strip_word(text: str) -> str:
     """Drop punctuation/markup so MMS_FA sees only alignable characters."""
     return "".join(c for c in text if c not in _STRIP).strip()
+
+
+def _hanzi_to_jyutping(text: str, romanizer: Any) -> str:
+    """Convert one Cantonese token to tone-free MMS alignment text."""
+    try:
+        pairs = romanizer.characters_to_jyutping(text)
+        pronunciations = [
+            pronunciation
+            for _character, pronunciation in pairs
+            if isinstance(pronunciation, str) and pronunciation
+        ]
+    except (AttributeError, TypeError, ValueError):
+        return text
+    if not pronunciations:
+        return text
+    syllables = [
+        re.sub(r"[0-9]", "", pronunciation) for pronunciation in pronunciations
+    ]
+    converted = "'".join(syllable for syllable in syllables if syllable)
+    return converted or text
+
+
+def _alignment_words(
+    words: list[str], item_language: Any, *, romanizer: Any | None = None
+) -> list[str]:
+    """Prepare source surfaces for MMS, romanizing only resolved Cantonese."""
+    stripped = [_strip_word(word) for word in words]
+    if (
+        getattr(item_language, "kind", None) != "code"
+        or str(getattr(item_language, "value", "")).casefold() != "yue"
+    ):
+        return stripped
+    if romanizer is None:
+        try:
+            import pycantonese as romanizer  # type: ignore[import-not-found,no-redef]
+        except ImportError as error:
+            raise RuntimeError(
+                "Cantonese wav2vec2 FA requires the `cantonese` extra "
+                "for Jyutping conversion"
+            ) from error
+    return [_hanzi_to_jyutping(word, romanizer) for word in stripped]
 
 
 class Wav2Vec2FaBackend(FA):
@@ -74,7 +116,7 @@ class Wav2Vec2FaBackend(FA):
     @property
     def name(self) -> str:
         # Bump when the alignment/post-correction changes (cache key).
-        return "wav2vec2-fa:mms_fa-v3"
+        return "wav2vec2-fa:mms_fa-v4"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -99,7 +141,9 @@ class Wav2Vec2FaBackend(FA):
 
     # ----- internals -----------------------------------------------------
 
-    def _mms(self, audio_chunk: Any, words: list[str]) -> list[tuple[str, tuple[int, int]]]:
+    def _mms(
+        self, audio_chunk: Any, words: list[str]
+    ) -> list[tuple[str, tuple[int, int]]]:
         """Run MMS_FA on one audio chunk + word list → `[(word, (s_ms,e_ms))]`.
 
         Port of BA2 `Wave2VecFAModel.__call__`. Times are relative to the chunk.
@@ -167,9 +211,7 @@ class Wav2Vec2FaBackend(FA):
         # Flatten utterance words into (uidx, widx, text), tracking each
         # utterance's window. Words carry their utterance's window time.
         # Mutable timing store: timings[uidx][widx] = (start_ms, end_ms) | None.
-        timings: list[list[Any]] = [
-            [None] * len(utt.words) for utt in item.utterances
-        ]
+        timings: list[list[Any]] = [[None] * len(utt.words) for utt in item.utterances]
         windows = [
             (int(getattr(u, "start_ms", 0) or 0), int(getattr(u, "end_ms", 0) or 0))
             for u in item.utterances
@@ -215,7 +257,7 @@ class Wav2Vec2FaBackend(FA):
             chunk = wave[lo:hi]
 
             src_words = [item.utterances[u].words[w].text for (u, w) in grp]
-            transcript = [_strip_word(t) for t in src_words]
+            transcript = _alignment_words(src_words, item.language)
             # MMS_FA needs non-empty alignable words; keep index parity by
             # substituting a single char for empties.
             transcript = [t if t else "·" for t in transcript]
@@ -283,7 +325,9 @@ class Wav2Vec2FaBackend(FA):
                     )
                 else:
                     words_out.append(
-                        AsrWord(text=word.text, start_ms=t[0], end_ms=t[1], confidence=None)
+                        AsrWord(
+                            text=word.text, start_ms=t[0], end_ms=t[1], confidence=None
+                        )
                     )
             timed = [w for w in words_out if w.end_ms > 0]
             aligned.append(
