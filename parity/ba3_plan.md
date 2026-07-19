@@ -10,7 +10,7 @@
 - [x] Fails unsupported primary languages per file instead of silently skipping them.
 - [x] Synthesizes non-analyzable special forms such as `@q` and `@n` from typed `form_type` data.
 - [ ] Rolls back invalid L2 splices, skips `NoAlign` words, and provides a fallback harness where secondary Stanza coverage is absent.
-- [ ] Detects bogus Stanza lemmas, missing fields, and invalid analyses, preserving the surface form and recording anomalies. 
+- [x] Detects bogus Stanza lemmas, missing fields, and invalid analyses, preserving the surface form and recording anomalies.
 - [ ] Applies numbered, retireable Stanza workarounds for Italian compound imperatives and related defects.
 - [ ] Corrects known English transcribe patterns, Chinese bogus lemmas, and Japanese token merging.
 - [ ] Preflights large Rev.AI batches up front instead of submitting every file independently. (Please do this without moving revai to rust; keep it in Python.)
@@ -99,3 +99,16 @@ The fixture exercises `&-you_know`: FA now receives `you`, `know`, `today`, whil
 - **new**: no
 
 Audit note: runtime parity was already present before this item, so pre- and post-edit semantic output is intentionally identical. The independent commit adds the missing injection-level regression by collecting typed `FormType` payloads, supplying an empty `UdResponse`, and validating the resulting aligned CHAT. Targeted verification: `bazel test --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test --test_output=errors`.
+
+### Repair invalid Stanza fields without losing lexical words
+- **component**: Python Stanza morphology renderer and backend diagnostics
+- **summary**: Normalizes missing or invalid lemma, UPOS, ID, head, and dependency-relation fields before rendering; lexical surfaces fall back to `x|surface`, dependency repairs satisfy the head/ROOT invariant, and every repair is logged with file and utterance identity.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/input/raw-stanza.json
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/tbt-output/renderer-seam.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/ba3-pre-output/renderer-seam.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-analysis-repair/ba3-post-output/renderer-seam.txt
+- **depends on**: []
+- **commit**: f2f60d0
+- **new**: no
+
+The seam deliberately combines a lexical `hello` with lemma `.`, null UPOS, out-of-range head `99`, and `<pad>` relation. Pre-edit BA3 silently classified it as punctuation and emitted no analysis. Post-edit BA3 preserves it as `x|hello`, repairs a validator-safe ROOT tree, and records four structured warnings. The fork's focused raw-Stanza regression proves its surface-lemma fallback; BA3 additionally repairs the invalid dependency fields instead of carrying them toward a later mapping failure. Targeted verification: `bazel test //python/batchalign:pytest --test_arg=-q --test_arg=python/batchalign/tests/test_morphotag_render.py --test_output=errors`; fork verification: `RUSTUP_TOOLCHAIN=1.95.0 cargo test -p batchalign-transform parse_raw_stanza_bogus_lemma`.
