@@ -99,6 +99,14 @@ FALSE_MWT_RULES: tuple[FalseMwtRule, ...] = (
         6, "cavallone", "NOUN", "cavallone", "Gender=Masc|Number=Sing", _REPROBE
     ),
     FalseMwtRule(6, "coccole", "NOUN", "coccole", "Gender=Fem|Number=Plur", _REPROBE),
+    FalseMwtRule(
+        7,
+        "la",
+        "DET",
+        "il",
+        "Definite=Def|Gender=Fem|Number=Sing|PronType=Art",
+        _REPROBE,
+    ),
 )
 
 _FALSE_MWT_BY_SURFACE = {rule.surface: rule for rule in FALSE_MWT_RULES}

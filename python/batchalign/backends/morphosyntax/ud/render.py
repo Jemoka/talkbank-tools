@@ -359,7 +359,7 @@ def _collapse_italian_false_mwts(
     tokens: list[Any],
     anomalies: list[AnalysisAnomaly],
 ) -> tuple[list[_NormalizedWord], list[Any]]:
-    """Collapse closed Defect-6 false MWT expansions into one lexical word."""
+    """Collapse closed Italian false MWT expansions into one lexical word."""
     from .it.workarounds import false_mwt_rule_for
 
     by_id = {word.id: word for word in words}
@@ -416,7 +416,7 @@ def _collapse_italian_false_mwts(
                 anomalies,
                 sample.id,
                 str(token.text),
-                "italian_defect_6",
+                f"italian_defect_{rule.defect}",
                 {"chunks": len(ids)},
                 {"upos": rule.upos, "lemma": rule.lemma, "chunks": 1},
                 rule.retire_when,

@@ -277,6 +277,47 @@ def test_italian_genuine_compound_mwt_is_not_defect6_collapsed():
     assert not any(a.field == "italian_defect_6" for a in analysis.anomalies)
 
 
+def test_italian_defect7_sentence_initial_la_collapses_to_article():
+    words = [
+        FakeWord(
+            "il",
+            "il",
+            "DET",
+            "Definite=Def|Gender=Masc|Number=Sing|PronType=Art",
+            3,
+            "det",
+            id=1,
+        ),
+        FakeWord(
+            "i",
+            "il",
+            "DET",
+            "Definite=Def|Gender=Masc|Number=Plur|PronType=Art",
+            1,
+            "det",
+            id=2,
+        ),
+        FakeWord(
+            "storia",
+            "storia",
+            "NOUN",
+            "Gender=Fem|Number=Sing",
+            0,
+            "root",
+            id=3,
+        ),
+    ]
+    tokens = [FakeToken("la", [1, 2]), FakeToken("storia", [3])]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=tokens), ".", [], "it"
+    )
+
+    assert _mor_str(analysis, ".") == "det|il-Fem-Def-Art-Sing noun|storia-Fem ."
+    assert _gra_str(analysis) == "1|2|DET 2|2|ROOT 3|2|PUNCT"
+    assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_7"]
+
+
 def test_question_terminator_is_carried_through():
     # The terminator is applied downstream; %gra still ends with a PUNCT.
     sent = _sentence(
