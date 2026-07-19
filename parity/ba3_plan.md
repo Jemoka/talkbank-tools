@@ -38,6 +38,7 @@
 - [x] 15/40 Rescues English contracted copula progressives in `%mor` and `%gra` together.
 - [x] 16/40 Makes batch input concurrency explicitly configurable.
 - [x] 17/40 Invalidates cached task output when the compiled engine changes.
+- [x] 18/40 Keeps experimental two-pass overlap UTR out of automatic selection.
 
 ## done
 
@@ -573,3 +574,16 @@ The fork exposes an operator worker limit and recently fixed a path where anothe
 - **new**: yes
 
 The fork requires its cache engine version to match before returning a hit. BA3's cache documentation instead acknowledged that code changes under a stable backend name silently served old output and required a manual name bump or cache purge. Post-edit the schema-v3 key includes the build's stamped git identity, with the package version as the non-stamped fallback, before task/backend/input identity. A released build retains normal reuse, while a new implementation cannot inherit its predecessor's transcript or analysis result. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-engine:batchalign_engine_unit_test --test_output=errors` (including distinct namespace digests for two code versions).
+
+### Keep automatic UTR on the validated global strategy
+- **component**: `batchalign-core` utterance timing recovery strategy selection
+- **summary**: Stops overlap markers from automatically enabling experimental two-pass UTR and keeps ordinary recovery on the monotonic global alignment path.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/input/overlap.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/tbt-output/strategy.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/ba3-pre-output/strategy.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/utr-global-default/ba3-post-output/strategy.txt
+- **depends on**: []
+- **commit**: 8767049
+- **new**: yes
+
+The fork previously auto-selected two-pass UTR for `+<` and bottom-overlap markers, but now deliberately keeps `Auto` on global UTR until the pass-2 end-time bug is resolved and operator files validate the experiment. Pre-edit BA3 retained the older automatic behavior and even documented its incomplete FA-group tiebreaker. Post-edit the two-pass implementation remains available for future calibrated opt-in work, while the default selector consistently returns the global monotonic strategy for overlap and non-overlap files. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors` (56 passed, 1 ignored, including a parsed `+<` regression).
