@@ -25,6 +25,7 @@
 - [x] 2/10 Suppresses terminator-only translation tiers.
 - [x] 3/10 Excludes paired CA segment repetitions from lexical text.
 - [x] 4/10 Keeps retraces with their retry across utterance splits.
+- [x] 5/10 Projects comparison candidates to one majority utterance.
 
 ## done
 
@@ -378,3 +379,16 @@ In CHAT, `↫sch↫schaap` records a repeated onset followed by the lexical Dutc
 - **new**: yes
 
 Retraced words are deliberately absent from the morphology word domain, so their top-level `Retrace` nodes receive no classifier assignment. Pre-edit generic back-fill attached those nodes to the preceding assigned word, creating a dangling retrace when the classifier boundary fell before the kept retry. Post-edit retraces first inherit the next assigned content group; genuinely utterance-final retraces still use the existing fallback. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact utseg::tests::utseg_split_keeps_retrace_with_following_retry` (1 passed).
+
+### Project comparison candidates to one utterance
+- **component**: `talkbank-transform` transcript comparison
+- **summary**: Projects every candidate main-token window to its majority utterance before overlap and alignment scoring, preventing a single gold utterance from collecting matches across two main utterances.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/tbt-output/metrics.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/ba3-pre-output/metrics.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/ba3-post-output/metrics.txt
+- **depends on**: []
+- **commit**: 6ac567d
+- **new**: yes
+
+Pre-edit bag-of-words scoring selected `the sky this dog ran` and counted `the` from one main utterance together with `dog ran` from the next, inflating the match count from two to three. Post-edit preserves Python `Counter.most_common(1)` first-seen tie behavior, trims candidate edges to the majority utterance, and scores only the projected range. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact compare::tests::find_best_segment_does_not_score_across_utterance_boundaries && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact compare::tests::compare_does_not_steal_match_across_utterance_boundary` (2 passed).
