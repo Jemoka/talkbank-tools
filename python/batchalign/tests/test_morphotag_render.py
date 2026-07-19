@@ -355,6 +355,48 @@ def test_italian_defect9_dagliela_rewrites_only_mwt_head():
     assert [anomaly.field for anomaly in analysis.anomalies] == ["italian_defect_9"]
 
 
+def test_italian_defect10_posa_clitics_use_canonical_verb_lemma():
+    for surface, clitic, gender in (
+        ("posala", "la", "Fem"),
+        ("posalo", "lo", "Masc"),
+    ):
+        words = [
+            FakeWord(
+                "posa",
+                "posa",
+                "VERB",
+                "Mood=Imp|Number=Sing|Person=2|VerbForm=Fin",
+                0,
+                "root",
+                id=1,
+            ),
+            FakeWord(
+                clitic,
+                clitic,
+                "PRON",
+                f"Gender={gender}|Number=Sing|Person=3|PronType=Prs",
+                1,
+                "obj",
+                id=2,
+            ),
+        ]
+        analysis = render.parse_sentence(
+            FakeSentence(words=words, tokens=[FakeToken(surface, [1, 2])]),
+            ".",
+            [],
+            "it",
+        )
+
+        assert (
+            _mor_str(analysis, ".")
+            == f"verb|posare-Fin-Imp-S2~pron|{clitic}-Prs-S3 ."
+        )
+        assert _gra_str(analysis) == "1|2|ROOT 2|1|OBJ 3|1|PUNCT"
+        assert [anomaly.field for anomaly in analysis.anomalies] == [
+            "italian_defect_10"
+        ]
+
+
 def test_question_terminator_is_carried_through():
     # The terminator is applied downstream; %gra still ends with a PUNCT.
     sent = _sentence(

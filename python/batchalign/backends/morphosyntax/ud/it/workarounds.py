@@ -132,6 +132,22 @@ COMPONENT_REWRITE_RULES: tuple[ComponentRewriteRule, ...] = (
         "Mood=Imp|Number=Sing|Person=2|VerbForm=Fin",
         _REPROBE,
     ),
+    ComponentRewriteRule(
+        10,
+        "posala",
+        "VERB",
+        "posare",
+        "Mood=Imp|Number=Sing|Person=2|VerbForm=Fin",
+        _REPROBE,
+    ),
+    ComponentRewriteRule(
+        10,
+        "posalo",
+        "VERB",
+        "posare",
+        "Mood=Imp|Number=Sing|Person=2|VerbForm=Fin",
+        _REPROBE,
+    ),
 )
 
 _COMPONENT_REWRITE_BY_SURFACE = {
