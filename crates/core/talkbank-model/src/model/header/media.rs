@@ -16,7 +16,9 @@ use talkbank_derive::{SemanticEq, SpanShift};
 ///
 /// `filename` and `media_type` are required by CHAT. `status` is optional and
 /// used by some corpora to mark missing or not-yet-linked assets.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, SemanticEq, SpanShift,
+)]
 pub struct MediaHeader {
     /// Media basename without extension.
     pub filename: MediaFilename,
@@ -68,5 +70,26 @@ impl std::fmt::Display for MediaHeader {
     /// Formats the media header in canonical CHAT text form.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.write_chat(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn media_hash_includes_filename_type_and_status() {
+        let audio = MediaHeader::new("session", MediaType::Audio);
+        let duplicate = MediaHeader::new("session", MediaType::Audio);
+        let video = MediaHeader::new("session", MediaType::Video);
+        let unlinked = MediaHeader::new("session", MediaType::Audio)
+            .with_status(MediaStatus::Unlinked);
+        let other_file = MediaHeader::new("other", MediaType::Audio);
+
+        let unique: HashSet<_> = [audio, duplicate, video, unlinked, other_file]
+            .into_iter()
+            .collect();
+        assert_eq!(unique.len(), 4);
     }
 }
