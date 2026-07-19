@@ -421,7 +421,7 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
                         bullet.timing.start_ms.min(word_start_ms),
                         bullet.timing.end_ms.max(word_end_ms),
                     ),
-                    _ => (seg.start_ms, seg.end_ms),
+                    _ => (word_start_ms, word_end_ms),
                 };
                 u.main.content.bullet = Some(Bullet::new(start_ms, end_ms));
             } else if u.main.content.bullet.as_ref().is_some_and(|bullet| {
@@ -934,6 +934,43 @@ mod tests {
 
         assert!(chat.to_chat().contains("\u{15}800_3000\u{15}"));
         assert!(!chat.to_chat().contains("\u{15}900_2200\u{15}"));
+    }
+
+    #[test]
+    fn timed_fa_words_create_main_bullet_from_word_span() {
+        const UNTIMED_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\thello world .\n@End\n";
+        let mut chat = Chat::parse(
+            UNTIMED_CHAT,
+            SourceId::try_new("untimed-window.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let aligned = vec![AsrSegment {
+            start_ms: 800,
+            end_ms: 3_000,
+            text: "hello world".into(),
+            speaker: None,
+            words: vec![
+                AsrWord {
+                    text: "hello".into(),
+                    start_ms: 1_000,
+                    end_ms: 1_500,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "world".into(),
+                    start_ms: 1_500,
+                    end_ms: 2_000,
+                    confidence: None,
+                },
+            ],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timed result");
+
+        assert!(chat.to_chat().contains("\u{15}1000_2000\u{15}"));
+        assert!(!chat.to_chat().contains("\u{15}800_3000\u{15}"));
     }
 
     #[test]
