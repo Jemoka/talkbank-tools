@@ -6,7 +6,7 @@
 - [ ] Fixed BA3 output passes `chatter validate`, making the validator the final output-integrity gate.
 - [x] Expands compound fillers and recovers their audio spans between recognized words.
 - [x] Detects long-file drift and monotonicity violations, then re-anchors or repairs timing. | FA recovery and repair passes
-- [ ] Integrates Cantonese FA through Jyutping and wav2vec2 (no need for the common recovery layer).
+- [x] Integrates Cantonese FA through Jyutping and wav2vec2 (no need for the common recovery layer).
 - [x] Fails unsupported primary languages per file instead of silently skipping them.
 - [x] Synthesizes non-analyzable special forms such as `@q` and `@n` from typed `form_type` data.
 - [ ] Rolls back invalid L2 splices, skips `NoAlign` words, and provides a fallback harness where secondary Stanza coverage is absent.
@@ -177,3 +177,16 @@ Audit note: the individual propagation and atomicity rules were already present;
 - **new**: no
 
 The synthetic 500-utterance regression includes one ordinary end overlap and one severe backward anchor at utterance 400. The post-pass reports one clamp and one strip, removes `%wor` together with the untrustworthy drifted main bullet, and reparses the complete 500-utterance serialization through the full CHAT validator. This follows the fork's conservative rule: preserve forward-moving conversational overlap starts, but never invent a location for a backward anchor. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors`.
+
+### Romanize Cantonese only at the wav2vec2 alignment seam
+- **component**: Python `Wav2Vec2FaBackend`
+- **summary**: Converts resolved `yue` source words to tone-free, apostrophe-delimited Jyutping before MMS_FA while preserving the original Hanzi surfaces in returned CHAT; non-Cantonese and unresolved-language inputs retain the shared path unchanged.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/input/alignment-seam.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/tbt-output/alignment-seam.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/ba3-pre-output/alignment-seam.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/cantonese-jyutping-fa/ba3-post-output/alignment-seam.txt
+- **depends on**: []
+- **commit**: 2ad0e3a
+- **new**: no
+
+The conversion is local to the direct MMS input seam, so this language-specific route does not depend on the common recovery layer and does not alter typed output words. If the optional Cantonese dependency is absent, the backend reports an actionable extra requirement instead of silently sending Han characters to MMS. Targeted verification uses the Bazel-built test executable: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_cantonese_fa.py -q` (3 passed).
