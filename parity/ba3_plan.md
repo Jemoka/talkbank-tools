@@ -8,7 +8,7 @@
 - [ ] Detects long-file drift and monotonicity violations, then re-anchors or repairs timing. | FA recovery and repair passes
 - [ ] Integrates Cantonese FA through Jyutping and wav2vec2 (no need for the common recovery layer).
 - [x] Fails unsupported primary languages per file instead of silently skipping them.
-- [ ] Synthesizes non-analyzable special forms such as `@q` and `@n` from typed `form_type` data.
+- [x] Synthesizes non-analyzable special forms such as `@q` and `@n` from typed `form_type` data.
 - [ ] Rolls back invalid L2 splices, skips `NoAlign` words, and provides a fallback harness where secondary Stanza coverage is absent.
 - [ ] Detects bogus Stanza lemmas, missing fields, and invalid analyses, preserving the surface form and recording anomalies. 
 - [ ] Applies numbered, retireable Stanza workarounds for Italian compound imperatives and related defects.
@@ -86,3 +86,16 @@ The regression blocks 100 synthetic per-input futures immediately after their fi
 - **new**: no
 
 The fixture exercises `&-you_know`: FA now receives `you`, `know`, `today`, while typed injection restores the source word domain as `you_know` at `100_350` and `today` at `400_600`. The same cursor policy applies to original words inside `ReplacedWord`. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors`.
+
+### Lock typed special-form synthesis when Stanza returns no sentence
+- **component**: `talkbank-transform` morphosyntax injection
+- **summary**: Pins the existing typed synthesis path end to end: an empty Stanza response still maps `@q` to `meta` and `@n` to `neo`, preserves the surface lemma, and emits validator-safe ROOT/PUNCT relations.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/input/special-forms.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/tbt-output/special-forms.cha
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/ba3-pre-output/special-forms.cha
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/special-form-synthesis/ba3-post-output/special-forms.cha
+- **depends on**: []
+- **commit**: 086894b
+- **new**: no
+
+Audit note: runtime parity was already present before this item, so pre- and post-edit semantic output is intentionally identical. The independent commit adds the missing injection-level regression by collecting typed `FormType` payloads, supplying an empty `UdResponse`, and validating the resulting aligned CHAT. Targeted verification: `bazel test --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test --test_output=errors`.
