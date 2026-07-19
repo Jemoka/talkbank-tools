@@ -115,6 +115,39 @@ async fn process_chat(
     sink.emit(ProgressEvent::stage_started(&source_id, Task::Morphosyntax));
     let t_start = std::time::Instant::now();
 
+    // Conversation Analysis transcripts deliberately bypass morphotagging.
+    // CA notation is not ordinary lexical input, and this is a legitimate
+    // not-applicable case rather than an inference failure.
+    if chat
+        .ast()
+        .options
+        .iter()
+        .any(|option| option.enables_ca_mode())
+    {
+        sink.emit(ProgressEvent::stage_injected(
+            &source_id,
+            Task::Morphosyntax,
+        ));
+        return Ok(());
+    }
+
+    // Reject an unsupported *primary* language before dispatching any
+    // utterance. The Python backend historically converted Stanza pipeline
+    // construction failures into empty analyses, which made the file appear
+    // successful while returning no morphology. A per-file typed error is
+    // both honest and safe for mixed-language batches: other files continue
+    // independently and no backend batch is poisoned.
+    if let Some(primary) = chat.primary_language()
+        && !is_stanza_supported(&primary)
+    {
+        return Err(BAError::Validation(format!(
+            "morphotag: primary @Languages '{primary}' is not supported by Stanza. \
+             Fix the @Languages header to use a supported ISO-639-3 code and re-run. \
+             Supported codes: {}.",
+            SUPPORTED_STANZA_CODES.join(", ")
+        )));
+    }
+
     let language = resolve_per_file_language(chat);
 
     // Phase 1: extract per-utterance token lists AND check which utterances
@@ -228,6 +261,21 @@ async fn process_chat(
         Task::Morphosyntax,
     ));
     Ok(())
+}
+
+/// ISO-639-3 languages for which the Batchalign Stanza configuration has a
+/// known complete tokenize/POS/lemma/depparse pipeline. Keep this sorted so
+/// both membership checks and the user-facing error remain deterministic.
+const SUPPORTED_STANZA_CODES: &[&str] = &[
+    "afr", "ara", "bul", "cat", "ces", "cmn", "cym", "dan", "deu", "ell", "eng", "est", "eus",
+    "fas", "fin", "fra", "gla", "gle", "glg", "heb", "hin", "hrv", "hun", "hye", "ind", "isl",
+    "ita", "jpn", "kat", "kor", "lat", "lav", "lit", "mlt", "nld", "nor", "pol", "por", "ron",
+    "rus", "slk", "slv", "spa", "swe", "tam", "tel", "tha", "tur", "ukr", "urd", "vie", "yue",
+    "zho",
+];
+
+fn is_stanza_supported(language: &str) -> bool {
+    SUPPORTED_STANZA_CODES.binary_search(&language).is_ok()
 }
 
 fn utterance_has_mor_tier(u: &Utterance) -> bool {
@@ -541,6 +589,8 @@ mod tests {
 
     const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tit's red .\n*CHI:\tcat dog .\n@End\n";
 
+    const UNSUPPORTED_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\tsrp\n@Participants:\tCHI Child\n@ID:\tsrp|corpus|CHI|||||Child|||\n*CHI:\tnešto .\n@End\n";
+
     /// Capturing sink for tick-sequence assertions.
     struct CapturingSink {
         events: Mutex<Vec<crate::base::ProgressEvent>>,
@@ -629,6 +679,62 @@ mod tests {
         assert!(s.contains("noun|cat"), "expected typed noun|cat: {s}");
         // Terminator rendered by the typed writer (period after the last word).
         assert!(s.contains("noun|dog ."), "expected terminator on %mor: {s}");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unsupported_primary_language_fails_before_dispatch() -> BAResult<()> {
+        let chat = Chat::parse(UNSUPPORTED_FIXTURE, SourceId::try_new("unsupported")?)?;
+        let mut value = BAValue::Chat(chat);
+        let dispatcher = RecordingDispatcher::new();
+        let err = MorphosyntaxTaskRunner
+            .apply(
+                &mut value,
+                &dispatcher,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
+            .await
+            .expect_err("unsupported primary language must fail the file");
+
+        match err {
+            BAError::Validation(message) => {
+                assert!(message.contains("primary @Languages 'srp'"));
+                assert!(message.contains("not supported by Stanza"));
+                assert!(message.contains("Fix the @Languages header"));
+            }
+            other => panic!("expected typed validation error, got {other:?}"),
+        }
+        assert!(
+            dispatcher.seen.lock().expect("poisoned").is_empty(),
+            "the per-file gate must run before any backend dispatch"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn ca_file_with_unsupported_language_is_legitimate_pass_through() -> BAResult<()> {
+        let input = UNSUPPORTED_FIXTURE.replace(
+            "@Participants:\tCHI Child\n",
+            "@Participants:\tCHI Child\n@Options:\tCA\n",
+        );
+        let chat = Chat::parse(&input, SourceId::try_new("ca-unsupported")?)?;
+        let before = chat.to_chat();
+        let mut value = BAValue::Chat(chat);
+        let dispatcher = RecordingDispatcher::new();
+
+        MorphosyntaxTaskRunner
+            .apply(
+                &mut value,
+                &dispatcher,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
+            .await?;
+
+        assert!(dispatcher.seen.lock().expect("poisoned").is_empty());
+        let BAValue::Chat(chat) = value else {
+            panic!("expected Chat pass-through");
+        };
+        assert_eq!(chat.to_chat(), before);
         Ok(())
     }
 
