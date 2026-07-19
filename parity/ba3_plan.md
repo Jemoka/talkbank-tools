@@ -2,7 +2,7 @@
 
 ## todo
 - [x] Runs typed pre- and post-stage gates and treats pre-serialization failure as a hard error.
-- [ ] Fixes single-word replacement retraces, `@Media` hashing, parser recovery spans, and Japanese token merging.
+- [x] Fixes single-word replacement retraces, `@Media` hashing, parser recovery spans, and Japanese token merging.
 - [x] Fixed BA3 output passes `chatter validate`, making the validator the final output-integrity gate.
 - [x] Expands compound fillers and recovers their audio spans between recognized words.
 - [x] Detects long-file drift and monotonicity violations, then re-anchors or repairs timing. | FA recovery and repair passes
@@ -307,3 +307,16 @@ Audit note: the fork-origin implementation and its end-to-end test were already 
 - **new**: no
 
 Audit note: the repair implementation was introduced by the earlier general invalid-Stanza fix, but only Latin lexical surfaces were pinned. This independent Chinese regression supplies `苹果` with the observed bogus lemma `。`, asserts exact `%mor` surface preservation and ROOT repair, and checks the anomaly retains the Han source text. Together with the English end-to-end evidence and Japanese realignment contract above, this closes the final three-language original TODO. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_morphotag_render.py -q -k chinese_bogus_punctuation_lemma` (1 passed, 11 deselected).
+
+### Hash the complete typed `@Media` identity
+- **component**: `talkbank-model` typed media header
+- **summary**: Adds `Eq` and `Hash` to `MediaHeader` so typed headers can safely key deduplication and memoization; the derived identity includes filename, capture modality, and optional linkage status.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/input/media-identities.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/tbt-output/hash-set.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/ba3-pre-output/hash-set.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/media-header-hash/ba3-post-output/hash-set.txt
+- **depends on**: []
+- **commit**: dd92e0b
+- **new**: no
+
+Pre-edit every constituent media field was already hashable, but the composite header omitted the contract and could not be used directly in a `HashSet`/`HashMap`. The regression inserts an exact duplicate plus three single-field variations and requires four unique identities, proving no field is accidentally ignored. This closes the last clause of the first bundled original TODO; its retrace, recovery-span, and Japanese clauses are independently evidenced above. Targeted verification: `bazel build --config=dev //crates/core/talkbank-model:talkbank_model_unit_test && bazel-bin/crates/core/talkbank-model/talkbank_model_unit_test --exact model::header::media::tests::media_hash_includes_filename_type_and_status` (1 passed).
