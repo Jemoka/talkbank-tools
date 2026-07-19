@@ -1,7 +1,7 @@
 # implementation plan
 
 ## todo
-- [ ] Runs typed pre- and post-stage gates and treats pre-serialization failure as a hard error.
+- [x] Runs typed pre- and post-stage gates and treats pre-serialization failure as a hard error.
 - [ ] Fixes single-word replacement retraces, `@Media` hashing, parser recovery spans, and Japanese token merging.
 - [ ] Fixed BA3 output passes `chatter validate`, making the validator the final output-integrity gate.
 - [x] Expands compound fillers and recovers their audio spans between recognized words.
@@ -125,3 +125,16 @@ The seam deliberately combines a lexical `hello` with lemma `.`, null UPOS, out-
 - **new**: no
 
 The regression reproduces the confirmed mid-sentence `dammela` shape (`ADJ`, lemma `dammelo`) and pins the full three-chunk output. Separate cases exercise missing-MWT `aprilo` and fabricated-lemma `leggila`; the registry test requires explicit defect numbers and retirement criteria. Targeted verification uses the Bazel-built test executable without the rule's fixed whole-suite argument: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_morphotag_render.py -q` (11 passed). Fork verification: `RUSTUP_TOOLCHAIN=1.95.0 cargo test -p batchalign test_italian_defect8_dammela` (2 passed).
+
+### Enforce typed gates at every pipeline and serialization boundary
+- **component**: `batchalign-engine` pipeline boundary, `batchalign-core` CHAT writer, and typed validation API
+- **summary**: Validates every CHAT carried directly, in pairs, or in artifact lists before and after each task; stage violations become per-file failures, and the exact serialized bytes must reparse and pass full validation before any disk write.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/input/stage-seam.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/tbt-output/gate.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/ba3-pre-output/invalid-output.cha
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/typed-stage-validation/ba3-post-output/gate.txt
+- **depends on**: []
+- **commit**: 6d1aaae
+- **new**: no
+
+The seam deliberately mutates an already-validated typed AST after admission by removing its main-tier terminator. Pre-edit BA3 could serialize the invalid transcript; post-edit, the shared pre/post boundary rejects it and `Chat::write` independently reparses the exact output bytes as a final hard gate. The validation helpers are now generic over both CHAT typestates, avoiding a string round-trip inside stage checks. Targeted verification: `bazel test --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test //crates/batchalign/batchalign-core:batchalign_core_unit_test //crates/batchalign/batchalign-engine:batchalign_engine_unit_test --test_output=errors`; Bazel product build: `just batchalign build debug`.
