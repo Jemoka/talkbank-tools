@@ -61,6 +61,7 @@
 - [x] 38/40 Replaces `%wor` in place without reordering dependent tiers.
 - [x] 39/40 Repairs near-zero FA words by borrowing from the following span.
 - [x] 40/40 Repairs near-zero FA words by borrowing from the preceding span.
+- [x] 41 (beyond minimum) Reuses clean `%wor` utterances inside mixed files.
 
 ## done
 
@@ -895,3 +896,16 @@ FA can return a formally positive span that is too short to represent a plausibl
 - **new**: yes
 
 A short final word has no following donor, and an internal short word may likewise fail the forward repair. The fork's fallback moves the shared boundary backward when the preceding span can lend enough time and remain positive. Pre-edit BA3 serialized `um 100_500; I 500_520`; post-edit it produces `um 100_480; I 480_520`, bringing the short word to the 40 ms floor without changing the utterance envelope. Untimed words, gaps, and a preceding donor too short to remain valid are left untouched. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::fa_rebalances_near_zero_word_from_preceding_span` (1 passed); file-local Rust formatting passed.
+
+### Reuse clean `%wor` utterances inside mixed files
+- **component**: `batchalign-core` forced-alignment task runner
+- **summary**: Dispatches only stale utterances in a partially reusable file, then merges fresh backend results with clean exact-match `%wor` timing in transcript order.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/input/mixed.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/tbt-output/dispatch.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/ba3-pre-output/dispatch.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-partial-wor-reuse/ba3-post-output/dispatch.txt
+- **depends on**: [031cc38, 93f4048, 7bddd99, 1a3287e, 475563d]
+- **commit**: ba105d5
+- **new**: yes
+
+The all-file fast path cannot help after a manual edit makes only one utterance stale: pre-edit BA3 sent every utterance back through the expensive model. The fork validates reuse per utterance with the same exact text, positive-duration, monotonicity, dominance, and next-boundary guards used by whole-file reuse. Post-edit BA3 removes clean segments from the backend request, aligns only stale segments, and merges the two result streams in original utterance order before ordinary injection and repair. A mixed two-utterance fixture therefore reduces model work from two utterances to one without trusting the mismatched `%wor`. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::mixed_file_reuses_only_clean_wor_utterances` (1 passed); file-local Rust formatting passed.
