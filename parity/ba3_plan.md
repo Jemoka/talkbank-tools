@@ -43,6 +43,7 @@
 - [x] 20/40 Collapses known Italian Stanza Defect 6 false MWT expansions.
 - [x] 21/40 Repairs the Italian sentence-initial `la` false MWT expansion.
 - [x] 22/40 Rewrites the mis-tagged verb head in Italian `dagliela` MWTs.
+- [x] 23/40 Canonicalizes the verb lemma in Italian `posala` and `posalo` MWTs.
 
 ## done
 
@@ -643,3 +644,16 @@ The fork records a distinct Defect 7 failure in which Stanza analyzes sentence-i
 - **new**: yes
 
 Stanza's `dagliela` range has the correct three-piece shape but analyzes its imperative head as the homographic adposition `da`, yielding `adp|da~pron|gli~pron|la`. The fork treats this separately from false-MWT collapse: only component zero's POS, canonical lemma, and imperative features change. Post-edit BA3 follows that invariant and leaves component ids, heads, relations, and clitic analyses intact, producing `verb|dare-Fin-Imp-S2~pron|gli-Prs-S3~pron|la-Prs-S3` plus an `italian_defect_9` anomaly. The closed lookup excludes correctly analyzed siblings such as `digliela` and `portagliela`. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg=italian_defect9` (Bazel target passed) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
+
+### Canonicalize the verb lemma in Italian `posala` and `posalo` MWTs
+- **component**: Python UD-to-CHAT Italian morphosyntax renderer
+- **summary**: Replaces Stanza's surface-echo `posa` lemma with canonical `posare` for the two confirmed imperative-clitic ranges while preserving their component structure.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/input/stanza-analysis.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/tbt-output/tiers.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/ba3-pre-output/tiers.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/italian-defect10-posare/ba3-post-output/tiers.txt
+- **depends on**: [b717b1e]
+- **commit**: 4895eed
+- **new**: yes
+
+Unlike Defect 9, Stanza already tags the head of `posala` and `posalo` as an imperative verb; only the lemma is the inflected surface `posa`. Pre-edit BA3 therefore emitted `verb|posa-Fin-Imp-S2` and made lemma-based corpus searches disagree with the fork. Post-edit the component-rewrite table gives both confirmed surfaces the canonical `posare` lemma and retains their `la`/`lo` post-clitic, ids, and dependency arcs. The regression exercises both genders and requires the distinct `italian_defect_10` anomaly. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors --test_arg=-k --test_arg=italian_defect10` (Bazel target passed) and Ruff on the changed files (with the unrelated pre-existing E721 diagnostic excluded).
