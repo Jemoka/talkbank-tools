@@ -26,6 +26,7 @@
 - [x] 3/10 Excludes paired CA segment repetitions from lexical text.
 - [x] 4/10 Keeps retraces with their retry across utterance splits.
 - [x] 5/10 Projects comparison candidates to one majority utterance.
+- [x] 6/10 Attributes matched comparison POS from the gold transcript.
 
 ## done
 
@@ -392,3 +393,16 @@ Retraced words are deliberately absent from the morphology word domain, so their
 - **new**: yes
 
 Pre-edit bag-of-words scoring selected `the sky this dog ran` and counted `the` from one main utterance together with `dog ran` from the next, inflating the match count from two to three. Post-edit preserves Python `Counter.most_common(1)` first-seen tie behavior, trims candidate edges to the majority utterance, and scores only the projected range. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact compare::tests::find_best_segment_does_not_score_across_utterance_boundaries && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact compare::tests::compare_does_not_steal_match_across_utterance_boundary` (2 passed).
+
+### Attribute matched POS from the gold transcript
+- **component**: `talkbank-transform` comparison annotation and metrics
+- **summary**: Uses the gold word's morphology tag for every matched token, so `%xsmor` and per-POS match counts describe the reference annotation rather than silently copying a conflicting main-transcript tag.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/tbt-output/xsmor.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/ba3-pre-output/xsmor.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-gold-pos/ba3-post-output/xsmor.txt
+- **depends on**: []
+- **commit**: 0064d0d
+- **new**: yes
+
+Pre-edit identical surfaces with disagreeing morphology produced `NOUN ADJ`, masking the gold annotation `INTJ NOUN` and charging matches to the wrong POS buckets. Post-edit matched and gold-only tokens both derive POS from gold, while main-only insertions continue to retain main POS; gold files without `%mor` correctly produce `?` instead of borrowing a tag. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test compare::tests::` (32 passed).
