@@ -96,6 +96,8 @@ impl TaskRunner for FaTaskRunner {
             return Ok(());
         }
 
+        strip_stale_fa_review_tiers(chat);
+
         // A completed prior FA run already carries the most precise timing
         // surface we can reuse: one timed `%wor` item per current main-tier
         // word. Refresh its utterance bullets without decoding audio or
@@ -184,6 +186,28 @@ impl TaskRunner for FaTaskRunner {
 
         sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Fa));
         Ok(())
+    }
+}
+
+/// Remove decision tiers produced by an earlier alignment run.
+///
+/// A clean rerun may produce no replacement decisions, so cleanup cannot be
+/// conditional on emitting new review tiers. `NoAlign` files bypass this
+/// helper and remain strict pass-throughs.
+fn strip_stale_fa_review_tiers(chat: &mut Chat) {
+    use talkbank_model::DependentTier;
+
+    for line in &mut chat.ast_mut().lines.0 {
+        let Line::Utterance(utterance) = line else {
+            continue;
+        };
+        utterance.dependent_tiers.retain(|tier| {
+            !matches!(
+                tier,
+                DependentTier::UserDefined(user)
+                    if matches!(user.label.as_str(), "xalign" | "xrev")
+            )
+        });
     }
 }
 
@@ -669,6 +693,35 @@ mod tests {
             panic!("expected reused CHAT")
         };
         assert!(chat.to_chat().contains("\u{15}100_500\u{15}"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn clean_fa_rerun_strips_stale_review_tiers() -> BAResult<()> {
+        const STALE_REVIEW_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\tmissing, audio\n\
+*PAR:\thello world . \u{15}100_500\u{15}\n\
+%wor:\thello \u{15}100_200\u{15} world \u{15}300_500\u{15} .\n\
+%xalign:\tfa:old_decision old_reason\n\
+%xrev:\t[ok]\n@End\n";
+        let chat = Chat::parse(STALE_REVIEW_CHAT, SourceId::try_new("stale-review.cha")?)?;
+        let mut value = BAValue::Chat(chat);
+
+        FaTaskRunner
+            .apply(
+                &mut value,
+                &PanicDispatcher,
+                std::sync::Arc::new(crate::base::NullSink),
+            )
+            .await?;
+
+        let BAValue::Chat(chat) = value else {
+            panic!("expected reused CHAT")
+        };
+        let output = chat.to_chat();
+        assert!(!output.contains("%xalign:"));
+        assert!(!output.contains("%xrev:"));
         Ok(())
     }
 
