@@ -29,6 +29,7 @@
 - [x] 6/10 Attributes matched comparison POS from the gold transcript.
 - [x] 7/10 Keeps experimental review tiers off by default.
 - [x] 8/10 Skips AppleDouble CHAT sidecars during every discovery pass.
+- [x] 9/10 Removes wrapped `%mor`/`%gra` tiers without orphan continuations.
 
 ## done
 
@@ -434,3 +435,16 @@ Pre-edit UTR hardcoded `ReviewLevel::All`, so any unmatched or zero-duration dec
 - **new**: yes
 
 The normal input collector already ignored directory dotfiles, but align independently scanned `*.cha` to choose its UTR language. Since `._session.cha` sorts before `session.cha`, binary metadata raised `UnicodeDecodeError` before any real input ran. Post-edit both preflight and collection share `_walk`, and a sidecar passed as the explicit path yields a clear no-language error rather than entering the pipeline. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_chat_discovery.py -q` (2 passed).
+
+### Remove wrapped analysis tiers completely before morphotagging
+- **component**: Python morphotag `--clear-existing` staging
+- **summary**: Removes every tab-led continuation belonging to an existing `%mor` or `%gra` tier while preserving following main tiers, headers, and unrelated dependent tiers.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/input/wrapped.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/tbt-output/cleared.cha
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/ba3-pre-output/cleared.cha
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/wrapped-analysis-clear/ba3-post-output/cleared.cha
+- **depends on**: []
+- **commit**: 48655f8
+- **new**: yes
+
+The default refresh path stages a copy without old analysis so the engine cannot skip already-tagged utterances. Pre-edit it removed only `%mor:` and `%gra:` header lines, leaving wrapped payload lines as orphan CHAT continuations; the staged file could then fail parsing before regeneration. Post-edit a small state machine consumes the complete logical analysis tiers and stops at the next non-continuation line. Targeted verification: `bazel build //python/batchalign:pytest && bazel-bin/python/batchalign/pytest python/batchalign/tests/test_morphotag_clear.py -q` (3 passed).
