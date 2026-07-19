@@ -376,7 +376,7 @@ fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
 /// in-memory tier-attachment loop.
 fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> {
     use talkbank_model::DependentTier;
-    use talkbank_model::model::{Bullet, WorTier};
+    use talkbank_model::model::{Bullet, BulletSource, WorTier};
 
     let mut idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
@@ -398,9 +398,19 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             u.dependent_tiers
                 .retain(|t| !matches!(t, DependentTier::Wor(_)));
             u.dependent_tiers.push(DependentTier::Wor(wor));
-            // BA2 refines the main-tier utterance bullet to span the aligned
-            // words (first word start … last word end).
-            u.main.content.bullet = Some(Bullet::new(seg.start_ms, seg.end_ms));
+            let has_timed_word = seg.words.iter().any(|word| word.end_ms > word.start_ms);
+            if has_timed_word {
+                // BA2 refines the main-tier utterance bullet to span the aligned
+                // words (first word start … last word end).
+                u.main.content.bullet = Some(Bullet::new(seg.start_ms, seg.end_ms));
+            } else if u.main.content.bullet.as_ref().is_some_and(|bullet| {
+                bullet.source == BulletSource::Authoritative
+                    && bullet.timing.end_ms <= bullet.timing.start_ms
+            }) {
+                // A stale authoritative T_T anchor cannot be retained when FA
+                // found no usable word timing; it would fail temporal validation.
+                u.main.content.bullet = None;
+            }
         }
         idx += 1;
     }
@@ -761,6 +771,57 @@ mod tests {
             4,
             "two source words should carry exactly two bullet pairs"
         );
+    }
+
+    #[test]
+    fn untimed_fa_result_clears_zero_duration_authoritative_bullet() {
+        const ZERO_BULLET_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\tz@l . \u{15}245000_246000\u{15}\n@End\n";
+        let mut chat = Chat::parse(
+            ZERO_BULLET_CHAT,
+            SourceId::try_new("zero-bullet.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let utterance = chat
+            .ast_mut()
+            .lines
+            .0
+            .iter_mut()
+            .find_map(|line| match line {
+                Line::Utterance(utterance) => Some(utterance),
+                _ => None,
+            })
+            .expect("utterance");
+        let bullet = utterance.main.content.bullet.as_mut().expect("main bullet");
+        bullet.timing.start_ms = 245_986;
+        bullet.timing.end_ms = 245_986;
+        let aligned = vec![AsrSegment {
+            start_ms: 245_986,
+            end_ms: 245_986,
+            text: "z".into(),
+            speaker: None,
+            words: vec![AsrWord {
+                text: "z".into(),
+                start_ms: 0,
+                end_ms: 0,
+                confidence: None,
+            }],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject untimed result");
+
+        let utterance = chat
+            .ast()
+            .lines
+            .0
+            .iter()
+            .find_map(|line| match line {
+                Line::Utterance(utterance) => Some(utterance),
+                _ => None,
+            })
+            .expect("utterance");
+        assert!(utterance.main.content.bullet.is_none());
     }
 
     #[test]
