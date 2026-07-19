@@ -1252,6 +1252,20 @@ fn english_transcribe_rules_fire_end_to_end() {
     );
 }
 
+#[test]
+fn chat_illegal_asr_separator_does_not_fail_transcription() {
+    let result = run_transcribe_to_description(
+        &[
+            ("hello", 0.0, 0.3),
+            (":", 0.3, 0.4),
+            ("world", 0.4, 0.7),
+            (".", 0.7, 0.8),
+        ],
+        "eng",
+    );
+    assert!(result.is_ok(), "bare ASR separator must be sanitized: {result:?}");
+}
+
 /// Non-English input is untouched by the 2026-04-23 English
 /// rules. Language gate is the sole guard.
 #[test]

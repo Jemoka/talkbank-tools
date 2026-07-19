@@ -134,6 +134,47 @@ pub fn strip_boundary_quotes(words: Vec<AsrWord>) -> Vec<AsrWord> {
     super::trim_word_boundaries(words, is_boundary_quote)
 }
 
+/// Remove ASR-emitted characters that cannot occur inside a CHAT word.
+///
+/// The typed word parser is the validity oracle. Invalid tokens are rebuilt
+/// character by character; an entirely invalid token is dropped, while a
+/// token with valid residue keeps its timing and other metadata.
+pub fn sanitize_chat_illegal_chars_in_utterances(utterances: &mut Vec<Utterance>) {
+    for utterance in utterances.iter_mut() {
+        let words = std::mem::take(&mut utterance.words);
+        utterance.words = words
+            .into_iter()
+            .filter_map(sanitize_chat_illegal_word)
+            .collect();
+    }
+    utterances.retain(|utterance| !utterance.words.is_empty());
+}
+
+fn sanitize_chat_illegal_word(mut word: AsrWord) -> Option<AsrWord> {
+    let original = word.text.as_str();
+    if super::ChatWordText::try_from(original).is_ok() {
+        return Some(word);
+    }
+
+    let mut sanitized = String::with_capacity(original.len());
+    for character in original.chars() {
+        sanitized.push(character);
+        if super::ChatWordText::try_from(sanitized.as_str()).is_err() {
+            sanitized.pop();
+        }
+    }
+
+    if sanitized.is_empty() {
+        tracing::warn!(original = %original, "dropping entirely CHAT-illegal ASR token");
+        return None;
+    }
+    if sanitized != original {
+        tracing::debug!(original = %original, sanitized = %sanitized, "sanitized ASR token for CHAT");
+        word.text = AsrNormalizedText::new(&sanitized);
+    }
+    Some(word)
+}
+
 // ---------------------------------------------------------------------------
 // Disfluency replacement
 // ---------------------------------------------------------------------------

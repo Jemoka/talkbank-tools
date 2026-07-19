@@ -48,7 +48,7 @@ pub fn utterances_from_prepared_chunks(
 }
 
 /// Apply the post-retokenization cleanup passes shared by all ASR paths.
-pub fn finalize_utterances(utterances: &mut [Utterance], lang: &str) {
+pub fn finalize_utterances(utterances: &mut Vec<Utterance>, lang: &str) {
     // Matches BA2's DisfluencyReplacementEngine which ran after ASR on all utterances.
     cleanup::apply_disfluency_replacements(utterances, lang);
 
@@ -61,6 +61,10 @@ pub fn finalize_utterances(utterances: &mut [Utterance], lang: &str) {
     // this post-retokenize hook handles the per-utterance rule that
     // needs to see utterance boundaries. English-gated.
     cleanup::apply_english_transcribe_rules_post_retokenize(utterances, lang);
+
+    // Run after number expansion: raw currency and percent surfaces are not
+    // standalone CHAT words, but are valid by the time this gate executes.
+    cleanup::sanitize_chat_illegal_chars_in_utterances(utterances);
 }
 
 /// Check if a word is or ends with a sentence-ending punctuation mark.
