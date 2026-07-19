@@ -417,6 +417,7 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
                 .any(|tier| matches!(tier, DependentTier::Wor(_)));
             let mut words = collapse_aligned_words(&u.main.content.content.0, &seg.words)?;
             rebalance_near_zero_words_from_following(&mut words);
+            rebalance_near_zero_words_from_preceding(&mut words);
             let has_untimed_leading_filler =
                 has_untimed_leading_filler_coverage(&u.main.content.content.0, &words);
             // Carry the utterance's own terminator onto `%wor` (BA2 parity);
@@ -692,6 +693,37 @@ fn rebalance_near_zero_words_from_following(words: &mut [talkbank_model::model::
         if next.timing.start_ms <= current.timing.end_ms && repaired_boundary < next.timing.end_ms {
             current.timing.end_ms = repaired_boundary;
             next.timing.start_ms = repaired_boundary;
+        }
+    }
+}
+
+fn rebalance_near_zero_words_from_preceding(words: &mut [talkbank_model::model::Word]) {
+    const MIN_WORD_DURATION_MS: u64 = 40;
+
+    for index in 1..words.len() {
+        let (before, after) = words.split_at_mut(index);
+        let Some(previous) = before[index - 1].inline_bullet.as_mut() else {
+            continue;
+        };
+        let Some(current) = after[0].inline_bullet.as_mut() else {
+            continue;
+        };
+        let duration_ms = current
+            .timing
+            .end_ms
+            .saturating_sub(current.timing.start_ms);
+        if duration_ms == 0 || duration_ms >= MIN_WORD_DURATION_MS {
+            continue;
+        }
+        let Some(repaired_boundary) = current.timing.end_ms.checked_sub(MIN_WORD_DURATION_MS)
+        else {
+            continue;
+        };
+        if current.timing.start_ms <= previous.timing.end_ms
+            && repaired_boundary > previous.timing.start_ms
+        {
+            previous.timing.end_ms = repaired_boundary;
+            current.timing.start_ms = repaired_boundary;
         }
     }
 }
@@ -1099,6 +1131,46 @@ mod tests {
 
         let output = chat.to_chat();
         assert!(output.contains("%wor:\ta \u{15}100_140\u{15} boat \u{15}140_500\u{15} ."));
+    }
+
+    #[test]
+    fn fa_rebalances_near_zero_word_from_preceding_span() {
+        const SHORT_FINAL_WORD_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\t&-um I . \u{15}100_520\u{15}\n@End\n";
+        let mut chat = Chat::parse(
+            SHORT_FINAL_WORD_CHAT,
+            SourceId::try_new("short-final-word.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let aligned = vec![AsrSegment {
+            start_ms: 100,
+            end_ms: 520,
+            text: "um I".into(),
+            speaker: None,
+            words: vec![
+                AsrWord {
+                    text: "um".into(),
+                    start_ms: 100,
+                    end_ms: 500,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "I".into(),
+                    start_ms: 500,
+                    end_ms: 520,
+                    confidence: None,
+                },
+            ],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timed result");
+
+        let output = chat.to_chat();
+        assert!(
+            output.contains("%wor:\tum \u{15}100_480\u{15} I \u{15}480_520\u{15} ."),
+            "expected preceding-span repair in:\n{output}"
+        );
     }
 
     #[test]
