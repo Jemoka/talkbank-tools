@@ -144,3 +144,39 @@ pub(crate) fn parse_word_content(
         ParseOutcome::rejected()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::TreeSitterParser;
+    use talkbank_model::model::{Line, RetraceKind, UtteranceContent};
+    use talkbank_model::{ErrorCollector, ParseOutcome};
+
+    #[test]
+    fn replacement_with_retrace_marker_stays_a_retrace() -> Result<(), String> {
+        let source = "@UTF8\n@Begin\n@Participants:\tCHI Child\n@Languages:\teng\n*CHI:\ttika@u [: kitty] [* p:n] [//] kitty is nice .\n@End\n";
+        let parser = TreeSitterParser::new().map_err(|error| error.to_string())?;
+        let errors = ErrorCollector::new();
+        let file = match parser.parse_chat_file_fragment(source, 0, &errors) {
+            ParseOutcome::Parsed(file) => file,
+            ParseOutcome::Rejected => return Err("parser rejected retrace fixture".into()),
+        };
+        let content = file
+            .lines
+            .iter()
+            .find_map(|line| match line {
+                Line::Utterance(utterance) => Some(&utterance.main.content.content.0),
+                _ => None,
+            })
+            .ok_or_else(|| "fixture did not produce an utterance".to_string())?;
+
+        match content.first() {
+            Some(UtteranceContent::Retrace(retrace)) => {
+                assert_eq!(retrace.kind, RetraceKind::Full);
+                Ok(())
+            }
+            other => Err(format!(
+                "replacement followed by [//] must be a full retrace, got {other:?}"
+            )),
+        }
+    }
+}
