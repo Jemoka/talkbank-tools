@@ -389,6 +389,18 @@ def segment_words(
     return out
 
 
+def _is_mps_device(device: str | None) -> bool:
+    """Return whether a Transformers device selector targets Apple MPS."""
+    return device is not None and device.strip().lower().split(":", 1)[0] == "mps"
+
+
+def _chatwhisper_dtypes(torch: Any, device: str | None) -> tuple[Any, ...]:
+    """Return model dtypes to try, in order, for one inference device."""
+    if _is_mps_device(device):
+        return (torch.float32,)
+    return (torch.bfloat16, torch.float16)
+
+
 class ChatWhisperBackend(ASR, UTR):
     """TalkBank CHATWhisper ASR + BERT utterance segmentation; also serves `Task.Utr`."""
 
@@ -441,6 +453,10 @@ class ChatWhisperBackend(ASR, UTR):
         # repo ships no tokenizer vocab), and NO feature-extractor override (the
         # model's own extractor is correct; overriding it produced garbage).
         # bfloat16 with a float16 fallback — the dtype affects greedy decode.
+        # Apple MPS does not implement Whisper's bfloat16 attention kernel,
+        # and construction can succeed only to crash later during inference,
+        # so select float32 up front instead of relying on the constructor
+        # fallback.
         pipe_kwargs: dict[str, Any] = {
             "tokenizer": WhisperTokenizer.from_pretrained(base),
             "chunk_length_s": 25,
@@ -449,16 +465,18 @@ class ChatWhisperBackend(ASR, UTR):
         }
         if device is not None:
             pipe_kwargs["device"] = device
-        try:
-            self._pipe = pipeline(
-                "automatic-speech-recognition", model=model,
-                torch_dtype=torch.bfloat16, **pipe_kwargs,
-            )
-        except (TypeError, RuntimeError):
-            self._pipe = pipeline(
-                "automatic-speech-recognition", model=model,
-                torch_dtype=torch.float16, **pipe_kwargs,
-            )
+        dtypes = _chatwhisper_dtypes(torch, device)
+        for index, dtype in enumerate(dtypes):
+            try:
+                self._pipe = pipeline(
+                    "automatic-speech-recognition", model=model,
+                    torch_dtype=dtype, **pipe_kwargs,
+                )
+            except (TypeError, RuntimeError):
+                if index + 1 == len(dtypes):
+                    raise
+            else:
+                break
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
