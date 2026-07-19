@@ -53,6 +53,7 @@
 - [x] 30/40 Rejects backward word order in reusable FA timing.
 - [x] 31/40 Clears stale zero-duration authoritative bullets after untimed FA.
 - [x] 32/40 Replaces provisional UTR windows with successful FA word spans.
+- [x] 33/40 Preserves authoritative bullet envelopes across successful FA.
 
 ## done
 
@@ -783,3 +784,16 @@ The fork distinguishes a usable UTR hint from a stale authoritative bullet left 
 - **new**: yes
 
 UTR boundaries are search hints, not authoritative transcript timing. The fork discards that broad window after successful forced alignment and derives the utterance bullet from the actual timed-word envelope. Pre-edit BA3 retained the segment bounds `800_3000` even though both aligned words occupied only `1000_2000`, leaving avoidable leading and trailing silence. Post-edit the injector tracks the minimum word start and maximum word end and overwrites only bullets marked as UTR-sourced; untimed results and authoritative transcript bullets retain their separate policies. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::timed_fa_words_overwrite_provisional_utr_window` (1 passed); file-local Rust formatting passed.
+
+### Preserve authoritative bullet envelopes across successful FA
+- **component**: `batchalign-core` forced-alignment result injection
+- **summary**: Unions successful aligned-word timing with an authoritative transcript bullet so forced alignment can expand, but never shrink, its original envelope.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-preserve-authoritative-envelope/ba3-post-output/result.txt
+- **depends on**: [be1af15]
+- **commit**: 96d78ca
+- **new**: yes
+
+Unlike provisional UTR hints, an existing authoritative bullet can intentionally include non-lexical or non-alignable audio around its words. The fork therefore unions its bounds with the successful FA word span. Pre-edit BA3 replaced `800_3000` with the narrower backend segment `900_2200`, losing both parts of that asserted envelope. Post-edit it retains `min(existing start, word start)` through `max(existing end, word end)` while still writing the newly aligned `%wor` tier. This is source-sensitive and does not weaken the UTR replacement rule. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::timed_fa_words_preserve_authoritative_bullet_envelope` (1 passed); file-local Rust formatting passed.
