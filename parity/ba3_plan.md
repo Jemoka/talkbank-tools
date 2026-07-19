@@ -20,6 +20,9 @@
 - [x] Propagates utterance metadata to children and keeps `ReplacedWord` atomic across splits.
 - [x] Uses a sliding dispatch window so huge ASR input lists do not become huge in-flight sets.
 
+## additional differences
+- [x] 1/10 Sanitizes CHAT-illegal ASR tokens without failing the transcript.
+
 ## done
 
 ### example change title
@@ -320,3 +323,16 @@ Audit note: the repair implementation was introduced by the earlier general inva
 - **new**: no
 
 Pre-edit every constituent media field was already hashable, but the composite header omitted the contract and could not be used directly in a `HashSet`/`HashMap`. The regression inserts an exact duplicate plus three single-field variations and requires four unique identities, proving no field is accidentally ignored. This closes the last clause of the first bundled original TODO; its retrace, recovery-span, and Japanese clauses are independently evidenced above. Targeted verification: `bazel build --config=dev //crates/core/talkbank-model:talkbank_model_unit_test && bazel-bin/crates/core/talkbank-model/talkbank_model_unit_test --exact model::header::media::tests::media_hash_includes_filename_type_and_status` (1 passed).
+
+### Sanitize CHAT-illegal ASR tokens at the final word seam
+- **component**: `talkbank-transform` ASR postprocessing
+- **summary**: Uses the typed CHAT word parser as an oracle after number expansion, stripping illegal characters while retaining valid residue and timing; entirely structural tokens are dropped, and empty utterances created by sanitization are removed.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/input/raw-asr.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/tbt-output/transcript.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/ba3-pre-output/transcript.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/asr-chat-sanitization/ba3-post-output/transcript.txt
+- **depends on**: []
+- **commit**: 3ccc897
+- **new**: yes
+
+Whisper and Tencent can emit bare CHAT separators such as `:` and `~`, or glue invalid Unicode to otherwise useful text. Pre-edit the downstream typed transcript gate rejected the whole utterance. Post-edit sanitization runs only after currency/percent expansion, preserves every already-valid word byte-for-byte, keeps timestamps on repaired residue, and prevents an all-dropped utterance from becoming an invalid empty main tier. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact build_chat::tests::chat_illegal_asr_separator_does_not_fail_transcription` (1 passed).
