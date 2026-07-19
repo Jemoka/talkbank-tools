@@ -398,11 +398,33 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             u.dependent_tiers
                 .retain(|t| !matches!(t, DependentTier::Wor(_)));
             u.dependent_tiers.push(DependentTier::Wor(wor));
-            let has_timed_word = seg.words.iter().any(|word| word.end_ms > word.start_ms);
-            if has_timed_word {
+            let timed_word_span = seg
+                .words
+                .iter()
+                .filter(|word| word.end_ms > word.start_ms)
+                .fold(None, |span: Option<(u64, u64)>, word| {
+                    Some(match span {
+                        Some((start_ms, end_ms)) => {
+                            (start_ms.min(word.start_ms), end_ms.max(word.end_ms))
+                        }
+                        None => (word.start_ms, word.end_ms),
+                    })
+                });
+            if let Some((word_start_ms, word_end_ms)) = timed_word_span {
                 // BA2 refines the main-tier utterance bullet to span the aligned
                 // words (first word start … last word end).
-                u.main.content.bullet = Some(Bullet::new(seg.start_ms, seg.end_ms));
+                let (start_ms, end_ms) = if u
+                    .main
+                    .content
+                    .bullet
+                    .as_ref()
+                    .is_some_and(|bullet| bullet.source == BulletSource::Utr)
+                {
+                    (word_start_ms, word_end_ms)
+                } else {
+                    (seg.start_ms, seg.end_ms)
+                };
+                u.main.content.bullet = Some(Bullet::new(start_ms, end_ms));
             } else if u.main.content.bullet.as_ref().is_some_and(|bullet| {
                 bullet.source == BulletSource::Authoritative
                     && bullet.timing.end_ms <= bullet.timing.start_ms
@@ -822,6 +844,60 @@ mod tests {
             })
             .expect("utterance");
         assert!(utterance.main.content.bullet.is_none());
+    }
+
+    #[test]
+    fn timed_fa_words_overwrite_provisional_utr_window() {
+        const UTR_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+*PAR:\thello world . \u{15}800_3000\u{15}\n@End\n";
+        let mut chat = Chat::parse(
+            UTR_CHAT,
+            SourceId::try_new("utr-window.cha").expect("source id"),
+        )
+        .expect("parse fixture");
+        let utterance = chat
+            .ast_mut()
+            .lines
+            .0
+            .iter_mut()
+            .find_map(|line| match line {
+                Line::Utterance(utterance) => Some(utterance),
+                _ => None,
+            })
+            .expect("utterance");
+        utterance
+            .main
+            .content
+            .bullet
+            .as_mut()
+            .expect("main bullet")
+            .source = talkbank_model::model::BulletSource::Utr;
+        let aligned = vec![AsrSegment {
+            start_ms: 800,
+            end_ms: 3_000,
+            text: "hello world".into(),
+            speaker: None,
+            words: vec![
+                AsrWord {
+                    text: "hello".into(),
+                    start_ms: 1_000,
+                    end_ms: 1_500,
+                    confidence: None,
+                },
+                AsrWord {
+                    text: "world".into(),
+                    start_ms: 1_500,
+                    end_ms: 2_000,
+                    confidence: None,
+                },
+            ],
+        }];
+
+        inject_word_timings(&mut chat, &aligned).expect("inject timed result");
+
+        assert!(chat.to_chat().contains("\u{15}1000_2000\u{15}"));
+        assert!(!chat.to_chat().contains("\u{15}800_3000\u{15}"));
     }
 
     #[test]
