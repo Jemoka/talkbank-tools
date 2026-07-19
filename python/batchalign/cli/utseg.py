@@ -64,6 +64,7 @@ def register(app: typer.Typer) -> None:
                 utseg_backend = ba.StanzaUtSegBackend(lang=lang3)
             pipeline = ba.recipes.utseg(
                 utseg_backend=utseg_backend,
+                workers=opts.workers,
             )
             inputs, root = collect_chat_inputs(folder)
             for inp in inputs:

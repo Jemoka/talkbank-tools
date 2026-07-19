@@ -169,7 +169,11 @@ def register(app: typer.Typer) -> None:
                 else:
                     raise typer.BadParameter(f"unknown UTR engine: {utr_engine}")
 
-            pipeline = ba.recipes.align(fa_backend=fa_backend, utr_backend=utr_backend)
+            pipeline = ba.recipes.align(
+                fa_backend=fa_backend,
+                utr_backend=utr_backend,
+                workers=opts.workers,
+            )
             inputs, root = collect_chat_inputs(folder)
             for inp in inputs:
                 ui.push(Task.from_input(inp))

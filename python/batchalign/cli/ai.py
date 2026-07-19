@@ -81,7 +81,7 @@ def register(app: typer.Typer) -> None:
                 )
             else:
                 raise typer.BadParameter(f"unknown engine: {engine}")
-            pipeline = ba.recipes.ai(ai_backend=backend)
+            pipeline = ba.recipes.ai(ai_backend=backend, workers=opts.workers)
             inputs, root = collect_ai_inputs(folder, instruction=instruction)
             for inp in inputs:
                 ui.push(Task.from_input(inp))

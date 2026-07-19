@@ -125,7 +125,10 @@ def register(app: typer.Typer) -> None:
                     exc,
                 )
                 stanza = None
-            pipeline = ba.recipes.compare(stanza_backend=stanza)
+            pipeline = ba.recipes.compare(
+                stanza_backend=stanza,
+                workers=opts.workers,
+            )
 
             inputs, root = _pair_folder_with_gold(folder)
             for inp in inputs:

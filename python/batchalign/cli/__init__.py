@@ -187,6 +187,12 @@ def _global(
         False, "--ansi",
         help="Force the live renderer even when stdout is not a TTY.",
     ),
+    workers: int = typer.Option(
+        8,
+        "--workers",
+        min=1,
+        help="Maximum number of input files processed concurrently.",
+    ),
 ) -> None:
     """Global flags. Runs before any subcommand body."""
     verbosity = -1 if quiet else verbose
@@ -212,6 +218,7 @@ def _global(
         verbosity=verbosity,
         plain=resolved_plain,
         quiet=quiet,
+        workers=workers,
     )
 
 

@@ -26,6 +26,7 @@ def test_root_help():
     assert result.exit_code == 0
     for cmd in SUBCOMMANDS:
         assert cmd in result.output, f"missing {cmd} in root --help"
+    assert "--workers" in result.output
 
 
 @pytest.mark.parametrize("cmd", SUBCOMMANDS)
@@ -104,8 +105,9 @@ def test_ai_passes_instruction_to_inputs(tmp_path, monkeypatch):
             captured["inputs"] = list(inputs)
             return []
 
-    def fake_recipe(*, ai_backend, **_opts):
+    def fake_recipe(*, ai_backend, **recipe_opts):
         captured["backend"] = ai_backend
+        captured["recipe_opts"] = recipe_opts
         return FakePipeline()
 
     def fake_dspy_backend(**kwargs):
@@ -117,7 +119,15 @@ def test_ai_passes_instruction_to_inputs(tmp_path, monkeypatch):
 
     result = CliRunner().invoke(
         app,
-        ["ai", "revise punctuation", str(chat), "--out", str(tmp_path / "out")],
+        [
+            "--workers",
+            "3",
+            "ai",
+            "revise punctuation",
+            str(chat),
+            "--out",
+            str(tmp_path / "out"),
+        ],
     )
     assert result.exit_code == 0, result.output
     inputs = captured["inputs"]
@@ -126,6 +136,7 @@ def test_ai_passes_instruction_to_inputs(tmp_path, monkeypatch):
     assert str(chat) in str(inputs[0].source_id)
     assert captured["backend_kwargs"]["max_tokens"] == 1024
     assert captured["backend_kwargs"]["timeout"] == 30
+    assert captured["recipe_opts"]["workers"] == 3
 
 
 def test_compare_takes_single_folder_with_gold_template():

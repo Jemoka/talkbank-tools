@@ -37,7 +37,7 @@ use crate::py_outcome::PyOutcome;
 
 const VERBOSE_TRACEBACK_ENV: &str = "BATCHALIGN_CLI_VERBOSE_TRACEBACKS";
 const RUST_TRACE_MARKER: &str = "Rust stack trace (captured at file failure):";
-const DISPATCH_WINDOW: usize = 8;
+const DEFAULT_WORKERS: usize = 8;
 
 /// The Python-facing pipeline object.
 #[pyclass]
@@ -51,6 +51,7 @@ struct PipelineInner {
     engine: Arc<BatchalignEngine>,
     runtime: Arc<tokio::runtime::Runtime>,
     sem: Arc<Semaphore>,
+    dispatch_window: usize,
 }
 
 #[pymethods]
@@ -59,16 +60,20 @@ impl Pipeline {
     ///
     /// `tasks` is just a list of `Task` enum values — runners are stateless
     /// and canonical, so there's no per-task config dict to thread through.
-    /// Per-pipeline tunables live on the backend constructors (e.g.
-    /// `StanzaBackend(retokenize=True)`).
+    /// Backend-specific tunables live on backend constructors (e.g.
+    /// `StanzaBackend(retokenize=True)`); `workers` controls input concurrency.
     #[new]
-    #[pyo3(signature = (tasks, backends, cache=None))]
+    #[pyo3(signature = (tasks, backends, cache=None, workers=DEFAULT_WORKERS))]
     fn py_new(
         _py: Python<'_>,
         tasks: Vec<Task>,
         backends: Vec<Py<PyAny>>,
         cache: Option<CacheSpec>,
+        workers: usize,
     ) -> PyResult<Self> {
+        if workers == 0 {
+            return Err(PyValueError::new_err("workers must be at least 1"));
+        }
         // 1. Resolve cache.
         let cache_spec = cache.unwrap_or_default();
         let cache = Arc::new(
@@ -77,7 +82,7 @@ impl Pipeline {
         );
 
         // 2. Build tokio runtime (one per Pipeline).
-        let worker_threads = num_cpus::get().min(8).max(1);
+        let worker_threads = num_cpus::get().min(workers).max(1);
         let runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(worker_threads)
@@ -119,7 +124,7 @@ impl Pipeline {
             }
         }
 
-        let sem = Arc::new(Semaphore::new(8));
+        let sem = Arc::new(Semaphore::new(workers));
 
         Ok(Pipeline {
             inner: Arc::new(PipelineInner {
@@ -128,6 +133,7 @@ impl Pipeline {
                 engine,
                 runtime,
                 sem,
+                dispatch_window: workers,
             }),
         })
     }
@@ -508,20 +514,20 @@ async fn run_inner(
             run_one(me, value, sink).await
         }
     });
-    collect_with_dispatch_window(futures).await
+    collect_with_dispatch_window(futures, inner.dispatch_window).await
 }
 
 /// Collect an ordered input stream while constructing/polling only a bounded
 /// number of per-file futures at once. The pipeline semaphore still owns the
 /// execution limit; this window prevents a huge input list from also becoming
 /// a huge resident set of waiting futures and captured `BAValue`s.
-async fn collect_with_dispatch_window<I, F, T>(futures: I) -> Vec<T>
+async fn collect_with_dispatch_window<I, F, T>(futures: I, dispatch_window: usize) -> Vec<T>
 where
     I: IntoIterator<Item = F>,
     F: Future<Output = T>,
 {
     stream::iter(futures)
-        .buffered(DISPATCH_WINDOW)
+        .buffered(dispatch_window)
         .collect()
         .await
 }
@@ -555,7 +561,8 @@ async fn run_inner_with_outcome_callback(
             (idx, run_one(me, value, sink).await)
         }
     });
-    let mut futures = stream::iter(futures).buffer_unordered(DISPATCH_WINDOW);
+    let dispatch_window = inner.dispatch_window;
+    let mut futures = stream::iter(futures).buffer_unordered(dispatch_window);
 
     let mut outcomes: Vec<Option<Py<PyOutcome>>> = (0..total).map(|_| None).collect();
     while let Some((idx, value)) = futures.next().await {
@@ -602,20 +609,52 @@ mod dispatch_window_tests {
             }
         });
 
-        let collector = tokio::spawn(collect_with_dispatch_window(futures));
+        let collector = tokio::spawn(collect_with_dispatch_window(futures, DEFAULT_WORKERS));
         for _ in 0..100 {
-            if started.load(Ordering::SeqCst) == DISPATCH_WINDOW {
+            if started.load(Ordering::SeqCst) == DEFAULT_WORKERS {
                 break;
             }
             tokio::task::yield_now().await;
         }
 
-        assert_eq!(started.load(Ordering::SeqCst), DISPATCH_WINDOW);
+        assert_eq!(started.load(Ordering::SeqCst), DEFAULT_WORKERS);
         release.add_permits(100);
         assert_eq!(
             collector.await.expect("collector task succeeds"),
             (0..100).collect::<Vec<_>>()
         );
+    }
+
+    #[tokio::test]
+    async fn dispatch_window_honors_configured_worker_count() {
+        let started = Arc::new(AtomicUsize::new(0));
+        let release = Arc::new(Semaphore::new(0));
+        let future_started = started.clone();
+        let future_release = release.clone();
+        let futures = (0..20).map(move |index| {
+            let started = future_started.clone();
+            let release = future_release.clone();
+            async move {
+                started.fetch_add(1, Ordering::SeqCst);
+                release
+                    .acquire()
+                    .await
+                    .expect("semaphore remains open")
+                    .forget();
+                index
+            }
+        });
+
+        let collector = tokio::spawn(collect_with_dispatch_window(futures, 3));
+        for _ in 0..20 {
+            if started.load(Ordering::SeqCst) == 3 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(started.load(Ordering::SeqCst), 3);
+        release.add_permits(20);
+        assert_eq!(collector.await.expect("collector succeeds").len(), 20);
     }
 }
 

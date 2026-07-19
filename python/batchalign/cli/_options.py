@@ -19,6 +19,7 @@ class CLIOptions:
     verbosity: int = 0          # -q → -1; -v counts; -vv = 2; ...
     plain: bool | None = None   # None → auto-detect from TTY
     quiet: bool = False
+    workers: int = 8
 
 
 def cli_options(ctx: typer.Context) -> CLIOptions:

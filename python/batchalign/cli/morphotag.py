@@ -91,6 +91,7 @@ def register(app: typer.Typer) -> None:
                 # lazily on first use.
                 pipeline = ba.recipes.morphotag(
                     stanza_backend=ba.StanzaBackend(retokenize=retokenize),
+                    workers=opts.workers,
                 )
                 inputs, root = collect_chat_inputs(folder)
 

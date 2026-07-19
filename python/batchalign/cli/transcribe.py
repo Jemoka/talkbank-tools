@@ -160,6 +160,7 @@ def register(app: typer.Typer) -> None:
                 asr_backend=asr_backend,
                 speaker_backend=speaker_backend,
                 utseg_backend=utseg_backend,
+                workers=opts.workers,
             )
             inputs, root = collect_media_inputs(folder, language=lang_code.alpha_3)
             for inp in inputs:

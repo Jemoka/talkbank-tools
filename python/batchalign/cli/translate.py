@@ -68,7 +68,10 @@ def register(app: typer.Typer) -> None:
                 backend = ba.AliyunTranslateBackend(target=target)
             else:
                 raise typer.BadParameter(f"unknown engine: {engine}")
-            pipeline = ba.recipes.translate(translate_backend=backend)
+            pipeline = ba.recipes.translate(
+                translate_backend=backend,
+                workers=opts.workers,
+            )
             inputs, root = collect_chat_inputs(folder)
             for inp in inputs:
                 ui.push(Task.from_input(inp))
