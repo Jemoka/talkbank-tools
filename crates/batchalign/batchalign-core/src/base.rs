@@ -1199,4 +1199,25 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn serialized_batchalign_output_passes_chatter_validation_pipeline() -> BAResult<()> {
+        const ANNOTATED_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Media:\tfixture, audio\n*CHI:\thello world . \u{15}0_600\u{15}\n%mor:\tintj|hello noun|world .\n%gra:\t1|2|DISCOURSE 2|0|ROOT 3|2|PUNCT\n%wor:\thello \u{15}0_200\u{15} world \u{15}250_500\u{15} .\n@End\n";
+
+        let chat = Chat::parse(
+            ANNOTATED_FIXTURE,
+            SourceId::try_new("chatter-output-gate")?,
+        )?;
+        let emitted = chat.validated_chat_text()?;
+
+        // `chatter validate` and Batchalign's final write gate share this
+        // parse-and-full-validation entry point. Re-enter it using the exact
+        // serialized bytes, including the generated analysis/timing tiers.
+        talkbank_transform::parse_and_validate(
+            &emitted,
+            ParseValidateOptions::default().with_validation(),
+        )
+        .map_err(|error| BAError::Validation(error.to_string()))?;
+        Ok(())
+    }
 }
