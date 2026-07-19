@@ -7,7 +7,7 @@
 - [ ] Expands compound fillers and recovers their audio spans between recognized words.
 - [ ] Detects long-file drift and monotonicity violations, then re-anchors or repairs timing. | FA recovery and repair passes
 - [ ] Integrates Cantonese FA through Jyutping and wav2vec2 (no need for the common recovery layer).
-- [ ] Fails unsupported primary languages per file instead of silently skipping them.
+- [x] Fails unsupported primary languages per file instead of silently skipping them.
 - [ ] Synthesizes non-analyzable special forms such as `@q` and `@n` from typed `form_type` data.
 - [ ] Rolls back invalid L2 splices, skips `NoAlign` words, and provides a fallback harness where secondary Stanza coverage is absent.
 - [ ] Detects bogus Stanza lemmas, missing fields, and invalid analyses, preserving the surface form and recording anomalies. 
@@ -31,5 +31,19 @@
 - **ba3 output, post-edit**: /file/output/example
 - **depends on**: [any commit hash]
 - **commit**: [commit hash for the change]
+- **new**: yes/no (new, not from the original TODO, or old from the above)
 
-discussion here, notes, things for me to review
+Discussion here, notes, things for me to review. Please keep this example block around.
+
+### Fail unsupported primary morphotag languages per file
+- **component**: `batchalign-core` morphosyntax task runner
+- **summary**: Rejects unsupported primary `@Languages` values before backend dispatch with an actionable per-file validation error; `@Options: CA` remains a legitimate unchanged pass-through.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/input/unsupported-srp.cha
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/tbt-output/cli-output.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/ba3-pre-output/unsupported-srp.cha
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/unsupported-primary-language/ba3-post-output/cli-output.txt
+- **depends on**: []
+- **commit**: 871c8d4
+- **new**: no
+
+The fixture is deliberately `srp`: the local Stanza 1.12 installation can tag it, so pre-edit BA3 reported success and generated `%mor`/`%gra`; the fork intentionally admits only its known-complete static language set and fails the file. Post-edit BA3 now matches that deterministic gate. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors` and the Bazel-backed `just batchalign cli` fixture run.
