@@ -142,6 +142,10 @@ impl TwoPassOverlapUtr {
 }
 
 impl UtrStrategy for TwoPassOverlapUtr {
+    fn name(&self) -> &'static str {
+        "two_pass"
+    }
+
     fn inject(&self, chat_file: &mut ChatFile<Validated>, asr_tokens: &[AsrTimingToken]) -> UtrResult {
         // Run two-pass on a clone so we can compare against global.
         let mut two_pass_file = chat_file.clone();

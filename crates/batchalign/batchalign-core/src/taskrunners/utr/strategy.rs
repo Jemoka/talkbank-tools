@@ -12,7 +12,7 @@ use talkbank_transform::dp_align::{self, MatchMode};
 
 use super::extraction::collect_fa_words;
 use super::overlap_markers;
-use super::two_pass::{GroupingContext, TwoPassConfig, TwoPassOverlapUtr};
+use super::two_pass::GroupingContext;
 
 /// A single ASR token with timing — the input that all UTR strategies
 /// consume. Constructed from `proto::asr::AsrSegment` words by the
@@ -56,6 +56,9 @@ impl Eq for UtrResult {}
 /// because UTR only runs as part of the validated pipeline; tests that
 /// want to exercise the algorithm can validate-then-strategy.
 pub trait UtrStrategy: Send + Sync {
+    /// Stable diagnostic label for policy tests and tracing.
+    fn name(&self) -> &'static str;
+
     /// Inject utterance-level timing from ASR tokens into untimed CHAT utterances.
     fn inject(
         &self,
@@ -69,44 +72,27 @@ pub trait UtrStrategy: Send + Sync {
 pub struct GlobalUtr;
 
 impl UtrStrategy for GlobalUtr {
+    fn name(&self) -> &'static str {
+        "global"
+    }
+
     fn inject(&self, chat_file: &mut ChatFile<Validated>, asr_tokens: &[AsrTimingToken]) -> UtrResult {
         run_global_utr(chat_file, asr_tokens, false, MatchMode::CaseInsensitive)
     }
 }
 
-/// Select the best UTR strategy for a given CHAT file.
+/// Select the default UTR strategy for a given CHAT file.
 ///
-/// Returns [`TwoPassOverlapUtr`] when any utterance has a `+<` lazy overlap
-/// linker or CA overlap markers (⌊). [`GlobalUtr`] otherwise.
+/// Automatic two-pass overlap recovery is intentionally disabled. The fork
+/// found that its experimental pass-2 windowing could emit incorrect overlap
+/// end times and now keeps `Auto` on the validated monotonic global path.
+/// Retaining this selector signature avoids churn when an explicit, calibrated
+/// two-pass opt-in is added later.
 pub fn select_strategy(
-    chat_file: &ChatFile<Validated>,
-    grouping_context: Option<GroupingContext>,
+    _chat_file: &ChatFile<Validated>,
+    _grouping_context: Option<GroupingContext>,
 ) -> Box<dyn UtrStrategy> {
-    let has_overlap = chat_file.lines.iter().any(|line| {
-        if let Line::Utterance(utt) = line {
-            if utt
-                .main
-                .content
-                .linkers
-                .0
-                .contains(&Linker::LazyOverlapPrecedes)
-            {
-                return true;
-            }
-            let info = overlap_markers::extract_overlap_info(&utt.main.content.content.0);
-            info.has_bottom_overlap()
-        } else {
-            false
-        }
-    });
-    if has_overlap {
-        Box::new(TwoPassOverlapUtr {
-            grouping_context,
-            config: TwoPassConfig::default(),
-        })
-    } else {
-        Box::new(GlobalUtr)
-    }
+    Box::new(GlobalUtr)
 }
 
 /// Pre-extracted utterance metadata used while planning one UTR pass.
@@ -587,5 +573,12 @@ mod tests {
         let result = inject_utr_timing(chat.ast_mut(), &[]);
         assert_eq!(result.injected, 0);
         assert_eq!(result.unmatched, 1);
+    }
+
+    #[test]
+    fn default_selector_keeps_overlap_files_on_global_utr() {
+        const CHA: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child, MOT Mother\n@ID:\teng|corpus|CHI|||||Child|||\n@ID:\teng|corpus|MOT|||||Mother|||\n*CHI:\thello there .\n*MOT:\t+< yeah .\n@End\n";
+        let chat = parse_chat(CHA);
+        assert_eq!(select_strategy(chat.ast(), None).name(), "global");
     }
 }

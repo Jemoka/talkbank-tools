@@ -6,8 +6,7 @@
 //! `AsrInput`) to whichever ASR backend has opted into the `UTR` marker,
 //! converts the returned `AsrOutput` segments to a flat
 //! `Vec<AsrTimingToken>` stream (with a 20 ms zero-duration filter), and
-//! runs a Hirschberg-DP strategy (`GlobalUtr` or `TwoPassOverlapUtr`,
-//! auto-picked by CA / `+<` marker presence) to inject
+//! runs the validated global Hirschberg-DP strategy to inject
 //! `BulletSource::Utr` utterance bullets on every untimed utterance.
 //! Decision provenance remains available for opt-in `%xalign` tiers.
 //!
@@ -45,8 +44,9 @@
 //!    mixin; their `call(batch)` sees an `AsrInput`-shaped payload and
 //!    runs unchanged.
 //! 4. **Convert to timing tokens** with the 20 ms zero-duration filter.
-//! 5. **Strategy.** `select_strategy(chat, None)` picks GlobalUtr or
-//!    TwoPassOverlap based on CA / `+<` markers.
+//! 5. **Strategy.** `select_strategy(chat, None)` uses GlobalUtr. The
+//!    experimental two-pass overlap implementation remains available for a
+//!    future explicit opt-in but is not selected automatically.
 //! 6. **Inject bullets** via `Bullet::utr_hint` so downstream FA
 //!    overwrites them rather than union-expanding.
 //! 7. **Audit.** Records decisions for zero-duration-skipped and unmatched
