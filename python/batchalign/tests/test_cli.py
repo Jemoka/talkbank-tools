@@ -17,6 +17,7 @@ SUBCOMMANDS = [
     "ai",
     "utseg",
     "compare",
+    "diarize",
 ]
 
 

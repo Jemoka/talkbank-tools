@@ -71,6 +71,10 @@ _LAZY_SUBCOMMANDS: dict[str, tuple[str, str]] = {
         "batchalign.cli.compare",
         "Compare each transcript in FOLDER against its gold template.",
     ),
+    "diarize": (
+        "batchalign.cli.diarize",
+        "Detect anonymous speaker turns and write turns JSON.",
+    ),
     "version": (
         "batchalign.cli.version",
         "Print version, git SHA, and contributors.",

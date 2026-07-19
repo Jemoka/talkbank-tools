@@ -8,7 +8,7 @@ use crate::backends::BatchPolicy;
 use crate::base::Task;
 use crate::base::{ProgressEvent, ProgressKind};
 use crate::utils::SourceId;
-use crate::utils::{AiChatInput, ChatInput, MediaInput, PairedInput};
+use crate::utils::{AiChatInput, ChatInput, MediaInput, PairedInput, PreparedAudio, prepare_pcm};
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
@@ -24,7 +24,14 @@ pub fn register(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ProgressEvent>()?;
     m.add_class::<ProgressKind>()?;
     m.add_class::<SourceId>()?;
+    m.add_function(wrap_pyfunction!(prepare_audio, m)?)?;
     Ok(())
+}
+
+/// Decode one media path through the same 16 kHz mono seam used by ASR/FA.
+#[pyfunction]
+fn prepare_audio(input: &MediaInput) -> PyResult<PreparedAudio> {
+    prepare_pcm(input).map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(err.to_string()))
 }
 
 #[pymethods]
