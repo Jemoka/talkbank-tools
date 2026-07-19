@@ -51,6 +51,7 @@
 - [x] 28/40 Rejects near-zero word spans from FA timing reuse.
 - [x] 29/40 Rejects one-word dominance in reusable FA timing.
 - [x] 30/40 Rejects backward word order in reusable FA timing.
+- [x] 31/40 Clears stale zero-duration authoritative bullets after untimed FA.
 
 ## done
 
@@ -755,3 +756,16 @@ Some bad prior alignments have no zero or tiny word: instead, one token absorbs 
 - **new**: yes
 
 Word spans can each be positive yet still form a backward sequence. The base BA3 reuse path accepted `hello 500_600; world 400_480`, then derived the invalid main bullet `500_480` and returned before the normal post-FA monotonicity repair. Post-edit every word start must be at or after the preceding word end; otherwise reuse is rejected without mutation and the normal FA path replaces the stale tier. This check is independent of the 40 ms floor, dominance ratio, and next-utterance boundary. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::complete_wor_reuse_rejects_backward_word_timing` (1 passed); file-local Rust formatting passed.
+
+### Clear stale zero-duration authoritative bullets after untimed FA
+- **component**: `batchalign-core` forced-alignment result injection
+- **summary**: Removes an authoritative `T_T` main-tier bullet when FA returns no timed words, while retaining the untimed `%wor` structure for diagnostics.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/input/scenario.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/tbt-output/result.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/ba3-pre-output/result.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/fa-clear-zero-bullet/ba3-post-output/result.txt
+- **depends on**: []
+- **commit**: 438641c
+- **new**: yes
+
+The fork distinguishes a usable UTR hint from a stale authoritative bullet left by an earlier bad FA run. When every returned word is untimed, there is no new span with which to repair an authoritative `245986_245986` anchor; retaining it guarantees temporal validation failure. Pre-edit BA3 copied the segment bounds back unconditionally and preserved the invalid bullet. Post-edit the no-timing branch removes only a zero/backward authoritative bullet, leaves valid existing windows unchanged, and still replaces `%wor` with the current untimed word structure. The strict parser regression constructs the stale state in the typed AST because serialized `T_T` input is correctly rejected as E362. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors --test_filter=taskrunners::fa::tests::untimed_fa_result_clears_zero_duration_authoritative_bullet` (1 passed); file-local Rust formatting passed.
