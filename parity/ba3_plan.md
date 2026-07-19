@@ -32,6 +32,7 @@
 - [x] 9/10 Removes wrapped `%mor`/`%gra` tiers without orphan continuations.
 - [x] 10/10 Schedules the largest batch inputs first.
 - [x] 11/40 Places generated provenance after constant participant headers.
+- [x] 12/40 Exposes Apple MPS only through an explicit, warned opt-in.
 
 ## done
 
@@ -489,3 +490,16 @@ The fork explicitly sorts batch discovery largest-first to avoid makespan domina
 - **new**: yes
 
 The fork's provenance regression identifies constant participant headers as the boundary between fixed participant metadata and changeable headers. Pre-edit BA3 appended provenance immediately before the first main tier, after `@Date` and any other session metadata. Post-edit BA3 selects the same constant-header boundary; documents without participant headers retain the prior safe fallback before the first utterance or `@End`. Targeted verification: `bazel test --config=dev //crates/batchalign/batchalign-core:batchalign_core_unit_test --test_output=errors` (55 passed, 1 ignored).
+
+### Expose Apple MPS only through an explicit warned opt-in
+- **component**: Python align/transcribe CLI device selection
+- **summary**: Adds `--allow-mps` to local alignment and transcription commands, keeps Apple GPU use opt-in, warns when engaged, rejects contradictory CPU/MPS switches, and preserves CHATWhisper's float32 MPS policy.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/input/invocations.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/tbt-output/device-policy.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/ba3-pre-output/device-policy.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/apple-mps-opt-in/ba3-post-output/device-policy.txt
+- **depends on**: [c425fe8]
+- **commit**: 1c926d2
+- **new**: yes
+
+The fork changed MPS from an implicit hardware possibility into an explicit performance/stability trade-off after rare sustained-load driver stalls. BA3's affected local backends already defaulted to CPU on Apple hosts, but offered no supported way to request MPS; users could only force CPU. Post-edit the shared resolver returns `mps` only for `--allow-mps`, emits a risk warning, and rejects combining it with `--force-cpu`. Pyannote remains untouched and therefore on its safe CPU path. Targeted verification: `bazel test //python/batchalign:pytest --test_arg=python/batchalign/tests/test_cli.py --test_arg=-q --test_output=errors` (Python Bazel target passed).
