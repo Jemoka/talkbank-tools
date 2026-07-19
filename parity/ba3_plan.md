@@ -268,3 +268,16 @@ Audit note: runtime parity was already supplied by the historical focused fix, a
 - **new**: no
 
 Pre-edit recovery intentionally retained the dependent-tier slot but constructed its tier and morphology terminator with `Span::DUMMY`. Post-edit uses one exact `tree_sitter::Node` range for the recovered typed objects; the fallback remains empty and ordering-preserving, but it no longer fabricates a source location. Targeted verification: `bazel build --config=dev //crates/core/talkbank-parser:talkbank_parser_unit_test && bazel-bin/crates/core/talkbank-parser/talkbank_parser_unit_test --exact parser::chat_file_parser::dependent_tier_dispatch::parsed::tests::recovered_tier_placeholders_keep_source_spans` (1 passed).
+
+### Lock Japanese Stanza splits back to one CHAT word
+- **component**: `talkbank-transform` tokenizer realignment
+- **summary**: Pins the character-alignment merge for Japanese: Stanza stem/auxiliary splits are recombined to the original CHAT surface and emitted with `expand_mwt=false`, preserving one morphology slot instead of allowing a second expansion.
+- **input example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/input/token-seam.txt
+- **tbt output example**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/tbt-output/tokens.txt
+- **ba3 output, pre-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/ba3-pre-output/tokens.txt
+- **ba3 output, post-edit**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/japanese-token-merge/ba3-post-output/tokens.txt
+- **depends on**: []
+- **commit**: a97cdb4
+- **new**: no
+
+Audit note: BA3 and the fork already share the same realignment implementation, but neither the generic compound case nor the English contraction case proved Japanese behavior. The focused contract uses `食べちゃう` split as `食べ + ちゃう`, checks exact surface restoration, and prevents accidental English-style MWT expansion. This one seam satisfies the Japanese-merging clause shared by both remaining original checklist lines. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact tokenizer_realign::tests::test_japanese_split_tokens_merge_back_to_chat_word` (1 passed).
