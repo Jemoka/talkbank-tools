@@ -26,12 +26,7 @@ def register(app: typer.Typer) -> None:
             "-o",
             help="Optional output folder; if omitted, each source file is overwritten in place.",
         ),
-        stanza_fallback: bool = typer.Option(
-            False,
-            "--utseg-fallback-stanza",
-            "--stanza-fallback",
-            help="Use Stanza constituency parsing when no TalkBank utterance-boundary model exists.",
-        ),
+        stanza_fallback: bool = typer.Option(False, "--stanza-fallback/--no-stanza-fallback"),
         language: str = typer.Option("en", "--language"),
     ) -> None:
         """Utterance segmentation pass over CHAT."""
@@ -52,18 +47,13 @@ def register(app: typer.Typer) -> None:
             # extend `_UTTERANCE_RESOLVE` in `chatutterance.py` if more
             # languages are added.
             lang3 = {"en": "eng", "yue": "yue", "zh-yue": "yue"}.get(language, language)
-            try:
-                utseg_backend = ba.CHATUtteranceBackend(lang=lang3)
-            except ValueError:
-                if not stanza_fallback:
-                    raise typer.BadParameter(
-                        f"no TalkBank utterance-segmentation model for {lang3!r}; "
-                        "pass --utseg-fallback-stanza to opt in to Stanza constituency parsing",
-                        param_hint="--language",
-                    )
-                utseg_backend = ba.StanzaUtSegBackend(lang=lang3)
+            # `stanza_fallback` is a recipe knob currently inert for the
+            # BERT/CHATUtterance backend — the flag stays in the typer
+            # surface for forward compat with a future stanza-based
+            # fallback path.
+            _ = stanza_fallback
             pipeline = ba.recipes.utseg(
-                utseg_backend=utseg_backend,
+                utseg_backend=ba.CHATUtteranceBackend(lang=lang3),
                 workers=opts.workers,
             )
             inputs, root = collect_chat_inputs(folder)

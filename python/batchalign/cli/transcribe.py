@@ -104,11 +104,6 @@ def register(app: typer.Typer) -> None:
             "CHATWhisper remains float32 when selected.",
         ),
         nowor: bool = typer.Option(False, "--nowor", help="Omit word-level timing (`%wor` and inline word bullets)."),
-        utseg_fallback_stanza: bool = typer.Option(
-            False,
-            "--utseg-fallback-stanza",
-            help="Use Stanza constituency parsing when no TalkBank utterance-boundary model exists.",
-        ),
     ) -> None:
         """Transcribe media into CHAT (.cha) files.
 
@@ -150,12 +145,7 @@ def register(app: typer.Typer) -> None:
             # recipe takes the fast path.
             utseg_backend: Any = None
             if not _engine_self_segments(engine):
-                utseg_backend = _build_utseg(
-                    ba,
-                    lang_code,
-                    engine,
-                    stanza_fallback=utseg_fallback_stanza,
-                )
+                utseg_backend = _build_utseg(ba, lang_code, engine)
             pipeline = ba.recipes.transcribe(
                 asr_backend=asr_backend,
                 speaker_backend=speaker_backend,
@@ -252,14 +242,9 @@ _UTSEG_LANG_3 = {
 }
 
 
-def _build_utseg(
-    ba: Any,
-    lang: LanguageCode,
-    engine: AsrEngine | None = None,
-    *,
-    stanza_fallback: bool = False,
-):
-    """Build the language-specific segmenter or an explicit Stanza fallback.
+def _build_utseg(ba: Any, lang: LanguageCode, engine: AsrEngine | None = None):
+    """Build the CHATUtterance segmenter for `lang`, or None if BA2 ships
+    no utterance model for it (then ASR segments stand as utterances).
 
     BA2's FunAudioEngine always segments with `BertCantoneseUtteranceModel`
     — even when the ASR model is `funasr/paraformer-zh` (Mandarin). Mirror
@@ -269,17 +254,9 @@ def _build_utseg(
         return ba.MalayalamSaTBackend()
     key = _UTSEG_LANG_3.get(lang.alpha_3)
     if key is None:
-        if stanza_fallback:
-            return ba.StanzaUtSegBackend(lang=lang.alpha_3)
-        raise typer.BadParameter(
-            f"no TalkBank utterance-segmentation model for {lang.alpha_3!r}; "
-            "pass --utseg-fallback-stanza to opt in to Stanza constituency parsing",
-            param_hint="--lang",
-        )
+        return None
     try:
         cantonese = engine is AsrEngine.funaudio
         return ba.CHATUtteranceBackend(lang=key, cantonese_inference=cantonese)
     except ValueError:
-        if stanza_fallback:
-            return ba.StanzaUtSegBackend(lang=lang.alpha_3)
-        raise
+        return None

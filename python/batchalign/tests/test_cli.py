@@ -60,8 +60,6 @@ def test_transcribe_exposes_all_ba2_asr_engines():
     assert "--engine" in help_text
     assert "--nowor" in help_text
     assert "--allow-mps" in help_text
-    # Rich truncates this long option in narrow non-TTY help output.
-    assert "--utseg-fallbac" in help_text
 
 
 def test_align_exposes_fa_engines():

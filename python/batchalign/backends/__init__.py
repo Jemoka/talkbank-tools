@@ -56,7 +56,6 @@ from batchalign.backends.utseg import (
     CantoneseWordSegBackend,
     CHATUtteranceBackend,
     MalayalamSaTBackend,
-    StanzaUtSegBackend,
 )
 
 __all__ = [
@@ -103,5 +102,4 @@ __all__ = [
     "CantoneseWordSegBackend",
     "CHATUtteranceBackend",
     "MalayalamSaTBackend",
-    "StanzaUtSegBackend",
 ]

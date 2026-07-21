@@ -354,38 +354,10 @@ fn find_best_segment_prefers_align_matches_over_waste() {
         .map(|s| s.to_string())
         .collect();
     assert_eq!(
-        find_best_segment(&gold, &main, &[0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        find_best_segment(&gold, &main),
         (4, 9),
         "should pick the higher-align-match window even if it wastes more tokens"
     );
-}
-
-#[test]
-fn find_best_segment_does_not_score_across_utterance_boundaries() {
-    let gold: Vec<String> = ["the", "dog", "ran"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    let main: Vec<String> = ["the", "sky", "this", "dog", "ran", "fast"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    let utterances = [0, 0, 1, 1, 1, 1];
-
-    assert_eq!(find_best_segment(&gold, &main, &utterances), (3, 5));
-}
-
-#[test]
-fn compare_does_not_steal_match_across_utterance_boundary() {
-    let parser = TreeSitterParser::new().unwrap();
-    let main = make_chat(&[("CHI", "the sky ."), ("CHI", "this dog ran fast .")]);
-    let gold = make_chat(&[("CHI", "the dog ran .")]);
-    let (main_file, _) = parse_lenient(&parser, &main);
-    let (gold_file, _) = parse_lenient(&parser, &gold);
-
-    let result = compare(&main_file, &gold_file);
-    assert_eq!(result.metrics.matches, 2);
-    assert_eq!(result.metrics.total_gold_words, 3);
 }
 
 #[test]
