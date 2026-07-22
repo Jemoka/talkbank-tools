@@ -15,6 +15,7 @@ record and reads whichever form its vendor SDK needs.
 
 from __future__ import annotations
 
+import logging
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,8 @@ from ..lang import LanguageCode
 from ._common import collect_media_inputs, write_outcome
 from ._options import cli_options, inference_device
 from .tui import Interface, Task
+
+_log = logging.getLogger("batchalign.cli.transcribe")
 
 
 class AsrEngine(str, Enum):
@@ -254,9 +257,20 @@ def _build_utseg(ba: Any, lang: LanguageCode, engine: AsrEngine | None = None):
         return ba.MalayalamSaTBackend()
     key = _UTSEG_LANG_3.get(lang.alpha_3)
     if key is None:
+        _log.warning(
+            "no TalkBank utterance-segmentation model for %r; "
+            "retaining ASR-provided utterance boundaries",
+            lang.alpha_3,
+        )
         return None
     try:
         cantonese = engine is AsrEngine.funaudio
         return ba.CHATUtteranceBackend(lang=key, cantonese_inference=cantonese)
-    except ValueError:
+    except ValueError as error:
+        _log.warning(
+            "TalkBank utterance-segmentation model for %r is unavailable "
+            "(%s); retaining ASR-provided utterance boundaries",
+            lang.alpha_3,
+            error,
+        )
         return None

@@ -25,7 +25,6 @@
 - [x] 2/10 Suppresses terminator-only translation tiers.
 - [x] 3/10 Excludes paired CA segment repetitions from lexical text.
 - [x] 4/10 Keeps retraces with their retry across utterance splits.
-- [x] 5/10 Projects comparison candidates to one majority utterance.
 - [x] 6/10 Attributes matched comparison POS from the gold transcript.
 - [x] 7/10 Keeps experimental review tiers off by default.
 - [x] 8/10 Skips AppleDouble CHAT sidecars in CLI discovery and align preflight.
@@ -34,7 +33,6 @@
 - [x] 11/40 Places generated provenance after constant participant headers.
 - [x] 12/40 Exposes Apple MPS only through an explicit, warned opt-in.
 - [x] 13/40 Refreshes stale same-version Stanza resource catalogs safely.
-- [x] 14/40 Makes unsupported-language Stanza UtSeg fallback explicit and functional.
 - [x] 15/40 Rescues English contracted copula progressives in `%mor` and `%gra` together.
 - [x] 16/40 Makes batch input concurrency explicitly configurable.
 - [x] 17/40 Invalidates cached task output when the compiled engine changes.
@@ -65,6 +63,11 @@
 - [x] 42 (beyond minimum) Applies the CHAT `%wor` word-domain policy to FA.
 
 ## done
+
+### Final review removals
+- **summary**: Restores cross-utterance comparison windows and removes the unsupported-language Stanza UtSeg fallback. Unsupported languages now warn and retain ASR-provided utterance boundaries.
+- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-removals/README.md
+- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/review-removals/trace.log
 
 ### example change title
 - **component**: which crate, component, etc.
@@ -393,18 +396,6 @@ In CHAT, `↫sch↫schaap` records a repeated onset followed by the lexical Dutc
 
 Retraced words are deliberately absent from the morphology word domain, so their top-level `Retrace` nodes receive no classifier assignment. Pre-edit generic back-fill attached those nodes to the preceding assigned word, creating a dangling retrace when the classifier boundary fell before the kept retry. Post-edit retraces first inherit the next assigned content group; genuinely utterance-final retraces still use the existing fallback. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact utseg::tests::utseg_split_keeps_retrace_with_following_retry` (1 passed).
 
-### Project comparison candidates to one utterance
-- **component**: `talkbank-transform` transcript comparison
-- **summary**: Projects every candidate main-token window to its majority utterance before overlap and alignment scoring, preventing a single gold utterance from collecting matches across two main utterances.
-- **concrete CHAT behavior artifact**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/input/main.cha (paired gold: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/input/gold.cha)
-- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/README.md
-- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/compare-majority-window/trace.log
-- **depends on**: []
-- **commit**: 6ac567d
-- **new**: yes
-
-Pre-edit bag-of-words scoring selected `the sky this dog ran` and counted `the` from one main utterance together with `dog ran` from the next, inflating the match count from two to three. Post-edit preserves Python `Counter.most_common(1)` first-seen tie behavior, trims candidate edges to the majority utterance, and scores only the projected range. Targeted verification: `bazel build --config=dev //crates/core/talkbank-transform:talkbank_transform_unit_test && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact compare::tests::find_best_segment_does_not_score_across_utterance_boundaries && bazel-bin/crates/core/talkbank-transform/talkbank_transform_unit_test --exact compare::tests::compare_does_not_steal_match_across_utterance_boundary` (2 passed).
-
 ### Attribute matched POS from the gold transcript
 - **component**: `talkbank-transform` comparison annotation and metrics
 - **summary**: Uses the gold word's morphology tag for every matched token, so `%xsmor` and per-POS match counts describe the reference annotation rather than silently copying a conflicting main-transcript tag.
@@ -496,17 +487,6 @@ The fork changed MPS from an implicit hardware possibility into an explicit perf
 - **new**: yes
 
 Stanford has republished Stanza model artifacts without changing the resources version, so `REUSE_RESOURCES` can verify a new model payload against an old cached checksum and make morphotag unavailable. Pre-edit BA3 never refreshed a present manifest. Post-edit it follows the fork's worker-boundary repair at BA3's backend boundary: missing manifests remain Stanza's responsibility, successful refreshes use same-directory atomic replacement, and failures leave the old catalog intact. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors` (Python Bazel target passed, including online-success, offline-fallback, and missing-manifest regressions).
-
-### Make unsupported-language Stanza UtSeg fallback explicit and functional
-- **component**: Python UtSeg backend and transcribe/utseg CLI wiring
-- **summary**: Refuses to silently omit utterance segmentation when no TalkBank boundary model exists and makes `--utseg-fallback-stanza` select a real constituency backend that applies the fork's coordinated-clause grouping policy.
-- **reproduction instructions**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/README.md
-- **captured Bazel debug trace**: /Users/houjun/Documents/Projects/talkbank-parity/ba3/stanza-utseg-opt-in/trace.log
-- **depends on**: [68575ff]
-- **commit**: b498ac0
-- **new**: yes
-
-Pre-edit transcribe returned `None` from its UtSeg builder for unsupported languages, silently keeping vendor ASR segmentation, while the standalone fallback switch was explicitly inert. Post-edit both command paths refuse that silent output change by default and expose the fork's named opt-in. The fallback groups coordinated `S` clauses, merges fragments shorter than three words, carries fixed word timings, and proportionally projects a timed parent window when word timing is absent. Targeted verification: `bazel test //python/batchalign:pytest --test_output=errors` (240 passed, 1 skipped).
 
 ### Rescue contracted copula progressives structurally
 - **component**: Python UD-to-CHAT morphosyntax renderer

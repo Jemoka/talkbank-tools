@@ -361,6 +361,25 @@ fn find_best_segment_prefers_align_matches_over_waste() {
 }
 
 #[test]
+fn compare_may_match_across_utterance_boundaries() {
+    let parser = TreeSitterParser::new().unwrap();
+    let main = make_chat(&[("CHI", "the sky ."), ("CHI", "this dog ran fast .")]);
+    let gold = make_chat(&[("CHI", "the dog ran .")]);
+    let (main_file, _) = parse_lenient(&parser, &main);
+    let (gold_file, _) = parse_lenient(&parser, &gold);
+
+    let result = compare(&main_file, &gold_file);
+    if std::env::var_os("BATCHALIGN_PARITY_TRACE").is_some() {
+        eprintln!(
+            "[compare-cross-utterance] matches={} total_gold_words={}",
+            result.metrics.matches, result.metrics.total_gold_words
+        );
+    }
+    assert_eq!(result.metrics.matches, 3);
+    assert_eq!(result.metrics.total_gold_words, 3);
+}
+
+#[test]
 fn conform_with_mapping_tracks_indices() {
     let words: Vec<String> = vec!["he's".to_string(), "going".to_string()];
     let (conformed, mapping) = conform_with_mapping(&words);

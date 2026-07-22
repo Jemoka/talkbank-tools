@@ -167,6 +167,22 @@ def test_malayalam_uses_sat_utterance_segmentation(monkeypatch):
     assert _build_utseg(ba, LanguageCode.from_str("mal"), AsrEngine.malayalam) is sentinel
 
 
+def test_unsupported_utseg_warns_and_retains_asr_utterances(caplog):
+    import os
+    from types import SimpleNamespace
+
+    from batchalign.cli.transcribe import _build_utseg
+    from batchalign.lang import LanguageCode
+
+    with caplog.at_level("WARNING", logger="batchalign.cli.transcribe"):
+        backend = _build_utseg(SimpleNamespace(), LanguageCode.from_str("srp"))
+
+    assert backend is None
+    assert "retaining ASR-provided utterance boundaries" in caplog.text
+    if os.environ.get("BATCHALIGN_PARITY_TRACE"):
+        print(f"[utseg-unsupported] backend={backend!r} warning={caplog.text.strip()}")
+
+
 # ---------------------------------------------------------------------------
 # `transcribe --lang` is required and ISO-639-3 only.
 # ---------------------------------------------------------------------------
