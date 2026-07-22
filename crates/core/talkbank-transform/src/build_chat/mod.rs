@@ -27,7 +27,10 @@ mod schema;
 mod tests;
 mod utterances;
 
-use talkbank_model::model::{ChatFile, Header, Line};
+use talkbank_model::model::{
+    ChatFile, Header, IDHeader, Line, Participant, ParticipantEntry, ParticipantName,
+    ParticipantRole, SpeakerCode,
+};
 
 pub use bridge::{TranscriptBuildError, build_chat_from_json, transcript_from_asr_utterances};
 pub use schema::{ParticipantDesc, TranscriptDescription, UtteranceDesc, WordDesc};
@@ -53,5 +56,31 @@ pub fn build_chat(desc: &TranscriptDescription) -> Result<ChatFile, String> {
     )?);
     lines.push(Line::header(Header::End));
 
-    Ok(ChatFile::new(lines))
+    // `ChatFile::new` intentionally leaves its derived participant map empty;
+    // it is meant for parser intermediates before @Participants/@ID
+    // reconciliation. Programmatically assembled CHAT must carry the same
+    // metadata as parsed CHAT, because stage validation and downstream
+    // transforms consult this map rather than re-scanning header lines.
+    let lang_code = context.langs().first().map(String::as_str).unwrap_or("eng");
+    let participants = desc
+        .participants
+        .iter()
+        .map(|participant| {
+            let code = SpeakerCode::new(participant.id.as_str());
+            let role = ParticipantRole::new(participant.role.as_str());
+            let entry = ParticipantEntry {
+                speaker_code: code.clone(),
+                name: participant.name.as_ref().map(ParticipantName::new),
+                role: role.clone(),
+            };
+            let corpus = if participant.corpus.is_empty() {
+                "corpus_name"
+            } else {
+                participant.corpus.as_str()
+            };
+            let id = IDHeader::new(lang_code, code.clone(), role).with_corpus(corpus);
+            (code, Participant::new(entry, id))
+        })
+        .collect();
+    Ok(ChatFile::with_participants(lines, participants))
 }
