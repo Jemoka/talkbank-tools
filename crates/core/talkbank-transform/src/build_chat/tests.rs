@@ -738,6 +738,11 @@ fn asr_pipeline_sets_correct_participant_roles() {
     // Verify serialization: "PAR0 Participant, PAR1 Participant"
     // No doubled role words
     let chat = build_chat(&desc).unwrap();
+    assert_eq!(chat.participant_count(), 2);
+    assert!(chat.get_participant("PAR0").is_some());
+    assert!(chat.get_participant("PAR1").is_some());
+    crate::validate::validate_to_level(&chat, &[], talkbank_model::ValidityLevel::MainTierValid)
+        .expect("ASR CHAT must pass the UtSeg pre-stage input gate");
     let output = to_chat_string(&chat);
     let participants_line = output
         .lines()
