@@ -58,13 +58,14 @@ use async_trait::async_trait;
 use smol_str::SmolStr;
 use talkbank_model::ParseError;
 use talkbank_model::Span;
-use talkbank_model::alignment::helpers::{WordItem, walk_words};
+use talkbank_model::alignment::helpers::TierDomain;
 use talkbank_model::alignment::{MorGraTerminatorSlot, align_main_to_mor, try_align_mor_gra};
 use talkbank_model::model::{
     DependentTier, GraTier, GrammaticalRelation, Mor, MorFeature, MorStem, MorTier, MorWord,
     PosCategory, Terminator,
 };
 use talkbank_model::{Line, Utterance};
+use talkbank_transform::extract::collect_utterance_content;
 
 /// Runner that drops typed `%mor` and `%gra` tiers on a CHAT document.
 pub struct MorphosyntaxTaskRunner;
@@ -301,20 +302,19 @@ fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
     }
 }
 
-/// Pull the alignable main-tier word surface forms from one utterance.
+/// Pull the Mor-alignable main-tier word surface forms from one utterance.
 ///
-/// Uses [`walk_words`] with `domain=None` to descend into all groups
-/// transparently (retraces included — Stanza still wants those tokens, the
-/// domain-aware Mor gating only matters when constructing a true `%mor`
-/// alignment from the parser; here we are *producing* a new `%mor`).
+/// Use the same canonical domain-aware extraction policy as `%mor` validation
+/// and injection. In particular, retraced material is not represented on a
+/// `%mor` tier, so sending it to Stanza would produce more analyses than there
+/// are legal tier slots and cause the whole utterance to be skipped.
 fn extract_tokens(u: &Utterance) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    walk_words(&u.main.content.content.0, None, &mut |item| match item {
-        WordItem::Word(w) => out.push(w.cleaned_text().to_string()),
-        WordItem::ReplacedWord(r) => out.push(r.word.cleaned_text().to_string()),
-        WordItem::Separator(_) => {}
-    });
-    out
+    let mut extracted = Vec::new();
+    collect_utterance_content(&u.main.content.content.0, TierDomain::Mor, &mut extracted);
+    extracted
+        .into_iter()
+        .map(|word| word.text.to_string())
+        .collect()
 }
 
 /// Build one typed [`MorWord`] from a structured unit (`pos|lemma-feat...`).
@@ -589,6 +589,8 @@ mod tests {
 
     const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\tit's red .\n*CHI:\tcat dog .\n@End\n";
 
+    const RETRACE_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\tnld\n@Participants:\tCHI Child\n@ID:\tnld|corpus|CHI|||||Child|||\n*CHI:\tUh van [/] van de uh boerderij .\n@End\n";
+
     const UNSUPPORTED_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\tsrp\n@Participants:\tCHI Child\n@ID:\tsrp|corpus|CHI|||||Child|||\n*CHI:\tnešto .\n@End\n";
 
     /// Capturing sink for tick-sequence assertions.
@@ -679,6 +681,39 @@ mod tests {
         assert!(s.contains("noun|cat"), "expected typed noun|cat: {s}");
         // Terminator rendered by the typed writer (period after the last word).
         assert!(s.contains("noun|dog ."), "expected terminator on %mor: {s}");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn retraced_words_are_not_sent_to_stanza_or_counted_in_mor() -> BAResult<()> {
+        let chat = Chat::parse(RETRACE_FIXTURE, SourceId::try_new("retrace")?)?;
+        let mut value = BAValue::Chat(chat);
+        let dispatcher = RecordingDispatcher::new();
+
+        MorphosyntaxTaskRunner
+            .apply(
+                &mut value,
+                &dispatcher,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
+            .await?;
+
+        let seen = dispatcher.seen.lock().expect("poisoned");
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].tokens, ["Uh", "van", "de", "uh", "boerderij"]);
+        drop(seen);
+
+        let BAValue::Chat(chat) = value else {
+            panic!("expected Chat");
+        };
+        let output = chat.to_chat();
+        assert!(output.contains("%mor:"), "missing %mor tier: {output}");
+        assert!(output.contains("%gra:"), "missing %gra tier: {output}");
+        assert_eq!(
+            output.matches("noun|van").count(),
+            1,
+            "retraced van must not receive a %mor slot: {output}"
+        );
         Ok(())
     }
 
