@@ -1,9 +1,10 @@
 //! `AsrTaskRunner` — turns `BAValue::Media` into `BAValue::Chat<Validated>`.
 //!
 //! Decodes the media via `crate::utils::prepare_pcm`, dispatches an `AsrInput`,
-//! then folds the returned `AsrOutput::segments` into a fresh CHAT document
-//! whose utterances mirror the segment text + diarization. Word timings, if
-//! present, ride along as bullet timestamps so downstream FA can refine them.
+//! then adapts the returned `AsrOutput::segments` into the canonical
+//! `talkbank-transform` ASR post-processing pipeline before building a fresh
+//! CHAT document. Word timings ride through normalization so downstream FA can
+//! refine them.
 //!
 //! Per spec2.md §8 and the BA2 `pipelines/asr/` reference.
 
@@ -13,15 +14,16 @@ use crate::base::Task;
 use crate::base::TaskInput;
 use crate::base::{Dispatcher, TaskRunner};
 use crate::base::{ProgressEvent, ProgressSink};
-use crate::proto::asr::{AsrInput, AsrOutput, AsrWord, LanguageSpec};
+use crate::proto::asr::{AsrInput, AsrOutput, LanguageSpec};
+use crate::utils::MediaInput;
 use crate::utils::SpeakerLabel;
 use crate::utils::{BAError, BAResult};
-use crate::utils::MediaInput;
 use async_trait::async_trait;
 use smol_str::SmolStr;
 use std::collections::BTreeMap;
-use talkbank_transform::asr_postprocess::{ChatWordText, WordKind};
-use talkbank_transform::build_chat::WordDesc;
+use talkbank_transform::asr_postprocess::{
+    AsrElement, AsrElementKind, AsrMonologue, AsrRawText, AsrTimestampSecs, SpeakerIndex,
+};
 
 /// ASR runner — `Task::Asr` entry point. The runner ships an `AsrInput`
 /// with `LanguageSpec::Auto` and default `AsrOptions`; the backend supplies
@@ -88,8 +90,7 @@ impl TaskRunner for AsrTaskRunner {
         progress.finish();
         let output: AsrOutput = output_raw.try_into()?;
 
-        let chat =
-            build_chat_from_asr(&media, &language, &output)?.with_media(media.clone());
+        let chat = build_chat_from_asr(&media, &language, &output)?.with_media(media.clone());
         *value = BAValue::Chat(chat);
 
         sink.emit(ProgressEvent::stage_injected(&media.source_id, Task::Asr));
@@ -112,12 +113,12 @@ fn build_chat_from_asr(
 ) -> BAResult<Chat> {
     use talkbank_model::ErrorCollector;
     use talkbank_transform::build_chat::{
-        ParticipantDesc, TranscriptDescription, UtteranceDesc, build_chat,
+        ParticipantDesc, build_chat, transcript_from_asr_utterances,
     };
 
     let lang_code = resolve_lang_code(language);
 
-    // Discover speakers in order of first appearance; assign PAR1, PAR2, ...
+    // Discover speakers in order of first appearance; assign PAR0, PAR1, ...
     let mut speaker_codes: BTreeMap<String, String> = BTreeMap::new();
     let mut order: Vec<String> = Vec::new();
     for seg in &output.segments {
@@ -138,53 +139,8 @@ fn build_chat_from_asr(
         order.push("PAR0".to_string());
     }
 
-    let participants = order
-        .iter()
-        .map(|code| ParticipantDesc {
-            id: code.clone(),
-            name: None,
-            role: "Participant".to_string(),
-            corpus: "batchalign".to_string(),
-        })
-        .collect();
-
-    let mut utterances: Vec<UtteranceDesc> = Vec::new();
-    for seg in &output.segments {
-        let raw = seg
-            .speaker
-            .as_ref()
-            .map(SpeakerLabel::as_str)
-            .unwrap_or("PAR1");
-        let code = speaker_codes
-            .get(raw)
-            .ok_or_else(|| BAError::Internal(format!("ASR: unknown speaker {raw}")))?;
-        let utt_text = sanitize_segment_text(&seg.text);
-        if utt_text.is_empty() {
-            continue;
-        }
-        // Carry the segment media window as the utterance bullet when present.
-        let (start_ms, end_ms) = if seg.start_ms == 0 && seg.end_ms == 0 {
-            (None, None)
-        } else {
-            (Some(seg.start_ms), Some(seg.end_ms))
-        };
-        let words = asr_words_to_word_descs(&seg.words);
-        // Prefer word mode when the backend supplied word tokens, so their
-        // fixed ASR timings survive even if the pipeline stops after ASR.
-        let text = if words.is_empty() {
-            Some(format!("{utt_text} ."))
-        } else {
-            None
-        };
-        utterances.push(UtteranceDesc {
-            speaker: code.clone(),
-            words: (!words.is_empty()).then_some(words),
-            text,
-            start_ms,
-            end_ms,
-            lang: None,
-        });
-    }
+    let raw_output = asr_output_for_postprocess(output, &speaker_codes)?;
+    let utterances = talkbank_transform::asr_postprocess::process_raw_asr(&raw_output, &lang_code);
 
     // Emit `@Media: <media stem>, <audio|video>` so downstream consumers
     // (BA2's align, third-party tools) can resolve the media file. The CHAT
@@ -193,17 +149,32 @@ fn build_chat_from_asr(
     // BA3 + our align resolve by filename stem regardless, but BA2's
     // align refuses input without an explicit `@Media:` tier.
     // Bug #11 fix (parity test 2026-05-31).
-    let desc = TranscriptDescription {
-        langs: vec![lang_code],
-        participants,
-        media_name: Some(media.path.to_string_lossy().into_owned()),
-        media_type: None,
-        utterances,
-        write_wor: true,
-    };
+    let mut desc = transcript_from_asr_utterances(
+        &utterances,
+        &order,
+        std::slice::from_ref(&lang_code),
+        Some(media.path.to_string_lossy().as_ref()),
+        true,
+    )
+    .map_err(|e| BAError::Validation(e.to_string()))?;
+    if desc.participants.is_empty() {
+        desc.participants = order
+            .iter()
+            .map(|code| ParticipantDesc {
+                id: code.clone(),
+                name: None,
+                role: "Participant".to_string(),
+                corpus: "batchalign".to_string(),
+            })
+            .collect();
+    }
+    for participant in &mut desc.participants {
+        participant.corpus = "batchalign".to_string();
+    }
+    // Let the official CHAT builder infer audio vs. video from the media path.
+    desc.media_type = None;
 
-    let chat_file =
-        build_chat(&desc).map_err(|e| BAError::Internal(format!("build_chat: {e}")))?;
+    let chat_file = build_chat(&desc).map_err(|e| BAError::Internal(format!("build_chat: {e}")))?;
 
     // Provenance `@Comment` stamping happens once at end-of-pipeline in
     // `batchalign_engine::pipeline::run_one` (single source of truth for
@@ -211,30 +182,89 @@ fn build_chat_from_asr(
 
     let collector = ErrorCollector::new();
     let validated = chat_file.validate_into(&collector, None);
+    if collector.has_errors() {
+        let joined = collector
+            .into_vec()
+            .into_iter()
+            .filter(|error| matches!(error.severity, talkbank_model::Severity::Error))
+            .map(|error| error.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(BAError::Validation(format!("\n{joined}")));
+    }
     Ok(Chat::from_validated_ast(validated, media.source_id.clone()))
 }
 
-fn asr_words_to_word_descs(words: &[AsrWord]) -> Vec<WordDesc> {
-    words
-        .iter()
-        .filter_map(|w| {
-            let text = w.text.trim();
+/// Adapt the taskrunner's stable ASR wire contract to the canonical
+/// `talkbank-transform` post-processing input. Each backend segment remains a
+/// monologue, and word timings are converted from milliseconds to seconds so
+/// `process_raw_asr` can preserve them through normalization and splitting.
+fn asr_output_for_postprocess(
+    output: &AsrOutput,
+    speaker_codes: &BTreeMap<String, String>,
+) -> BAResult<talkbank_transform::asr_postprocess::AsrOutput> {
+    let mut monologues = Vec::with_capacity(output.segments.len());
+    for segment in &output.segments {
+        let raw_speaker = segment
+            .speaker
+            .as_ref()
+            .map(SpeakerLabel::as_str)
+            .unwrap_or("PAR1");
+        let code = speaker_codes
+            .get(raw_speaker)
+            .ok_or_else(|| BAError::Internal(format!("ASR: unknown speaker {raw_speaker}")))?;
+        let speaker_number = code
+            .strip_prefix("PAR")
+            .and_then(|number| number.parse::<usize>().ok())
+            .ok_or_else(|| BAError::Internal(format!("ASR: invalid participant code {code}")))?;
+
+        let elements = if segment.words.is_empty() {
+            let text = sanitize_segment_text(&segment.text);
             if text.is_empty() {
-                return None;
-            }
-            let (start_ms, end_ms) = if w.end_ms > w.start_ms {
-                (Some(w.start_ms), Some(w.end_ms))
+                Vec::new()
             } else {
-                (None, None)
-            };
-            Some(WordDesc {
-                text: ChatWordText::try_from(text).ok()?,
-                start_ms,
-                end_ms,
-                kind: WordKind::Regular,
-            })
+                vec![postprocess_element(&text, segment.start_ms, segment.end_ms)]
+            }
+        } else {
+            segment
+                .words
+                .iter()
+                .map(|word| postprocess_element(&word.text, word.start_ms, word.end_ms))
+                .collect()
+        };
+
+        if !elements.is_empty() {
+            monologues.push(AsrMonologue {
+                speaker: SpeakerIndex(speaker_number),
+                elements,
+            });
+        }
+    }
+    Ok(talkbank_transform::asr_postprocess::AsrOutput { monologues })
+}
+
+fn postprocess_element(text: &str, start_ms: u64, end_ms: u64) -> AsrElement {
+    let trimmed = text.trim();
+    AsrElement {
+        value: AsrRawText::new(trimmed),
+        ts: AsrTimestampSecs(start_ms as f64 / 1000.0),
+        end_ts: AsrTimestampSecs(end_ms as f64 / 1000.0),
+        kind: if is_punctuation_token(trimmed) {
+            AsrElementKind::Punctuation
+        } else {
+            AsrElementKind::Text
+        },
+    }
+}
+
+fn is_punctuation_token(text: &str) -> bool {
+    !text.is_empty()
+        && text.chars().all(|character| {
+            matches!(
+                character,
+                '.' | '?' | '!' | ',' | ';' | ':' | '。' | '؟' | '۔' | '،' | '؛'
+            )
         })
-        .collect()
 }
 
 /// Resolve a `LanguageSpec` to a usable ISO-3 code for the CHAT header.
@@ -353,8 +383,8 @@ mod tests {
         let text = chat.to_chat();
         assert!(text.contains("@Languages:\teng"));
         assert!(text.contains("@Participants:"));
-        assert!(text.contains("*PAR0:\thello there ."));
-        assert!(text.contains("*PAR1:\tgeneral kenobi ."));
+        assert!(text.contains("*PAR0:\tHello there ."));
+        assert!(text.contains("*PAR1:\tGeneral kenobi ."));
         // Provenance `@Comment` is stamped by the pipeline driver, not the
         // runner — see `batchalign_engine::pipeline::stamp_run_provenance`.
         assert!(
@@ -396,8 +426,80 @@ mod tests {
         let chat =
             build_chat_from_asr(&media, &LanguageSpec::Code("spa".into()), &out).expect("chat");
         let text = chat.to_chat();
-        assert!(text.contains("@Languages:\tspa"), "expected spa header, got {text}");
-        assert!(text.contains("@ID:\tspa|batchalign|PAR0"), "expected spa ID, got {text}");
+        assert!(
+            text.contains("@Languages:\tspa"),
+            "expected spa header, got {text}"
+        );
+        assert!(
+            text.contains("@ID:\tspa|batchalign|PAR0"),
+            "expected spa ID, got {text}"
+        );
+    }
+
+    #[test]
+    fn taskrunner_postprocesses_german_numbers_and_commas() {
+        let sid = SourceId::try_new("tst").expect("sid");
+        let timed_words = [",", "20", ",", ",", "1999", ",", "45"]
+            .into_iter()
+            .enumerate()
+            .map(|(index, text)| AsrWord {
+                text: text.to_string(),
+                start_ms: index as u64 * 100,
+                end_ms: (index as u64 + 1) * 100,
+                confidence: None,
+            })
+            .collect();
+        let out = AsrOutput {
+            source_id: sid.clone(),
+            segments: vec![AsrSegment {
+                start_ms: 0,
+                end_ms: 700,
+                text: ", 20 , , 1999 , 45".into(),
+                speaker: Some(SpeakerLabel::new("spk_0")),
+                words: timed_words,
+            }],
+        };
+
+        let media = fake_media(&sid, "wav");
+        let chat = build_chat_from_asr(&media, &LanguageSpec::Code("deu".into()), &out)
+            .expect("canonical post-processing should produce valid German CHAT");
+        let text = chat.to_chat();
+        let main = text
+            .lines()
+            .find(|line| line.starts_with("*PAR0:"))
+            .expect("main tier");
+
+        assert!(main.contains("zwanzig"), "20 was not expanded: {main}");
+        assert!(
+            main.contains("eintausend neunhundert neunundneunzig"),
+            "1999 was not expanded: {main}"
+        );
+        assert!(
+            main.contains("fünfundvierzig"),
+            "45 was not expanded: {main}"
+        );
+        assert!(!main.contains(','), "ASR commas were not stripped: {main}");
+    }
+
+    #[test]
+    fn taskrunner_rejects_residual_language_validation_errors() {
+        let sid = SourceId::try_new("tst").expect("sid");
+        let out = AsrOutput {
+            source_id: sid.clone(),
+            segments: vec![fake_segment("spk_0", "abc123", 0, 500)],
+        };
+        let media = fake_media(&sid, "wav");
+
+        let error = build_chat_from_asr(&media, &LanguageSpec::Code("deu".into()), &out)
+            .expect_err("unexpandable German digit-bearing tokens must fail in the taskrunner");
+        assert!(
+            matches!(error, BAError::Validation(_)),
+            "expected validation error, got {error:?}"
+        );
+        assert!(
+            error.to_string().contains("E220"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
@@ -444,7 +546,11 @@ mod tests {
         };
         let runner = AsrTaskRunner;
         runner
-            .apply(&mut value, &disp, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
+            .apply(
+                &mut value,
+                &disp,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
             .await
             .expect("apply ok");
         match value {
