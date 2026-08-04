@@ -1,4 +1,4 @@
-"""`Interface` — the live registry that owns the deck and the summary.
+"""`Interface` — lifecycle bridge for the Textual dashboard and plain CLI.
 
 Lifecycle inside a CLI command:
 
@@ -7,22 +7,17 @@ Lifecycle inside a CLI command:
         # "preparing pipeline…" spinner from `__enter__` below.
         pipeline = ba.recipes.foo(...)
         inputs, root = collect_*_inputs(folder)
-        tasks = {str(inp.source_id): ui.push(Task.from_input(inp)) for inp in inputs}
-        outcomes = pipeline.run(inputs, callbacks=ui.callbacks_for(tasks))
+        for inp in inputs:
+            ui.push(Task.from_input(inp))
+        outcomes = list(ui.run_pipeline(pipeline, inputs))
         write_outcomes(...)
     raise typer.Exit(code=ui.exit_code)
 
-The deck is the single source of truth. There is ONE Rich `Progress`
-region with:
-  - an overall bar (in batch mode), plus
-  - one bar per pushed file, pre-registered in WAIT state.
-
-As `ProgressEvent`s flow in we mutate each bar's status column
-(wait / run / done / fail / skip) and its (completed, total) counts.
-Bars stay visible after the run so the final state of every file is
-on screen. The summary block prints once below, with failure
-details + hints. **No scrolling completion log** — that would
-duplicate what the bars already say.
+Interactive terminals get a responsive Textual application with an overall
+summary, filterable/navigable file table, live stage progress, and a selected
+file detail panel.  The synchronous pipeline runs on a worker thread so
+Textual remains on the main thread and can reliably handle keyboard and resize
+events.  The summary block prints once after the alternate screen closes.
 
 Plain mode (non-TTY or `--plain`) replaces the live deck with one
 column-aligned line per state transition, deduplicated against the
@@ -38,20 +33,14 @@ import sys
 import time
 from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    TaskID,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
+from rich import box
 from rich.status import Status
 from rich.syntax import Syntax
+from rich.table import Table
+from rich.text import Text
 
 from ... import config as _ba_config
 from . import bridge
@@ -64,6 +53,9 @@ from .errors import (
 from .hints import hint_for
 from .task import Task, TaskState
 
+if TYPE_CHECKING:
+    from .dashboard import Dashboard
+
 
 _log = logging.getLogger("batchalign.cli.tui")
 
@@ -74,14 +66,6 @@ _W_LABEL = 44   # filename column
 _W_STAGE = 8    # current stage label
 _W_TIME = 8
 
-# Status palette — color encodes state, nothing else.
-_STATE_STYLE = {
-    TaskState.WAIT: "dim",
-    TaskState.RUN:  "yellow",
-    TaskState.OK:   "green",
-    TaskState.FAIL: "red",
-    TaskState.SKIP: "blue",
-}
 _TRACEBACK_ENV = "BATCHALIGN_CLI_VERBOSE_TRACEBACKS"
 
 
@@ -108,12 +92,6 @@ class Interface:
         self.console = console
 
         self._tasks: dict[str, Task] = {}
-        self._rich_ids: dict[str, TaskID] = {}      # batch/single: per-task rich id
-        self._stage_ids: dict[str, TaskID] = {}     # single-file: stage → rich id
-        self._single_prev_stage: str | None = None
-        self._overall: TaskID | None = None
-        self._completed_count = 0
-        self._progress: Progress | None = None
         self._status: Status | None = None
         self._started_at: float = 0.0
         self._sigint_prev: Any = None
@@ -130,17 +108,13 @@ class Interface:
         # already emitted, to avoid duplicate `start` / `done` rows.
         self._plain_started: set[str] = set()
         self._plain_completed: set[str] = set()
-        # Sources we've already credited toward the overall completed
-        # counter. Each Task can fire multiple terminal-looking events
-        # (e.g. StageFailed followed by SourceCompleted); without this
-        # guard the overall bar runs past the total ("3/2").
-        self._counted_complete: set[str] = set()
         # If the pipeline raises during `run`, we stash the exception
         # message here and surface it ONCE in the summary as a
         # "pipeline aborted" banner — instead of dumping the same text
         # onto every per-file row (which is the duplication the user
         # flagged).
         self._pipeline_error: str | None = None
+        self._dashboard: Dashboard | None = None
 
     # ----- construction ---------------------------------------------------
 
@@ -201,21 +175,19 @@ class Interface:
         """Tell the interface which pipeline is currently running so the
         SIGINT handler can call its cooperative `cancel()` method.
 
-        Without this, Ctrl-C only fires *after* `pipeline.run` returns:
-        the Python signal handler can't run while the Rust runtime holds
-        the main thread inside `py.detach`. The Rust side now polls
-        signals itself (see `pipeline.rs::run`), but we still call cancel
-        from Python so any post-block Ctrl-C also takes effect.
+        Interactive runs keep Python signal handling responsive by putting the
+        pipeline on a worker thread. Plain runs may hold the main thread inside
+        ``py.detach``, where the Rust side also polls signals. Calling
+        ``cancel`` covers both paths.
         """
         self._pipeline = pipeline
 
     def callbacks_for(self, tasks: dict[str, Task]) -> list[tuple[str, Callable]]:
         """Bridge `ProgressEvent`s → `Task` mutations + our refresh hook.
 
-        Side effect: this is the "done pushing, about to run" moment.
-        Closes the preparing-spinner and opens the deck, so the user
-        sees the full per-file bar list BEFORE `pipeline.run` starts
-        emitting events.
+        This compatibility helper is used by the deterministic plain renderer.
+        Interactive CLI commands use :meth:`run_pipeline`, which can keep
+        Textual on the main thread while the engine runs off-thread.
         """
         self._open_run()
         return bridge.callbacks_for(tasks, on_event=self._on_event)
@@ -266,7 +238,10 @@ class Interface:
         old_traceback_env = os.environ.get(_TRACEBACK_ENV)
         if self.verbosity >= 2:
             os.environ[_TRACEBACK_ENV] = "1"
-        try:
+        outcomes: list[Any] = []
+
+        def invoke_pipeline() -> None:
+            nonlocal outcomes
             if on_outcome is None:
                 outcomes = pipeline.run(list(inputs), callbacks=cbs)
             else:
@@ -275,18 +250,28 @@ class Interface:
                     callbacks=cbs,
                     outcome_callback=on_outcome,
                 )
+            if self._interrupted:
+                self._finalize_interrupted_tasks()
+
+        def record_dashboard_error(exc: BaseException) -> None:
+            if isinstance(exc, Exception):
+                self._record_pipeline_error(exc, tasks_by_sid.values())
+
+        try:
+            if self._dashboard is not None:
+                self._dashboard.run_while(
+                    invoke_pipeline,
+                    self._tasks.values(),
+                    on_error=record_dashboard_error,
+                )
+            else:
+                invoke_pipeline()
         except Exception as exc:  # noqa: BLE001
             # A pipeline-level raise now means a genuinely unrecoverable
             # error (no source_id could even be derived for one of the
             # inputs, or the engine itself died). Mark every still-live
             # task as failed and surface the banner once.
-            self._pipeline_error = f"{type(exc).__name__}: {exc}"
-            for task in tasks_by_sid.values():
-                if not task.is_terminal:
-                    task.fail(self._pipeline_error)
-                    if self._progress is not None:
-                        self._refresh_task(task)
-                    self._mark_completed(task)
+            self._record_pipeline_error(exc, tasks_by_sid.values())
             return
         finally:
             if old_traceback_env is None:
@@ -305,8 +290,6 @@ class Interface:
                 if on_outcome is None:
                     yield outcome
                 continue
-            if task.is_terminal:
-                self._mark_completed(task)
             if on_outcome is None and task.state is not TaskState.FAIL:
                 yield outcome
 
@@ -315,15 +298,14 @@ class Interface:
     def __enter__(self) -> "Interface":
         self._started_at = time.monotonic()
         self._install_sigint()
-        self._render_command_header()
+        if self.plain or self.quiet:
+            self._render_command_header()
         if not self.plain and not self.quiet:
             self._status = Status("preparing pipeline…", console=self.console,
                                     spinner="dots")
             self._status.__enter__()
-        # Let credential prompts fired from deep inside backend
-        # construction quiesce our live region while they draw — the
-        # rich Status spinner and Progress deck both repaint on a
-        # timer, which otherwise garbles the credential Panel/Prompt.
+        # Let credential prompts fired from deep inside backend construction
+        # quiesce the Rich preparing spinner while they draw.
         _ba_config.register_prompt_suspend(self._suspend_for_prompt)
         return self
 
@@ -344,15 +326,7 @@ class Interface:
         #     "pipeline aborted" so they don't appear in the
         #     per-file fail list (the banner has the message).
         if self._interrupted:
-            for t in self._tasks.values():
-                if t.state is TaskState.RUN:
-                    t.fail("interrupted")
-                elif t.state is TaskState.WAIT:
-                    t.skip("not started")
-                else:
-                    continue
-                if self._progress is not None:
-                    self._refresh_task(t)
+            self._finalize_interrupted_tasks()
         elif exc is not None:
             self._pipeline_error = f"{type(exc).__name__}: {exc}"
             for t in self._tasks.values():
@@ -360,14 +334,10 @@ class Interface:
                     t.fail(self._pipeline_error)
                 elif t.state is TaskState.WAIT:
                     t.skip("pipeline aborted")
-                else:
-                    continue
-                if self._progress is not None:
-                    self._refresh_task(t)
 
-        if self._progress is not None:
-            self._progress.__exit__(exc_type, exc, tb)
-            self._progress = None
+        if self._dashboard is not None:
+            self._dashboard.close(self._tasks.values())
+            self._dashboard = None
 
         self._render_summary()
         self._restore_sigint()
@@ -377,6 +347,21 @@ class Interface:
         # right after the `with`, so the exit status still reflects
         # the failure — no duplicate Rich traceback below the summary.
         return exc is not None
+
+    def _record_pipeline_error(self, exc: Exception, tasks) -> None:
+        """Set the abort banner and fail live tasks before the final frame."""
+        self._pipeline_error = f"{type(exc).__name__}: {exc}"
+        for task in tasks:
+            if not task.is_terminal:
+                task.fail(self._pipeline_error)
+
+    def _finalize_interrupted_tasks(self) -> None:
+        """Normalize unfinished tasks before cancellation is rendered."""
+        for task in self._tasks.values():
+            if task.state is TaskState.RUN:
+                task.fail("interrupted")
+            elif task.state is TaskState.WAIT:
+                task.skip("not started")
 
     # ----- exit code ------------------------------------------------------
 
@@ -408,9 +393,19 @@ class Interface:
             return
         self._opened = True
         self._close_status()
-        self._render_file_count()
+        if self.plain or self.quiet:
+            self._render_file_count()
         if not self.plain and not self.quiet:
-            self._open_progress()
+            from .dashboard import Dashboard
+
+            self._dashboard = Dashboard(
+                command=self.command,
+                params=self.params,
+                output=self.output,
+                tasks=self._tasks.values(),
+                request_cancel=self._request_cancel,
+            )
+            self._dashboard.start()
 
     def _render_command_header(self) -> None:
         dest = "in-place" if self.output is None else f"→ {self.output}"
@@ -444,31 +439,19 @@ class Interface:
 
     @contextmanager
     def _suspend_for_prompt(self):
-        """Pause the active spinner/progress region for a credential prompt.
+        """Pause the preparing spinner for a credential prompt.
 
-        Rich's Status and Progress widgets both repaint on a timer; if
-        we leave them running while ``config._prompt_form`` draws its
-        Panel and Prompt, the two redraw loops fight and we get the
-        garbled output that the user reported (interleaved spinner
-        glyphs and unreadable input line). Stopping the live region
-        for the duration of the prompt — and restarting it after —
-        keeps both surfaces legible.
+        Credential discovery happens before the Textual dashboard starts, but
+        Rich's preparing spinner is already active. Quiescing it keeps the
+        prompt legible.
         """
         status, self._status = self._status, None
-        progress, self._progress = self._progress, None
         if status is not None:
             with suppress(Exception):
                 status.__exit__(None, None, None)
-        if progress is not None:
-            with suppress(Exception):
-                progress.stop()
         try:
             yield
         finally:
-            if progress is not None:
-                with suppress(Exception):
-                    progress.start()
-                self._progress = progress
             if status is not None:
                 # Re-arm the same spinner so the user sees the original
                 # "preparing pipeline…" status continue after they
@@ -497,12 +480,6 @@ class Interface:
             self.console.print()
             self.console.print(
                 f"done   done={ok} fail={fail} skip={skip}  {_fmt_elapsed(elapsed)}"
-            )
-        else:
-            self.console.print()
-            self.console.print(
-                f"done · [green]done {ok}[/] · [red]fail {fail}[/] · "
-                f"[blue]skip {skip}[/] · {_fmt_elapsed(elapsed)}"
             )
 
         # Pipeline-level abort: one line with the exception, no
@@ -548,6 +525,52 @@ class Interface:
                 self.console.print("interrupted by user")
             else:
                 self.console.print("[red]interrupted by user[/]")
+
+        # Interactive output should end on the durable overview, not on the
+        # final error block. Verbose/plain mode deliberately keeps its legacy
+        # chronological stream and compact count line above.
+        if not self.plain:
+            self.console.print()
+            self._render_rich_summary(ok=ok, fail=fail, skip=skip, elapsed=elapsed)
+
+    def _render_rich_summary(
+        self, *, ok: int, fail: int, skip: int, elapsed: float
+    ) -> None:
+        """Leave one compact, persistent table after the dashboard closes."""
+        total = len(self._tasks)
+        destination = "in place" if self.output is None else str(self.output)
+        files = Table(
+            title=f"batchalign3 {self.command} · Run summary",
+            title_style="bold #c7d2fe",
+            caption=(
+                f"{total} processed · {ok} done · {fail} failed · "
+                f"{skip} skipped · {_fmt_elapsed(elapsed)} · {destination}"
+            ),
+            caption_style="dim",
+            box=box.ROUNDED,
+            expand=True,
+            header_style="bold #a5b4fc",
+        )
+        files.add_column("STATUS", width=9, no_wrap=True)
+        files.add_column("FILE", ratio=3, overflow="fold")
+        files.add_column("LAST STAGE", ratio=2, overflow="fold")
+        files.add_column("TIME", justify="right", width=8)
+        state_labels = {
+            TaskState.OK: Text("✓ done", style="bold green"),
+            TaskState.FAIL: Text("✗ failed", style="bold red"),
+            TaskState.SKIP: Text("– skipped", style="bold yellow"),
+            TaskState.RUN: Text("● running", style="bold cyan"),
+            TaskState.WAIT: Text("○ queued", style="dim"),
+        }
+        for task in self._tasks.values():
+            files.add_row(
+                state_labels[task.state],
+                task.label,
+                task.stage or "—",
+                _fmt_elapsed(task.elapsed) if task.elapsed is not None else "—",
+            )
+
+        self.console.print(files)
 
     def _print_summary_failure(self, task: Task) -> None:
         msg = task.error or ""
@@ -603,57 +626,6 @@ class Interface:
 
     # ----- progress wiring ------------------------------------------------
 
-    def _open_progress(self) -> None:
-        single = len(self._tasks) == 1
-
-        # Custom columns. Status column reads task.fields[state] +
-        # task.fields[state_style]; markup=True (default) renders the
-        # colour codes inline. Stage column similar.
-        state_col = TextColumn(
-            "[{task.fields[state_style]}]{task.fields[state]:<" + str(_W_STATE) + "}[/]"
-        )
-        label_col = TextColumn("{task.description}")
-        stage_col = TextColumn(
-            "[dim]{task.fields[stage]:<" + str(_W_STAGE) + "}[/]"
-        )
-        bar_col = BarColumn(bar_width=24)
-        count_col = MofNCompleteColumn()
-        elapsed_col = TimeElapsedColumn()
-        eta_col = TimeRemainingColumn(elapsed_when_finished=False)
-
-        if single:
-            cols = [state_col, stage_col, bar_col, count_col, elapsed_col]
-        else:
-            cols = [state_col, label_col, stage_col, bar_col, count_col,
-                    elapsed_col, eta_col]
-
-        self._progress = Progress(
-            *cols, console=self.console, transient=False, refresh_per_second=4,
-        )
-        self._progress.__enter__()
-
-        if not single:
-            # Overall bar — at the top, no state/stage column meaning.
-            self._overall = self._progress.add_task(
-                description="[bold]overall[/]",
-                total=max(1, len(self._tasks)),
-                state="",            # blank cell for the overall row
-                state_style="dim",
-                stage="",
-            )
-            # Pre-register every pushed file in WAIT state. All bars
-            # visible from the start; the deck is the source of truth.
-            for sid, task in self._tasks.items():
-                rid = self._progress.add_task(
-                    description=_pad(task.label, _W_LABEL),
-                    total=1, completed=0,
-                    state=task.state.value.lower(),
-                    state_style=_STATE_STYLE[task.state],
-                    stage="—",
-                )
-                self._rich_ids[sid] = rid
-        # Single-file: stage bars added lazily on each StageStarted.
-
     def _on_event(self, ev: Any, task: Task) -> None:
         if not self._opened:
             self._open_run()
@@ -666,114 +638,8 @@ class Interface:
             self._plain_event(ev, task)
             return
 
-        if self._progress is None:  # quiet mode
-            return
-
-        if len(self._tasks) == 1:
-            self._refresh_single_file(task)
-        else:
-            self._refresh_task(task)
-            if task.is_terminal:
-                self._mark_completed(task)
-
-    def _mark_completed(self, task: Task) -> None:
-        """Credit `task` toward the overall counter exactly once.
-
-        Called both from `_on_event` (terminal events from the Rust
-        pipeline) and from `run_pipeline`'s per-input `except` block
-        (terminal failures the Rust pipeline raises without firing a
-        callback, e.g. parse errors during input conversion).
-        """
-        if task.source_id in self._counted_complete:
-            return
-        if self._progress is None or self._overall is None:
-            return
-        self._counted_complete.add(task.source_id)
-        self._completed_count += 1
-        self._progress.update(self._overall, completed=self._completed_count)
-
-    # ----- batch refresh -------------------------------------------------
-
-    def _refresh_task(self, task: Task) -> None:
-        """Paint `task`'s current state onto its pre-registered bar."""
-        assert self._progress is not None
-        rid = self._rich_ids.get(task.source_id)
-        if rid is None:
-            return
-        completed = task.progress[0] if task.progress else (
-            1 if task.state is TaskState.OK else 0
-        )
-        total = task.progress[1] if task.progress else 1
-        self._progress.update(
-            rid,
-            completed=completed,
-            total=total,
-            state=task.state.value.lower(),
-            state_style=_STATE_STYLE[task.state],
-            stage=(task.stage or "—"),
-        )
-
-    # ----- single-file refresh -------------------------------------------
-
-    def _refresh_single_file(self, task: Task) -> None:
-        assert self._progress is not None
-        if task.stage is None and not task.is_terminal:
-            return
-
-        # When stage transitions, fill the previous stage bar to 100% +
-        # mark it ok.
-        if (
-            self._single_prev_stage is not None
-            and task.stage is not None
-            and self._single_prev_stage != task.stage
-        ):
-            self._finish_stage_bar(self._single_prev_stage, TaskState.OK)
-        if task.stage is not None:
-            self._single_prev_stage = task.stage
-
-        # Lazy-add the current stage bar.
-        if task.stage is not None and task.stage not in self._stage_ids:
-            rid = self._progress.add_task(
-                description=_pad(task.stage, _W_STAGE),
-                total=(task.progress[1] if task.progress else 1),
-                completed=(task.progress[0] if task.progress else 0),
-                state=task.state.value.lower(),
-                state_style=_STATE_STYLE[task.state],
-                stage=task.stage,
-            )
-            self._stage_ids[task.stage] = rid
-
-        if task.stage is not None:
-            rid = self._stage_ids[task.stage]
-            completed = task.progress[0] if task.progress else 0
-            total = task.progress[1] if task.progress else 1
-            self._progress.update(
-                rid,
-                completed=completed,
-                total=total,
-                state=task.state.value.lower(),
-                state_style=_STATE_STYLE[task.state],
-                stage=task.stage,
-            )
-
-        if task.is_terminal and self._single_prev_stage is not None:
-            self._finish_stage_bar(self._single_prev_stage, task.state)
-
-    def _finish_stage_bar(self, stage: str, terminal_state: TaskState) -> None:
-        if self._progress is None:
-            return
-        rid = self._stage_ids.get(stage)
-        if rid is None:
-            return
-        rt = next((r for r in self._progress.tasks if r.id == rid), None)
-        if rt is None:
-            return
-        self._progress.update(
-            rid,
-            completed=rt.total or 1,
-            state=terminal_state.value.lower(),
-            state_style=_STATE_STYLE[terminal_state],
-        )
+        if self._dashboard is not None:
+            self._dashboard.update(self._tasks.values())
 
     # ----- plain renderer -------------------------------------------------
 
@@ -801,16 +667,14 @@ class Interface:
     # ----- SIGINT ---------------------------------------------------------
 
     def _install_sigint(self) -> None:
-        # Two-stage Ctrl-C, because the Rust pipeline holds the main
-        # thread inside `py.detach` for the duration of a run:
+        # Two-stage Ctrl-C. Interactive runs put the pipeline on a worker
+        # thread so Textual can own the main thread; plain runs may still
+        # hold the main thread inside `py.detach`:
         #
         #   1st Ctrl-C: mark interrupted, call `pipeline.cancel()` so the
         #               engine stops dispatching new work, then raise
-        #               KeyboardInterrupt. The raise only takes effect
-        #               once `pipeline.run` returns (Rust polls signals
-        #               itself — see `pipeline.rs` — so that happens
-        #               within ~100 ms after the cancel flag is set + the
-        #               currently-running backend calls finish).
+        #               KeyboardInterrupt. Rust also polls signals during
+        #               plain runs (see `pipeline.rs`).
         #
         #   2nd Ctrl-C within 2 s: hard exit. `os._exit(130)` skips
         #               atexit + Python finalization, but the kernel
@@ -823,8 +687,7 @@ class Interface:
         def _handler(signum, frame):  # noqa: ARG001
             now = time.monotonic()
             if self._interrupted and (now - self._interrupt_at) < 2.0:
-                # Bypass the live region's atexit ordering — we want to
-                # be gone *now*, not after Rich tries to redraw.
+                # Bypass terminal-renderer cleanup — we want to be gone now.
                 os._exit(130)
             self._interrupted = True
             self._interrupt_at = now
@@ -836,6 +699,14 @@ class Interface:
             self._sigint_prev = signal.signal(signal.SIGINT, _handler)
         except (ValueError, OSError):
             self._sigint_prev = None
+
+    def _request_cancel(self) -> None:
+        """Request the same cooperative cancellation as the first Ctrl-C."""
+        self._interrupted = True
+        self._interrupt_at = time.monotonic()
+        if self._pipeline is not None:
+            with suppress(Exception):
+                self._pipeline.cancel()
 
     def _restore_sigint(self) -> None:
         if self._sigint_prev is not None:

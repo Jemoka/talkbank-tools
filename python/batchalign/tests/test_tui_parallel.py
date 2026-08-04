@@ -20,11 +20,12 @@ from __future__ import annotations
 import io
 import os
 import re
+import threading
 from types import SimpleNamespace
 
 from rich.console import Console
 
-from batchalign.cli.tui import Interface, Task
+from batchalign.cli.tui import Interface, Task, TaskState
 
 
 def _capture_console() -> tuple[Console, io.StringIO]:
@@ -78,6 +79,198 @@ def test_run_pipeline_submits_inputs_in_one_call(fake_progress_core):
     assert calls == [3], f"expected single batched call of 3, got {calls}"
     assert len(outs) == 3
     assert ui.exit_code == 0
+
+
+def test_interactive_dashboard_keeps_textual_on_main_thread(
+    fake_progress_core, monkeypatch
+):
+    """Interactive runs move only pipeline work off the main/UI thread."""
+    RustTask, ProgressKind, ProgressEvent = fake_progress_core
+    console, _ = _capture_console()
+    main_thread = threading.current_thread()
+    pipeline_threads: list[threading.Thread] = []
+    dashboard_threads: list[threading.Thread] = []
+    dashboard_updates: list[bool] = []
+
+    class FakeDashboard:
+        def __init__(self, **_kwargs):
+            dashboard_threads.append(threading.current_thread())
+
+        def start(self):
+            pass
+
+        def update(self, _tasks, *, finished=False):
+            dashboard_updates.append(finished)
+
+        def run_while(self, worker, _tasks, **_kwargs):
+            thread = threading.Thread(target=worker)
+            thread.start()
+            thread.join()
+
+        def close(self, _tasks):
+            pass
+
+    import batchalign.cli.tui.dashboard as dashboard_module
+
+    monkeypatch.setattr(dashboard_module, "Dashboard", FakeDashboard)
+
+    class FakePipeline:
+        def run(self, inputs, callbacks):
+            pipeline_threads.append(threading.current_thread())
+            callback = dict(callbacks)[inputs[0].source_id]
+            callback(
+                ProgressEvent(
+                    source_id=inputs[0].source_id,
+                    kind=ProgressKind.StageStarted,
+                    task=RustTask.Asr,
+                )
+            )
+            callback(
+                ProgressEvent(
+                    source_id=inputs[0].source_id,
+                    kind=ProgressKind.SourceCompleted,
+                )
+            )
+            return [SimpleNamespace(source_id=inputs[0].source_id)]
+
+    inp = SimpleNamespace(source_id="a", path="/x/a.wav")
+    ui = Interface.open(
+        command="transcribe", params={}, output=None, plain=False, console=console
+    )
+    with ui:
+        ui.push(Task.from_input(inp))
+        list(ui.run_pipeline(FakePipeline(), [inp]))
+
+    assert dashboard_threads == [main_thread]
+    assert pipeline_threads and pipeline_threads[0] is not main_thread
+    assert len(dashboard_updates) == 2
+
+
+def test_interactive_pipeline_error_is_normalized_before_final_frame(
+    fake_progress_core, monkeypatch
+):
+    """The dashboard's last snapshot must contain terminal failure states."""
+    console, _ = _capture_console()
+    final_states = []
+
+    class FakeDashboard:
+        def __init__(self, **_kwargs):
+            pass
+
+        def start(self):
+            pass
+
+        def update(self, _tasks, *, finished=False):
+            pass
+
+        def run_while(self, worker, tasks, *, on_error=None):
+            errors = []
+
+            def run():
+                try:
+                    worker()
+                except BaseException as exc:  # noqa: BLE001 - mirrors adapter
+                    errors.append(exc)
+                    if on_error is not None:
+                        on_error(exc)
+
+            thread = threading.Thread(target=run)
+            thread.start()
+            thread.join()
+            final_states.extend(task.state for task in tasks)
+            if errors:
+                raise errors[0]
+
+        def close(self, _tasks):
+            pass
+
+    import batchalign.cli.tui.dashboard as dashboard_module
+
+    monkeypatch.setattr(dashboard_module, "Dashboard", FakeDashboard)
+
+    class BrokenPipeline:
+        def run(self, _inputs, callbacks):
+            raise RuntimeError("engine unavailable")
+
+    inputs = [
+        SimpleNamespace(source_id=sid, path=f"/x/{sid}.wav") for sid in ("a", "b")
+    ]
+    ui = Interface.open(
+        command="transcribe", params={}, output=None, plain=False, console=console
+    )
+    with ui:
+        for inp in inputs:
+            ui.push(Task.from_input(inp))
+        list(ui.run_pipeline(BrokenPipeline(), inputs))
+
+    assert final_states == [TaskState.FAIL, TaskState.FAIL]
+    assert ui.exit_code == 2
+
+
+def test_interactive_cancel_is_normalized_before_final_frame(
+    fake_progress_core, monkeypatch
+):
+    RustTask, ProgressKind, ProgressEvent = fake_progress_core
+    console, _ = _capture_console()
+    final_states = []
+
+    class FakeDashboard:
+        def __init__(self, **_kwargs):
+            pass
+
+        def start(self):
+            pass
+
+        def update(self, _tasks, *, finished=False):
+            pass
+
+        def run_while(self, worker, tasks, **_kwargs):
+            thread = threading.Thread(target=worker)
+            thread.start()
+            thread.join()
+            final_states.extend(task.state for task in tasks)
+
+        def close(self, _tasks):
+            pass
+
+    import batchalign.cli.tui.dashboard as dashboard_module
+
+    monkeypatch.setattr(dashboard_module, "Dashboard", FakeDashboard)
+
+    class CancelledPipeline:
+        def __init__(self):
+            self.cancelled = False
+
+        def cancel(self):
+            self.cancelled = True
+
+        def run(self, inputs, callbacks):
+            callback = dict(callbacks)[inputs[0].source_id]
+            callback(
+                ProgressEvent(
+                    source_id=inputs[0].source_id,
+                    kind=ProgressKind.StageStarted,
+                    task=RustTask.Asr,
+                )
+            )
+            ui._request_cancel()
+            return [SimpleNamespace(source_id=inp.source_id) for inp in inputs]
+
+    inputs = [
+        SimpleNamespace(source_id=sid, path=f"/x/{sid}.wav") for sid in ("a", "b")
+    ]
+    pipeline = CancelledPipeline()
+    ui = Interface.open(
+        command="transcribe", params={}, output=None, plain=False, console=console
+    )
+    with ui:
+        for inp in inputs:
+            ui.push(Task.from_input(inp))
+        list(ui.run_pipeline(pipeline, inputs))
+
+    assert pipeline.cancelled
+    assert final_states == [TaskState.FAIL, TaskState.SKIP]
+    assert ui.exit_code == 130
 
 
 def test_run_pipeline_enables_traceback_capture_only_at_vv(fake_progress_core):

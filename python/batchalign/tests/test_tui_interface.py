@@ -118,6 +118,83 @@ def test_total_failure_exit_two(fake_progress_core):
     assert ui.exit_code == 2
 
 
+def test_verbose_mode_keeps_line_oriented_output(fake_progress_core):
+    console, _buf = _capture_console()
+    for verbosity in (1, 2, 3):
+        ui = Interface.open(
+            command="morphotag",
+            params={},
+            output=None,
+            plain=False,
+            console=console,
+            verbosity=verbosity,
+        )
+        assert ui.plain is True
+
+
+def test_interactive_summary_lists_processed_files(fake_progress_core):
+    console, buf = _capture_console()
+    ui = Interface.open(
+        command="transcribe",
+        params={},
+        output=None,
+        plain=False,
+        console=console,
+    )
+    done = ui.push(Task(source_id="a", label="done.wav"))
+    failed = ui.push(Task(source_id="b", label="broken.wav"))
+    done.stage_started("asr")
+    done.complete()
+    failed.stage_started("asr")
+    failed.fail("backend failed")
+    ui._started_at = 0.0
+
+    ui._render_summary()
+
+    out = _strip_ansi(buf.getvalue())
+    assert "Run summary" in out
+    assert "batchalign3 transcribe" in out
+    assert "2 processed" in out
+    assert "done.wav" in out
+    assert "broken.wav" in out
+    assert "backend failed" in out
+
+
+def test_interactive_summary_preserves_chat_parse_carets(
+    fake_progress_core, tmp_path
+):
+    console, buf = _capture_console()
+    chat = tmp_path / "broken.cha"
+    content = "@Begin\n*PAR:\thello <bad>\n@End\n"
+    chat.write_text(content, encoding="utf-8")
+    start = content.encode().index(b"<bad>")
+    error = (
+        f"parse {chat}: CHAT validation failed: "
+        f"error[E999]: Illegal token (bytes {start}..{start + 5})"
+    )
+    ui = Interface.open(
+        command="morphotag",
+        params={},
+        output=None,
+        plain=False,
+        console=console,
+    )
+    task = ui.push(Task(source_id=str(chat), label=chat.name))
+    task.stage_started("morphosyntax")
+    task.fail(error)
+    ui._started_at = 0.0
+
+    ui._render_summary()
+
+    out = _strip_ansi(buf.getvalue())
+    assert "Run summary" in out
+    assert "error[E999]: Illegal token" in out
+    assert "at line 2" in out
+    assert "hello <bad>" in out
+    assert "^^^^^" in out
+    assert out.index("error[E999]: Illegal token") < out.index("Run summary")
+
+
 def test_traceback_hidden_below_vv(fake_progress_core):
     RustTask, ProgressKind, ProgressEvent = fake_progress_core
     console, buf = _capture_console()
