@@ -273,6 +273,29 @@ def test_interactive_cancel_is_normalized_before_final_frame(
     assert ui.exit_code == 130
 
 
+def test_second_cancel_request_hard_exits(monkeypatch):
+    console, _ = _capture_console()
+    ui = Interface.open(
+        command="transcribe", params={}, output=None, plain=True, console=console
+    )
+    exit_codes = []
+
+    def fake_exit(code):
+        exit_codes.append(code)
+        raise SystemExit(code)
+
+    monkeypatch.setattr(os, "_exit", fake_exit)
+    ui._request_cancel()
+    try:
+        ui._request_cancel()
+    except SystemExit as exc:
+        assert exc.code == 130
+    else:
+        raise AssertionError("second cancellation did not hard-exit")
+
+    assert exit_codes == [130]
+
+
 def test_run_pipeline_enables_traceback_capture_only_at_vv(fake_progress_core):
     RustTask, ProgressKind, ProgressEvent = fake_progress_core
     console, _ = _capture_console()

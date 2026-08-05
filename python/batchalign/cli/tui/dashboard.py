@@ -21,6 +21,7 @@ from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.coordinate import Coordinate
 from textual.widgets import DataTable, ProgressBar, Static
 
 from .errors import is_rich, render_error
@@ -261,11 +262,23 @@ class BatchalignDashboard(App[None]):
 
     def on_mount(self) -> None:
         table = self.query_one("#files", DataTable)
-        table.add_columns("STATUS", "FILE", "STAGE", "PROGRESS", "ELAPSED")
+        table.add_column("STATUS", key="status")
+        table.add_column("FILE", key="file")
+        table.add_column("STAGE", key="stage")
+        table.add_column("PROGRESS", key="progress")
+        table.add_column("ELAPSED", key="elapsed")
         table.focus()
         self._content_ready = True
         self._apply_size_classes(self.size.width, self.size.height)
         self._render_all()
+        # ``on_mount`` runs before Textual's first completed paint. Releasing
+        # the pipeline worker here lets Python-heavy lazy backend setup seize
+        # the GIL while the alternate screen is still blank (often leaving a
+        # lone character from the Rich "preparing pipeline…" spinner). Wait
+        # until the initial dashboard frame has actually been refreshed.
+        self.call_after_refresh(self._release_pipeline_worker)
+
+    def _release_pipeline_worker(self) -> None:
         if self._external_ready_event is not None:
             self._external_ready_event.set()
 
@@ -350,9 +363,9 @@ class BatchalignDashboard(App[None]):
             total=max(1, total), progress=terminal
         )
         filter_bits = []
-        for index, (name, states) in enumerate(_FILTERS, 1):
+        for name, states in _FILTERS:
             count = sum(t.state in states for t in self.snapshots)
-            label = f"{index} {name.upper()} {count}"
+            label = f"{name.upper()} {count}"
             filter_bits.append(
                 f"[bold #c7d2fe on #26334a] {label} [/]"
                 if name == self.filter_name
@@ -373,22 +386,47 @@ class BatchalignDashboard(App[None]):
 
     def _render_table(self, selected: str | None = None) -> None:
         table = self.query_one("#files", DataTable)
-        table.clear(columns=False)
         visible = self._visible()
+        visible_ids = [task.source_id for task in visible]
+        current_ids = [
+            str(table.coordinate_to_cell_key(Coordinate(row, 0)).row_key.value)
+            for row in range(table.row_count)
+        ]
+
+        # Progress events normally change cell values, not table membership.
+        # Updating in place preserves the user's independent scroll position;
+        # clearing the table resets it to the selected/processing row.
+        if current_ids == visible_ids:
+            for task in visible:
+                for column, value in zip(
+                    ("status", "file", "stage", "progress", "elapsed"),
+                    self._row_values(task),
+                ):
+                    table.update_cell(
+                        task.source_id, column, value, update_width=True
+                    )
+            return
+
+        scroll_x, scroll_y = table.scroll_offset
+        table.clear(columns=False)
         for task in visible:
-            table.add_row(
-                _STATE_MARKUP[task.state],
-                escape(task.label),
-                escape(task.stage or "—"),
-                _progress(task),
-                _elapsed(task.elapsed),
-                key=task.source_id,
-            )
+            table.add_row(*self._row_values(task), key=task.source_id)
         if selected is not None:
             for index, task in enumerate(visible):
                 if task.source_id == selected:
-                    table.move_cursor(row=index)
+                    table.move_cursor(row=index, scroll=False)
                     break
+        table.set_scroll(scroll_x, scroll_y)
+
+    @staticmethod
+    def _row_values(task: TaskSnapshot) -> tuple[str, str, str, str, str]:
+        return (
+            _STATE_MARKUP[task.state],
+            escape(task.label),
+            escape(task.stage or "—"),
+            _progress(task),
+            _elapsed(task.elapsed),
+        )
 
     def _selected(self) -> TaskSnapshot | None:
         source_id = self.selected_source_id
@@ -478,12 +516,17 @@ class BatchalignDashboard(App[None]):
     def action_cancel_run(self) -> None:
         if self._request_cancel is not None:
             if self._cancel_requested:
-                self.notify("Cancellation is already in progress.")
+                self.notify("Force quitting now…", severity="error")
+                self._request_cancel()
                 return
             self._cancel_requested = True
             self._render_all(self.selected_source_id)
+            self.query_one("#keybar", Static).update(
+                "[bold #fb7185]Ctrl+C again[/] force quit"
+            )
             self.notify(
-                "Cancellation requested; finishing active work.", severity="warning"
+                "Cancellation requested; Ctrl+C again force quits.",
+                severity="warning",
             )
             self._request_cancel()
 
@@ -510,6 +553,7 @@ class Dashboard:
             request_cancel=request_cancel,
         )
         self._running = False
+        self._abort_before_start = threading.Event()
 
     def start(self) -> None:
         """Retained as a no-op for ``Interface``'s prepare/run boundary.
@@ -539,7 +583,9 @@ class Dashboard:
         errors: list[BaseException] = []
 
         def work() -> None:
-            self._ready.wait(timeout=2.0)
+            self._ready.wait()
+            if self._abort_before_start.is_set():
+                return
             try:
                 worker()
             except BaseException as exc:  # noqa: BLE001 - re-raised on main thread
@@ -559,6 +605,11 @@ class Dashboard:
         try:
             self._app.run(mouse=True)
         finally:
+            # If Textual aborts before its first refresh, unblock the worker
+            # without launching a pipeline invisibly after the UI is gone.
+            if not self._ready.is_set():
+                self._abort_before_start.set()
+                self._ready.set()
             pipeline_thread.join()
             self._running = False
         if errors:

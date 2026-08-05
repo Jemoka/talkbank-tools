@@ -96,7 +96,6 @@ class Interface:
         self._started_at: float = 0.0
         self._sigint_prev: Any = None
         self._interrupted = False
-        self._interrupt_at: float = 0.0
         # Active pipeline, set by `callbacks_for` / `run_pipeline` so the
         # SIGINT handler can flip its cooperative-cancel flag. Without
         # this, Ctrl-C just sets a Python-side flag that doesn't fire
@@ -676,7 +675,7 @@ class Interface:
         #               KeyboardInterrupt. Rust also polls signals during
         #               plain runs (see `pipeline.rs`).
         #
-        #   2nd Ctrl-C within 2 s: hard exit. `os._exit(130)` skips
+        #   2nd Ctrl-C: hard exit. `os._exit(130)` skips
         #               atexit + Python finalization, but the kernel
         #               sends SIGTERM/HUP to subprocesses in the
         #               foreground process group, so ffmpeg / whisper /
@@ -685,12 +684,10 @@ class Interface:
         #               backend has gone unresponsive and won't honor
         #               cooperative cancel.
         def _handler(signum, frame):  # noqa: ARG001
-            now = time.monotonic()
-            if self._interrupted and (now - self._interrupt_at) < 2.0:
+            if self._interrupted:
                 # Bypass terminal-renderer cleanup — we want to be gone now.
                 os._exit(130)
             self._interrupted = True
-            self._interrupt_at = now
             if self._pipeline is not None:
                 with suppress(Exception):
                     self._pipeline.cancel()
@@ -701,9 +698,10 @@ class Interface:
             self._sigint_prev = None
 
     def _request_cancel(self) -> None:
-        """Request the same cooperative cancellation as the first Ctrl-C."""
+        """Cooperatively cancel once; hard-exit on the second request."""
+        if self._interrupted:
+            os._exit(130)
         self._interrupted = True
-        self._interrupt_at = time.monotonic()
         if self._pipeline is not None:
             with suppress(Exception):
                 self._pipeline.cancel()

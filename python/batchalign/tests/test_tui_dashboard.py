@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import threading
 
 from rich.console import Console
 from textual.widgets import DataTable, Static
@@ -52,6 +53,27 @@ def test_task_snapshot_detaches_mutable_task_state():
     assert (snapshot.completed, snapshot.total) == (3, 8)
 
 
+def test_pipeline_is_released_only_after_initial_refresh():
+    async def exercise() -> None:
+        ready = threading.Event()
+        app = BatchalignDashboard(
+            command="transcribe",
+            params={},
+            output=None,
+            snapshots=_snapshots(),
+            ready=ready,
+        )
+        assert not ready.is_set()
+        async with app.run_test(size=(100, 28)) as pilot:
+            await pilot.pause()
+            assert ready.is_set()
+            assert app._content_ready
+            assert app.query_one("#files", DataTable).row_count == 3
+            app.exit()
+
+    asyncio.run(exercise())
+
+
 def test_dashboard_filters_navigates_and_responds_to_resize():
     async def exercise() -> None:
         app = BatchalignDashboard(
@@ -67,6 +89,10 @@ def test_dashboard_filters_navigates_and_responds_to_resize():
             assert not app.screen.has_class("narrow")
             assert "whisper" in str(app.query_one("#config", Static).render())
             assert "Ctrl+C" in str(app.query_one("#keybar", Static).render())
+            filters = str(app.query_one("#filters", Static).render())
+            assert "ALL 3" in filters
+            assert "ACTIVE 2" in filters
+            assert "1 ALL" not in filters
 
             await pilot.press("down")
             await pilot.pause()
@@ -140,6 +166,55 @@ def test_dashboard_applies_live_updates_and_preserves_selection():
     asyncio.run(exercise())
 
 
+def test_live_progress_does_not_recenter_the_users_viewport():
+    async def exercise() -> None:
+        snapshots = [
+            TaskSnapshot(
+                f"/data/{index:02}.wav",
+                f"{index:02}.wav",
+                TaskState.RUN if index == 0 else TaskState.WAIT,
+                "asr" if index == 0 else None,
+                index if index == 0 else None,
+                100 if index == 0 else None,
+                1.0 if index == 0 else None,
+                None,
+            )
+            for index in range(30)
+        ]
+        app = BatchalignDashboard(
+            command="transcribe", params={}, output=None, snapshots=snapshots
+        )
+        async with app.run_test(size=(100, 20)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#files", DataTable)
+            assert app.selected_source_id == "/data/00.wav"
+            table.scroll_to(y=12, animate=False, immediate=True)
+            await pilot.pause()
+            before = table.scroll_offset
+            assert before.y > 0
+
+            updated = list(snapshots)
+            updated[0] = TaskSnapshot(
+                "/data/00.wav",
+                "00.wav",
+                TaskState.RUN,
+                "asr",
+                50,
+                100,
+                2.0,
+                None,
+            )
+            app.apply_snapshots(updated)
+            await pilot.pause()
+
+            assert table.scroll_offset == before
+            assert app.selected_source_id == "/data/00.wav"
+            assert str(table.get_cell("/data/00.wav", "progress")) == "50/100   50%"
+            app.exit()
+
+    asyncio.run(exercise())
+
+
 def test_dashboard_surfaces_cancellation_immediately():
     async def exercise() -> None:
         cancellations = []
@@ -159,10 +234,11 @@ def test_dashboard_surfaces_cancellation_immediately():
             assert app._cancel_requested
             summary = str(app.query_one("#summary", Static).render())
             assert "CANCELLING" in summary
+            assert "again" in str(app.query_one("#keybar", Static).render())
 
             await pilot.press("ctrl+c")
             await pilot.pause()
-            assert cancellations == [True]
+            assert cancellations == [True, True]
             app.exit()
 
     asyncio.run(exercise())
