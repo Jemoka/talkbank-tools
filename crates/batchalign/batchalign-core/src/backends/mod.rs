@@ -18,7 +18,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod compare;
+pub mod convert;
 pub use compare::CompareBackend;
+pub use convert::ConvertBackend;
 
 /// Backend-call failure.
 #[derive(Debug, Error)]

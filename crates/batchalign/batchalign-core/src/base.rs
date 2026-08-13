@@ -9,6 +9,7 @@ use crate::metrics::MetricsArtifact;
 use crate::proto::ai::{AiInput, AiOutput};
 use crate::proto::asr::{AsrInput, AsrOutput};
 use crate::proto::compare::{CompareInput, CompareOutput};
+use crate::proto::convert::{ConvertInput, MediaOutput};
 use crate::proto::coref::{CorefInput, CorefOutput};
 use crate::proto::fa::{FaInput, FaOutput};
 use crate::proto::morphosyntax::{MorphosyntaxInput, MorphosyntaxOutput};
@@ -66,6 +67,8 @@ pub enum Task {
     Coref,
     /// Pure-AST diff against a gold-standard transcript.
     Compare,
+    /// Decode media and encode a new WAV or MP3 artifact.
+    Convert,
 }
 
 impl Task {
@@ -91,6 +94,7 @@ impl Task {
             Task::Coref => &[Task::Morphosyntax],
             Task::Translate => &[Task::Morphosyntax],
             Task::Compare => &[],
+            Task::Convert => &[],
         }
     }
 
@@ -107,11 +111,12 @@ impl Task {
             Task::Translate => "translate",
             Task::Coref => "coref",
             Task::Compare => "compare",
+            Task::Convert => "convert",
         }
     }
 
     /// Every variant — useful for iteration in tests and codegen.
-    pub const ALL: [Task; 10] = [
+    pub const ALL: [Task; 11] = [
         Task::Ai,
         Task::Asr,
         Task::Fa,
@@ -122,6 +127,7 @@ impl Task {
         Task::Translate,
         Task::Coref,
         Task::Compare,
+        Task::Convert,
     ];
 }
 
@@ -205,6 +211,7 @@ union_input_output! {
         Translate(TranslateInput) => Translate,
         Coref(CorefInput) => Coref,
         Compare(CompareInput) => Compare,
+        Convert(ConvertInput) => Convert,
     }
     output {
         Ai(AiOutput),
@@ -217,6 +224,7 @@ union_input_output! {
         Translate(TranslateOutput),
         Coref(CorefOutput),
         Compare(CompareOutput),
+        Convert(MediaOutput),
     }
 }
 
@@ -251,6 +259,7 @@ try_from_output! {
     Translate(TranslateOutput),
     Coref(CorefOutput),
     Compare(CompareOutput),
+    Convert(MediaOutput),
 }
 
 // ---------------------------------------------------------------------------
@@ -488,6 +497,8 @@ impl Paired {
 pub enum BAValue {
     /// A reference to media on disk (the typical pipeline input).
     Media(MediaInput),
+    /// Newly encoded media bytes. Unlike `Media`, this is a writable output.
+    MediaOutput(MediaOutput),
     /// A validated CHAT document.
     Chat(Chat<Validated>),
     /// A CHAT document paired with the instruction for `Task::Ai`.
@@ -537,6 +548,7 @@ impl BAValue {
     pub fn source_id(&self) -> SourceId {
         match self {
             BAValue::Media(m) => m.source_id.clone(),
+            BAValue::MediaOutput(m) => m.source_id.clone(),
             BAValue::Chat(c) => c.source_id().clone(),
             BAValue::Ai { chat, .. } => chat.source_id().clone(),
             BAValue::Paired(p) => p.source_id().clone(),
@@ -565,6 +577,7 @@ impl BAValue {
     pub fn kind(&self) -> &'static str {
         match self {
             BAValue::Media(_) => "Media",
+            BAValue::MediaOutput(_) => "MediaOutput",
             BAValue::Chat(_) => "Chat",
             BAValue::Ai { .. } => "Ai",
             BAValue::Paired(_) => "Paired",
@@ -587,6 +600,7 @@ impl BAValue {
             BAValue::Media(_) => Err(BAError::Internal(
                 "pipeline did not process media into a writable output".into(),
             )),
+            BAValue::MediaOutput(output) => output.write(path),
             BAValue::Cons { head, tail } => {
                 head.write(path)?;
                 tail.write(path)

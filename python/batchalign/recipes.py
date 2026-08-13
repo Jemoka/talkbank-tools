@@ -130,6 +130,23 @@ def utseg(*, utseg_backend: Any, **opts: Any) -> Any:
     return Pipeline(tasks=[Task.UtSeg], backends=[utseg_backend], **opts)
 
 
+def convert(*, format: str, convert_backend: Any = None, **opts: Any) -> Any:
+    """Decode media and produce a new WAV or MP3 artifact.
+
+    The default backend is native Rust. Conversion bypasses the shared LMDB
+    cache unless the caller explicitly supplies a cache policy: encoded media
+    payloads are large and cheap enough to regenerate that caching them is a
+    poor default.
+    """
+    Task, Pipeline = _core()
+    if convert_backend is None:
+        from batchalign._core import CacheSpec  # type: ignore[attr-defined]
+        from batchalign._core.backends import ConvertBackend  # type: ignore[attr-defined]
+        convert_backend = ConvertBackend(format)
+        opts.setdefault("cache", CacheSpec.bypass())
+    return Pipeline(tasks=[Task.Convert], backends=[convert_backend], **opts)
+
+
 def compare(
     *,
     stanza_backend: Any | None = None,
@@ -172,4 +189,5 @@ __all__ = [
     "coref",
     "utseg",
     "compare",
+    "convert",
 ]

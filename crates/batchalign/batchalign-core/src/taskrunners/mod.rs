@@ -6,6 +6,7 @@
 pub mod ai;
 pub mod asr;
 pub mod compare;
+pub mod convert;
 pub mod coref;
 pub mod fa;
 pub mod morphosyntax;
@@ -36,5 +37,6 @@ pub fn canonical(task: Task) -> Box<dyn DynTaskRunner> {
         Task::Utr => Box::new(utr::UtrTaskRunner),
         Task::Coref => Box::new(coref::CorefTaskRunner),
         Task::Compare => Box::new(compare::CompareTaskRunner),
+        Task::Convert => Box::new(convert::ConvertTaskRunner),
     }
 }

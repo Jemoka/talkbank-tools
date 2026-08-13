@@ -843,7 +843,11 @@ fn validate_value_for_stage(value: &BAValue, task: Task, gate: StageGate) -> Res
             validate_value_for_stage(head, task, gate)?;
             validate_value_for_stage(tail, task, gate)
         }
-        BAValue::Media(_) | BAValue::Metrics(_) | BAValue::Nil | BAValue::Failed { .. } => Ok(()),
+        BAValue::Media(_)
+        | BAValue::MediaOutput(_)
+        | BAValue::Metrics(_)
+        | BAValue::Nil
+        | BAValue::Failed { .. } => Ok(()),
     }
 }
 

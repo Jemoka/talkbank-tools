@@ -270,6 +270,7 @@ fn call_py_backend(
                 TaskInput::Translate(_) => "Translate",
                 TaskInput::Coref(_) => "Coref",
                 TaskInput::Compare(_) => "Compare",
+                TaskInput::Convert(_) => "Convert",
             })
             .collect();
         let response_tagged = proto_mod

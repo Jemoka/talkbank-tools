@@ -260,8 +260,8 @@ impl PairedInput {
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all))]
 pub struct PreparedAudio {
     /// Interleaved little-endian f32 PCM samples.
-    #[serde(with = "base64_pcm")]
-    #[schemars(schema_with = "base64_pcm::json_schema")]
+    #[serde(with = "base64_bytes")]
+    #[schemars(schema_with = "base64_bytes::json_schema")]
     pub pcm_f32le: Vec<u8>,
     /// Sampling rate in Hz.
     pub sample_rate: u32,
@@ -281,7 +281,7 @@ crate::register_proto_schema!(PreparedAudio);
 /// `np.frombuffer(audio.pcm_f32le, ...)`. The `format: "byte"` annotation
 /// tells `datamodel-code-generator` to emit a `bytes` field that auto-decodes
 /// the base64 payload at validation time.
-mod base64_pcm {
+pub(crate) mod base64_bytes {
     use base64::Engine as _;
     use base64::engine::general_purpose::STANDARD;
     use schemars::{Schema, SchemaGenerator, json_schema};
@@ -334,8 +334,21 @@ impl From<&str> for SpeakerLabel {
 // Audio preparation (symphonia-backed PCM decode)
 // ---------------------------------------------------------------------------
 
-/// Decode the file at `input.path` into little-endian f32 PCM bytes.
+/// Decode the file at `input.path` into mono little-endian f32 PCM bytes.
+///
+/// Inference consumers historically require mono, so this remains the
+/// downmixing entrypoint. Media conversion uses [`prepare_pcm_interleaved`]
+/// to retain the source channel layout.
 pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
+    prepare_pcm_impl(input, true)
+}
+
+/// Decode media into interleaved little-endian f32 PCM without downmixing.
+pub fn prepare_pcm_interleaved(input: &MediaInput) -> Result<PreparedAudio> {
+    prepare_pcm_impl(input, false)
+}
+
+fn prepare_pcm_impl(input: &MediaInput, downmix_to_mono: bool) -> Result<PreparedAudio> {
     let file = std::fs::File::open(&input.path)
         .with_context(|| format!("audio_prep: open {}", input.path.display()))?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
@@ -369,11 +382,9 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
         .with_context(|| "audio_prep: codec init")?;
 
     let sample_rate = track.codec_params.sample_rate.unwrap_or(16_000);
-    // Source channel count is informational only — we downmix to mono below
-    // (BA2 parity: `torch.mean(audio.transpose(0,1), dim=1)` in
-    // `batchalign2/batchalign/models/wave2vec/infer_fa.py`).
 
     let mut pcm_f32: Vec<f32> = Vec::new();
+    let mut decoded_channels: Option<usize> = None;
     loop {
         let packet = match format.next_packet() {
             Ok(p) => p,
@@ -408,17 +419,35 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
         if planes.is_empty() {
             continue;
         }
-        let frames = planes[0].len();
-        if planes.len() == 1 {
-            pcm_f32.extend_from_slice(planes[0]);
+        if let Some(expected) = decoded_channels {
+            if expected != planes.len() {
+                return Err(anyhow!(
+                    "audio_prep: channel count changed from {expected} to {}",
+                    planes.len()
+                ));
+            }
         } else {
-            let n = planes.len() as f32;
-            for i in 0..frames {
-                let mut acc = 0.0f32;
-                for plane in planes {
-                    acc += plane[i];
+            decoded_channels = Some(planes.len());
+        }
+        let frames = planes[0].len();
+        if downmix_to_mono {
+            if planes.len() == 1 {
+                pcm_f32.extend_from_slice(planes[0]);
+            } else {
+                let n = planes.len() as f32;
+                for i in 0..frames {
+                    let mut acc = 0.0f32;
+                    for plane in planes {
+                        acc += plane[i];
+                    }
+                    pcm_f32.push(acc / n);
                 }
-                pcm_f32.push(acc / n);
+            }
+        } else {
+            for i in 0..frames {
+                for plane in planes {
+                    pcm_f32.push(plane[i]);
+                }
             }
         }
     }
@@ -428,9 +457,13 @@ pub fn prepare_pcm(input: &MediaInput) -> Result<PreparedAudio> {
         pcm_bytes.extend_from_slice(&sample.to_le_bytes());
     }
 
-    // pcm_f32 is now mono; downstream `channels` is the post-downmix value.
-    let channels: u16 = 1;
-    let frame_count = pcm_f32.len() as u64;
+    let channels = if downmix_to_mono {
+        1
+    } else {
+        u16::try_from(decoded_channels.unwrap_or(1))
+            .map_err(|_| anyhow!("audio_prep: channel count does not fit u16"))?
+    };
+    let frame_count = (pcm_f32.len() / usize::from(channels)) as u64;
 
     Ok(PreparedAudio {
         pcm_f32le: pcm_bytes,

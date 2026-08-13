@@ -25,6 +25,7 @@
 pub mod ai;
 pub mod asr;
 pub mod compare;
+pub mod convert;
 pub mod coref;
 pub mod fa;
 pub mod morphosyntax;
@@ -36,6 +37,7 @@ pub mod utseg;
 pub use ai::{AiInput, AiOutput, AiRevision, AiUtterance};
 pub use asr::{AsrInput, AsrOptions, AsrOutput, AsrSegment, AsrWord, LanguageSpec};
 pub use compare::{CompareInput, CompareMetrics, CompareMetricsPos, CompareOutput};
+pub use convert::{ConvertInput, MediaFormat, MediaOutput};
 pub use coref::{CorefInput, CorefOutput};
 pub use fa::{FaInput, FaOutput};
 pub use morphosyntax::{

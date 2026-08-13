@@ -75,6 +75,10 @@ from batchalign._core._proto_generated import (  # noqa: F401
     CompareMetrics,
     CompareMetricsPos,
     CompareOutput,
+    # Convert
+    ConvertInput,
+    MediaFormat,
+    MediaOutput,
     # Tagged unions
     TaskInput,
     TaskOutput,
@@ -123,6 +127,7 @@ _TAG_TO_INPUT: dict[str, type] = {
     "Translate": TranslateInput,
     "Coref": CorefInput,
     "Compare": CompareInput,
+    "Convert": ConvertInput,
 }
 
 _OUTPUT_TO_TAG: dict[type, str] = {
@@ -135,6 +140,7 @@ _OUTPUT_TO_TAG: dict[type, str] = {
     TranslateOutput: "Translate",
     CorefOutput: "Coref",
     CompareOutput: "Compare",
+    MediaOutput: "Convert",
 }
 
 

@@ -19,6 +19,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 
 pub mod compare;
+pub mod convert;
 
 /// Build the `batchalign._core.backends` submodule, populate it with all
 /// native backend wrappers, and attach it to the parent `_core` module.
@@ -29,6 +30,7 @@ pub mod compare;
 pub fn register<'py>(py: Python<'py>, parent: &Bound<'py, PyModule>) -> PyResult<()> {
     let m = PyModule::new(py, "backends")?;
     m.add_class::<compare::CompareBackend>()?;
+    m.add_class::<convert::ConvertBackend>()?;
 
     parent.add_submodule(&m)?;
     let sys = py.import("sys")?;

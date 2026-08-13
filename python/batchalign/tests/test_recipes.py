@@ -31,6 +31,7 @@ def fake_core(monkeypatch):
         Translate = "Translate"
         Coref = "Coref"
         Compare = "Compare"
+        Convert = "Convert"
 
     captured = {}
 
@@ -45,11 +46,25 @@ def fake_core(monkeypatch):
         """Stand-in for `batchalign._core.backends.CompareBackend`."""
         name = "compare:rust:v3.1"
 
+    class ConvertBackend:
+        """Stand-in for `batchalign._core.backends.ConvertBackend`."""
+
+        def __init__(self, format):
+            self.format = format
+            self.name = f"convert:rust:{format}"
+
+    class CacheSpec:
+        @staticmethod
+        def bypass():
+            return "cache-bypass"
+
     fake = types.ModuleType("batchalign._core")
     fake.Task = Task
     fake.Pipeline = Pipeline
+    fake.CacheSpec = CacheSpec
     fake_backends = types.ModuleType("batchalign._core.backends")
     fake_backends.CompareBackend = CompareBackend
+    fake_backends.ConvertBackend = ConvertBackend
     fake.backends = fake_backends
     monkeypatch.setitem(sys.modules, "batchalign._core", fake)
     monkeypatch.setitem(sys.modules, "batchalign._core.backends", fake_backends)
@@ -148,3 +163,27 @@ def test_compare_chains_morphosyntax_then_compare(fake_core):
     assert len(pipe.backends) == 2
     assert pipe.backends[0] == "stanza_fake"
     assert pipe.backends[1].name == "compare:rust:v3.1"
+
+
+def test_convert_defaults_to_native_backend_and_bypasses_cache(fake_core):
+    Task, Pipeline, _ = fake_core
+    from batchalign import recipes
+
+    pipe = recipes.convert(format="mp3", workers=3)
+    assert _task_names(pipe) == ["Convert"]
+    assert pipe.backends[0].name == "convert:rust:mp3"
+    assert pipe.opts == {"workers": 3, "cache": "cache-bypass"}
+
+
+def test_convert_accepts_explicit_backend_and_cache(fake_core):
+    Task, Pipeline, _ = fake_core
+    from batchalign import recipes
+
+    backend = object()
+    pipe = recipes.convert(
+        format="wav",
+        convert_backend=backend,
+        cache="caller-cache",
+    )
+    assert pipe.backends == [backend]
+    assert pipe.opts["cache"] == "caller-cache"
