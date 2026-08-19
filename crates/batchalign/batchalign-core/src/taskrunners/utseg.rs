@@ -22,8 +22,8 @@ use crate::proto::utseg::{UtSegInput, UtSegOutput};
 use crate::utils::SourceId;
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
-use std::collections::BTreeSet;
-use talkbank_model::alignment::helpers::{WordItem, walk_words};
+use std::collections::{BTreeSet, HashMap};
+use talkbank_model::alignment::helpers::TierDomain;
 
 /// UtSeg runner — `Task::UtSeg` entry point.
 pub struct UtSegTaskRunner;
@@ -78,6 +78,8 @@ impl TaskRunner for UtSegTaskRunner {
         let rows: Vec<UtteranceRow> = collect_utterance_rows(chat);
         let total = rows.len() as u64;
         let mut new_utts: Vec<NewUtterance> = Vec::new();
+        let mut assignment_map: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut requires_rebuild = false;
         for (idx, row) in rows.iter().enumerate() {
             let input = UtSegInput {
                 source_id: source_id.clone(),
@@ -89,6 +91,13 @@ impl TaskRunner for UtSegTaskRunner {
             };
             let out_raw = dispatcher.dispatch(TaskInput::UtSeg(input.clone())).await?;
             let out: UtSegOutput = out_raw.try_into()?;
+            match assignments_from_spans(row, &out) {
+                Some(assignments) if !assignments.is_empty() => {
+                    assignment_map.insert(idx, assignments);
+                }
+                Some(_) => {}
+                None => requires_rebuild = true,
+            }
             collect_split(row, &input, &out, &mut new_utts);
             sink.emit(ProgressEvent::stage_tick(
                 &source_id,
@@ -98,17 +107,29 @@ impl TaskRunner for UtSegTaskRunner {
             ));
         }
 
-        let mut new_chat = build_chat_from_utterances(
-            &source_id,
-            &langs,
-            &media_name,
-            media_type.as_deref(),
-            &new_utts,
-        )?;
-        if let Some(m) = media {
-            new_chat = new_chat.with_media(m);
+        if requires_rebuild {
+            // Backends that change tokenization (rather than only assigning
+            // existing words to utterances) still need the legacy rebuild.
+            // Cantonese word segmentation is the primary example.
+            let mut new_chat = build_chat_from_utterances(
+                &source_id,
+                &langs,
+                &media_name,
+                media_type.as_deref(),
+                &new_utts,
+            )?;
+            if let Some(m) = media {
+                new_chat = new_chat.with_media(m);
+            }
+            *value = BAValue::Chat(new_chat);
+        } else {
+            // Boundary-only backends return the original words partitioned
+            // into spans. Apply those assignments to the existing typed AST
+            // so case, CHAT structure, dependent tiers, and the parent's
+            // utterance bullet are preserved exactly. The shared transform
+            // deliberately attaches that bullet to the final child only.
+            talkbank_transform::utseg::apply_utseg_results(chat.ast_mut(), &assignment_map);
         }
-        *value = BAValue::Chat(new_chat);
         sink.emit(ProgressEvent::stage_injected(&source_id, Task::UtSeg));
         Ok(())
     }
@@ -166,21 +187,22 @@ fn collect_utterance_rows(chat: &Chat) -> Vec<UtteranceRow> {
                 .wor_tier()
                 .map(|tier| tier.words().map(word_timing).collect())
                 .unwrap_or_default();
-            let mut words: Vec<AsrWord> = Vec::new();
-            walk_words(&u.main.content.content.0, None, &mut |w| match w {
-                WordItem::Word(x) => {
-                    let fallback = wor_timings.get(words.len()).and_then(|t| *t);
-                    words.push(asr_word_from_text(x.cleaned_text(), word_timing(x).or(fallback)));
-                }
-                WordItem::ReplacedWord(r) => {
-                    let fallback = wor_timings.get(words.len()).and_then(|t| *t);
-                    words.push(asr_word_from_text(
-                        r.word.cleaned_text(),
-                        word_timing(&r.word).or(fallback),
-                    ));
-                }
-                WordItem::Separator(_) => {}
-            });
+            let mut extracted = Vec::new();
+            talkbank_transform::extract::collect_utterance_content(
+                &u.main.content.content,
+                TierDomain::Mor,
+                &mut extracted,
+            );
+            let words: Vec<AsrWord> = extracted
+                .iter()
+                .enumerate()
+                .map(|(index, word)| {
+                    asr_word_from_text(
+                        word.text.as_str(),
+                        wor_timings.get(index).and_then(|timing| *timing),
+                    )
+                })
+                .collect();
             let (start_ms, end_ms) = u
                 .main
                 .content
@@ -201,6 +223,35 @@ fn collect_utterance_rows(chat: &Chat) -> Vec<UtteranceRow> {
             }
         })
         .collect()
+}
+
+/// Recover the backend's typed group assignment from its word-preserving spans.
+///
+/// `Some(vec![])` means the backend returned no spans and the source utterance
+/// should remain unchanged. `None` means the backend changed tokenization, so
+/// the caller must use the legacy text rebuild path.
+fn assignments_from_spans(row: &UtteranceRow, out: &UtSegOutput) -> Option<Vec<usize>> {
+    if out.utterances.is_empty() {
+        return Some(Vec::new());
+    }
+
+    let source_words: Vec<&str> = row.words.iter().map(|word| word.text.as_str()).collect();
+    let output_words: Vec<&str> = out
+        .utterances
+        .iter()
+        .flat_map(|span| span.words.iter().map(|word| word.text.as_str()))
+        .collect();
+    if source_words != output_words {
+        return None;
+    }
+
+    Some(
+        out.utterances
+            .iter()
+            .enumerate()
+            .flat_map(|(group, span)| std::iter::repeat_n(group, span.words.len()))
+            .collect(),
+    )
 }
 
 fn word_timing(word: &talkbank_model::model::Word) -> Option<(u64, u64)> {
@@ -395,7 +446,7 @@ fn build_chat_from_utterances(
 
 fn inject_word_timings(chat: &mut Chat, utts: &[NewUtterance]) -> BAResult<()> {
     use talkbank_model::DependentTier;
-    use talkbank_model::model::{Bullet, Word, WorTier};
+    use talkbank_model::model::{Bullet, WorTier, Word};
 
     let mut idx = 0usize;
     for line in chat.ast_mut().lines.0.iter_mut() {
@@ -418,8 +469,7 @@ fn inject_word_timings(chat: &mut Chat, utts: &[NewUtterance]) -> BAResult<()> {
                     }
                 })
                 .collect();
-            let wor =
-                WorTier::from_words(words).with_terminator(u.main.content.terminator.clone());
+            let wor = WorTier::from_words(words).with_terminator(u.main.content.terminator.clone());
             u.dependent_tiers
                 .retain(|t| !matches!(t, DependentTier::Wor(_)));
             u.dependent_tiers.push(DependentTier::Wor(wor));
@@ -492,7 +542,11 @@ mod tests {
             }]),
         };
         UtSegTaskRunner
-            .apply(&mut value, &disp, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
+            .apply(
+                &mut value,
+                &disp,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
             .await
             .expect("apply");
         let BAValue::Chat(c) = value else {
@@ -503,6 +557,79 @@ mod tests {
         assert_eq!(main_lines.len(), 2, "expected 2 utterances, got {text}");
         assert!(main_lines[0].contains("hello there"));
         assert!(main_lines[1].contains("general kenobi"));
+    }
+
+    #[tokio::test]
+    async fn typed_split_preserves_case_and_puts_parent_bullet_on_last_child() {
+        const CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
+@Participants:\tPAR1 Participant\n@ID:\teng|batchalign|PAR1|||||Participant|||\n\
+@Media:\tsession, audio\n*PAR1:\t&-uh Yeah that's mine . \u{15}10_500\u{15}\n@End\n";
+
+        let sid = SourceId::try_new("session").expect("sid");
+        let chat = Chat::parse(CHAT, sid.clone()).expect("parse typed CHAT");
+        let mut value = BAValue::Chat(chat);
+        let disp = ScriptedDispatcher {
+            assert_input_words: false,
+            outputs: Mutex::new(vec![UtSegOutput {
+                source_id: sid,
+                utterances: vec![
+                    UtteranceSpan {
+                        start_ms: 0,
+                        end_ms: 0,
+                        text: "Yeah".into(),
+                        words: vec![AsrWord {
+                            text: "Yeah".into(),
+                            start_ms: 0,
+                            end_ms: 0,
+                            confidence: None,
+                        }],
+                    },
+                    UtteranceSpan {
+                        start_ms: 0,
+                        end_ms: 0,
+                        text: "that's mine".into(),
+                        words: vec![
+                            AsrWord {
+                                text: "that's".into(),
+                                start_ms: 0,
+                                end_ms: 0,
+                                confidence: None,
+                            },
+                            AsrWord {
+                                text: "mine".into(),
+                                start_ms: 0,
+                                end_ms: 0,
+                                confidence: None,
+                            },
+                        ],
+                    },
+                ],
+            }]),
+        };
+
+        UtSegTaskRunner
+            .apply(
+                &mut value,
+                &disp,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
+            .await
+            .expect("apply");
+        let BAValue::Chat(chat) = value else {
+            panic!("expected chat");
+        };
+        let output = chat.to_chat();
+        let main_lines: Vec<&str> = output
+            .lines()
+            .filter(|line| line.starts_with("*PAR1:"))
+            .collect();
+        assert_eq!(
+            main_lines,
+            [
+                "*PAR1:\t&-uh Yeah .",
+                "*PAR1:\tthat's mine . \u{15}10_500\u{15}"
+            ]
+        );
     }
 
     #[tokio::test]
@@ -602,7 +729,11 @@ mod tests {
             }]),
         };
         UtSegTaskRunner
-            .apply(&mut value, &disp, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
+            .apply(
+                &mut value,
+                &disp,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
             .await
             .expect("apply");
         let BAValue::Chat(c) = value else {

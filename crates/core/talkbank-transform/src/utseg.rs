@@ -33,6 +33,7 @@ use talkbank_model::model::dependent_tier::wor::WorItem;
 use talkbank_model::model::{
     ChatFile, DependentTier, Line, MainTier, Terminator, Utterance, UtteranceContent, WorTier,
 };
+use talkbank_model::validation::ValidationState;
 
 use crate::extract;
 use talkbank_model::SpeakerCode;
@@ -308,7 +309,10 @@ pub fn validate_utseg_response(
 ///
 /// `assignment_map` maps `utt_ordinal` to assignments (parallel to extracted words).
 /// Utterances whose ordinals are not in the map are left unchanged.
-pub fn apply_utseg_results(chat_file: &mut ChatFile, assignment_map: &HashMap<usize, Vec<usize>>) {
+pub fn apply_utseg_results<S: ValidationState>(
+    chat_file: &mut ChatFile<S>,
+    assignment_map: &HashMap<usize, Vec<usize>>,
+) {
     if assignment_map.is_empty() {
         return;
     }
@@ -568,7 +572,10 @@ pub fn split_utterance(utt: Utterance, assignments: &[usize]) -> Vec<Utterance> 
         {
             continue;
         }
-        if let Some(next_group) = content_item_group[idx + 1..].iter().find_map(|group| *group) {
+        if let Some(next_group) = content_item_group[idx + 1..]
+            .iter()
+            .find_map(|group| *group)
+        {
             content_item_group[idx] = Some(next_group);
         }
     }

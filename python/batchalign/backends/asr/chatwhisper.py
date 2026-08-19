@@ -31,6 +31,7 @@ Models are pulled from HuggingFace (resolve table below), matching BA2's
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Any
 
 from batchalign.backends.base import ASR, UTR, BatchPolicy
@@ -56,6 +57,13 @@ _UTTERANCE_RESOLVE = {
 _ENDING_PUNCT = [".", "?", "!"]
 _MOR_PUNCT = [",", "‡", "„"]
 _STRIP_PUNCT = _ENDING_PUNCT + _MOR_PUNCT
+_STRIP_UTTERANCE_PUNCT_RE = re.compile(r"[.?!,]")
+_BOUNDARY_ACTIONS = {2, 3, 4}
+
+# Match the gold-path classifier's WordPiece windows. Each model call adds
+# [CLS] and [SEP], so 480 content tokens remain below BERT's 512-position cap.
+_TYPED_WINDOW_INNER_TOKENS = 480
+_TYPED_WINDOW_OVERLAP_TOKENS = 96
 
 
 # Sliding-window parameters for long-passage BERT inference. Tuned so a
@@ -103,9 +111,9 @@ class BertUtteranceModel:
     """TalkBank CHATUtterance BERT segmenter — faithful port of BA2.
 
     Predicts, per word, one of: normal / capitalize / +period / +question /
-    +exclamation / +comma; reconstructs the passage with that punctuation;
-    then `sent_tokenize`s into utterances. Deterministic (argmax), CPU-friendly,
-    needs no audio — which is why it ports cleanly across environments.
+    +exclamation / +comma. ``predict_assignments`` exposes the gold-path typed
+    boundary contract; ``__call__`` retains the older sentence reconstruction
+    interface for compatibility with the CHATWhisper helpers.
 
     Long passages are sliced into overlapping word-chunks (`chunk_words_for_
     bert`) so the BERT 512-token window never overflows. Each chunk is
@@ -149,6 +157,108 @@ class BertUtteranceModel:
             prev_word_idx = elem
             actions.append(int(classified_targets[0][indx]))
         return actions
+
+    @staticmethod
+    def _normalize_word_mapping(words: Sequence[str]) -> tuple[list[str], list[int]]:
+        """Normalize model words while retaining their source indices."""
+        normalized: list[str] = []
+        original_indices: list[int] = []
+        for original_index, word in enumerate(words):
+            lowered = word.lower().strip()
+            if not lowered:
+                continue
+            cleaned = _STRIP_UTTERANCE_PUNCT_RE.sub("", lowered)
+            if cleaned:
+                normalized.append(cleaned)
+                original_indices.append(original_index)
+        return normalized, original_indices
+
+    def predict_actions(self, words: Sequence[str]) -> list[int]:
+        """Return one gold-path boundary-model action per source word."""
+        normalized_words, original_indices = self._normalize_word_mapping(words)
+        if len(normalized_words) <= 1:
+            return [0] * len(words)
+
+        raw_actions = self._predict_word_actions(normalized_words)
+
+        # BA2 drops the earlier of two adjacent model actions. This avoids
+        # emitting an empty utterance when two neighbouring words are both
+        # classified as boundaries.
+        actions = raw_actions[:]
+        for word_index, action in enumerate(raw_actions[:-1]):
+            if action > 0 and raw_actions[word_index + 1] > 0:
+                actions[word_index] = 0
+
+        expanded_actions = [0] * len(words)
+        for normalized_index, original_index in enumerate(original_indices):
+            expanded_actions[original_index] = actions[normalized_index]
+        return expanded_actions
+
+    def _predict_word_actions(self, normalized_words: list[str]) -> list[int]:
+        """Classify a pretokenized word sequence with overlapping windows."""
+        import torch  # type: ignore[import-not-found]
+
+        encoding = self.tokenizer(
+            [normalized_words],
+            return_tensors="pt",
+            is_split_into_words=True,
+            add_special_tokens=False,
+        )
+        input_ids = encoding.input_ids[0]
+        word_ids = encoding.word_ids(0)
+        token_count = int(input_ids.shape[0])
+        word_count = len(normalized_words)
+        max_positions = int(self.model.config.max_position_embeddings)
+        class_count = int(self.model.config.num_labels)
+
+        inner_window = min(_TYPED_WINDOW_INNER_TOKENS, max_positions - 2)
+        if inner_window <= _TYPED_WINDOW_OVERLAP_TOKENS:
+            stride = inner_window
+        else:
+            stride = inner_window - _TYPED_WINDOW_OVERLAP_TOKENS
+
+        accumulated = torch.zeros((token_count, class_count), dtype=torch.float32)
+        counts = torch.zeros(token_count, dtype=torch.float32)
+        cls_token = torch.tensor([self.tokenizer.cls_token_id], dtype=input_ids.dtype)
+        sep_token = torch.tensor([self.tokenizer.sep_token_id], dtype=input_ids.dtype)
+
+        start = 0
+        while True:
+            end = min(start + inner_window, token_count)
+            inner_ids = input_ids[start:end]
+            inner_count = int(inner_ids.shape[0])
+            window_ids = torch.cat([cls_token, inner_ids, sep_token]).unsqueeze(0)
+            window_ids = window_ids.to(self.device)
+            attention_mask = torch.ones_like(window_ids)
+            output = self.model(input_ids=window_ids, attention_mask=attention_mask)
+            logits = output.logits[0].detach().to("cpu", dtype=torch.float32)
+            accumulated[start:end] += logits[1 : inner_count + 1]
+            counts[start:end] += 1.0
+            if end >= token_count:
+                break
+            start += stride
+
+        token_actions = torch.argmax(accumulated / counts.unsqueeze(-1), dim=1).tolist()
+        word_actions = [0] * word_count
+        previous_word_index: int | None = None
+        for token_index, word_index in enumerate(word_ids):
+            if word_index is None or word_index == previous_word_index:
+                continue
+            previous_word_index = word_index
+            word_actions[word_index] = token_actions[token_index]
+        return word_actions
+
+    def predict_assignments(self, words: Sequence[str]) -> list[int]:
+        """Return typed utterance-group assignments parallel to ``words``."""
+        if len(words) <= 1:
+            return [0] * len(words)
+        assignments: list[int] = []
+        current_group = 0
+        for action in self.predict_actions(words):
+            assignments.append(current_group)
+            if action in _BOUNDARY_ACTIONS:
+                current_group += 1
+        return assignments
 
     def __call__(self, passage: str) -> list[str]:
         import nltk  # type: ignore[import-not-found]

@@ -54,6 +54,13 @@ class RevAI(ASR, UTR, Speaker):
         # gave us alpha_2 (or alpha_3 if no alpha_2 exists, e.g.
         # `yue` for Cantonese — Rev accepts that as-is).
         self._language = _rev_code(language)
+        self._utterance_segmenter: Any | None = None
+        if self._language == "en":
+            from batchalign.backends.asr.chatwhisper import BertUtteranceModel
+
+            self._utterance_segmenter = BertUtteranceModel(
+                "talkbank/CHATUtterance-en"
+            )
         # Submit-then-poll batching: stage all jobs first, then poll in
         # parallel so per-job latency is bounded by max(submission times)
         # + max(transcription times) instead of summed serially.
@@ -61,9 +68,9 @@ class RevAI(ASR, UTR, Speaker):
 
     @property
     def name(self) -> str:
-        # v4: punct-split + retrace for non-BERT languages (es, …). Bump when
-        # submit/segmentation behaviour changes (cache key).
-        return "revai:async-v4"
+        # v5: English uses typed CHATUtterance assignments on raw words before
+        # ASR cleanup/CHAT construction, matching the gold pipeline stage order.
+        return "revai:async-v5:typed-utseg1"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -113,10 +120,18 @@ class RevAI(ASR, UTR, Speaker):
         for item in batch:
             resp = responses[item.source_id]
             if isinstance(item, AsrInput):
+                segments = _segments_from_rev(
+                    resp, AsrSegment, AsrWord, self._language
+                )
+                utterance_segmenter = getattr(self, "_utterance_segmenter", None)
+                if utterance_segmenter is not None:
+                    segments = _presegment_raw_segments(
+                        segments, utterance_segmenter, AsrSegment
+                    )
                 outputs.append(
                     AsrOutput(
                         source_id=item.source_id,
-                        segments=_segments_from_rev(resp, AsrSegment, AsrWord, self._language),
+                        segments=segments,
                     )
                 )
             elif isinstance(item, SpeakerInput):
@@ -363,6 +378,41 @@ def _segments_from_rev(
                 )
         _flush(sentence)
     return segments
+
+
+def _presegment_raw_segments(
+    segments: list[Any], segmenter: Any, AsrSegment: type
+) -> list[Any]:
+    """Split raw Rev words with typed BERT assignments before CHAT cleanup."""
+    output: list[Any] = []
+    for segment in segments:
+        words = list(segment.words)
+        if len(words) <= 1:
+            output.append(segment)
+            continue
+        assignments = segmenter.predict_assignments(
+            [str(word.text) for word in words]
+        )
+        if len(assignments) != len(words):
+            output.append(segment)
+            continue
+
+        group_start = 0
+        for index in range(1, len(words) + 1):
+            if index < len(words) and assignments[index] == assignments[group_start]:
+                continue
+            grouped_words = words[group_start:index]
+            output.append(
+                AsrSegment(
+                    start_ms=grouped_words[0].start_ms,
+                    end_ms=grouped_words[-1].end_ms,
+                    text=" ".join(str(word.text) for word in grouped_words),
+                    speaker=segment.speaker,
+                    words=grouped_words,
+                )
+            )
+            group_start = index
+    return output
 
 
 def _diar_from_rev(

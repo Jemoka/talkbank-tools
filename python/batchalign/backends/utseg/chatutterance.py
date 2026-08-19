@@ -84,8 +84,9 @@ class CHATUtteranceBackend(UtSeg):
         #   * `nodot1` — strip internal periods left behind by Punkt
         #     abbreviation handling
         #   * `wordts1` — carry fixed ASR word timings through split spans
+        #   * `typed2` — typed word assignments; preserve CHAT case/structure
         canto = ":canto" if self._cantonese and self._lang != "yue" else ""
-        return f"chatutterance:{self._model_id}:disfl2:tsdist:nodot1:wordts1{canto}"
+        return f"chatutterance:{self._model_id}:typed2{canto}"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -105,6 +106,27 @@ class CHATUtteranceBackend(UtSeg):
                 text = (seg.text or "").strip()
                 if not text:
                     continue
+                # The gold pipeline consumes word-level group assignments,
+                # then applies them to the existing typed CHAT utterance. This
+                # preserves capitalization, retraces, dependent tiers, and the
+                # parent's bullet. Keep the older sentence reconstruction only
+                # for Cantonese's distinct model and test doubles that expose
+                # the legacy callable interface.
+                predictor = getattr(self._segmenter, "predict_assignments", None)
+                if not getattr(self, "_cantonese", False) and predictor is not None:
+                    source_words = list(seg.words)
+                    assignments = predictor(
+                        [str(word.text) for word in source_words]
+                    )
+                    if len(assignments) == len(source_words):
+                        spans.extend(
+                            _spans_from_assignments(
+                                source_words,
+                                assignments,
+                                UtteranceSpan,
+                            )
+                        )
+                        continue
                 # Step 1: collect cleaned sentences (BERT segmenter + BA2
                 # disfluency [`uh → &-uh`] + retrace [`[/]`] marking).
                 sentences: list[str] = []
@@ -162,6 +184,32 @@ class CHATUtteranceBackend(UtSeg):
                     )
             outputs.append(UtSegOutput(source_id=item.source_id, utterances=spans))
         return outputs
+
+
+def _spans_from_assignments(
+    words: list[Any], assignments: list[int], UtteranceSpan: type
+) -> list[Any]:
+    """Partition original words without rewriting their text or timing."""
+    if not words:
+        return []
+
+    spans: list[Any] = []
+    group_start = 0
+    for index in range(1, len(words) + 1):
+        if index < len(words) and assignments[index] == assignments[group_start]:
+            continue
+        grouped_words = words[group_start:index]
+        timed = [word for word in grouped_words if word.end_ms > word.start_ms]
+        spans.append(
+            UtteranceSpan(
+                start_ms=timed[0].start_ms if timed else 0,
+                end_ms=timed[-1].end_ms if timed else 0,
+                text=" ".join(str(word.text) for word in grouped_words),
+                words=grouped_words,
+            )
+        )
+        group_start = index
+    return spans
 
 
 def _distributed_bounds(
