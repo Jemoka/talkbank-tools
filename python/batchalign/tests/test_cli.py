@@ -59,6 +59,7 @@ def test_transcribe_exposes_all_ba2_asr_engines():
         assert engine in help_text, f"transcribe --engine missing {engine}"
     assert "--lang" in help_text
     assert "--engine" in help_text
+    assert "--wor" in help_text
     assert "--nowor" in help_text
     assert "--allow-mps" in help_text
 
@@ -294,3 +295,80 @@ def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
     assert captured["language"].alpha_3 == "eng"
     assert captured["language"].alpha_2 == "en"
     assert captured["language"].name == "English"
+
+
+@pytest.mark.parametrize(
+    ("timing_option", "expected_strip"),
+    [
+        ([], True),
+        (["--wor"], False),
+        (["--nowor"], True),
+    ],
+)
+def test_transcribe_omits_word_timing_unless_requested(
+    tmp_path, monkeypatch, timing_option, expected_strip,
+):
+    """Transcribe matches BA2/BA3: `%wor` is opt-in, not the default."""
+    import batchalign as ba
+    from batchalign.cli import transcribe as transcribe_cli
+
+    written = []
+
+    class FakeBackend:
+        pass
+
+    class FakeOutcome:
+        def __init__(self, source_id):
+            self.source_id = source_id
+
+        def write(self, _path, *, strip_word_timing=False):
+            written.append(strip_word_timing)
+
+    class FakeInterface:
+        exit_code = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def push(self, _task):
+            return None
+
+        def run_pipeline(self, _pipeline, inputs, *, on_outcome):
+            outcome = FakeOutcome(str(inputs[0].source_id))
+            on_outcome(outcome)
+            return iter([outcome])
+
+    monkeypatch.setattr(ba, "RevAI", lambda **_kwargs: FakeBackend())
+    monkeypatch.setattr(
+        ba, "CHATUtteranceBackend", lambda **_kwargs: FakeBackend()
+    )
+    monkeypatch.setattr(
+        ba.recipes, "transcribe", lambda **_kwargs: object()
+    )
+    monkeypatch.setattr(
+        transcribe_cli.Interface, "open", lambda **_kwargs: FakeInterface()
+    )
+
+    media = tmp_path / "sample.wav"
+    media.write_bytes(b"")
+    out = tmp_path / "out"
+    result = CliRunner().invoke(
+        app,
+        [
+            "transcribe",
+            "--engine",
+            "rev",
+            "--lang",
+            "eng",
+            *timing_option,
+            "--out",
+            str(out),
+            str(media),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert written == [expected_strip]

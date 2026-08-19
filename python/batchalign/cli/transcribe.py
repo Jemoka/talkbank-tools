@@ -106,7 +106,11 @@ def register(app: typer.Typer) -> None:
             "default because sustained MPS inference can be unstable; "
             "CHATWhisper remains float32 when selected.",
         ),
-        nowor: bool = typer.Option(False, "--nowor", help="Omit word-level timing (`%wor` and inline word bullets)."),
+        wor: bool = typer.Option(
+            False,
+            "--wor/--nowor",
+            help="Include word-level timing (`%wor` and inline word bullets); omitted by default.",
+        ),
     ) -> None:
         """Transcribe media into CHAT (.cha) files.
 
@@ -167,7 +171,7 @@ def register(app: typer.Typer) -> None:
                         root,
                         out,
                         output_suffix=".cha",
-                        strip_word_timing=nowor,
+                        strip_word_timing=not wor,
                     ),
                 )
             )
