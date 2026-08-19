@@ -74,6 +74,37 @@ def test_pipeline_is_released_only_after_initial_refresh():
     asyncio.run(exercise())
 
 
+def test_elapsed_clock_advances_without_progress_events():
+    async def exercise() -> None:
+        app = BatchalignDashboard(
+            command="convert",
+            params={"format": "mp3"},
+            output=None,
+            snapshots=_snapshots(),
+        )
+        async with app.run_test(size=(100, 28)) as pilot:
+            await pilot.pause()
+            running_before = app.snapshots[0].elapsed
+            terminal_before = app.snapshots[1].elapsed
+
+            # Simulate a quiet two-second encode stage and trigger the same
+            # callback the dashboard's 100 ms interval invokes.
+            app._last_elapsed_refresh -= 2.0
+            app._refresh_elapsed()
+
+            assert app.snapshots[0].elapsed is not None
+            assert running_before is not None
+            assert app.snapshots[0].elapsed >= running_before + 2.0
+            assert app.snapshots[1].elapsed == terminal_before
+            table = app.query_one("#files", DataTable)
+            assert table.get_cell("/data/a.wav", "elapsed") == (
+                f"{app.snapshots[0].elapsed:.1f}s"
+            )
+            app.exit()
+
+    asyncio.run(exercise())
+
+
 def test_dashboard_filters_navigates_and_responds_to_resize():
     async def exercise() -> None:
         app = BatchalignDashboard(

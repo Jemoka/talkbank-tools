@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from time import monotonic
 from typing import ClassVar
 
 from rich.console import Group
@@ -225,6 +226,7 @@ class BatchalignDashboard(App[None]):
         self._finished = False
         self._cancel_requested = False
         self._content_ready = False
+        self._last_elapsed_refresh = monotonic()
 
     def compose(self) -> ComposeResult:
         destination = "in place" if self.output is None else str(self.output)
@@ -271,6 +273,10 @@ class BatchalignDashboard(App[None]):
         self._content_ready = True
         self._apply_size_classes(self.size.width, self.size.height)
         self._render_all()
+        # Progress callbacks can be minutes apart while a backend is decoding,
+        # encoding, or waiting on an external service. Keep elapsed time live
+        # independently of those callbacks; terminal snapshots remain fixed.
+        self.set_interval(0.1, self._refresh_elapsed)
         # ``on_mount`` runs before Textual's first completed paint. Releasing
         # the pipeline worker here lets Python-heavy lazy backend setup seize
         # the GIL while the alternate screen is still blank (often leaving a
@@ -310,10 +316,33 @@ class BatchalignDashboard(App[None]):
         """Apply an update inside the Textual event loop."""
         selected = self.selected_source_id
         self.snapshots = list(snapshots)
+        self._last_elapsed_refresh = monotonic()
         self._finished = finished
         self._render_all(selected)
         if finished:
             self.set_timer(1.25, self.exit)
+
+    def _refresh_elapsed(self) -> None:
+        """Advance running clocks even when the pipeline emits no events."""
+        now = monotonic()
+        delta = max(0.0, now - self._last_elapsed_refresh)
+        self._last_elapsed_refresh = now
+        if self._finished or delta == 0.0:
+            return
+        if not any(task.state is TaskState.RUN for task in self.snapshots):
+            return
+        selected = self.selected_source_id
+        self.snapshots = [
+            replace(task, elapsed=(task.elapsed or 0.0) + delta)
+            if task.state is TaskState.RUN
+            else task
+            for task in self.snapshots
+        ]
+        # Counts, filters, config, and overall progress are unchanged by a
+        # clock tick. Updating only the two elapsed-time consumers avoids
+        # rebuilding the whole dashboard ten times per second.
+        self._render_table(selected)
+        self._render_detail()
 
     @property
     def selected_source_id(self) -> str | None:
