@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from batchalign.cli.diarize import _protocol_audio, _turns_document
+from batchalign.cli.diarize import (
+    DiarizeEngine,
+    _build_backend,
+    _protocol_audio,
+    _turns_document,
+)
 
 
 def test_turns_document_maps_sorted_labels_to_anonymous_tracks():
@@ -40,3 +45,27 @@ def test_protocol_audio_bridges_native_prepared_audio():
     assert audio.sample_rate == 16_000
     assert audio.channels == 1
     assert audio.frame_count == 1
+
+
+def test_backend_selector_defaults_to_cloud_and_can_select_local():
+    calls = []
+    cloud = object()
+    local = object()
+    ba = SimpleNamespace(
+        PyannoteAIBackend=lambda **kwargs: calls.append(("cloud", kwargs)) or cloud,
+        PyannoteBackend=lambda **kwargs: calls.append(("local", kwargs)) or local,
+    )
+
+    assert _build_backend(ba, DiarizeEngine.pyannote_ai, 2) is cloud
+    assert _build_backend(ba, DiarizeEngine.pyannote, 3) is local
+    assert calls == [
+        ("cloud", {"num_speakers": 2}),
+        ("local", {"num_speakers": 3}),
+    ]
+
+
+def test_turns_document_identifies_local_engine():
+    output = SimpleNamespace(diarization=SimpleNamespace(segments=[]))
+    assert _turns_document(output, DiarizeEngine.pyannote)["source"] == (
+        "batchalign3:pyannote"
+    )

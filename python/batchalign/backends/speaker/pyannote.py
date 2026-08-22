@@ -38,9 +38,12 @@ class PyannoteBackend(Speaker, UtSeg):
         model: str = "talkbank/dia-fork",
         *,
         hf_token: str | None = None,
+        num_speakers: int = 0,
         batch_size: int = 1,
         batch_window_ms: int = 0,
     ) -> None:
+        if num_speakers < 0:
+            raise ValueError("num_speakers must be non-negative")
         from pyannote.audio import Pipeline  # type: ignore[import-not-found]
 
         # Token resolution order:
@@ -65,11 +68,12 @@ class PyannoteBackend(Speaker, UtSeg):
         except TypeError:
             self._pipeline = Pipeline.from_pretrained(model, use_auth_token=token)
         self._model = model
+        self._num_speakers = num_speakers
         self._policy = BatchPolicy(max_size=batch_size, window_ms=batch_window_ms)
 
     @property
     def name(self) -> str:
-        return f"pyannote:{self._model}"
+        return f"pyannote:{self._model}:speakers-{self._num_speakers or 'auto'}"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -141,7 +145,9 @@ class PyannoteBackend(Speaker, UtSeg):
         wave_np = np.frombuffer(item.audio.pcm_f32le, dtype=np.float32)
         wave = torch.from_numpy(np.ascontiguousarray(wave_np)).unsqueeze(0)
         kwargs: dict[str, Any] = {}
-        n = int(getattr(item, "num_speakers", 0) or 0)
+        n = int(
+            getattr(item, "num_speakers", 0) or self._num_speakers or 0
+        )
         if n > 0:
             kwargs["num_speakers"] = n
         annotation = self._pipeline(

@@ -79,7 +79,8 @@ class PyannoteAIBackend(Speaker):
 
     @property
     def name(self) -> str:
-        return f"pyannote-ai:{self._model}:v1"
+        speakers = self._num_speakers or "auto"
+        return f"pyannote-ai:{self._model}:speakers-{speakers}:v1"
 
     @property
     def batch_policy(self) -> BatchPolicy:

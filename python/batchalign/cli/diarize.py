@@ -4,12 +4,26 @@ from __future__ import annotations
 
 import base64
 import json
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import typer
 
 from ._common import MEDIA_EXTENSIONS, _root_for, _walk, safe_resolve
+
+
+class DiarizeEngine(str, Enum):
+    """Speaker diarization backend exposed by the CLIs."""
+
+    pyannote_ai = "pyannote-ai"
+    pyannote = "pyannote"
+
+
+def _build_backend(ba: Any, engine: DiarizeEngine, num_speakers: int) -> Any:
+    if engine is DiarizeEngine.pyannote_ai:
+        return ba.PyannoteAIBackend(num_speakers=num_speakers)
+    return ba.PyannoteBackend(num_speakers=num_speakers)
 
 
 def _protocol_audio(audio: Any) -> Any:
@@ -24,13 +38,16 @@ def _protocol_audio(audio: Any) -> Any:
     )
 
 
-def _turns_document(output: Any) -> dict[str, Any]:
+def _turns_document(
+    output: Any,
+    engine: DiarizeEngine = DiarizeEngine.pyannote_ai,
+) -> dict[str, Any]:
     """Project backend labels to stable anonymous CHAT-style track names."""
     segments = list(output.diarization.segments)
     labels = sorted({str(segment.speaker) for segment in segments})
     tracks = {label: f"PAR{index}" for index, label in enumerate(labels)}
     return {
-        "source": "batchalign3:pyannote-ai",
+        "source": f"batchalign3:{engine.value}",
         "turns": [
             {
                 "start_ms": int(segment.start_ms),
@@ -66,6 +83,12 @@ def register(app: typer.Typer) -> None:
             "-o",
             help="Output folder; default writes .turns.json beside each input.",
         ),
+        engine: DiarizeEngine = typer.Option(
+            DiarizeEngine.pyannote_ai,
+            "--engine",
+            case_sensitive=False,
+            help="Diarization engine: pyannote-ai (cloud) or pyannote (local).",
+        ),
         num_speakers: int = typer.Option(
             0,
             "--num-speakers",
@@ -74,7 +97,7 @@ def register(app: typer.Typer) -> None:
             help="Expected speaker count; zero auto-detects.",
         ),
     ) -> None:
-        """Detect anonymous speaker turns with pyannoteAI cloud."""
+        """Detect speaker turns with pyannoteAI cloud or local Pyannote."""
         import batchalign as ba
         from batchalign._core import prepare_audio
         from batchalign._core.proto import SpeakerInput
@@ -82,7 +105,7 @@ def register(app: typer.Typer) -> None:
 
         paths = _walk(folder, MEDIA_EXTENSIONS)
         root = _root_for(folder)
-        backend = ba.PyannoteAIBackend(num_speakers=num_speakers)
+        backend = _build_backend(ba, engine, num_speakers)
         for path in paths:
             media = media_from_path(path, source_id=str(path))
             request = SpeakerInput(
@@ -94,9 +117,9 @@ def register(app: typer.Typer) -> None:
             target = _target(path, root, out)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(
-                json.dumps(_turns_document(response), indent=2) + "\n",
+                json.dumps(_turns_document(response, engine), indent=2) + "\n",
                 encoding="utf-8",
             )
 
 
-__all__ = ["_turns_document", "register"]
+__all__ = ["DiarizeEngine", "_build_backend", "_turns_document", "register"]

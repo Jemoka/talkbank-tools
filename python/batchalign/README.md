@@ -77,8 +77,8 @@ pip install 'batchalign[all]'          # everything
 batchalign3 --help
 
 batchalign3 transcribe input_dir -o output_dir --lang eng
-batchalign3 transcribe input_dir -o output_dir --lang eng --engine whisper --diarize
-batchalign3 diarize    input_dir -o output_dir
+batchalign3 transcribe input_dir -o output_dir --lang eng --engine whisper --diarize --diarize-engine pyannote-ai
+batchalign3 diarize    input_dir -o output_dir --engine pyannote-ai
 batchalign3 align     input_dir -o output_dir --engine wav2vec
 batchalign3 morphotag input_dir -o output_dir --language en
 batchalign3 utseg     input_dir -o output_dir
@@ -93,8 +93,10 @@ batchalign3 daemon                     # FastAPI server (needs [api])
 When `-o` is omitted, results are written back in place. The CLI accepts
 either a single CHAT/media file or a folder (walked recursively).
 
-The diarization CLI uses pyannoteAI cloud. Configure its API key in the shared
-Batchalign config file (or set `BATCHALIGN_PYANNOTE_KEY`):
+The diarization CLI defaults to pyannoteAI cloud. Select the optional local
+backend with `--engine pyannote` (or `--diarize-engine pyannote` on
+`transcribe`). Configure the cloud API key in the shared Batchalign config file
+(or set `BATCHALIGN_PYANNOTE_KEY`):
 
 ```ini
 [diarize]

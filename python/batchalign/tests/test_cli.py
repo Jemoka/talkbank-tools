@@ -62,6 +62,15 @@ def test_transcribe_exposes_all_ba2_asr_engines():
     assert "--wor" in help_text
     assert "--nowor" in help_text
     assert "--allow-mps" in help_text
+    assert "--diarize-engine" in help_text
+    assert "pyannote-ai" in help_text
+
+
+def test_diarize_exposes_cloud_and_local_engines():
+    help_text = _help("diarize")
+    assert "--engine" in help_text
+    assert "pyannote-ai" in help_text
+    assert "pyannote" in help_text
 
 
 def test_align_exposes_fa_engines():

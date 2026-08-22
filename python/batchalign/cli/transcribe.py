@@ -24,6 +24,7 @@ import typer
 
 from ..lang import LanguageCode
 from ._common import collect_media_inputs, write_outcome
+from .diarize import DiarizeEngine, _build_backend as _build_diarize_backend
 from ._options import cli_options, inference_device
 from .tui import Interface, Task
 
@@ -94,6 +95,12 @@ def register(app: typer.Typer) -> None:
             "--diarize/--no-diarize",
             help="Run speaker diarization (ignored for rev and google, which diarize themselves).",
         ),
+        diarize_engine: DiarizeEngine = typer.Option(
+            DiarizeEngine.pyannote_ai,
+            "--diarize-engine",
+            case_sensitive=False,
+            help="Diarization engine: pyannote-ai (cloud, default) or pyannote (local).",
+        ),
         num_speakers: int = typer.Option(2, "--num-speakers", "-n", help="Expected speaker count (diarization hint)."),
         force_cpu: bool = typer.Option(
             False, "--force-cpu",
@@ -130,7 +137,13 @@ def register(app: typer.Typer) -> None:
 
         with Interface.open(
             command="transcribe",
-            params={"engine": engine.value, "asr": model or _DEFAULT_MODEL.get(engine, ""), "lang": lang_code.alpha_3, "diarize": diarize},
+            params={
+                "engine": engine.value,
+                "asr": model or _DEFAULT_MODEL.get(engine, ""),
+                "lang": lang_code.alpha_3,
+                "diarize": diarize,
+                "diarize_engine": diarize_engine.value,
+            },
             output=out,
             verbosity=opts.verbosity,
             plain=opts.plain,
@@ -141,11 +154,11 @@ def register(app: typer.Typer) -> None:
                 ba, engine, model, lang_code, num_speakers, device
             )
             # Cloud engines with native speaker labels share one atomic call;
-            # other engines opt into pyannoteAI with --diarize.
+            # other engines use the selected dedicated backend with --diarize.
             speaker_backend: Any = None
             if diarize and not native_diarization:
-                speaker_backend = ba.PyannoteAIBackend(
-                    num_speakers=num_speakers
+                speaker_backend = _build_diarize_backend(
+                    ba, diarize_engine, num_speakers
                 )
             # Always pair the ASR with the BA2 CHATUtterance BERT
             # segmenter — every transcribe path must produce one
