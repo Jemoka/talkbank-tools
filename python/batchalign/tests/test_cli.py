@@ -209,6 +209,60 @@ def test_unsupported_utseg_warns_and_retains_asr_utterances(caplog):
         print(f"[utseg-unsupported] backend={backend!r} warning={caplog.text.strip()}")
 
 
+def test_transcribe_wires_pyannote_ai_for_separate_diarization(
+    tmp_path, monkeypatch,
+):
+    import batchalign as ba
+
+    captured = {}
+    speaker = object()
+    utterance_segmenter = object()
+
+    monkeypatch.setattr(ba, "WhisperBackend", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        ba,
+        "PyannoteAIBackend",
+        lambda **kwargs: captured.update(pyannote_kwargs=kwargs) or speaker,
+    )
+    monkeypatch.setattr(
+        ba,
+        "CHATUtteranceBackend",
+        lambda **_kwargs: utterance_segmenter,
+    )
+
+    class FakePipeline:
+        def run(self, _inputs, callbacks=None, outcome_callback=None):
+            return []
+
+    def fake_recipe(**kwargs):
+        captured["recipe"] = kwargs
+        return FakePipeline()
+
+    monkeypatch.setattr(ba.recipes, "transcribe", fake_recipe)
+    media = tmp_path / "sample.mp3"
+    media.write_bytes(b"media")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "transcribe",
+            "--engine",
+            "whisper",
+            "--lang",
+            "eng",
+            "--diarize",
+            "--num-speakers",
+            "3",
+            str(media),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["pyannote_kwargs"] == {"num_speakers": 3}
+    assert captured["recipe"]["speaker_backend"] is speaker
+    assert captured["recipe"]["utseg_backend"] is utterance_segmenter
+
+
 # ---------------------------------------------------------------------------
 # `transcribe --lang` is required and ISO-639-3 only.
 # ---------------------------------------------------------------------------

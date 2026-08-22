@@ -34,8 +34,8 @@ def transcribe(
     This is BA2's transcribe *pairing*: ASR, then a utterance-segmentation
     stage. Pass `utseg_backend=CHATUtteranceBackend(...)` for BA2's BERT
     segmenter (the parity path, applied uniformly to whichever ASR engine
-    produced the words). Pyannote, if given as `speaker_backend`, services
-    both Speaker and UtSeg, so it covers segmentation on its own.
+    produced the words). A legacy speaker backend that also implements UtSeg
+    can cover segmentation on its own; diarization-only services cannot.
 
     Force-alignment is *not* wired here — compose `align(fa_backend=...)`
     afterwards for refined word-level timings.
@@ -51,8 +51,12 @@ def transcribe(
         tasks.append(Task.UtSeg)
         backends.append(utseg_backend)
     elif speaker_backend is not None:
-        # Pyannote services Speaker AND UtSeg — UtSeg rides along.
-        tasks.append(Task.UtSeg)
+        # A legacy speaker backend may also implement UtSeg. Diarization-only
+        # services (including pyannoteAI) must not fabricate that capability.
+        from batchalign.backends.base import UtSeg
+
+        if isinstance(speaker_backend, UtSeg):
+            tasks.append(Task.UtSeg)
     # With neither, there is nothing to serve UtSeg, so we omit it and the ASR
     # segments stand as the utterances (no segmentation).
     return Pipeline(tasks=tasks, backends=backends, **opts)

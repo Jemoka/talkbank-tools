@@ -141,10 +141,12 @@ def register(app: typer.Typer) -> None:
                 ba, engine, model, lang_code, num_speakers, device
             )
             # Cloud engines with native speaker labels share one atomic call;
-            # other engines opt into Pyannote with --diarize.
+            # other engines opt into pyannoteAI with --diarize.
             speaker_backend: Any = None
             if diarize and not native_diarization:
-                speaker_backend = ba.PyannoteBackend()
+                speaker_backend = ba.PyannoteAIBackend(
+                    num_speakers=num_speakers
+                )
             # Always pair the ASR with the BA2 CHATUtterance BERT
             # segmenter — every transcribe path must produce one
             # utterance per sentence. ChatWhisper does segmentation

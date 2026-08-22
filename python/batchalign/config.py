@@ -24,6 +24,9 @@ The file uses ``configparser`` syntax with flat dotted keys::
     [translate]
     engine.google.key = <api key>
 
+    [diarize]
+    engine.pyannote.key = <pyannoteAI API key>
+
     [ai]
     together.key = <api key>
 
@@ -76,6 +79,7 @@ _API_KEY_LOCATIONS: Mapping[str, tuple[str, str]] = {
     "google_translate": ("translate", "engine.google.key"),
     "google": ("translate", "engine.google.key"),
     "google_asr": ("asr", "engine.google.key"),
+    "pyannote": ("diarize", "engine.pyannote.key"),
     "hf": ("auth", "hf_token"),
     "huggingface": ("auth", "hf_token"),
 }
@@ -158,6 +162,7 @@ _API_KEY_DISPLAY: Mapping[str, tuple[str, str]] = {
     "google_translate": ("Google Translate", "API Key"),
     "google": ("Google Translate", "API Key"),
     "google_asr": ("Google Gemini ASR", "API Key"),
+    "pyannote": ("pyannoteAI", "API Key"),
     "hf": ("HuggingFace", "Access Token"),
     "huggingface": ("HuggingFace", "Access Token"),
 }

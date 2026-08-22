@@ -101,6 +101,18 @@ def test_hf_token_section(tmp_path):
     assert config.get_api_key("huggingface", path=p) == "hf_test_token"
 
 
+def test_pyannote_ai_key(tmp_path):
+    p = tmp_path / "ba.ini"
+    _write_ini(
+        p,
+        """
+        [diarize]
+        engine.pyannote.key = PYANNOTE_SECRET
+        """,
+    )
+    assert config.get_api_key("pyannote", path=p) == "PYANNOTE_SECRET"
+
+
 def test_malformed_ini_returns_none(tmp_path):
     p = tmp_path / "broken.ini"
     p.write_text("not = an [ini\n  ===")

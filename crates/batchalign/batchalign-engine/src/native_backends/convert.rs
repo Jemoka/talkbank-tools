@@ -1,6 +1,6 @@
 //! `batchalign._core.backends.ConvertBackend` — configurable native wrapper.
 
-use batchalign_core::{Backend, MediaFormat};
+use batchalign_core::{Backend, MediaFormat, PreparedAudio};
 use batchalign_core::backends::ConvertBackend as CoreConvertBackend;
 use pyo3::prelude::*;
 use pyo3::types::PyCapsule;
@@ -45,6 +45,27 @@ impl ConvertBackend {
     #[getter]
     fn tasks(&self) -> Vec<batchalign_core::Task> {
         self.inner.tasks().to_vec()
+    }
+
+    /// Encode prepared interleaved float32 PCM without constructing a nested
+    /// Pipeline. Cloud backends use this to obtain an in-memory media payload
+    /// while sharing the Convert task's codec implementation.
+    #[pyo3(signature = (pcm_f32le, sample_rate, channels, frame_count))]
+    fn encode_prepared(
+        &self,
+        pcm_f32le: Vec<u8>,
+        sample_rate: u32,
+        channels: u16,
+        frame_count: u64,
+    ) -> PyResult<Vec<u8>> {
+        self.inner
+            .encode(&PreparedAudio {
+                pcm_f32le,
+                sample_rate,
+                channels,
+                frame_count,
+            })
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
     fn __repr__(&self) -> String {

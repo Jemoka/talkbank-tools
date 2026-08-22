@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from typing import Any
@@ -11,13 +12,25 @@ import typer
 from ._common import MEDIA_EXTENSIONS, _root_for, _walk, safe_resolve
 
 
+def _protocol_audio(audio: Any) -> Any:
+    """Bridge native ``prepare_audio`` output to the Python wire model."""
+    from batchalign._core.proto import PreparedAudio
+
+    return PreparedAudio(
+        pcm_f32le=base64.b64encode(bytes(audio.pcm_f32le)),
+        sample_rate=int(audio.sample_rate),
+        channels=int(audio.channels),
+        frame_count=int(audio.frame_count),
+    )
+
+
 def _turns_document(output: Any) -> dict[str, Any]:
     """Project backend labels to stable anonymous CHAT-style track names."""
     segments = list(output.diarization.segments)
     labels = sorted({str(segment.speaker) for segment in segments})
     tracks = {label: f"PAR{index}" for index, label in enumerate(labels)}
     return {
-        "source": "batchalign3:pyannote",
+        "source": "batchalign3:pyannote-ai",
         "turns": [
             {
                 "start_ms": int(segment.start_ms),
@@ -61,7 +74,7 @@ def register(app: typer.Typer) -> None:
             help="Expected speaker count; zero auto-detects.",
         ),
     ) -> None:
-        """Detect anonymous speaker turns without transcribing."""
+        """Detect anonymous speaker turns with pyannoteAI cloud."""
         import batchalign as ba
         from batchalign._core import prepare_audio
         from batchalign._core.proto import SpeakerInput
@@ -69,12 +82,12 @@ def register(app: typer.Typer) -> None:
 
         paths = _walk(folder, MEDIA_EXTENSIONS)
         root = _root_for(folder)
-        backend = ba.PyannoteBackend()
+        backend = ba.PyannoteAIBackend(num_speakers=num_speakers)
         for path in paths:
             media = media_from_path(path, source_id=str(path))
             request = SpeakerInput(
                 source_id=str(path),
-                audio=prepare_audio(media),
+                audio=_protocol_audio(prepare_audio(media)),
                 num_speakers=num_speakers,
             )
             response = backend.call([request])[0]

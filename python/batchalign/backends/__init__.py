@@ -45,7 +45,7 @@ from batchalign.backends.fa import (
     WhisperFaBackend,
 )
 from batchalign.backends.morphosyntax import StanzaBackend
-from batchalign.backends.speaker import PyannoteBackend
+from batchalign.backends.speaker import PyannoteAIBackend, PyannoteBackend
 from batchalign.backends.translate import (
     AliyunTranslateBackend,
     GoogleTranslateBackend,
@@ -92,6 +92,7 @@ __all__ = [
     # Morphosyntax
     "StanzaBackend",
     # Speaker
+    "PyannoteAIBackend",
     "PyannoteBackend",
     # Translate
     "AliyunTranslateBackend",

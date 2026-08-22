@@ -29,6 +29,15 @@ impl ConvertBackend {
             format,
         }
     }
+
+    /// Encode already-prepared PCM through the same implementation used by
+    /// the Convert task runner.
+    pub fn encode(&self, audio: &PreparedAudio) -> BAResult<Vec<u8>> {
+        match self.format {
+            MediaFormat::Wav => encode_wav(audio),
+            MediaFormat::Mp3 => encode_mp3(audio),
+        }
+    }
 }
 
 impl Backend for ConvertBackend {
@@ -56,10 +65,7 @@ impl Backend for ConvertBackend {
                         input.task()
                     )));
                 };
-                let encoded_bytes = match self.format {
-                    MediaFormat::Wav => encode_wav(&input.audio)?,
-                    MediaFormat::Mp3 => encode_mp3(&input.audio)?,
-                };
+                let encoded_bytes = self.encode(&input.audio)?;
                 Ok(TaskOutput::Convert(MediaOutput {
                     source_id: input.source_id,
                     format: self.format,

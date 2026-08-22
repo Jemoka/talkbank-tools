@@ -151,6 +151,7 @@ def test_concrete_backend_classes_importable():
         DspyAIBackend,
         WhisperBackend,
         StanzaBackend,
+        PyannoteAIBackend,
         PyannoteBackend,
         GoogleTranslateBackend,
         RevAI,
@@ -166,6 +167,7 @@ def test_concrete_backend_classes_importable():
         DspyAIBackend,
         WhisperBackend,
         StanzaBackend,
+        PyannoteAIBackend,
         PyannoteBackend,
         GoogleTranslateBackend,
         RevAI,
@@ -176,6 +178,9 @@ def test_concrete_backend_classes_importable():
         GoogleGenAIBackend,
     ):
         assert issubclass(cls, Backend), cls
+
+    assert issubclass(PyannoteAIBackend, Speaker)
+    assert not issubclass(PyannoteAIBackend, UtSeg)
 
 
 def test_whisper_declared_tasks_via_class_mro():

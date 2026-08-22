@@ -3,5 +3,6 @@
 from __future__ import annotations
 
 from batchalign.backends.speaker.pyannote import PyannoteBackend
+from batchalign.backends.speaker.pyannote_ai import PyannoteAIBackend
 
-__all__ = ["PyannoteBackend"]
+__all__ = ["PyannoteAIBackend", "PyannoteBackend"]

@@ -97,8 +97,21 @@ def test_transcribe_with_diarize(fake_core):
         asr_backend="ASR-stub",
         speaker_backend="SPK-stub",
     )
-    assert _task_names(pipe) == ["Asr", "Speaker", "UtSeg"]
+    assert _task_names(pipe) == ["Asr", "Speaker"]
     assert pipe.backends == ["ASR-stub", "SPK-stub"]
+
+
+def test_transcribe_with_distinct_diarize_and_utseg(fake_core):
+    Task, Pipeline, _ = fake_core
+    from batchalign import recipes
+
+    pipe = recipes.transcribe(
+        asr_backend="ASR-stub",
+        speaker_backend="SPK-stub",
+        utseg_backend="UTSEG-stub",
+    )
+    assert _task_names(pipe) == ["Asr", "Speaker", "UtSeg"]
+    assert pipe.backends == ["ASR-stub", "SPK-stub", "UTSEG-stub"]
 
 
 def test_align(fake_core):

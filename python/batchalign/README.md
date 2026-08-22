@@ -61,7 +61,7 @@ are gated behind extras — install only what you use:
 pip install 'batchalign[whisper]'      # Whisper ASR
 pip install 'batchalign[malayalam]'    # Malayalam Wav2Vec2 XLSR ASR
 pip install 'batchalign[stanza]'       # morphosyntax (%mor / %gra)
-pip install 'batchalign[pyannote]'     # speaker diarization
+pip install 'batchalign[pyannote]'     # optional local Pyannote backend API
 pip install 'batchalign[revai]'        # Rev.AI cloud ASR
 pip install 'batchalign[google]'       # Gemini cloud ASR + diarization
 pip install 'batchalign[cantonese]'    # Cantonese pipeline (FunASR, Tencent)
@@ -77,6 +77,8 @@ pip install 'batchalign[all]'          # everything
 batchalign3 --help
 
 batchalign3 transcribe input_dir -o output_dir --lang eng
+batchalign3 transcribe input_dir -o output_dir --lang eng --engine whisper --diarize
+batchalign3 diarize    input_dir -o output_dir
 batchalign3 align     input_dir -o output_dir --engine wav2vec
 batchalign3 morphotag input_dir -o output_dir --language en
 batchalign3 utseg     input_dir -o output_dir
@@ -90,6 +92,14 @@ batchalign3 daemon                     # FastAPI server (needs [api])
 
 When `-o` is omitted, results are written back in place. The CLI accepts
 either a single CHAT/media file or a folder (walked recursively).
+
+The diarization CLI uses pyannoteAI cloud. Configure its API key in the shared
+Batchalign config file (or set `BATCHALIGN_PYANNOTE_KEY`):
+
+```ini
+[diarize]
+engine.pyannote.key = YOUR_API_KEY
+```
 
 ## Programmatic API
 
