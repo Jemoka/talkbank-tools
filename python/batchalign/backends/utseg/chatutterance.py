@@ -43,9 +43,10 @@ class CHATUtteranceBackend(UtSeg):
         self,
         *,
         lang: str = "eng",
-        batch_size: int = 8,
+        batch_size: int = 32,
         batch_window_ms: int = 50,
         cantonese_inference: bool = False,
+        segmenter: Any | None = None,
     ) -> None:
         from batchalign.backends.asr.chatwhisper import (
             BertCantoneseUtteranceModel,
@@ -65,7 +66,9 @@ class CHATUtteranceBackend(UtSeg):
         # FunAudioEngine always segments with BertCantoneseUtteranceModel
         # (even paraformer-zh), so the funaudio path opts in to match.
         self._cantonese = lang == "yue" or cantonese_inference
-        if self._cantonese:
+        if segmenter is not None:
+            self._segmenter = segmenter
+        elif self._cantonese:
             self._segmenter = BertCantoneseUtteranceModel(model)
         else:
             self._segmenter = BertUtteranceModel(model)
@@ -95,14 +98,34 @@ class CHATUtteranceBackend(UtSeg):
     def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from batchalign._core.proto import AsrWord, UtSegInput, UtSegOutput, UtteranceSpan
 
-        outputs: list[Any] = []
         for item in batch:
             if not isinstance(item, UtSegInput):
                 raise TypeError(
                     f"CHATUtteranceBackend does not handle: {type(item).__name__}"
                 )
+
+        batched_assignments: dict[tuple[int, int], list[int]] = {}
+        batch_predictor = getattr(
+            self._segmenter, "predict_assignments_batch", None
+        )
+        if not getattr(self, "_cantonese", False) and batch_predictor is not None:
+            locations: list[tuple[int, int]] = []
+            word_sequences: list[list[str]] = []
+            for item_index, item in enumerate(batch):
+                for segment_index, seg in enumerate(item.segments):
+                    if not (seg.text or "").strip():
+                        continue
+                    locations.append((item_index, segment_index))
+                    word_sequences.append(
+                        [str(word.text) for word in seg.words]
+                    )
+            assignment_batches = batch_predictor(word_sequences)
+            batched_assignments.update(zip(locations, assignment_batches))
+
+        outputs: list[Any] = []
+        for item_index, item in enumerate(batch):
             spans: list[Any] = []
-            for seg in item.segments:
+            for segment_index, seg in enumerate(item.segments):
                 text = (seg.text or "").strip()
                 if not text:
                     continue
@@ -115,9 +138,13 @@ class CHATUtteranceBackend(UtSeg):
                 predictor = getattr(self._segmenter, "predict_assignments", None)
                 if not getattr(self, "_cantonese", False) and predictor is not None:
                     source_words = list(seg.words)
-                    assignments = predictor(
-                        [str(word.text) for word in source_words]
+                    assignments = batched_assignments.get(
+                        (item_index, segment_index)
                     )
+                    if assignments is None:
+                        assignments = predictor(
+                            [str(word.text) for word in source_words]
+                        )
                     if len(assignments) == len(source_words):
                         spans.extend(
                             _spans_from_assignments(

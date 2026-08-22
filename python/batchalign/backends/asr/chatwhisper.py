@@ -145,7 +145,8 @@ class BertUtteranceModel:
         tokd = self.tokenizer(
             [chunk], return_tensors="pt", is_split_into_words=True
         ).to(self.device)
-        res = self.model(**tokd).logits
+        with torch.inference_mode():
+            res = self.model(**tokd).logits
         classified_targets = torch.argmax(res, dim=2).cpu()
 
         actions: list[int] = []
@@ -181,6 +182,14 @@ class BertUtteranceModel:
 
         raw_actions = self._predict_word_actions(normalized_words)
 
+        return self._finalize_actions(words, original_indices, raw_actions)
+
+    @staticmethod
+    def _finalize_actions(
+        words: Sequence[str], original_indices: list[int], raw_actions: list[int]
+    ) -> list[int]:
+        """Apply BA2 boundary cleanup and restore original word positions."""
+
         # BA2 drops the earlier of two adjacent model actions. This avoids
         # emitting an empty utterance when two neighbouring words are both
         # classified as boundaries.
@@ -193,6 +202,42 @@ class BertUtteranceModel:
         for normalized_index, original_index in enumerate(original_indices):
             expanded_actions[original_index] = actions[normalized_index]
         return expanded_actions
+
+    def predict_actions_batch(
+        self, word_sequences: Sequence[Sequence[str]]
+    ) -> list[list[int]]:
+        """Return actions for many independent sequences with batched BERT calls.
+
+        Rev commonly yields hundreds of short monologues per recording. Running
+        each one through BERT separately makes Python and model-dispatch overhead
+        dominate the cloud transcription time. This method preserves each
+        sequence's independent attention context while padding similarly sized
+        windows into shared model forwards.
+        """
+        normalized: list[list[str]] = []
+        mappings: list[list[int]] = []
+        active_indices: list[int] = []
+        results = [[0] * len(words) for words in word_sequences]
+
+        for sequence_index, words in enumerate(word_sequences):
+            normalized_words, original_indices = self._normalize_word_mapping(words)
+            if len(normalized_words) <= 1:
+                continue
+            normalized.append(normalized_words)
+            mappings.append(original_indices)
+            active_indices.append(sequence_index)
+
+        if not normalized:
+            return results
+
+        raw_batches = self._predict_word_actions_batch(normalized)
+        for active_index, original_indices, raw_actions in zip(
+            active_indices, mappings, raw_batches
+        ):
+            results[active_index] = self._finalize_actions(
+                word_sequences[active_index], original_indices, raw_actions
+            )
+        return results
 
     def _predict_word_actions(self, normalized_words: list[str]) -> list[int]:
         """Classify a pretokenized word sequence with overlapping windows."""
@@ -230,7 +275,10 @@ class BertUtteranceModel:
             window_ids = torch.cat([cls_token, inner_ids, sep_token]).unsqueeze(0)
             window_ids = window_ids.to(self.device)
             attention_mask = torch.ones_like(window_ids)
-            output = self.model(input_ids=window_ids, attention_mask=attention_mask)
+            with torch.inference_mode():
+                output = self.model(
+                    input_ids=window_ids, attention_mask=attention_mask
+                )
             logits = output.logits[0].detach().to("cpu", dtype=torch.float32)
             accumulated[start:end] += logits[1 : inner_count + 1]
             counts[start:end] += 1.0
@@ -248,6 +296,139 @@ class BertUtteranceModel:
             word_actions[word_index] = token_actions[token_index]
         return word_actions
 
+    def _predict_word_actions_batch(
+        self,
+        normalized_sequences: Sequence[list[str]],
+        *,
+        max_batch_size: int = 32,
+        max_batch_tokens: int = 2048,
+    ) -> list[list[int]]:
+        """Classify independent word sequences in padded, length-sorted batches."""
+        import torch  # type: ignore[import-not-found]
+
+        max_positions = int(self.model.config.max_position_embeddings)
+        class_count = int(self.model.config.num_labels)
+        inner_window = min(_TYPED_WINDOW_INNER_TOKENS, max_positions - 2)
+        if inner_window <= _TYPED_WINDOW_OVERLAP_TOKENS:
+            stride = inner_window
+        else:
+            stride = inner_window - _TYPED_WINDOW_OVERLAP_TOKENS
+
+        word_ids_by_sequence: list[list[int | None]] = []
+        accumulated: list[Any] = []
+        counts: list[Any] = []
+        # (padded length, sequence index, start, end, inner count, ids)
+        windows: list[tuple[int, int, int, int, int, Any]] = []
+        cls_token_id = int(self.tokenizer.cls_token_id)
+        sep_token_id = int(self.tokenizer.sep_token_id)
+
+        for sequence_index, normalized_words in enumerate(normalized_sequences):
+            encoding = self.tokenizer(
+                [normalized_words],
+                return_tensors="pt",
+                is_split_into_words=True,
+                add_special_tokens=False,
+            )
+            input_ids = encoding.input_ids[0]
+            word_ids_by_sequence.append(encoding.word_ids(0))
+            token_count = int(input_ids.shape[0])
+            accumulated.append(
+                torch.zeros((token_count, class_count), dtype=torch.float32)
+            )
+            counts.append(torch.zeros(token_count, dtype=torch.float32))
+
+            start = 0
+            while token_count:
+                end = min(start + inner_window, token_count)
+                inner_ids = input_ids[start:end]
+                inner_count = int(inner_ids.shape[0])
+                window_ids = torch.cat(
+                    [
+                        torch.tensor([cls_token_id], dtype=input_ids.dtype),
+                        inner_ids,
+                        torch.tensor([sep_token_id], dtype=input_ids.dtype),
+                    ]
+                )
+                windows.append(
+                    (
+                        inner_count + 2,
+                        sequence_index,
+                        start,
+                        end,
+                        inner_count,
+                        window_ids,
+                    )
+                )
+                if end >= token_count:
+                    break
+                start += stride
+
+        # Length sorting keeps padding low. The token cap prevents an isolated
+        # 480-token window from inflating a large batch on memory-limited Macs.
+        windows.sort(key=lambda item: item[0])
+        cursor = 0
+        pad_token_id = self.tokenizer.pad_token_id
+        if pad_token_id is None:
+            pad_token_id = 0
+        while cursor < len(windows):
+            batch_windows: list[tuple[int, int, int, int, int, Any]] = []
+            padded_length = 0
+            while cursor < len(windows) and len(batch_windows) < max_batch_size:
+                candidate = windows[cursor]
+                candidate_length = max(padded_length, candidate[0])
+                candidate_tokens = candidate_length * (len(batch_windows) + 1)
+                if batch_windows and candidate_tokens > max_batch_tokens:
+                    break
+                batch_windows.append(candidate)
+                padded_length = candidate_length
+                cursor += 1
+
+            input_batch = torch.full(
+                (len(batch_windows), padded_length),
+                int(pad_token_id),
+                dtype=batch_windows[0][5].dtype,
+            )
+            attention_mask = torch.zeros_like(input_batch)
+            for row, window in enumerate(batch_windows):
+                window_ids = window[5]
+                length = int(window_ids.shape[0])
+                input_batch[row, :length] = window_ids
+                attention_mask[row, :length] = 1
+
+            with torch.inference_mode():
+                batch_output = self.model(
+                    input_ids=input_batch.to(self.device),
+                    attention_mask=attention_mask.to(self.device),
+                )
+            batch_logits = batch_output.logits.detach().to(
+                "cpu", dtype=torch.float32
+            )
+            for row, window in enumerate(batch_windows):
+                _, sequence_index, start, end, inner_count, _ = window
+                accumulated[sequence_index][start:end] += batch_logits[
+                    row, 1 : inner_count + 1
+                ]
+                counts[sequence_index][start:end] += 1.0
+
+        results: list[list[int]] = []
+        for sequence_index, normalized_words in enumerate(normalized_sequences):
+            token_actions = torch.argmax(
+                accumulated[sequence_index]
+                / counts[sequence_index].unsqueeze(-1),
+                dim=1,
+            ).tolist()
+            word_actions = [0] * len(normalized_words)
+            previous_word_index: int | None = None
+            for token_index, word_index in enumerate(
+                word_ids_by_sequence[sequence_index]
+            ):
+                if word_index is None or word_index == previous_word_index:
+                    continue
+                previous_word_index = word_index
+                word_actions[word_index] = token_actions[token_index]
+            results.append(word_actions)
+        return results
+
     def predict_assignments(self, words: Sequence[str]) -> list[int]:
         """Return typed utterance-group assignments parallel to ``words``."""
         if len(words) <= 1:
@@ -259,6 +440,21 @@ class BertUtteranceModel:
             if action in _BOUNDARY_ACTIONS:
                 current_group += 1
         return assignments
+
+    def predict_assignments_batch(
+        self, word_sequences: Sequence[Sequence[str]]
+    ) -> list[list[int]]:
+        """Return typed utterance groups for many independent sequences."""
+        results: list[list[int]] = []
+        for actions in self.predict_actions_batch(word_sequences):
+            assignments: list[int] = []
+            current_group = 0
+            for action in actions:
+                assignments.append(current_group)
+                if action in _BOUNDARY_ACTIONS:
+                    current_group += 1
+            results.append(assignments)
+        return results
 
     def __call__(self, passage: str) -> list[str]:
         import nltk  # type: ignore[import-not-found]

@@ -152,7 +152,14 @@ def register(app: typer.Typer) -> None:
             # recipe takes the fast path.
             utseg_backend: Any = None
             if not _engine_self_segments(engine):
-                utseg_backend = _build_utseg(ba, lang_code, engine)
+                shared_segmenter = None
+                if engine is AsrEngine.rev:
+                    shared_segmenter = getattr(
+                        asr_backend, "utterance_segmenter", None
+                    )
+                utseg_backend = _build_utseg(
+                    ba, lang_code, engine, segmenter=shared_segmenter
+                )
             pipeline = ba.recipes.transcribe(
                 asr_backend=asr_backend,
                 speaker_backend=speaker_backend,
@@ -249,7 +256,13 @@ _UTSEG_LANG_3 = {
 }
 
 
-def _build_utseg(ba: Any, lang: LanguageCode, engine: AsrEngine | None = None):
+def _build_utseg(
+    ba: Any,
+    lang: LanguageCode,
+    engine: AsrEngine | None = None,
+    *,
+    segmenter: Any | None = None,
+):
     """Build the CHATUtterance segmenter for `lang`, or None if BA2 ships
     no utterance model for it (then ASR segments stand as utterances).
 
@@ -269,7 +282,11 @@ def _build_utseg(ba: Any, lang: LanguageCode, engine: AsrEngine | None = None):
         return None
     try:
         cantonese = engine is AsrEngine.funaudio
-        return ba.CHATUtteranceBackend(lang=key, cantonese_inference=cantonese)
+        return ba.CHATUtteranceBackend(
+            lang=key,
+            cantonese_inference=cantonese,
+            segmenter=segmenter,
+        )
     except ValueError as error:
         _log.warning(
             "TalkBank utterance-segmentation model for %r is unavailable "

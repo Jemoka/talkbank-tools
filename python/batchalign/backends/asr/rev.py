@@ -76,6 +76,11 @@ class RevAI(ASR, UTR, Speaker):
     def batch_policy(self) -> BatchPolicy:
         return self._policy
 
+    @property
+    def utterance_segmenter(self) -> Any | None:
+        """The raw-word segmenter, reusable by the downstream typed pass."""
+        return self._utterance_segmenter
+
     def call(self, batch: list[Any], *, progress: Any = None, **_kwargs: Any) -> list[Any]:
         from batchalign._core.proto import (
             AsrInput,
@@ -384,15 +389,27 @@ def _presegment_raw_segments(
     segments: list[Any], segmenter: Any, AsrSegment: type
 ) -> list[Any]:
     """Split raw Rev words with typed BERT assignments before CHAT cleanup."""
+    word_sequences = [
+        [str(word.text) for word in segment.words] for segment in segments
+    ]
+    batch_predictor = getattr(segmenter, "predict_assignments_batch", None)
+    if batch_predictor is not None:
+        assignment_batches = batch_predictor(word_sequences)
+    else:
+        assignment_batches = [
+            segmenter.predict_assignments(words) for words in word_sequences
+        ]
+
     output: list[Any] = []
-    for segment in segments:
+    for segment_index, segment in enumerate(segments):
         words = list(segment.words)
         if len(words) <= 1:
             output.append(segment)
             continue
-        assignments = segmenter.predict_assignments(
-            [str(word.text) for word in words]
-        )
+        if segment_index < len(assignment_batches):
+            assignments = assignment_batches[segment_index]
+        else:
+            assignments = segmenter.predict_assignments(word_sequences[segment_index])
         if len(assignments) != len(words):
             output.append(segment)
             continue

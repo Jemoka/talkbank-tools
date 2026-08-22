@@ -169,6 +169,30 @@ def test_malayalam_uses_sat_utterance_segmentation(monkeypatch):
     assert _build_utseg(ba, LanguageCode.from_str("mal"), AsrEngine.malayalam) is sentinel
 
 
+def test_rev_reuses_raw_word_segmenter_for_typed_pass(monkeypatch):
+    import batchalign as ba
+    from batchalign.cli.transcribe import AsrEngine, _build_utseg
+    from batchalign.lang import LanguageCode
+
+    captured = {}
+    shared_segmenter = object()
+
+    def fake_backend(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(ba, "CHATUtteranceBackend", fake_backend)
+
+    _build_utseg(
+        ba,
+        LanguageCode.from_str("eng"),
+        AsrEngine.rev,
+        segmenter=shared_segmenter,
+    )
+
+    assert captured["segmenter"] is shared_segmenter
+
+
 def test_unsupported_utseg_warns_and_retains_asr_utterances(caplog):
     import os
     from types import SimpleNamespace

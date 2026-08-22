@@ -22,6 +22,7 @@ use crate::proto::utseg::{UtSegInput, UtSegOutput};
 use crate::utils::SourceId;
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
+use futures::future::try_join_all;
 use std::collections::{BTreeSet, HashMap};
 use talkbank_model::alignment::helpers::TierDomain;
 
@@ -74,31 +75,41 @@ impl TaskRunner for UtSegTaskRunner {
             .collect();
 
         // Per-utterance text (typed extraction via `walk_words`) → dispatch →
-        // collect the re-segmented sub-utterances.
+        // collect the re-segmented sub-utterances. Queue every independent row
+        // before awaiting results so the backend batcher can combine rows from
+        // the same document. `try_join_all` preserves input order.
         let rows: Vec<UtteranceRow> = collect_utterance_rows(chat);
         let total = rows.len() as u64;
         let mut new_utts: Vec<NewUtterance> = Vec::new();
         let mut assignment_map: HashMap<usize, Vec<usize>> = HashMap::new();
         let mut requires_rebuild = false;
-        for (idx, row) in rows.iter().enumerate() {
-            let input = UtSegInput {
+        let inputs: Vec<UtSegInput> = rows
+            .iter()
+            .map(|row| UtSegInput {
                 source_id: source_id.clone(),
                 segments: vec![row.as_segment()],
                 // Language is per-file from `@Languages:`; the backend pins its
                 // own model at construction.
                 language: LanguageSpec::PerFile,
                 stanza_fallback: false,
-            };
+            })
+            .collect();
+        let dispatched = try_join_all(inputs.iter().cloned().map(|input| async move {
             let out_raw = dispatcher.dispatch(TaskInput::UtSeg(input.clone())).await?;
-            let out: UtSegOutput = out_raw.try_into()?;
-            match assignments_from_spans(row, &out) {
+            let output: UtSegOutput = out_raw.try_into()?;
+            Ok::<(UtSegInput, UtSegOutput), BAError>((input, output))
+        }))
+        .await?;
+
+        for (idx, ((input, out), row)) in dispatched.iter().zip(&rows).enumerate() {
+            match assignments_from_spans(row, out) {
                 Some(assignments) if !assignments.is_empty() => {
                     assignment_map.insert(idx, assignments);
                 }
                 Some(_) => {}
                 None => requires_rebuild = true,
             }
-            collect_split(row, &input, &out, &mut new_utts);
+            collect_split(row, input, out, &mut new_utts);
             sink.emit(ProgressEvent::stage_tick(
                 &source_id,
                 Task::UtSeg,
