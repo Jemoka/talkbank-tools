@@ -237,6 +237,12 @@ bazel_dep(name = "rules_uv", version = "0.59.0")
 # stay on rules_uv/pip_compile for dep resolution and only borrow
 # aspect's py_* defs.
 bazel_dep(name = "aspect_rules_py", version = "1.11.5")
+single_version_override(
+    module_name = "aspect_rules_py",
+    patch_strip = 1,
+    patches = ["//bazel/patches:aspect-rules-py-isolated-runtime-venv.patch"],
+    version = "1.11.5",
+)
 
 # Single source of truth for the Python interpreter pin. Flows into the
 # rules_python toolchain, the uv-managed venv, and the maturin host

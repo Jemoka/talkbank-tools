@@ -80,6 +80,12 @@ py_binary(
     # paths that aspect's venv-builder flags as conflicts; suppress
     # entirely since none are runtime-load-relevant.
     package_collisions = "ignore",
+    # The upstream launcher normally materializes one mutable venv inside the
+    # target's shared runfiles tree at process startup. Concurrent CLI
+    # invocations can then observe half-refreshed Torch/certifi symlinks.
+    # Give this long-running product binary a per-process runtime venv; tests
+    # retain the faster shared default.
+    isolate_runtime_venv = True,
     deps = [":batchalign_lib"],
 )
 

@@ -1,0 +1,66 @@
+Add opt-in per-process runtime venvs to py_binary.
+
+The standard rules_py launcher rebuilds a mutable venv under the target's
+shared runfiles tree every time it starts. Two concurrent long-running
+Batchalign invocations can therefore mutate the same symlink forest while
+Python is importing from it. Keep the upstream fast shared default, but let
+product binaries request an isolated temporary venv that lives until their
+Python process exits.
+
+diff --git a/py/private/py_binary.bzl b/py/private/py_binary.bzl
+--- a/py/private/py_binary.bzl
++++ b/py/private/py_binary.bzl
+@@ -66,6 +66,7 @@ def _py_binary_rule_impl(ctx):
+             "{{VENV_TOOL}}": to_rlocation_path(ctx, venv_toolchain.bin.bin),
+             "{{ARG_COLLISION_STRATEGY}}": ctx.attr.package_collisions,
+             "{{ARG_PYTHON}}": to_rlocation_path(ctx, py_toolchain.python) if py_toolchain.runfiles_interpreter else py_toolchain.python.path,
++            "{{ISOLATE_RUNTIME_VENV}}": str(ctx.attr.isolate_runtime_venv).lower(),
+             "{{ARG_VENV_NAME}}": ".{}.venv".format(ctx.attr.name),
+             "{{ARG_PTH_FILE}}": to_rlocation_path(ctx, site_packages_pth_file),
+             "{{ENTRYPOINT}}": to_rlocation_path(ctx, main),
+@@ -151,6 +152,14 @@ Script to execute with the Python interpreter.
+ Part of the aspect_rules_py//uv system, has no effect in rules_python's pip.
+ """,
+     ),
++    "isolate_runtime_venv": attr.bool(
++        doc = """Create this binary's runtime venv in a per-process temporary directory.
++
++Use this for long-running binaries that may be started concurrently. It avoids
++one process mutating the shared runfiles venv while another imports from it.
++""",
++        default = False,
++    ),
+     "python_version": attr.string(
+         doc = """Whether to build this target and its transitive deps for a specific python version.""",
+     ),
+diff --git a/py/private/run.tmpl.sh b/py/private/run.tmpl.sh
+--- a/py/private/run.tmpl.sh
++++ b/py/private/run.tmpl.sh
+@@ -37,3 +37,13 @@ function python_location {
+ VENV_TOOL="$(rlocation {{VENV_TOOL}})"
+-VIRTUAL_ENV="$(alocation "${RUNFILES_DIR}/{{ARG_VENV_NAME}}")"
++ISOLATE_RUNTIME_VENV="{{ISOLATE_RUNTIME_VENV}}"
++if [[ "${ISOLATE_RUNTIME_VENV}" == "true" ]]; then
++  # Keep the venv directly below RUNFILES_DIR. The generated .pth contains
++  # relative paths whose depth assumes this exact location.
++  RUNTIME_VENV_ROOT="$(mktemp -d "${RUNFILES_DIR}/{{ARG_VENV_NAME}}.XXXXXX")"
++  trap 'rm -rf -- "${RUNTIME_VENV_ROOT}"' EXIT
++  VIRTUAL_ENV="${RUNTIME_VENV_ROOT}"
++else
++  RUNTIME_VENV_ROOT=""
++  VIRTUAL_ENV="$(alocation "${RUNFILES_DIR}/{{ARG_VENV_NAME}}")"
++fi
+ export VIRTUAL_ENV
+@@ -61 +71,11 @@ if [ -n "${BASH:-}" -o -n "${ZSH_VERSION:-}" ] ; then
+-exec "{{EXEC_PYTHON_BIN}}" {{INTERPRETER_FLAGS}} "$(rlocation {{ENTRYPOINT}})" "$@"
++if [[ "${ISOLATE_RUNTIME_VENV}" == "true" ]]; then
++  # Keep the temporary venv alive for the whole Python process, then let the
++  # EXIT trap remove the exact mktemp-created directory.
++  set +e
++  "{{EXEC_PYTHON_BIN}}" {{INTERPRETER_FLAGS}} "$(rlocation {{ENTRYPOINT}})" "$@"
++  status=$?
++  set -e
++  exit "${status}"
++else
++  exec "{{EXEC_PYTHON_BIN}}" {{INTERPRETER_FLAGS}} "$(rlocation {{ENTRYPOINT}})" "$@"
++fi
