@@ -470,7 +470,7 @@ wheels = [
 
 [[package]]
 name = "batchalign"
-version = "0.9.0a25"
+version = "0.9.0a26"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
