@@ -78,6 +78,40 @@ def test_pipeline_cache_misses_on_different_langs() -> None:
     assert fake_stanza.Pipeline.call_count == 2
 
 
+def test_hindi_pipeline_does_not_request_missing_mwt_model() -> None:
+    """Hindi's Stanza package has no MWT processor/model."""
+    _reset_cache()
+    from batchalign.backends.morphosyntax.stanza import StanzaBackend
+
+    fake_stanza = mock.MagicMock()
+    fake_stanza.Pipeline.return_value = mock.sentinel.PIPE_HI
+    fake_stanza.__version__ = "test"
+
+    with mock.patch.dict("sys.modules", {"stanza": fake_stanza}):
+        backend = StanzaBackend(lang="hin", retokenize=False)
+
+    assert backend._nlp is mock.sentinel.PIPE_HI
+    processors = fake_stanza.Pipeline.call_args.kwargs["processors"]
+    assert processors == {
+        "tokenize": "default",
+        "pos": "default",
+        "lemma": "default",
+        "depparse": "default",
+    }
+
+
+@pytest.mark.parametrize("surface", ["जी", "हाँ", "தமிழ்"])
+def test_code_switch_masker_keeps_unicode_combining_marks(surface: str) -> None:
+    from batchalign.backends.morphosyntax.stanza import StanzaBackend
+
+    line, special_forms = StanzaBackend._preprocess_text(
+        f"before {surface}@s after"
+    )
+
+    assert line == "before xbxxx after"
+    assert special_forms == [[surface, "s"]]
+
+
 def test_one_bad_language_does_not_kill_the_batch() -> None:
     """A pipeline-init failure for one input must NOT fail the rest of the batch.
 

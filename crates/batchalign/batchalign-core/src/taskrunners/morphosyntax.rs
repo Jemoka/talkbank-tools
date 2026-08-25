@@ -102,8 +102,9 @@ impl TaskRunner for MorphosyntaxTaskRunner {
 
 /// Run morphosyntax on one CHAT in place. Used both by the `BAValue::Chat`
 /// path and twice in the `BAValue::Paired` path (main then gold). Language
-/// is resolved per-file from the chat's `@Languages:` header; backends that
-/// want to pin a language do so via their own constructor.
+/// defaults from the chat's `@Languages:` header and is overridden by an
+/// utterance precode such as `[- hin]`; backends that want to pin a language
+/// do so via their own constructor.
 async fn process_chat(
     chat: &mut Chat,
     dispatcher: &dyn Dispatcher,
@@ -149,14 +150,18 @@ async fn process_chat(
         )));
     }
 
-    let language = resolve_per_file_language(chat);
+    let default_language = resolve_per_file_language(chat);
 
-    // Phase 1: extract per-utterance token lists AND check which utterances
+    // Phase 1: extract per-utterance NLP inputs AND check which utterances
     // already carry a `%mor:` tier. Pre-tagged utterances are skipped end-to-
     // end (no dispatch, no re-injection) — the existing tier is authoritative.
     // This is the "morphotag is idempotent" contract Compare relies on.
     let t_phase1 = std::time::Instant::now();
-    let per_utt_tokens: Vec<Vec<String>> = chat.ast().utterances().map(extract_tokens).collect();
+    let per_utt_inputs: Vec<ExtractedMorphosyntaxInput> = chat
+        .ast()
+        .utterances()
+        .map(|utterance| extract_input(utterance, &default_language))
+        .collect();
     let already_tagged: Vec<bool> = chat
         .ast()
         .utterances()
@@ -166,7 +171,7 @@ async fn process_chat(
         target: "batchalign::morphosyntax",
         sid = %source_id,
         phase = "extract_tokens",
-        utterances = per_utt_tokens.len(),
+        utterances = per_utt_inputs.len(),
         elapsed_ms = t_phase1.elapsed().as_millis() as u64,
     );
 
@@ -191,21 +196,20 @@ async fn process_chat(
     let progress_dyn: Arc<dyn crate::base::BackendProgress> = progress.clone();
     let mut dispatched: Vec<(usize, MorphosyntaxOutput)> = Vec::new();
     let t_dispatch = std::time::Instant::now();
-    for (idx, tokens) in per_utt_tokens.iter().enumerate() {
+    for (idx, extracted) in per_utt_inputs.iter().enumerate() {
         if already_tagged[idx] {
             continue;
         }
-        let text = tokens.join(" ");
         let input = MorphosyntaxInput {
             source_id: source_id.clone(),
             utterance_id: idx as u32,
-            language: language.clone(),
-            tokens: tokens.clone(),
+            language: extracted.language.clone(),
+            tokens: extracted.tokens.clone(),
             // Retokenize off by default — preserves upstream main-tier
             // tokenization. Backends that want to resplit (BA2's
             // `retokenize=True`) flip it via their own constructor.
             retokenize: false,
-            text,
+            text: extracted.text.clone(),
         };
         progress.start_step();
         let task_out = dispatcher
@@ -302,19 +306,61 @@ fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
     }
 }
 
-/// Pull the Mor-alignable main-tier word surface forms from one utterance.
+/// NLP input projected from one typed utterance.
 ///
-/// Use the same canonical domain-aware extraction policy as `%mor` validation
-/// and injection. In particular, retraced material is not represented on a
-/// `%mor` tier, so sending it to Stanza would produce more analyses than there
-/// are legal tier slots and cause the whole utterance to be skipped.
-fn extract_tokens(u: &Utterance) -> Vec<String> {
+/// `tokens` keeps the clean main-tier surface forms used for alignment, while
+/// `text` retains an `@s` sentinel on word-level language switches. The Stanza
+/// backend deliberately masks that sentinel before inference and restores the
+/// conventional `L2|xxx` analysis afterward. Keeping the two projections
+/// separate prevents CHAT markup from leaking into the authoritative token
+/// list while still preserving the code-switch signal across the task API.
+struct ExtractedMorphosyntaxInput {
+    language: LanguageSpec,
+    tokens: Vec<String>,
+    text: String,
+}
+
+/// Resolve the language used to tag an utterance.
+///
+/// A main-tier precode (`[- hin]`) is narrower than the file-wide default and
+/// must win. Without one, the first `@Languages:` code remains the transcript
+/// default, as specified by the typed CHAT model.
+fn resolve_utterance_language(u: &Utterance, default: &LanguageSpec) -> LanguageSpec {
+    u.main
+        .content
+        .language_code
+        .as_ref()
+        .map(|code| LanguageSpec::Code(SmolStr::new(code.as_str())))
+        .unwrap_or_else(|| default.clone())
+}
+
+/// Extract the clean alignment tokens and the markup-aware Stanza text.
+fn extract_input(u: &Utterance, default_language: &LanguageSpec) -> ExtractedMorphosyntaxInput {
     let mut extracted = Vec::new();
     collect_utterance_content(&u.main.content.content.0, TierDomain::Mor, &mut extracted);
-    extracted
-        .into_iter()
+
+    let tokens: Vec<String> = extracted
+        .iter()
         .map(|word| word.text.to_string())
-        .collect()
+        .collect();
+    let text = extracted
+        .iter()
+        .map(|word| {
+            let surface = word.text.to_string();
+            if word.lang.is_some() {
+                format!("{surface}@s")
+            } else {
+                surface
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    ExtractedMorphosyntaxInput {
+        language: resolve_utterance_language(u, default_language),
+        tokens,
+        text,
+    }
 }
 
 /// Build one typed [`MorWord`] from a structured unit (`pos|lemma-feat...`).
@@ -593,6 +639,8 @@ mod tests {
 
     const UNSUPPORTED_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\tsrp\n@Participants:\tCHI Child\n@ID:\tsrp|corpus|CHI|||||Child|||\n*CHI:\tnešto .\n@End\n";
 
+    const MULTILINGUAL_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng, hin, tam\n@Participants:\tTEA Teacher\n@ID:\teng|corpus|TEA|||||Teacher|||\n*TEA:\thello .\n*TEA:\t[- hin] हाँ .\n*TEA:\tGandhi जी@s:hin .\n*TEA:\t[- hin] so@s:eng group@s:eng में .\n*TEA:\t[- tam] யாரு ?\n@End\n";
+
     /// Capturing sink for tick-sequence assertions.
     struct CapturingSink {
         events: Mutex<Vec<crate::base::ProgressEvent>>,
@@ -681,6 +729,48 @@ mod tests {
         assert!(s.contains("noun|cat"), "expected typed noun|cat: {s}");
         // Terminator rendered by the typed writer (period after the last word).
         assert!(s.contains("noun|dog ."), "expected terminator on %mor: {s}");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn preserves_utterance_and_word_code_switches_for_dispatch() -> BAResult<()> {
+        let chat = Chat::parse(
+            MULTILINGUAL_FIXTURE,
+            SourceId::try_new("multilingual")?,
+        )?;
+        let mut value = BAValue::Chat(chat);
+        let dispatcher = RecordingDispatcher::new();
+
+        MorphosyntaxTaskRunner
+            .apply(
+                &mut value,
+                &dispatcher,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
+            .await?;
+
+        let seen = dispatcher.seen.lock().expect("poisoned");
+        assert_eq!(seen.len(), 5);
+
+        assert_eq!(seen[0].language, LanguageSpec::Code(SmolStr::new("eng")));
+        assert_eq!(seen[0].tokens, ["hello"]);
+        assert_eq!(seen[0].text, "hello");
+
+        assert_eq!(seen[1].language, LanguageSpec::Code(SmolStr::new("hin")));
+        assert_eq!(seen[1].tokens, ["हाँ"]);
+        assert_eq!(seen[1].text, "हाँ");
+
+        assert_eq!(seen[2].language, LanguageSpec::Code(SmolStr::new("eng")));
+        assert_eq!(seen[2].tokens, ["Gandhi", "जी"]);
+        assert_eq!(seen[2].text, "Gandhi जी@s");
+
+        assert_eq!(seen[3].language, LanguageSpec::Code(SmolStr::new("hin")));
+        assert_eq!(seen[3].tokens, ["so", "group", "में"]);
+        assert_eq!(seen[3].text, "so@s group@s में");
+
+        assert_eq!(seen[4].language, LanguageSpec::Code(SmolStr::new("tam")));
+        assert_eq!(seen[4].tokens, ["யாரு"]);
+        assert_eq!(seen[4].text, "யாரு");
         Ok(())
     }
 

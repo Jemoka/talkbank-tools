@@ -177,6 +177,7 @@ _MWT_EXCLUSION = frozenset(
         "eu",
         "el",
         "he",
+        "hi",
         "af",
         "ga",
         "da",
@@ -200,7 +201,11 @@ _CLEANUP_RE = re.compile(r"\+<|\+/|\(|\)|\+\^|\+//|\+\.\.\.|_|[#]")
 # Stanza treats as an unknown unit) and remember the original
 # `(stem, tag)` pair so the renderer can re-emit the right POS/lemma —
 # see `render.parse_sentence`'s `special_forms` handling.
-_SPECIAL_FORM_RE = re.compile(r"\w+@[\w:]+")
+# The word surface may contain combining marks that Python's ``\w`` does not
+# include (for example the Devanagari vowel sign in ``जी@s:hin`` or Tamil
+# combining signs). Match the complete non-whitespace surface up to ``@``;
+# the marker itself remains deliberately narrow.
+_SPECIAL_FORM_RE = re.compile(r"[^\s@]+@[\w:]+")
 
 # CA-notation marker cleanup — Conversation-Analysis transcripts use a
 # rich set of prosodic markers (°, ↑, ↓, ∆, ⌈⌉, ⌊⌋, ≈, ≋, ‡, etc.)

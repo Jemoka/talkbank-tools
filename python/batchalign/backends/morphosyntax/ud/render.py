@@ -1124,7 +1124,7 @@ def parse_sentence(
     chunk_gra: dict[int, tuple[int, int, str]] = {}
     for elem in gra_tmp:
         index, raw_head, deprel = elem
-        if index in special_form_ids:
+        if index in special_form_ids and raw_head != 0:
             deprel = "FLAT"
         head = 0 if raw_head == 0 else actual_indicies[raw_head - 1]
         chunk_gra[index] = (index, head, deprel)

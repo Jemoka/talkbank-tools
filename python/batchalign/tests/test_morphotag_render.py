@@ -126,6 +126,34 @@ def test_english_declarative_matches_ba2():
     assert _gra_str(analysis) == "1|2|NSUBJ 2|0|ROOT 3|5|DET 4|5|AMOD 5|2|OBJ 6|2|PUNCT"
 
 
+def test_code_switched_root_keeps_root_relation():
+    sent = _sentence(
+        [
+            ("xbxxx", "xbxxx", "X", None, 0, "root"),
+            ("friend", "friend", "NOUN", "Number=Sing", 1, "flat"),
+        ]
+    )
+
+    analysis = render.parse_sentence(sent, ".", [["जी", "s"]], "en")
+
+    assert _mor_str(analysis, ".") == "L2|xxx noun|friend ."
+    assert _gra_str(analysis) == "1|0|ROOT 2|1|FLAT 3|1|PUNCT"
+
+
+def test_code_switched_dependent_uses_flat_relation():
+    sent = _sentence(
+        [
+            ("friend", "friend", "NOUN", "Number=Sing", 0, "root"),
+            ("xbxxx", "xbxxx", "X", None, 1, "dep"),
+        ]
+    )
+
+    analysis = render.parse_sentence(sent, ".", [["जी", "s"]], "en")
+
+    assert _mor_str(analysis, ".") == "noun|friend L2|xxx ."
+    assert _gra_str(analysis) == "1|0|ROOT 2|1|FLAT 3|1|PUNCT"
+
+
 def test_english_aux_participle_matches_ba2():
     # "he is running very fast ."
     sent = _sentence(

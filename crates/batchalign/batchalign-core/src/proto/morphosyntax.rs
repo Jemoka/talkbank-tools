@@ -136,9 +136,11 @@ pub struct MorphosyntaxInput {
     /// main tier already encodes word boundaries.
     #[serde(default)]
     pub retokenize: bool,
-    /// Plain-text utterance — populated for `retokenize=true` so the
-    /// backend can apply its own segmenter (it falls back to
-    /// `tokens.join(" ")` when empty).
+    /// Utterance text for backend preprocessing. This may retain narrowly
+    /// scoped CHAT signals such as a word-level `@s` language switch even
+    /// when `tokens` contains only clean alignment surfaces. With
+    /// `retokenize=true`, the backend may also use it as segmentation input;
+    /// when empty, the backend falls back to `tokens.join(" ")`.
     #[serde(default)]
     pub text: String,
 }
