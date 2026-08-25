@@ -415,8 +415,9 @@ class StanzaBackend(Morphosyntax):
         version = getattr(self._stanza, "__version__", "unknown")
         retok = "retok" if self._retokenize else "noretok"
         # Invalidate empty cache entries written by older builds when pipeline
-        # construction failed but returned a success-shaped output.
-        return f"stanza:{version}:{retok}:strict-init1"
+        # construction failed, plus analyses where Unicode lexical words were
+        # dropped after Stanza mislabeled them as punctuation.
+        return f"stanza:{version}:{retok}:strict-init2"
 
     @property
     def batch_policy(self) -> BatchPolicy:

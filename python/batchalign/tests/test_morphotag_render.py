@@ -154,6 +154,14 @@ def test_code_switched_dependent_uses_flat_relation():
     assert _gra_str(analysis) == "1|0|ROOT 2|1|FLAT 3|1|PUNCT"
 
 
+@pytest.mark.parametrize("surface", ["ना", "அப்டே"])
+def test_unicode_word_misclassified_as_punctuation_is_preserved(surface: str):
+    """Combining marks must not make a lexical word vanish from `%mor`."""
+    word = FakeWord(surface, surface, "PUNCT", None, 0, "root", id=1)
+
+    assert render.handle(word, "hi") == ("x", surface, [])
+
+
 def test_english_aux_participle_matches_ba2():
     # "he is running very fast ."
     sent = _sentence(

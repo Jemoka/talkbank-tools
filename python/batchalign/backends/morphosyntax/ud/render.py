@@ -30,6 +30,7 @@ Language-specific helpers (``en/irr.py``, ``fr/case.py``, ``fr/apm.py``,
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -927,13 +928,36 @@ def handler__PUNCT(
         return ("noun", "da", [])
     elif word.text == "哎呀":
         return ("punct", "哎呀", [])
-    elif re.match(r"^['\w-]+$", word.text):
+    elif _is_lexical_surface(word.text):
         if word.text == "もん":
             return ("part", word.text, [])
         if word.text == ",":
             return ("cm", "cm", [])
         return ("x", word.text, [])
     return None
+
+
+def _is_lexical_surface(text: str) -> bool:
+    """Recognize words that Stanza has incorrectly labelled as punctuation.
+
+    Python's ``\\w`` excludes Unicode combining marks.  That made lexical
+    Devanagari and Tamil forms such as ``ना`` and ``அப்டே`` fail the old
+    punctuation fallback and disappear from ``%mor`` entirely.  Treat Unicode
+    letters, numbers, and marks as word material while retaining the narrow
+    apostrophe/hyphen/underscore allowance of the previous regular expression.
+    """
+    if not text:
+        return False
+    allowed_punctuation = {"'", "’", "-", "_"}
+    has_word_material = False
+    for char in text:
+        category = unicodedata.category(char)
+        if category[0] in {"L", "M", "N"}:
+            has_word_material = True
+            continue
+        if char not in allowed_punctuation:
+            return False
+    return has_word_material
 
 
 HANDLERS = {
