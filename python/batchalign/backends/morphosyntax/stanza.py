@@ -27,6 +27,7 @@ This project supports UD `%mor` syntax only (see CLAUDE.md). Legacy CLAN-mor
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
 import os
@@ -95,9 +96,35 @@ _pipeline_cache_lock = threading.Lock()
 # Process-wide memo of pipeline keys whose construction has already failed
 # (e.g. unsupported Stanza language). Keeps `call()` from re-attempting the
 # same broken `stanza.Pipeline(lang=...)` for every utterance in a file
-# (and for every file with that language) — one warning per language, then
-# fast empty-result fallback. Maps key → reason for the warning.
+# (and for every file with that language). Repeated calls still raise, but
+# without re-entering the failed model constructor. Maps key → error text.
 _pipeline_failures: dict[tuple, str] = {}
+
+# PyTorch lazily imports a number of internal modules while deserializing
+# models. Importing through two deep dependency chains on different worker
+# threads can expose a partially initialized ``torch`` package (upstream
+# pytorch/pytorch#182560). Batchalign's engine deliberately invokes Python
+# backends from blocking worker threads, so finish the Torch/Functorch import
+# synchronously, behind one process-wide lock, before constructing Stanza.
+_runtime_import_lock = threading.Lock()
+
+
+def _import_stanza_runtime() -> Any:
+    """Prepare lazy runtime state before Stanza can reach worker threads.
+
+    Textual temporarily replaces ``sys.stderr`` while the interactive
+    dashboard owns the terminal.  Stanza's download progress bar lazily
+    creates a multiprocessing lock and resource-tracker process, which reads
+    that stream's file descriptor.  Prime the exact tqdm class Stanza uses
+    while backend construction is still on the main thread and stderr is a
+    real terminal.
+    """
+    with _runtime_import_lock:
+        importlib.import_module("torch")
+        importlib.import_module("torch._functorch.config")
+        stanza = importlib.import_module("stanza")
+        stanza.resources.common.tqdm.get_lock()
+        return stanza
 
 # An existing Stanza resources.json can become stale when Stanford republishes
 # model artifacts under the same resources version. Refresh it once at this
@@ -250,7 +277,7 @@ class StanzaBackend(Morphosyntax):
         retokenize: bool = False,
         processors: str | None = None,
     ) -> None:
-        import stanza  # type: ignore[import-not-found]
+        stanza = _import_stanza_runtime()
 
         self._stanza = stanza
         _refresh_stanza_resources_manifest_once(stanza)
@@ -298,6 +325,11 @@ class StanzaBackend(Morphosyntax):
             },
             "tokenize_no_ssplit": True,
             "verbose": False,
+            # The backend refreshes an existing resources.json once, before
+            # the dashboard starts.  Avoid making every lazily constructed
+            # language pipeline download that same manifest again.  Missing
+            # model files are still downloaded by REUSE_RESOURCES.
+            "download_method": "reuse_resources",
         }
         if lang not in _MWT_EXCLUSION:
             config["processors"]["mwt"] = "gum" if lang == "en" else "default"
@@ -331,10 +363,9 @@ class StanzaBackend(Morphosyntax):
         (`MultilingualPipeline`) and single-language files both cache
         under the same scheme.
 
-        Raises whatever Stanza raises if model construction fails — the
-        per-input handler in `call()` catches and memoizes via
-        `_pipeline_failures` so subsequent inputs in the same language
-        don't re-attempt the failing init.
+        Raises whatever Stanza raises if model construction fails. Deferred
+        header-driven construction is caught and memoized by ``call()``;
+        explicitly pinned construction fails immediately in ``__init__``.
         """
         key = self._pipeline_key_for(langs, self._retokenize)
         with _pipeline_cache_lock:
@@ -346,6 +377,7 @@ class StanzaBackend(Morphosyntax):
                 nlp = stanza.MultilingualPipeline(
                     lang_configs=configs,
                     lang_id_config={"langid_lang_subset": list(langs)},
+                    download_method="reuse_resources",
                 )
             else:
                 lang = langs[0]
@@ -382,7 +414,9 @@ class StanzaBackend(Morphosyntax):
     def name(self) -> str:
         version = getattr(self._stanza, "__version__", "unknown")
         retok = "retok" if self._retokenize else "noretok"
-        return f"stanza:{version}:{retok}"
+        # Invalidate empty cache entries written by older builds when pipeline
+        # construction failed but returned a success-shaped output.
+        return f"stanza:{version}:{retok}:strict-init1"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -400,22 +434,19 @@ class StanzaBackend(Morphosyntax):
         batching — Stanza's tokenizer / tagger / parser run vectorized over
         all N sentences at once.
 
-        Failure isolation runs at three levels so one bad input never
-        poisons its batch-mates:
+        Failure handling distinguishes invalid individual utterances from a
+        broken backend runtime:
 
         - **Language resolution** raises → that input gets an empty result.
-        - **Pipeline init** raises (e.g. unsupported language like `su`) →
-          that *language group* gets empty results; the failure is memoized
-          in `_pipeline_failures` so subsequent batches with that language
-          short-circuit without re-attempting the load.
+        - **Pipeline init** raises (missing dependency/model, unsupported
+          language, corrupt runtime) → the backend raises so the engine marks
+          the command failed and the CLI does not overwrite input with empty
+          tiers. The reason is memoized to avoid repeating construction.
         - **Batched `nlp(joined)` raises** → fall back to per-sentence
           processing for that group so we still rescue the inputs that
           would have parsed cleanly on their own.
         """
-        from batchalign._core.proto import (
-            MorphosyntaxInput,
-            MorphosyntaxOutput,
-        )
+        from batchalign._core.proto import MorphosyntaxInput
 
         outputs: list[Any] = [None] * len(batch)
 
@@ -446,26 +477,25 @@ class StanzaBackend(Morphosyntax):
         for key, items in groups.items():
             langs = list(items[0][2])
 
-            if _pipeline_failures.get(key) is not None:
-                # Known-broken pipeline (we warned the first time) — fast
-                # empty-result path for every utterance in this language.
-                for idx, item, _ in items:
-                    outputs[idx] = self._empty_output(item)
-                continue
+            previous_failure = _pipeline_failures.get(key)
+            if previous_failure is not None:
+                raise RuntimeError(
+                    "morphotag: Stanza pipeline is unavailable for "
+                    f"langs={langs}: {previous_failure}"
+                )
 
             try:
                 nlp = self._build_pipeline_for(self._stanza, langs)
-            except Exception as exc:  # noqa: BLE001 — one bad language must not kill the batch.
+            except Exception as exc:  # noqa: BLE001 — surface model/runtime failures.
+                if os.environ.get("BATCHALIGN_CLI_VERBOSE_TRACEBACKS"):
+                    _log.exception(
+                        "morphotag: Stanza pipeline initialization traceback"
+                    )
                 _pipeline_failures[key] = str(exc)
-                _log.warning(
-                    "morphotag: Stanza pipeline init failed for langs=%s (%s); "
-                    "skipping %%mor/%%gra for all utterances with this language",
-                    langs,
-                    exc,
-                )
-                for idx, item, _ in items:
-                    outputs[idx] = self._empty_output(item)
-                continue
+                raise RuntimeError(
+                    "morphotag: failed to initialize Stanza pipeline for "
+                    f"langs={langs}: {exc}"
+                ) from exc
 
             self._run_language_group(key, langs, nlp, items, outputs)
 

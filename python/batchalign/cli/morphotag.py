@@ -73,6 +73,10 @@ def register(app: typer.Typer) -> None:
         # nuke the files before the summary could read them, so any
         # `error[E###]` line gets degraded to a plain string.
         tmpdir: Path | None = None
+        # Interface renders and suppresses setup exceptions. Initialize the
+        # status so an import/model-init failure still exits nonzero rather
+        # than falling through to an unbound local after the `with` block.
+        exit_code = 2
         try:
             with Interface.open(
                 command="morphotag",

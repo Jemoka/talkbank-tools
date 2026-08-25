@@ -7,6 +7,7 @@ assert the cache is hit on the second backend.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from unittest import mock
 
 import pytest
@@ -19,6 +20,43 @@ def _reset_cache() -> None:
     stanza_backend_mod._pipeline_failures.clear()
 
 
+@contextmanager
+def _fake_runtime(fake_stanza):
+    """Patch the runtime loader without unloading Torch's C extension.
+
+    ``patch.dict(sys.modules)`` removes modules imported inside its context on
+    exit. Re-importing PyTorch's extension in the same process is unsupported
+    and can segfault, so backend unit tests replace the narrow loader instead.
+    """
+    from batchalign.backends.morphosyntax import stanza as stanza_backend_mod
+
+    with mock.patch.object(
+        stanza_backend_mod,
+        "_import_stanza_runtime",
+        return_value=fake_stanza,
+    ):
+        yield
+
+
+def test_stanza_runtime_eagerly_prepares_worker_thread_dependencies() -> None:
+    """Prepare Torch and Stanza's download lock before engine threads start."""
+    from batchalign.backends.morphosyntax import stanza as stanza_backend_mod
+
+    imported: list[str] = []
+    fake_stanza = mock.MagicMock()
+
+    def _import(name: str):
+        imported.append(name)
+        return fake_stanza if name == "stanza" else mock.sentinel.TORCH_MODULE
+
+    with mock.patch.object(stanza_backend_mod.importlib, "import_module", _import):
+        result = stanza_backend_mod._import_stanza_runtime()
+
+    assert result is fake_stanza
+    assert imported == ["torch", "torch._functorch.config", "stanza"]
+    fake_stanza.resources.common.tqdm.get_lock.assert_called_once_with()
+
+
 def test_pipeline_cache_hits_on_same_key() -> None:
     """Second backend with same langs+retokenize reuses the first pipeline."""
     _reset_cache()
@@ -28,7 +66,7 @@ def test_pipeline_cache_hits_on_same_key() -> None:
     fake_stanza.Pipeline.return_value = mock.sentinel.PIPE_EN
     fake_stanza.__version__ = "test"
 
-    with mock.patch.dict("sys.modules", {"stanza": fake_stanza}):
+    with _fake_runtime(fake_stanza):
         a = StanzaBackend(lang="en", retokenize=False)
         b = StanzaBackend(lang="en", retokenize=False)
 
@@ -49,7 +87,7 @@ def test_pipeline_cache_misses_on_different_retokenize() -> None:
     ]
     fake_stanza.__version__ = "test"
 
-    with mock.patch.dict("sys.modules", {"stanza": fake_stanza}):
+    with _fake_runtime(fake_stanza):
         a = StanzaBackend(lang="en", retokenize=False)
         b = StanzaBackend(lang="en", retokenize=True)
 
@@ -69,7 +107,7 @@ def test_pipeline_cache_misses_on_different_langs() -> None:
     ]
     fake_stanza.__version__ = "test"
 
-    with mock.patch.dict("sys.modules", {"stanza": fake_stanza}):
+    with _fake_runtime(fake_stanza):
         a = StanzaBackend(lang="en", retokenize=False)
         b = StanzaBackend(lang="es", retokenize=False)
 
@@ -87,7 +125,7 @@ def test_hindi_pipeline_does_not_request_missing_mwt_model() -> None:
     fake_stanza.Pipeline.return_value = mock.sentinel.PIPE_HI
     fake_stanza.__version__ = "test"
 
-    with mock.patch.dict("sys.modules", {"stanza": fake_stanza}):
+    with _fake_runtime(fake_stanza):
         backend = StanzaBackend(lang="hin", retokenize=False)
 
     assert backend._nlp is mock.sentinel.PIPE_HI
@@ -98,6 +136,7 @@ def test_hindi_pipeline_does_not_request_missing_mwt_model() -> None:
         "lemma": "default",
         "depparse": "default",
     }
+    assert fake_stanza.Pipeline.call_args.kwargs["download_method"] == "reuse_resources"
 
 
 @pytest.mark.parametrize("surface", ["जी", "हाँ", "தமிழ்"])
@@ -112,15 +151,8 @@ def test_code_switch_masker_keeps_unicode_combining_marks(surface: str) -> None:
     assert special_forms == [[surface, "s"]]
 
 
-def test_one_bad_language_does_not_kill_the_batch() -> None:
-    """A pipeline-init failure for one input must NOT fail the rest of the batch.
-
-    This is the failure mode that surfaced as "Language su unsupported"
-    aborting every file in a multi-file run: the batcher mixes utterances
-    from different files into one `backend.call(batch)`, so any exception
-    raised by `call` is broadcast to every reply in the batch (see
-    `crates/batchalign/batchalign-engine/src/batcher.rs:150`).
-    """
+def test_pipeline_init_failure_is_fatal_and_memoized() -> None:
+    """A missing runtime/model must never look like successful empty tiers."""
     _reset_cache()
     from batchalign.backends.morphosyntax.stanza import StanzaBackend
     from batchalign._core.proto import (
@@ -133,10 +165,8 @@ def test_one_bad_language_does_not_kill_the_batch() -> None:
     fake_stanza.__version__ = "test"
 
     # The `eng` pipeline is wired to return an empty `doc.sentences` for
-    # whatever joined input it receives; the renderer then yields an empty
-    # SentenceAnalysis. We only care that the dispatcher (a) doesn't crash
-    # when one language is broken, and (b) attempts the broken pipeline at
-    # most once.
+    # whatever joined input it receives. We only care that the dispatcher
+    # reports the broken language and attempts that pipeline at most once.
     def _make_pipeline(_lang: str, **_: object):
         pipe = mock.MagicMock(name=f"PIPE_{_lang}")
         pipe.return_value = mock.MagicMock(sentences=[])
@@ -148,7 +178,7 @@ def test_one_bad_language_does_not_kill_the_batch() -> None:
         )
     )
 
-    with mock.patch.dict("sys.modules", {"stanza": fake_stanza}):
+    with _fake_runtime(fake_stanza):
         backend = StanzaBackend()  # unpinned — language flows from inputs
 
         inputs = [
@@ -178,16 +208,20 @@ def test_one_bad_language_does_not_kill_the_batch() -> None:
             ),
         ]
 
-        outputs = backend.call(inputs)
+        with pytest.raises(
+            RuntimeError,
+            match=r"failed to initialize Stanza pipeline.*langs=\['su'\]",
+        ):
+            backend.call(inputs)
 
-    # Every input gets an output. The failing-language inputs come back
-    # with empty tokens (runner treats those as "no %mor for this utt").
-    assert len(outputs) == len(inputs)
-    assert outputs[0].source_id == "ok.cha"
-    assert outputs[1].tokens == []
-    assert outputs[2].tokens == []
-    # The broken language was attempted exactly once across all three
-    # inputs — second/third utterances short-circuit via the memo.
+        # A later batch reports the memoized failure loudly without trying
+        # to construct the same known-broken pipeline again.
+        with pytest.raises(
+            RuntimeError,
+            match=r"Stanza pipeline is unavailable.*langs=\['su'\]",
+        ):
+            backend.call(inputs[1:])
+
     su_attempts = [
         c for c in fake_stanza.Pipeline.call_args_list if c.kwargs.get("lang") == "su"
     ]
@@ -205,10 +239,19 @@ def test_multilingual_pipeline_cached_under_frozenset_key() -> None:
     fake_stanza.MultilingualPipeline.return_value = mock.sentinel.PIPE_MULTI
     fake_stanza.__version__ = "test"
 
-    with mock.patch.dict("sys.modules", {"stanza": fake_stanza}):
+    with _fake_runtime(fake_stanza):
         a = StanzaBackend(lang="en,es", retokenize=False)
         b = StanzaBackend(lang="es,en", retokenize=False)
 
     assert a._nlp is mock.sentinel.PIPE_MULTI
     assert b._nlp is mock.sentinel.PIPE_MULTI
     assert fake_stanza.MultilingualPipeline.call_count == 1
+    assert (
+        fake_stanza.MultilingualPipeline.call_args.kwargs["download_method"]
+        == "reuse_resources"
+    )
+    configs = fake_stanza.MultilingualPipeline.call_args.kwargs["lang_configs"]
+    assert all(
+        config["download_method"] == "reuse_resources"
+        for config in configs.values()
+    )

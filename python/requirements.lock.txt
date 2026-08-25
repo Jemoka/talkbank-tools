@@ -4793,9 +4793,9 @@ standard-sunau==3.13.0 ; python_full_version >= '3.13' \
     # via
     #   audioread
     #   librosa
-stanza==1.12.1 \
-    --hash=sha256:b7e1e43369d0b19fe8894af557084334c67273e779d7ea164096c04356abf184 \
-    --hash=sha256:bf8068bc1803e84d024d074cdc47e707a66885c82194889fc3c790efe53e25e1
+stanza==1.12.2 \
+    --hash=sha256:b49370eb545054923520189af78510e2d9fedca423b8fe86958edf6f47b7be97 \
+    --hash=sha256:ff59f7e4c09e18c1711e27aa7987607790139496cbd2906d2499b062d324c390
     # via batchalign (python/pyproject.toml)
 starlette==1.2.0 \
     --hash=sha256:36e0c76ac59157e75dc4b3bdeafba97fb04eaf1878045f15dbef666a6f092ed7 \

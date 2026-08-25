@@ -580,6 +580,7 @@ revai = [
 ]
 stanza = [
     { name = "stanza" },
+    { name = "torch" },
     { name = "transformers" },
 ]
 translate = [
@@ -623,6 +624,7 @@ runtime = [
     { name = "rich" },
     { name = "soundfile" },
     { name = "stanza" },
+    { name = "torch" },
     { name = "tqdm" },
     { name = "transformers" },
     { name = "typer" },
@@ -689,19 +691,20 @@ requires-dist = [
     { name = "soundfile", specifier = ">=0.12" },
     { name = "sse-starlette", marker = "extra == 'all'", specifier = ">=2.0" },
     { name = "sse-starlette", marker = "extra == 'api'", specifier = ">=2.0" },
-    { name = "stanza", marker = "extra == 'all'", specifier = ">=1.12" },
-    { name = "stanza", marker = "extra == 'stanza'", specifier = ">=1.12" },
+    { name = "stanza", marker = "extra == 'all'", specifier = ">=1.12.2,<1.13" },
+    { name = "stanza", marker = "extra == 'stanza'", specifier = ">=1.12.2,<1.13" },
     { name = "tencentcloud-sdk-python-asr", marker = "extra == 'all'" },
     { name = "tencentcloud-sdk-python-asr", marker = "extra == 'cantonese'" },
     { name = "tencentcloud-sdk-python-tmt", marker = "extra == 'all'" },
     { name = "tencentcloud-sdk-python-tmt", marker = "extra == 'cantonese'" },
     { name = "textual", specifier = ">=0.80" },
-    { name = "torch", marker = "extra == 'all'", specifier = ">=2.0" },
+    { name = "torch", marker = "extra == 'all'", specifier = ">=2.0,<2.13" },
     { name = "torch", marker = "extra == 'malayalam'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'nllb'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'qwen3'", specifier = ">=2.0" },
+    { name = "torch", marker = "extra == 'stanza'", specifier = ">=2.0,<2.13" },
     { name = "torch", marker = "extra == 'whisper'", specifier = ">=2.0" },
-    { name = "torchaudio", marker = "extra == 'all'", specifier = ">=2.0" },
+    { name = "torchaudio", marker = "extra == 'all'", specifier = ">=2.0,<2.13" },
     { name = "torchaudio", marker = "extra == 'malayalam'", specifier = ">=2.0" },
     { name = "torchaudio", marker = "extra == 'whisper'", specifier = ">=2.0" },
     { name = "tqdm", specifier = ">=4" },
@@ -746,7 +749,8 @@ runtime = [
     { name = "pydantic", specifier = ">=2" },
     { name = "rich", specifier = ">=13" },
     { name = "soundfile", specifier = ">=0.12" },
-    { name = "stanza", specifier = ">=1.12" },
+    { name = "stanza", specifier = ">=1.12.2,<1.13" },
+    { name = "torch", specifier = ">=2.0,<2.13" },
     { name = "tqdm", specifier = ">=4" },
     { name = "transformers", specifier = ">=4.57,<5" },
     { name = "typer", specifier = ">=0.12" },
@@ -7173,7 +7177,7 @@ wheels = [
 
 [[package]]
 name = "stanza"
-version = "1.12.1"
+version = "1.12.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "emoji" },
@@ -7189,9 +7193,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "udtools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bd/3c/4d39f26810c1e8521d3437122fcd3fa61e103649c7e4f2c29ac685b9f6f6/stanza-1.12.1.tar.gz", hash = "sha256:b7e1e43369d0b19fe8894af557084334c67273e779d7ea164096c04356abf184", size = 1573421, upload-time = "2026-05-28T02:07:40.684Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/33/8d/091be6e3f21ce031cc9b31776a167a39f12a354fc19fe2f8764960f5da75/stanza-1.12.2.tar.gz", hash = "sha256:ff59f7e4c09e18c1711e27aa7987607790139496cbd2906d2499b062d324c390", size = 1611613, upload-time = "2026-06-03T21:03:37.264Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/23/d2/f655c6ad3be4e174e4667ecfff0aa442c34905e424185dfb37b7ee9b5699/stanza-1.12.1-py3-none-any.whl", hash = "sha256:bf8068bc1803e84d024d074cdc47e707a66885c82194889fc3c790efe53e25e1", size = 1807129, upload-time = "2026-05-28T02:07:36.835Z" },
+    { url = "https://files.pythonhosted.org/packages/90/34/7a697ec9879c0c0b5928f74f921fc8e536573749c8c65baa8d74a61feb66/stanza-1.12.2-py3-none-any.whl", hash = "sha256:b49370eb545054923520189af78510e2d9fedca423b8fe86958edf6f47b7be97", size = 1848938, upload-time = "2026-06-03T21:03:33.399Z" },
 ]
 
 [[package]]
