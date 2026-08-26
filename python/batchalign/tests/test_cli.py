@@ -307,7 +307,7 @@ def test_transcribe_wires_pyannote_ai_for_separate_diarization(
     assert captured["recipe"]["utseg_backend"] is utterance_segmenter
 
 
-def test_transcribe_rev_diarize_declares_native_speaker_task(
+def test_transcribe_rev_diarize_uses_pyannote_cloud_speaker_task(
     tmp_path, monkeypatch,
 ):
     import batchalign as ba
@@ -334,8 +334,14 @@ def test_transcribe_rev_diarize_declares_native_speaker_task(
         def run(self, _inputs, callbacks=None, outcome_callback=None):
             return []
 
+    cloud_speaker = object()
     monkeypatch.setattr(ba, "RevAI", FakeRev)
     monkeypatch.setattr(ba, "CHATUtteranceBackend", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        ba,
+        "PyannoteAIBackend",
+        lambda **kwargs: captured.update(pyannote_kwargs=kwargs) or cloud_speaker,
+    )
 
     def fake_recipe(**kwargs):
         captured.update(kwargs)
@@ -351,8 +357,12 @@ def test_transcribe_rev_diarize_declares_native_speaker_task(
     )
 
     assert result.exit_code == 0, result.output
-    assert captured["diarize"] is True
-    assert captured["speaker_backend"] is None
+    assert captured["pyannote_kwargs"] == {"num_speakers": 2}
+    assert captured["speaker_backend"] is cloud_speaker
+    assert captured.get("diarize", False) is False
+    assert isinstance(captured["asr_backend"], ba.ASR)
+    assert not isinstance(captured["asr_backend"], ba.Speaker)
+    assert captured["asr_backend"].name == "fake-rev"
 
 
 # ---------------------------------------------------------------------------

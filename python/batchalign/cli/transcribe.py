@@ -22,6 +22,7 @@ from typing import Any
 
 import typer
 
+from ..backends.base import ASR, Backend
 from ..lang import LanguageCode
 from ._common import collect_media_inputs, write_outcome
 from .diarize import DiarizeEngine, _build_backend as _build_diarize_backend
@@ -31,10 +32,36 @@ from .tui import Interface, Task
 _log = logging.getLogger("batchalign.cli.transcribe")
 
 
+class _ASROnlyBackend(ASR):
+    """Expose only ASR from a multi-capability provider backend.
+
+    Pipeline dispatch rejects two implementations of the same task. Rev and
+    Google can both emit their own Speaker projection, but when the CLI has a
+    dedicated diarizer that projection must be hidden so Pyannote is the sole
+    Speaker backend. Calls and cache identity still belong to the provider.
+    """
+
+    def __init__(self, backend: Backend) -> None:
+        self._backend = backend
+
+    @property
+    def name(self) -> str:
+        return self._backend.name
+
+    @property
+    def batch_policy(self) -> Any:
+        return self._backend.batch_policy
+
+    def call(
+        self, batch: list[Any], *, progress: Any = None, **kwargs: Any
+    ) -> list[Any]:
+        return self._backend.call(batch, progress=progress, **kwargs)
+
+
 class AsrEngine(str, Enum):
     """ASR engine selection (BA2 parity set)."""
 
-    rev = "rev"            # Rev.AI cloud (ASR + its own diarization)
+    rev = "rev"            # Rev.AI cloud ASR
     whisper = "whisper"    # HF transformers Whisper
     chatwhisper = "chatwhisper"  # TalkBank CHATWhisper + BERT utterance segmenter (BA2 default)
     openai = "openai"      # openai-whisper package
@@ -93,7 +120,7 @@ def register(app: typer.Typer) -> None:
         diarize: bool = typer.Option(
             False,
             "--diarize/--no-diarize",
-            help="Run speaker diarization. Rev and Google run their own Speaker stage; other engines use --diarize-engine.",
+            help="Run speaker diarization with --diarize-engine after utterance segmentation.",
         ),
         diarize_engine: DiarizeEngine = typer.Option(
             DiarizeEngine.pyannote_ai,
@@ -150,20 +177,19 @@ def register(app: typer.Typer) -> None:
             quiet=opts.quiet,
         ) as ui:
             device = inference_device(force_cpu=force_cpu, allow_mps=allow_mps)
-            asr_backend, native_diarization = _build_asr(
+            asr_backend, _native_diarization = _build_asr(
                 ba, engine, model, lang_code, num_speakers, device
             )
-            # Native multi-capability backends must still run Task.Speaker;
-            # returning speaker-labelled ASR alone does not exercise CHAT
-            # reinjection. Other engines use the dedicated diarizer.
-            speaker_backend: Any = None
-            use_asr_speaker_backend = False
-            if diarize and isinstance(asr_backend, ba.Speaker):
-                use_asr_speaker_backend = True
-            elif diarize and not native_diarization:
-                speaker_backend = _build_diarize_backend(
-                    ba, diarize_engine, num_speakers
-                )
+            # `--diarize` always means the selected dedicated diarization
+            # backend. Some ASR providers return preliminary speaker labels,
+            # but those must not replace (or bypass) the requested Pyannote
+            # pass. The recipe runs this backend after utterance segmentation
+            # so its assignments are the final speaker labels.
+            speaker_backend: Any = (
+                _build_diarize_backend(ba, diarize_engine, num_speakers)
+                if diarize
+                else None
+            )
             # Always pair the ASR with the BA2 CHATUtterance BERT
             # segmenter — every transcribe path must produce one
             # utterance per sentence. ChatWhisper does segmentation
@@ -183,11 +209,16 @@ def register(app: typer.Typer) -> None:
                     segmenter=shared_segmenter,
                     device=device,
                 )
+            pipeline_asr_backend = (
+                _ASROnlyBackend(asr_backend)
+                if speaker_backend is not None
+                and isinstance(asr_backend, ba.Speaker)
+                else asr_backend
+            )
             pipeline = ba.recipes.transcribe(
-                asr_backend=asr_backend,
+                asr_backend=pipeline_asr_backend,
                 speaker_backend=speaker_backend,
                 utseg_backend=utseg_backend,
-                diarize=use_asr_speaker_backend,
                 workers=opts.workers,
             )
             inputs, root = collect_media_inputs(folder, language=lang_code.alpha_3)

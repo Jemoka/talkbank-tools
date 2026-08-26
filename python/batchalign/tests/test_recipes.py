@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import sys
 import types
-from unittest import mock
 
 import pytest
 
@@ -110,8 +109,8 @@ def test_transcribe_with_distinct_diarize_and_utseg(fake_core):
         speaker_backend="SPK-stub",
         utseg_backend="UTSEG-stub",
     )
-    assert _task_names(pipe) == ["Asr", "Speaker", "UtSeg"]
-    assert pipe.backends == ["ASR-stub", "SPK-stub", "UTSEG-stub"]
+    assert _task_names(pipe) == ["Asr", "UtSeg", "Speaker"]
+    assert pipe.backends == ["ASR-stub", "UTSEG-stub", "SPK-stub"]
 
 
 def test_transcribe_native_diarization_reuses_asr_backend(fake_core):

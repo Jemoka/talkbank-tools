@@ -44,14 +44,11 @@ def transcribe(
     Task, Pipeline = _core()
     tasks = [Task.Asr]
     backends = [asr_backend]
-    if speaker_backend is not None or diarize:
-        tasks.append(Task.Speaker)
-        if speaker_backend is not None and speaker_backend is not asr_backend:
-            backends.append(speaker_backend)
     if utseg_backend is not None:
         # Explicit utterance segmenter (e.g. CHATUtterance) handles UtSeg.
         tasks.append(Task.UtSeg)
-        backends.append(utseg_backend)
+        if all(utseg_backend is not backend for backend in backends):
+            backends.append(utseg_backend)
     elif speaker_backend is not None:
         # A legacy speaker backend may also implement UtSeg. Diarization-only
         # services (including pyannoteAI) must not fabricate that capability.
@@ -59,6 +56,17 @@ def transcribe(
 
         if isinstance(speaker_backend, UtSeg):
             tasks.append(Task.UtSeg)
+    # Speaker assignment must be last: UtSeg can rebuild the utterance list,
+    # so running it after diarization can discard the speaker labels that were
+    # just injected. This also makes a dedicated diarizer authoritative over
+    # any preliminary speaker labels returned by the ASR provider.
+    if speaker_backend is not None or diarize:
+        tasks.append(Task.Speaker)
+        if (
+            speaker_backend is not None
+            and all(speaker_backend is not backend for backend in backends)
+        ):
+            backends.append(speaker_backend)
     # With neither, there is nothing to serve UtSeg, so we omit it and the ASR
     # segments stand as the utterances (no segmentation).
     return Pipeline(tasks=tasks, backends=backends, **opts)
