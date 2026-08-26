@@ -165,7 +165,7 @@ def register(app: typer.Typer) -> None:
                     )
                 elif utr_engine is UtrEngine.rev:
                     # Credentials come from the user's batchalign config.
-                    utr_backend = ba.RevAI(language=lang_code)
+                    utr_backend = ba.RevAI(language=lang_code, device=device)
                 else:
                     raise typer.BadParameter(f"unknown UTR engine: {utr_engine}")
 

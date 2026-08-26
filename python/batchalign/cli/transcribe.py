@@ -104,14 +104,14 @@ def register(app: typer.Typer) -> None:
         num_speakers: int = typer.Option(2, "--num-speakers", "-n", help="Expected speaker count (diarization hint)."),
         force_cpu: bool = typer.Option(
             False, "--force-cpu",
-            help="Run the ASR model on CPU (BA2's --force-cpu). Needed on Apple "
-            "MPS, where Whisper's bfloat16 attention kernel is unsupported.",
+            help="Run local inference, including utterance segmentation, on "
+            "CPU (BA2's --force-cpu).",
         ),
         allow_mps: bool = typer.Option(
             False, "--allow-mps",
-            help="Explicitly allow local ASR models to use Apple MPS. Off by "
-            "default because sustained MPS inference can be unstable; "
-            "CHATWhisper remains float32 when selected.",
+            help="Explicitly allow local ASR and utterance-segmentation models "
+            "to use Apple MPS. Off by default because sustained MPS inference "
+            "can be unstable; CHATWhisper remains float32 when selected.",
         ),
         wor: bool = typer.Option(
             False,
@@ -173,7 +173,11 @@ def register(app: typer.Typer) -> None:
                         asr_backend, "utterance_segmenter", None
                     )
                 utseg_backend = _build_utseg(
-                    ba, lang_code, engine, segmenter=shared_segmenter
+                    ba,
+                    lang_code,
+                    engine,
+                    segmenter=shared_segmenter,
+                    device=device,
                 )
             pipeline = ba.recipes.transcribe(
                 asr_backend=asr_backend,
@@ -217,7 +221,11 @@ def _build_asr(
     """
     m = model or _DEFAULT_MODEL.get(engine)
     if engine is AsrEngine.rev:
-        return ba.RevAI(language=lang, num_speakers=num_speakers), True
+        return ba.RevAI(
+            language=lang,
+            num_speakers=num_speakers,
+            device=device,
+        ), True
     if engine is AsrEngine.google:
         return ba.GoogleGenAIBackend(
             language=lang,
@@ -277,6 +285,7 @@ def _build_utseg(
     engine: AsrEngine | None = None,
     *,
     segmenter: Any | None = None,
+    device: str | None = None,
 ):
     """Build the CHATUtterance segmenter for `lang`, or None if BA2 ships
     no utterance model for it (then ASR segments stand as utterances).
@@ -301,6 +310,7 @@ def _build_utseg(
             lang=key,
             cantonese_inference=cantonese,
             segmenter=segmenter,
+            device=device,
         )
     except ValueError as error:
         _log.warning(

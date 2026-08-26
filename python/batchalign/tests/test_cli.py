@@ -81,6 +81,12 @@ def test_align_exposes_fa_engines():
     assert "--allow-mps" in help_text
 
 
+def test_utseg_exposes_mps_device_controls():
+    help_text = _help("utseg")
+    assert "--allow-mps" in help_text
+    assert "--force-cpu" in help_text
+
+
 def test_local_inference_device_requires_explicit_mps_opt_in():
     from batchalign.cli._options import inference_device
 
@@ -197,9 +203,38 @@ def test_rev_reuses_raw_word_segmenter_for_typed_pass(monkeypatch):
         LanguageCode.from_str("eng"),
         AsrEngine.rev,
         segmenter=shared_segmenter,
+        device="mps",
     )
 
     assert captured["segmenter"] is shared_segmenter
+    assert captured["device"] == "mps"
+
+
+def test_rev_asr_receives_utterance_segmentation_device(monkeypatch):
+    from types import SimpleNamespace
+
+    from batchalign.cli.transcribe import AsrEngine, _build_asr
+    from batchalign.lang import LanguageCode
+
+    captured = {}
+    backend = object()
+
+    def fake_rev(**kwargs):
+        captured.update(kwargs)
+        return backend
+
+    ba = SimpleNamespace(RevAI=fake_rev)
+    result, native_diarization = _build_asr(
+        ba,
+        AsrEngine.rev,
+        None,
+        LanguageCode.from_str("eng"),
+        device="mps",
+    )
+
+    assert result is backend
+    assert native_diarization is True
+    assert captured["device"] == "mps"
 
 
 def test_unsupported_utseg_warns_and_retains_asr_utterances(caplog):
@@ -333,6 +368,7 @@ def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
         def __init__(self, *, language, num_speakers=2, **kwargs):
             captured["language"] = language
             captured["num_speakers"] = num_speakers
+            captured["asr_device"] = kwargs.get("device")
         @property
         def name(self):
             return "fakerev"
@@ -363,7 +399,8 @@ def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
     # rev does not). Without this stub the test would try to fetch
     # `talkbank/CHATUtterance-en` from HF at runtime.
     class FakeUtseg:
-        def __init__(self, *a, **kw): pass
+        def __init__(self, *a, **kw):
+            captured["utseg_device"] = kw.get("device")
         @property
         def name(self): return "fake-utseg"
         @property
@@ -374,7 +411,8 @@ def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
     monkeypatch.setattr(ba, "CHATUtteranceBackend", FakeUtseg)
 
     result = runner.invoke(app, [
-        "transcribe", "--engine", "rev", "--lang", "eng", str(media),
+        "transcribe", "--engine", "rev", "--lang", "eng", "--allow-mps",
+        str(media),
     ])
     # The pipeline returns empty outcomes → exit_code 0, no failures.
     assert result.exit_code == 0, result.output
@@ -382,6 +420,8 @@ def test_transcribe_accepts_alpha_3_language_and_passes_LanguageCode(
     assert captured["language"].alpha_3 == "eng"
     assert captured["language"].alpha_2 == "en"
     assert captured["language"].name == "English"
+    assert captured["asr_device"] == "mps"
+    assert captured["utseg_device"] == "mps"
 
 
 @pytest.mark.parametrize(

@@ -47,6 +47,7 @@ class CHATUtteranceBackend(UtSeg):
         batch_window_ms: int = 50,
         cantonese_inference: bool = False,
         segmenter: Any | None = None,
+        device: str | None = None,
     ) -> None:
         from batchalign.backends.asr.chatwhisper import (
             BertCantoneseUtteranceModel,
@@ -69,9 +70,13 @@ class CHATUtteranceBackend(UtSeg):
         if segmenter is not None:
             self._segmenter = segmenter
         elif self._cantonese:
-            self._segmenter = BertCantoneseUtteranceModel(model)
+            self._segmenter = BertCantoneseUtteranceModel(model, device=device)
         else:
-            self._segmenter = BertUtteranceModel(model)
+            self._segmenter = BertUtteranceModel(model, device=device)
+        segmenter_device = getattr(self._segmenter, "device", None)
+        self._device_type = getattr(segmenter_device, "type", None)
+        if self._device_type is None and isinstance(segmenter_device, str):
+            self._device_type = segmenter_device.split(":", 1)[0].lower()
         # Disfluency / replacement table for this language (BA2 pairs the
         # disfluency stage with utterance segmentation in the ASR pipeline).
         self._cleanup = load_cleanup(SUPPORT_SUFFIX.get(lang, lang))
@@ -89,7 +94,11 @@ class CHATUtteranceBackend(UtSeg):
         #   * `wordts1` — carry fixed ASR word timings through split spans
         #   * `typed2` — typed word assignments; preserve CHAT case/structure
         canto = ":canto" if self._cantonese and self._lang != "yue" else ""
-        return f"chatutterance:{self._model_id}:typed2{canto}"
+        # MPS can make a different decision for logits extremely close to a
+        # class boundary. Keep its cached results separate from the historical
+        # CPU/CUDA namespace without invalidating existing default-device work.
+        device = ":mps" if self._device_type == "mps" else ""
+        return f"chatutterance:{self._model_id}:typed2{canto}{device}"
 
     @property
     def batch_policy(self) -> BatchPolicy:

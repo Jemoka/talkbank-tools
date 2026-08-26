@@ -38,6 +38,7 @@ class RevAI(ASR, UTR, Speaker):
         timeout_s: float = 3600.0,
         batch_size: int = 8,
         batch_window_ms: int = 250,
+        device: str | None = None,
     ) -> None:
         key = api_key if api_key is not None else config.get_api_key("revai", interactive=True)
         if not key:
@@ -59,7 +60,8 @@ class RevAI(ASR, UTR, Speaker):
             from batchalign.backends.asr.chatwhisper import BertUtteranceModel
 
             self._utterance_segmenter = BertUtteranceModel(
-                "talkbank/CHATUtterance-en"
+                "talkbank/CHATUtterance-en",
+                device=device,
             )
         # Submit-then-poll batching: stage all jobs first, then poll in
         # parallel so per-job latency is bounded by max(submission times)
@@ -70,7 +72,12 @@ class RevAI(ASR, UTR, Speaker):
     def name(self) -> str:
         # v5: English uses typed CHATUtterance assignments on raw words before
         # ASR cleanup/CHAT construction, matching the gold pipeline stage order.
-        return "revai:async-v5:typed-utseg1"
+        segmenter_device = getattr(self._utterance_segmenter, "device", None)
+        device_type = getattr(segmenter_device, "type", None)
+        if device_type is None and isinstance(segmenter_device, str):
+            device_type = segmenter_device.split(":", 1)[0].lower()
+        device = ":mps" if device_type == "mps" else ""
+        return f"revai:async-v5:typed-utseg1{device}"
 
     @property
     def batch_policy(self) -> BatchPolicy:

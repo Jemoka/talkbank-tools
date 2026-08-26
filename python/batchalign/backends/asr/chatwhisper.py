@@ -30,12 +30,15 @@ Models are pulled from HuggingFace (resolve table below), matching BA2's
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Sequence
 from typing import Any
 
 from batchalign.backends.base import ASR, UTR, BatchPolicy
 from batchalign.lang import LanguageCode
+
+_log = logging.getLogger(__name__)
 
 # BA2 model resolution (models/resolve.py). English is the finetuned pairing;
 # others fall back to base Whisper + (where present) a CHATUtterance model.
@@ -107,6 +110,49 @@ def chunk_words_for_bert(
     return chunks
 
 
+def _utterance_device(torch: Any, requested: str | None) -> Any:
+    """Resolve a device for the BERT utterance segmenters.
+
+    Preserve the historical CUDA-then-CPU default while allowing the CLI to
+    opt into Apple MPS.  An unavailable MPS request falls back to CPU so a
+    command remains usable when Torch was built without Metal support.
+    """
+    if requested is None:
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    device = torch.device(requested)
+    if device.type == "mps":
+        mps = getattr(getattr(torch, "backends", None), "mps", None)
+        if mps is None or not mps.is_available():
+            _log.warning(
+                "Apple MPS was requested for utterance segmentation but is "
+                "unavailable; falling back to CPU"
+            )
+            return torch.device("cpu")
+    return device
+
+
+def _place_utterance_model(
+    torch: Any,
+    model: Any,
+    requested: str | None,
+) -> tuple[Any, Any]:
+    """Move an utterance model to its device, with MPS construction fallback."""
+    device = _utterance_device(torch, requested)
+    try:
+        return model.to(device), device
+    except (NotImplementedError, RuntimeError):
+        if getattr(device, "type", None) != "mps":
+            raise
+        _log.warning(
+            "Could not initialize the utterance segmenter on Apple MPS; "
+            "falling back to CPU",
+            exc_info=True,
+        )
+        cpu = torch.device("cpu")
+        return model.to(cpu), cpu
+
+
 class BertUtteranceModel:
     """TalkBank CHATUtterance BERT segmenter — faithful port of BA2.
 
@@ -125,17 +171,19 @@ class BertUtteranceModel:
     Port of `batchalign2/batchalign/models/utterance/infer.py`.
     """
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, *, device: str | None = None) -> None:
         import torch  # type: ignore[import-not-found]
         from transformers import (  # type: ignore[import-not-found]
             AutoTokenizer,
             BertForTokenClassification,
         )
 
-        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(model)
-        self.model = BertForTokenClassification.from_pretrained(model).to(device)
-        self.device = device
+        self.model, self.device = _place_utterance_model(
+            torch,
+            BertForTokenClassification.from_pretrained(model),
+            device,
+        )
         self.model.eval()
 
     def _infer_chunk(self, chunk: list[str]) -> list[int]:
@@ -532,17 +580,19 @@ class BertCantoneseUtteranceModel:
 
     _KEYWORDS = ["呀", "啦", "喎", "嘞", "㗎喇", "囉", "㗎", "啊", "嗯"]
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, *, device: str | None = None) -> None:
         import torch  # type: ignore[import-not-found]
         from transformers import (  # type: ignore[import-not-found]
             AutoTokenizer,
             BertForTokenClassification,
         )
 
-        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(model)
-        self.model = BertForTokenClassification.from_pretrained(model).to(device)
-        self.device = device
+        self.model, self.device = _place_utterance_model(
+            torch,
+            BertForTokenClassification.from_pretrained(model),
+            device,
+        )
         self.max_length = 512
         self.model.eval()
 

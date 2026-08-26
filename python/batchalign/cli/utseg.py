@@ -7,7 +7,7 @@ from pathlib import Path
 import typer
 
 from ._common import collect_chat_inputs, write_outcome
-from ._options import cli_options
+from ._options import cli_options, inference_device
 from .tui import Interface, Task
 
 
@@ -28,15 +28,30 @@ def register(app: typer.Typer) -> None:
         ),
         stanza_fallback: bool = typer.Option(False, "--stanza-fallback/--no-stanza-fallback"),
         language: str = typer.Option("en", "--language"),
+        force_cpu: bool = typer.Option(
+            False,
+            "--force-cpu",
+            help="Run utterance segmentation on CPU.",
+        ),
+        allow_mps: bool = typer.Option(
+            False,
+            "--allow-mps",
+            help="Use Apple MPS for utterance segmentation when available.",
+        ),
     ) -> None:
         """Utterance segmentation pass over CHAT."""
         import batchalign as ba
 
         opts = cli_options(ctx)
+        device = inference_device(force_cpu=force_cpu, allow_mps=allow_mps)
 
         with Interface.open(
             command="utseg",
-            params={"lang": language, "stanza_fallback": stanza_fallback},
+            params={
+                "lang": language,
+                "stanza_fallback": stanza_fallback,
+                "device": device or "auto",
+            },
             output=out,
             verbosity=opts.verbosity,
             plain=opts.plain,
@@ -53,7 +68,10 @@ def register(app: typer.Typer) -> None:
             # fallback path.
             _ = stanza_fallback
             pipeline = ba.recipes.utseg(
-                utseg_backend=ba.CHATUtteranceBackend(lang=lang3),
+                utseg_backend=ba.CHATUtteranceBackend(
+                    lang=lang3,
+                    device=device,
+                ),
                 workers=opts.workers,
             )
             inputs, root = collect_chat_inputs(folder)
