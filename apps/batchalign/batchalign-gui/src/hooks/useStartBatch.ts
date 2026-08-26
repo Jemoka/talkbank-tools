@@ -14,21 +14,35 @@ function buildRecipeKwargs(
 ): Record<string, unknown> {
   switch (verb) {
     case "transcribe": {
-      const engine = (config.engine as string) || "WhisperXBackend";
+      const engine = (config.engine as string) || "WhisperBackend";
       const lang = (config.lang as string) || "eng";
       const speakers = (config.speakers as number) ?? 2;
       const diarize = (config.diarize as boolean) ?? true;
+      const nativeSpeaker = engine === "RevAI" || engine === "GoogleGenAIBackend";
+      const asrKwargs: Record<string, unknown> = { language: lang };
+      if (nativeSpeaker) asrKwargs.num_speakers = speakers;
       const out: Record<string, unknown> = {
-        asr_backend: { kind: engine, kwargs: { lang } },
+        asr_backend: { kind: engine, kwargs: asrKwargs },
       };
       if (diarize) {
-        out.speaker_backend = {
-          kind: "PyannoteBackend",
-          kwargs: { num_speakers: speakers },
-        };
+        if (nativeSpeaker) {
+          out.diarize = true;
+        } else {
+          out.speaker_backend = {
+            kind: (config.diarize_engine as string) || "PyannoteAIBackend",
+            kwargs: { num_speakers: speakers },
+          };
+        }
       }
       return out;
     }
+    case "diarize":
+      return {
+        speaker_backend: {
+          kind: (config.engine as string) || "PyannoteAIBackend",
+          kwargs: { num_speakers: (config.speakers as number) ?? 0 },
+        },
+      };
     case "align":
       return {
         fa_backend: {

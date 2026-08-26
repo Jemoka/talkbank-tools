@@ -70,6 +70,7 @@ export default function DropZone() {
       pipeline: [],
       config: {
         transcribe: {},
+        diarize: {},
         align: {},
         morphotag: {},
         translate: {},

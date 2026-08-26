@@ -20,6 +20,7 @@ function requiredKind(verb: VerbStep): "media" | "chat" | "paired" {
       return "media";
     case "morphotag":
     case "translate":
+    case "diarize":
       return "chat";
     case "align":
     case "compare":

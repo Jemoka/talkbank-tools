@@ -26,11 +26,20 @@ const PRETTY_ASR: Record<string, string> = {
   QwenAsrBackend: "Qwen-ASR",
 };
 
+const PRETTY_SPEAKER: Record<string, string> = {
+  PyannoteAIBackend: "pyannoteAI (cloud)",
+  PyannoteBackend: "Pyannote (local)",
+};
+
 export default function TranscribePanel({ batchId, config }: Props) {
   const { capabilities, dispatch } = useStore();
   const asrEngines =
     capabilities?.backends_by_task["ASR"] ??
-    ["WhisperXBackend", "RevAI", "Qwen3AsrBackend"];
+    ["WhisperBackend", "RevAI", "Qwen3AsrBackend"];
+  const speakerEngines = (
+    capabilities?.backends_by_task["Speaker"] ??
+    ["PyannoteAIBackend", "PyannoteBackend"]
+  ).filter((name) => name.startsWith("Pyannote"));
 
   const set = (patch: VerbConfig) =>
     dispatch({
@@ -42,8 +51,11 @@ export default function TranscribePanel({ batchId, config }: Props) {
 
   const lang = (config.lang as string) ?? "eng";
   const speakers = (config.speakers as number) ?? 2;
-  const engine = (config.engine as string) ?? "WhisperXBackend";
+  const engine = (config.engine as string) ?? "WhisperBackend";
   const diarize = (config.diarize as boolean) ?? true;
+  const nativeSpeaker = engine === "RevAI" || engine === "GoogleGenAIBackend";
+  const diarizeEngine =
+    (config.diarize_engine as string) ?? "PyannoteAIBackend";
 
   return (
     <div>
@@ -77,6 +89,23 @@ export default function TranscribePanel({ batchId, config }: Props) {
       <FieldRow label="diarize">
         <Toggle on={diarize} onChange={(on) => set({ diarize: on })} />
       </FieldRow>
+      {diarize && !nativeSpeaker && (
+        <FieldRow label="diarizer">
+          <RadioGroup
+            value={diarizeEngine}
+            options={speakerEngines.map((name) => [
+              name,
+              PRETTY_SPEAKER[name] ?? name,
+            ])}
+            onChange={(value) => set({ diarize_engine: value })}
+          />
+        </FieldRow>
+      )}
+      {diarize && nativeSpeaker && (
+        <FieldRow label="diarizer">
+          <span className="ba-mono">{PRETTY_ASR[engine] ?? engine}</span>
+        </FieldRow>
+      )}
     </div>
   );
 }

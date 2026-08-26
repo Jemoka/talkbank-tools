@@ -8,11 +8,41 @@ use crate::base::Task;
 use crate::base::TaskInput;
 use crate::base::{Dispatcher, TaskRunner};
 use crate::proto::speaker::{SpeakerInput, SpeakerOutput};
-use crate::utils::{BAError, BAResult, prepare_pcm};
+use crate::utils::{BAError, BAResult, MediaInput, prepare_pcm};
 use async_trait::async_trait;
-use talkbank_model::Line;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+use talkbank_model::{Line, SpeakerCode};
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_model::content::UtteranceContent;
+
+const SIBLING_MEDIA_EXTS: &[&str] = &[
+    "wav", "mp3", "mp4", "m4a", "flac", "ogg", "aac", "wma", "mov", "m4v", "avi",
+    "mpg", "mpeg",
+];
+
+/// Resolve media for CHAT loaded from disk. Prefer the typed `@Media`
+/// basename, then fall back to the transcript's own stem.
+fn sibling_media(chat: &Chat) -> Option<MediaInput> {
+    let chat_path = Path::new(chat.source_id().as_str());
+    let mut stems = Vec::new();
+    if let (Some(parent), Some(header)) = (chat_path.parent(), chat.ast().media.as_deref()) {
+        stems.push(parent.join(header.filename.as_str()));
+    }
+    stems.push(chat_path.with_extension(""));
+
+    for stem in stems {
+        for ext in SIBLING_MEDIA_EXTS {
+            for candidate_ext in [ext.to_string(), ext.to_ascii_uppercase()] {
+                let candidate = stem.with_extension(candidate_ext);
+                if candidate.is_file() {
+                    return Some(MediaInput::new(chat.source_id().clone(), candidate));
+                }
+            }
+        }
+    }
+    None
+}
 
 pub struct SpeakerTaskRunner;
 
@@ -37,9 +67,15 @@ impl TaskRunner for SpeakerTaskRunner {
             }
         };
 
-        let media = chat.media().cloned().ok_or_else(|| {
-            BAError::Internal("SpeakerTaskRunner: chat has no attached media".into())
-        })?;
+        let media = match chat.media().cloned() {
+            Some(media) => media,
+            None => sibling_media(chat).ok_or_else(|| {
+                BAError::Internal(
+                    "SpeakerTaskRunner: chat has no attached media and no @Media/sibling media file was found"
+                        .into(),
+                )
+            })?,
+        };
 
         sink.emit(ProgressEvent::stage_started(
             chat.source_id(),
@@ -76,11 +112,29 @@ fn relabel_utterances_by_diarization(
     out: &SpeakerOutput,
     sink: &dyn ProgressSink,
 ) -> BAResult<()> {
-    use talkbank_model::SpeakerCode;
     let segs = &out.diarization.segments;
     if segs.is_empty() {
         return Ok(());
     }
+    // Diarizer labels are opaque. Map them deterministically onto the CHAT's
+    // declared participant order so Rev's second (Speaker) projection does
+    // not replace the valid PAR0/PAR1 codes created by its ASR projection
+    // with undeclared vendor labels such as "speaker0".
+    let labels: BTreeSet<&str> = segs
+        .iter()
+        .map(|segment| segment.speaker.as_str())
+        .collect();
+    let declared: Vec<SpeakerCode> = chat.ast().participants.keys().cloned().collect();
+    let speaker_codes: BTreeMap<&str, SpeakerCode> = labels
+        .into_iter()
+        .enumerate()
+        .map(|(index, label)| {
+            let code = declared.get(index).cloned().unwrap_or_else(|| {
+                SpeakerCode::new(format!("PAR{index}"))
+            });
+            (label, code)
+        })
+        .collect();
     let source_id = chat.source_id().clone();
     let total = chat
         .ast()
@@ -92,7 +146,18 @@ fn relabel_utterances_by_diarization(
     let mut completed: u64 = 0;
     for line in chat.ast_mut().lines.0.iter_mut() {
         let Line::Utterance(u) = line else { continue };
-        if let Some(mid) = utterance_midpoint_ms(&u.main.content.content.0) {
+        let midpoint = u
+            .main
+            .content
+            .bullet
+            .as_ref()
+            .and_then(|bullet| {
+                let timing = &bullet.timing;
+                (timing.end_ms >= timing.start_ms)
+                    .then_some(timing.start_ms + (timing.end_ms - timing.start_ms) / 2)
+            })
+            .or_else(|| utterance_midpoint_ms(&u.main.content.content.0));
+        if let Some(mid) = midpoint {
             let best = segs
                 .iter()
                 .find(|s| mid >= s.start_ms && mid <= s.end_ms)
@@ -104,7 +169,9 @@ fn relabel_utterances_by_diarization(
                     })
                 });
             if let Some(seg) = best {
-                u.main.speaker = SpeakerCode::new(canonical_speaker_code(seg.speaker.as_str()));
+                if let Some(code) = speaker_codes.get(seg.speaker.as_str()) {
+                    u.main.speaker = code.clone();
+                }
             }
         }
         completed += 1;
@@ -141,18 +208,4 @@ fn word_timing(w: &WordItem<'_>) -> Option<(u64, u64)> {
     };
     let b = word.inline_bullet.as_ref()?;
     Some((b.timing.start_ms, b.timing.end_ms))
-}
-
-fn canonical_speaker_code(raw: &str) -> String {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return "PAR".into();
-    }
-    let mut out = String::new();
-    for c in trimmed.chars().take(8) {
-        if c.is_ascii_alphanumeric() {
-            out.push(c.to_ascii_uppercase());
-        }
-    }
-    if out.is_empty() { "PAR".into() } else { out }
 }

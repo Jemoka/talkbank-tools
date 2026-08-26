@@ -8,6 +8,7 @@ import { useStore, type VerbStep } from "../store";
 
 const AVAILABLE_VERBS: VerbStep[] = [
   "transcribe",
+  "diarize",
   "align",
   "morphotag",
   "translate",

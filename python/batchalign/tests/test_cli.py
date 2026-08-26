@@ -307,6 +307,54 @@ def test_transcribe_wires_pyannote_ai_for_separate_diarization(
     assert captured["recipe"]["utseg_backend"] is utterance_segmenter
 
 
+def test_transcribe_rev_diarize_declares_native_speaker_task(
+    tmp_path, monkeypatch,
+):
+    import batchalign as ba
+
+    captured = {}
+
+    class FakeRev(ba.Speaker):
+        def __init__(self, **_kwargs):
+            self.utterance_segmenter = None
+
+        @property
+        def name(self):
+            return "fake-rev"
+
+        @property
+        def batch_policy(self):
+            from batchalign.backends.base import BatchPolicy
+            return BatchPolicy.one()
+
+        def call(self, batch):
+            return []
+
+    class FakePipeline:
+        def run(self, _inputs, callbacks=None, outcome_callback=None):
+            return []
+
+    monkeypatch.setattr(ba, "RevAI", FakeRev)
+    monkeypatch.setattr(ba, "CHATUtteranceBackend", lambda **_kwargs: object())
+
+    def fake_recipe(**kwargs):
+        captured.update(kwargs)
+        return FakePipeline()
+
+    monkeypatch.setattr(ba.recipes, "transcribe", fake_recipe)
+    media = tmp_path / "sample.wav"
+    media.write_bytes(b"media")
+
+    result = CliRunner().invoke(
+        app,
+        ["transcribe", "--engine", "rev", "--lang", "eng", "--diarize", str(media)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["diarize"] is True
+    assert captured["speaker_backend"] is None
+
+
 # ---------------------------------------------------------------------------
 # `transcribe --lang` is required and ISO-639-3 only.
 # ---------------------------------------------------------------------------

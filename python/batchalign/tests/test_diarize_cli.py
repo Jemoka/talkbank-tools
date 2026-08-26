@@ -2,49 +2,14 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from typer.testing import CliRunner
+
+from batchalign.cli import app
+
 from batchalign.cli.diarize import (
     DiarizeEngine,
     _build_backend,
-    _protocol_audio,
-    _turns_document,
 )
-
-
-def test_turns_document_maps_sorted_labels_to_anonymous_tracks():
-    output = SimpleNamespace(
-        diarization=SimpleNamespace(
-            segments=[
-                SimpleNamespace(start_ms=100, end_ms=250, speaker="SPEAKER_01"),
-                SimpleNamespace(start_ms=260, end_ms=500, speaker="SPEAKER_00"),
-                SimpleNamespace(start_ms=510, end_ms=700, speaker="SPEAKER_01"),
-            ]
-        )
-    )
-
-    assert _turns_document(output) == {
-        "source": "batchalign3:pyannote-ai",
-        "turns": [
-            {"start_ms": 100, "end_ms": 250, "track": "PAR1"},
-            {"start_ms": 260, "end_ms": 500, "track": "PAR0"},
-            {"start_ms": 510, "end_ms": 700, "track": "PAR1"},
-        ],
-    }
-
-
-def test_protocol_audio_bridges_native_prepared_audio():
-    native = SimpleNamespace(
-        pcm_f32le=b"\x00\x01\x02\x03",
-        sample_rate=16_000,
-        channels=1,
-        frame_count=1,
-    )
-
-    audio = _protocol_audio(native)
-
-    assert bytes(audio.pcm_f32le) == native.pcm_f32le
-    assert audio.sample_rate == 16_000
-    assert audio.channels == 1
-    assert audio.frame_count == 1
 
 
 def test_backend_selector_defaults_to_cloud_and_can_select_local():
@@ -64,8 +29,48 @@ def test_backend_selector_defaults_to_cloud_and_can_select_local():
     ]
 
 
-def test_turns_document_identifies_local_engine():
-    output = SimpleNamespace(diarization=SimpleNamespace(segments=[]))
-    assert _turns_document(output, DiarizeEngine.pyannote)["source"] == (
-        "batchalign3:pyannote"
+def test_diarize_runs_shared_pipeline_on_chat_and_writes_chat(
+    tmp_path, monkeypatch,
+):
+    import batchalign as ba
+
+    chat = tmp_path / "sample.cha"
+    chat.write_text(
+        "@Begin\n@Languages:\teng\n@Participants:\tPAR Participant\n"
+        "@ID:\teng|batchalign|PAR|||||Participant|||\n"
+        "*PAR:\thello .\n@End\n",
+        encoding="utf-8",
     )
+    captured = {}
+    backend = object()
+    monkeypatch.setattr(ba, "PyannoteAIBackend", lambda **_kwargs: backend)
+
+    class FakeOutcome:
+        source_id = str(chat)
+
+        def write(self, target, *, strip_word_timing=False):
+            captured["target"] = target
+            captured["strip_word_timing"] = strip_word_timing
+
+    class FakePipeline:
+        def run(self, inputs, callbacks=None, outcome_callback=None):
+            captured["inputs"] = list(inputs)
+            outcome = FakeOutcome()
+            if outcome_callback is not None:
+                outcome_callback(outcome)
+            return [outcome]
+
+    def fake_recipe(**kwargs):
+        captured["recipe"] = kwargs
+        return FakePipeline()
+
+    monkeypatch.setattr(ba.recipes, "diarize", fake_recipe)
+
+    result = CliRunner().invoke(app, ["diarize", str(chat)])
+
+    assert result.exit_code == 0, result.output
+    assert captured["recipe"]["speaker_backend"] is backend
+    assert len(captured["inputs"]) == 1
+    assert str(captured["inputs"][0].path) == str(chat)
+    assert captured["target"] == str(chat)
+    assert captured["strip_word_timing"] is False

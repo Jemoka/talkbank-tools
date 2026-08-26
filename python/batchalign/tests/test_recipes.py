@@ -114,6 +114,28 @@ def test_transcribe_with_distinct_diarize_and_utseg(fake_core):
     assert pipe.backends == ["ASR-stub", "SPK-stub", "UTSEG-stub"]
 
 
+def test_transcribe_native_diarization_reuses_asr_backend(fake_core):
+    Task, Pipeline, _ = fake_core
+    from batchalign import recipes
+
+    backend = object()
+    pipe = recipes.transcribe(asr_backend=backend, diarize=True)
+
+    assert _task_names(pipe) == ["Asr", "Speaker"]
+    assert pipe.backends == [backend]
+
+
+def test_diarize(fake_core):
+    Task, Pipeline, _ = fake_core
+    from batchalign import recipes
+
+    pipe = recipes.diarize(speaker_backend="speaker", workers=3)
+
+    assert _task_names(pipe) == ["Speaker"]
+    assert pipe.backends == ["speaker"]
+    assert pipe.opts == {"workers": 3}
+
+
 def test_align(fake_core):
     Task, Pipeline, _ = fake_core
     from batchalign import recipes

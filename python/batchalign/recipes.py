@@ -27,6 +27,7 @@ def transcribe(
     asr_backend: Any,
     speaker_backend: Any | None = None,
     utseg_backend: Any | None = None,
+    diarize: bool = False,
     **opts: Any,
 ) -> Any:
     """ASR + utterance segmentation (+ optional speaker diarization).
@@ -43,9 +44,10 @@ def transcribe(
     Task, Pipeline = _core()
     tasks = [Task.Asr]
     backends = [asr_backend]
-    if speaker_backend is not None:
+    if speaker_backend is not None or diarize:
         tasks.append(Task.Speaker)
-        backends.append(speaker_backend)
+        if speaker_backend is not None and speaker_backend is not asr_backend:
+            backends.append(speaker_backend)
     if utseg_backend is not None:
         # Explicit utterance segmenter (e.g. CHATUtterance) handles UtSeg.
         tasks.append(Task.UtSeg)
@@ -60,6 +62,20 @@ def transcribe(
     # With neither, there is nothing to serve UtSeg, so we omit it and the ASR
     # segments stand as the utterances (no segmentation).
     return Pipeline(tasks=tasks, backends=backends, **opts)
+
+
+def diarize(*, speaker_backend: Any, **opts: Any) -> Any:
+    """Inject diarized speaker assignments into existing timed CHAT.
+
+    Uses the canonical Speaker runner, including Pipeline caching, progress,
+    media preparation, and CHAT mutation.
+    """
+    Task, Pipeline = _core()
+    return Pipeline(
+        tasks=[Task.Speaker],
+        backends=[speaker_backend],
+        **opts,
+    )
 
 
 def align(
@@ -185,6 +201,7 @@ def compare(
 
 __all__ = [
     "transcribe",
+    "diarize",
     "align",
     "utr",
     "morphotag",

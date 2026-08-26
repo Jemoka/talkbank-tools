@@ -11,6 +11,7 @@ import type { ProgressEvent, ProgressTask } from "./protocol/events";
 
 export type VerbStep =
   | "transcribe"
+  | "diarize"
   | "align"
   | "morphotag"
   | "translate"
@@ -19,6 +20,7 @@ export type VerbStep =
 /** Verb → daemon task (used to route ProgressEvent into the right stage). */
 export const VERB_TO_TASK: Record<VerbStep, ProgressTask> = {
   transcribe: "Asr",
+  diarize: "Speaker",
   align: "Fa",
   morphotag: "Morphosyntax",
   translate: "Translate",

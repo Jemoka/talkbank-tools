@@ -93,7 +93,7 @@ def register(app: typer.Typer) -> None:
         diarize: bool = typer.Option(
             False,
             "--diarize/--no-diarize",
-            help="Run speaker diarization (ignored for rev and google, which diarize themselves).",
+            help="Run speaker diarization. Rev and Google run their own Speaker stage; other engines use --diarize-engine.",
         ),
         diarize_engine: DiarizeEngine = typer.Option(
             DiarizeEngine.pyannote_ai,
@@ -153,10 +153,14 @@ def register(app: typer.Typer) -> None:
             asr_backend, native_diarization = _build_asr(
                 ba, engine, model, lang_code, num_speakers, device
             )
-            # Cloud engines with native speaker labels share one atomic call;
-            # other engines use the selected dedicated backend with --diarize.
+            # Native multi-capability backends must still run Task.Speaker;
+            # returning speaker-labelled ASR alone does not exercise CHAT
+            # reinjection. Other engines use the dedicated diarizer.
             speaker_backend: Any = None
-            if diarize and not native_diarization:
+            use_asr_speaker_backend = False
+            if diarize and isinstance(asr_backend, ba.Speaker):
+                use_asr_speaker_backend = True
+            elif diarize and not native_diarization:
                 speaker_backend = _build_diarize_backend(
                     ba, diarize_engine, num_speakers
                 )
@@ -183,6 +187,7 @@ def register(app: typer.Typer) -> None:
                 asr_backend=asr_backend,
                 speaker_backend=speaker_backend,
                 utseg_backend=utseg_backend,
+                diarize=use_asr_speaker_backend,
                 workers=opts.workers,
             )
             inputs, root = collect_media_inputs(folder, language=lang_code.alpha_3)

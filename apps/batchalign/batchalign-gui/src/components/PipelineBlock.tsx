@@ -69,6 +69,7 @@ function EmptyPipelineHint() {
       </span>{" "}
       above. pick any combination of{" "}
       <span className="ba-mono">transcribe</span>,{" "}
+      <span className="ba-mono">diarize</span>,{" "}
       <span className="ba-mono">align</span>,{" "}
       <span className="ba-mono">morphotag</span>,{" "}
       <span className="ba-mono">translate</span>,{" "}

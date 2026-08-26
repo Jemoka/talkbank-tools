@@ -6,6 +6,7 @@
 import type { ComponentType } from "react";
 import type { VerbConfig, VerbStep } from "../store";
 import TranscribePanel from "./TranscribePanel";
+import DiarizePanel from "./DiarizePanel";
 import AlignPanel from "./AlignPanel";
 import MorphotagPanel from "./MorphotagPanel";
 import TranslatePanel from "./TranslatePanel";
@@ -18,6 +19,7 @@ export interface PanelProps {
 
 const REGISTRY: Record<VerbStep, ComponentType<PanelProps>> = {
   transcribe: TranscribePanel,
+  diarize: DiarizePanel,
   align: AlignPanel,
   morphotag: MorphotagPanel,
   translate: TranslatePanel,
