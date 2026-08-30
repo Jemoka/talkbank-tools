@@ -1,6 +1,0 @@
----
-source: tests/clan_golden.rs
-expression: clan_output
----
-*** File "pipeout": line 11: 7 characters long:
-cookies

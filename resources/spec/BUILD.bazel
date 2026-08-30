@@ -1,7 +1,7 @@
-"""CHAT specification — single source of truth for grammar/parser tests.
+"""CHAT specification fixtures retained for Batchalign validation parity.
 
-Read by `//crates/spec/talkbank-spec-testgen` (static codegen) and
-`//crates/spec/talkbank-spec-testrun` (live-parser verification).
+The canonical parser and specification implementation lives in Chatter;
+Batchalign keeps only the documents consumed by its own tests and resources.
 """
 
 package(default_visibility = ["//visibility:public"])

@@ -1,9 +1,0 @@
----
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
-expression: tier
----
-items:
-  - Word:
-      segments:
-        - ˈap
-terminator: ~

@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: Word can only have one primary stress
-@Comment:	Invalid: 'ˈheˈllo' - Two primary stress markers
-*CHI:	ˈheˈllo .
-@End

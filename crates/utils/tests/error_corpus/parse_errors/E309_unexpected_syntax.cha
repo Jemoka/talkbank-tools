@@ -1,8 +1,0 @@
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	Expected error: E309 (Unexpected syntax)
-@Comment:	Trigger: Unexpected characters in utterance context
-*CHI:	hello ## world .
-@End

@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|test|CHI|2;06.||||Target_Child|||
-@Media:	check_133, audio
-*CHI:	hello . 1000_3000
-*CHI:	world . 2000_4000
-@End

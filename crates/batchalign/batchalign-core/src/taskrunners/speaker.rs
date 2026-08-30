@@ -12,13 +12,12 @@ use crate::utils::{BAError, BAResult, MediaInput, prepare_pcm};
 use async_trait::async_trait;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
-use talkbank_model::{Line, SpeakerCode};
 use talkbank_model::alignment::helpers::{WordItem, walk_words};
 use talkbank_model::content::UtteranceContent;
+use talkbank_model::{Line, SpeakerCode};
 
 const SIBLING_MEDIA_EXTS: &[&str] = &[
-    "wav", "mp3", "mp4", "m4a", "flac", "ogg", "aac", "wma", "mov", "m4v", "avi",
-    "mpg", "mpeg",
+    "wav", "mp3", "mp4", "m4a", "flac", "ogg", "aac", "wma", "mov", "m4v", "avi", "mpg", "mpeg",
 ];
 
 /// Resolve media for CHAT loaded from disk. Prefer the typed `@Media`
@@ -129,9 +128,10 @@ fn relabel_utterances_by_diarization(
         .into_iter()
         .enumerate()
         .map(|(index, label)| {
-            let code = declared.get(index).cloned().unwrap_or_else(|| {
-                SpeakerCode::new(format!("PAR{index}"))
-            });
+            let code = declared
+                .get(index)
+                .cloned()
+                .unwrap_or_else(|| SpeakerCode::new(format!("PAR{index}")));
             (label, code)
         })
         .collect();
@@ -139,12 +139,12 @@ fn relabel_utterances_by_diarization(
     let total = chat
         .ast()
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter(|l| matches!(l, Line::Utterance(_)))
         .count() as u64;
     let mut completed: u64 = 0;
-    for line in chat.ast_mut().lines.0.iter_mut() {
+    for line in chat.ast_mut().lines.as_mut_slice().iter_mut() {
         let Line::Utterance(u) = line else { continue };
         let midpoint = u
             .main
@@ -156,7 +156,7 @@ fn relabel_utterances_by_diarization(
                 (timing.end_ms >= timing.start_ms)
                     .then_some(timing.start_ms + (timing.end_ms - timing.start_ms) / 2)
             })
-            .or_else(|| utterance_midpoint_ms(&u.main.content.content.0));
+            .or_else(|| utterance_midpoint_ms(&u.main.content.content.as_slice()));
         if let Some(mid) = midpoint {
             let best = segs
                 .iter()

@@ -1,6 +1,0 @@
-# Audio fixtures are too large for git — fetch from net via:
-#   scp operator@server:/Volumes/Other/biling/Bangor/Miami/spa/0wav/herring03.wav /tmp/
-#   ffmpeg -i /tmp/herring03.wav -ss 30 -t 60 -c copy tests/fixtures/bilingual/herring03_bilingual_clip.wav
-*.wav
-*.mp3
-*.mp4

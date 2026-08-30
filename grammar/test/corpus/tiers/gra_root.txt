@@ -1,9 +1,0 @@
-================================================================================
-gra_root - Example %gra tier with ROOT pattern
-================================================================================
-%gra:	1|0|ROOT 2|1|PUNCT
-
-
---------------------------------------------------------------------------------
-
-(source_file (gra_dependent_tier (gra_tier_prefix) (tier_sep (colon) (tab)) (gra_contents (gra_relation index: (gra_index) (pipe) head: (gra_head) (pipe) relation: (gra_relation_name)) (whitespaces) (gra_relation index: (gra_index) (pipe) head: (gra_head) (pipe) relation: (gra_relation_name))) (newline)))

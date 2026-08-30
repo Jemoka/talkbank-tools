@@ -1,8 +1,0 @@
----
-source: crates/talkbank-parser-re2c/tests/snapshot_tests.rs
-expression: tokens
----
-- kind: "IdFields { language: \"eng\", corpus: \"corpus\", speaker: \"CHI\", age: \"3;00.\", sex: \"female\", group: \"typical\", ses: \"\", role: \"Child\", education: \"\", custom: \"\" }"
-  text: eng
-- kind: Newline
-  text: "\n"

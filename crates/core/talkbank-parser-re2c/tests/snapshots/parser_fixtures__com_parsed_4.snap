@@ -1,6 +1,0 @@
----
-source: crates/talkbank-parser-re2c/tests/parser_fixtures.rs
-expression: tier
----
-segments:
-  - Text: "|EC|3|0|0|CM|NT|FI|"

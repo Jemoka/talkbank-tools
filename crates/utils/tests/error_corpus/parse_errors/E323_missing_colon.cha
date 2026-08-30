@@ -1,8 +1,0 @@
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	ERROR: Speaker must be followed by colon
-@Comment:	Invalid: '*CHI hello' - Missing colon
-*CHI hello .
-@End

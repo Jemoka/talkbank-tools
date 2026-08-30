@@ -1,9 +1,0 @@
-================================================================================
-group_multiple_annotations - Angle bracket group with multiple space-separated scoped annotations.All annotations must be collected as part of the same group, not splitinto separate content items.
-================================================================================
-*CHI:	<really> [?] [<] .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (group_with_annotations (less_than) content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment))))))) (greater_than) annotations: (base_annotations (whitespaces) (scoped_uncertain) (whitespaces) (indexed_overlap_precedes)))) (whitespaces)) ending: (utterance_end (period) (newline)))))

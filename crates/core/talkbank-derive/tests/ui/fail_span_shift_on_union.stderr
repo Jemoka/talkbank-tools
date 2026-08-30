@@ -1,8 +1,0 @@
-error: SpanShift cannot be derived for unions
- --> tests/ui/fail_span_shift_on_union.rs:4:1
-  |
-4 | / union BadUnion {
-5 | |     a: i32,
-6 | |     b: f32,
-7 | | }
-  | |_^

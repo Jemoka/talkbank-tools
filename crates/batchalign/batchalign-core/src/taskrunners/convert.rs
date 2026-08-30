@@ -29,7 +29,10 @@ impl TaskRunner for ConvertTaskRunner {
             }
         };
 
-        sink.emit(ProgressEvent::stage_started(&media.source_id, Task::Convert));
+        sink.emit(ProgressEvent::stage_started(
+            &media.source_id,
+            Task::Convert,
+        ));
         let audio = prepare_pcm_interleaved(&media)
             .map_err(|err| BAError::Internal(format!("convert audio decode: {err:#}")))?;
         let output: MediaOutput = dispatcher
@@ -40,7 +43,10 @@ impl TaskRunner for ConvertTaskRunner {
             .await?
             .try_into()?;
         *value = BAValue::MediaOutput(output);
-        sink.emit(ProgressEvent::stage_injected(&media.source_id, Task::Convert));
+        sink.emit(ProgressEvent::stage_injected(
+            &media.source_id,
+            Task::Convert,
+        ));
         Ok(())
     }
 }

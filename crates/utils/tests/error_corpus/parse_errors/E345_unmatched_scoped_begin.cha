@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	Expected error: E345 (Unmatched scoped annotation begin)
-@Comment:	Trigger: Opening < without matching >
-*CHI:	hello <world .
-@End

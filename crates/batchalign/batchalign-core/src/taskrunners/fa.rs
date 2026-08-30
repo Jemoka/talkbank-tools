@@ -113,7 +113,7 @@ impl TaskRunner for FaTaskRunner {
         // word. Refresh its utterance bullets without decoding audio or
         // dispatching the backend again.
         if refresh_complete_wor_alignment(chat) {
-            clear_media_unlinked(&mut chat.ast_mut().lines.0);
+            clear_media_unlinked(chat.ast_mut().lines.as_mut_slice());
             return Ok(());
         }
 
@@ -198,7 +198,7 @@ impl TaskRunner for FaTaskRunner {
         // (the E544-required marker for transcripts with no timing), that
         // tag is now stale. Drop it so the output advertises its newly-
         // linked state and downstream tools honour the timing.
-        clear_media_unlinked(&mut chat.ast_mut().lines.0);
+        clear_media_unlinked(chat.ast_mut().lines.as_mut_slice());
 
         sink.emit(ProgressEvent::stage_injected(chat.source_id(), Task::Fa));
         Ok(())
@@ -213,13 +213,13 @@ impl TaskRunner for FaTaskRunner {
 fn strip_stale_fa_review_tiers(chat: &mut Chat) {
     use talkbank_model::DependentTier;
 
-    for line in &mut chat.ast_mut().lines.0 {
+    for line in chat.ast_mut().lines.as_mut_slice() {
         let Line::Utterance(utterance) = line else {
             continue;
         };
         utterance.dependent_tiers.retain(|tier| {
             !matches!(
-                tier,
+                &tier.tier,
                 DependentTier::UserDefined(user)
                     if matches!(user.label.as_str(), "xalign" | "xrev")
             )
@@ -252,18 +252,22 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
     let mut saw_words = false;
     fa_debug_trace("complete-reuse input", chat.to_chat());
 
-    for (line_index, line) in chat.ast().lines.0.iter().enumerate() {
+    for (line_index, line) in chat.ast().lines.as_slice().iter().enumerate() {
         let Line::Utterance(utterance) = line else {
             continue;
         };
         let mut main_words = Vec::new();
-        walk_words(&utterance.main.content.content.0, None, &mut |item| {
-            if let Some(word) = source_word(&item)
-                && counts_for_tier(word, TierDomain::Wor)
-            {
-                main_words.push(word.cleaned_text().to_string());
-            }
-        });
+        walk_words(
+            &utterance.main.content.content.as_slice(),
+            None,
+            &mut |item| {
+                if let Some(word) = source_word(&item)
+                    && counts_for_tier(word, TierDomain::Wor)
+                {
+                    main_words.push(word.cleaned_text().to_string());
+                }
+            },
+        );
         if main_words.is_empty() {
             continue;
         }
@@ -368,18 +372,17 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
         return false;
     }
     for (line_index, _, end_ms) in &refreshed {
-        let next_start_ms =
-            chat.ast().lines.0[line_index + 1..]
-                .iter()
-                .find_map(|line| match line {
-                    Line::Utterance(utterance) => utterance
-                        .main
-                        .content
-                        .bullet
-                        .as_ref()
-                        .map(|bullet| bullet.timing.start_ms),
-                    _ => None,
-                });
+        let next_start_ms = chat.ast().lines.as_slice()[line_index + 1..]
+            .iter()
+            .find_map(|line| match line {
+                Line::Utterance(utterance) => utterance
+                    .main
+                    .content
+                    .bullet
+                    .as_ref()
+                    .map(|bullet| bullet.timing.start_ms),
+                _ => None,
+            });
         if next_start_ms.is_some_and(|next_start| *end_ms > next_start) {
             fa_debug_trace(
                 "complete-reuse rejected",
@@ -392,7 +395,8 @@ fn refresh_complete_wor_alignment(chat: &mut Chat) -> bool {
         }
     }
     for (line_index, start_ms, end_ms) in refreshed {
-        let Line::Utterance(utterance) = &mut chat.ast_mut().lines.0[line_index] else {
+        let Line::Utterance(utterance) = &mut chat.ast_mut().lines.as_mut_slice()[line_index]
+        else {
             unreachable!("recorded line index must remain an utterance")
         };
         utterance.main.content.bullet = Some(talkbank_model::model::Bullet::new(start_ms, end_ms));
@@ -414,7 +418,7 @@ fn collect_reusable_wor_segments(chat: &Chat) -> Vec<Option<AsrSegment>> {
     let utterances: Vec<_> = chat
         .ast()
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter_map(|line| match line {
             Line::Utterance(utterance) => Some(utterance),
@@ -435,13 +439,17 @@ fn collect_reusable_wor_segments(chat: &Chat) -> Vec<Option<AsrSegment>> {
         .enumerate()
         .map(|(index, utterance)| {
             let mut main_words = Vec::new();
-            walk_words(&utterance.main.content.content.0, None, &mut |item| {
-                if let Some(word) = source_word(&item)
-                    && counts_for_tier(word, TierDomain::Wor)
-                {
-                    main_words.push(word.cleaned_text().to_string());
-                }
-            });
+            walk_words(
+                &utterance.main.content.content.as_slice(),
+                None,
+                &mut |item| {
+                    if let Some(word) = source_word(&item)
+                        && counts_for_tier(word, TierDomain::Wor)
+                    {
+                        main_words.push(word.cleaned_text().to_string());
+                    }
+                },
+            );
             if main_words.is_empty() {
                 return None;
             }
@@ -540,10 +548,10 @@ fn merge_reused_and_fresh_segments(
 
 fn extract_utterances_for_fa(chat: &Chat) -> Vec<AsrSegment> {
     let mut out = Vec::new();
-    for line in chat.ast().lines.0.iter() {
+    for line in chat.ast().lines.as_slice().iter() {
         let Line::Utterance(u) = line else { continue };
         let mut words = Vec::new();
-        walk_words(&u.main.content.content.0, None, &mut |w| {
+        walk_words(&u.main.content.content.as_slice(), None, &mut |w| {
             if let Some(word) = source_word(&w)
                 && counts_for_tier(word, TierDomain::Wor)
             {
@@ -608,7 +616,7 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             .unwrap_or_else(|error| format!("<serialization failed: {error}>")),
     );
     let mut idx = 0usize;
-    for line in chat.ast_mut().lines.0.iter_mut() {
+    for line in chat.ast_mut().lines.as_mut_slice().iter_mut() {
         let Line::Utterance(u) = line else { continue };
         let Some(seg) = aligned.get(idx) else {
             return Err(BAError::Internal(format!(
@@ -619,12 +627,12 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             let had_wor_tier = u
                 .dependent_tiers
                 .iter()
-                .any(|tier| matches!(tier, DependentTier::Wor(_)));
-            let mut words = collapse_aligned_words(&u.main.content.content.0, &seg.words)?;
+                .any(|tier| matches!(&tier.tier, DependentTier::Wor(_)));
+            let mut words = collapse_aligned_words(&u.main.content.content.as_slice(), &seg.words)?;
             rebalance_near_zero_words_from_following(&mut words);
             rebalance_near_zero_words_from_preceding(&mut words);
             let has_untimed_leading_filler =
-                has_untimed_leading_filler_coverage(&u.main.content.content.0, &words);
+                has_untimed_leading_filler_coverage(&u.main.content.content.as_slice(), &words);
             // Carry the utterance's own terminator onto `%wor` (BA2 parity);
             // the typed writer renders the bullets and the terminator.
             let wor = WorTier::from_words(words).with_terminator(u.main.content.terminator.clone());
@@ -635,15 +643,15 @@ fn inject_word_timings(chat: &mut Chat, aligned: &[AsrSegment]) -> BAResult<()> 
             let original_wor_position = u
                 .dependent_tiers
                 .iter()
-                .position(|tier| matches!(tier, DependentTier::Wor(_)));
+                .position(|tier| matches!(&tier.tier, DependentTier::Wor(_)));
             u.dependent_tiers
-                .retain(|tier| !matches!(tier, DependentTier::Wor(_)));
+                .retain(|tier| !matches!(&tier.tier, DependentTier::Wor(_)));
             match original_wor_position {
                 Some(position) => u.dependent_tiers.insert(
                     position.min(u.dependent_tiers.len()),
-                    DependentTier::Wor(wor),
+                    DependentTier::Wor(wor).into(),
                 ),
-                None => u.dependent_tiers.push(DependentTier::Wor(wor)),
+                None => u.dependent_tiers.push(DependentTier::Wor(wor).into()),
             }
             let timed_word_span = seg
                 .words
@@ -719,7 +727,7 @@ fn enforce_fa_monotonicity(chat: &mut Chat) -> MonotonicityRepairs {
 
     let mut repairs = MonotonicityRepairs::default();
     let mut last_start_ms = 0;
-    for line in &mut chat.ast_mut().lines.0 {
+    for line in chat.ast_mut().lines.as_mut_slice() {
         let Line::Utterance(utterance) = line else {
             continue;
         };
@@ -736,7 +744,7 @@ fn enforce_fa_monotonicity(chat: &mut Chat) -> MonotonicityRepairs {
             utterance.main.content.bullet = None;
             utterance
                 .dependent_tiers
-                .retain(|tier| !matches!(tier, DependentTier::Wor(_)));
+                .retain(|tier| !matches!(&tier.tier, DependentTier::Wor(_)));
             repairs.stripped += 1;
         } else {
             last_start_ms = start_ms;
@@ -746,7 +754,7 @@ fn enforce_fa_monotonicity(chat: &mut Chat) -> MonotonicityRepairs {
     let timed: Vec<(usize, u64)> = chat
         .ast()
         .lines
-        .0
+        .as_slice()
         .iter()
         .enumerate()
         .filter_map(|(index, line)| {
@@ -763,7 +771,8 @@ fn enforce_fa_monotonicity(chat: &mut Chat) -> MonotonicityRepairs {
     for pair in timed.windows(2) {
         let (previous_index, _) = pair[0];
         let (_, next_start_ms) = pair[1];
-        let Line::Utterance(previous) = &mut chat.ast_mut().lines.0[previous_index] else {
+        let Line::Utterance(previous) = &mut chat.ast_mut().lines.as_mut_slice()[previous_index]
+        else {
             continue;
         };
         let Some(bullet) = previous.main.content.bullet.as_mut() else {
@@ -776,7 +785,7 @@ fn enforce_fa_monotonicity(chat: &mut Chat) -> MonotonicityRepairs {
             previous.main.content.bullet = None;
             previous
                 .dependent_tiers
-                .retain(|tier| !matches!(tier, DependentTier::Wor(_)));
+                .retain(|tier| !matches!(&tier.tier, DependentTier::Wor(_)));
             repairs.stripped += 1;
         } else {
             bullet.timing.end_ms = next_start_ms;
@@ -975,6 +984,7 @@ mod tests {
     fn fa_excludes_untranscribed_words_from_dispatch_and_wor() {
         const UNTRANSCRIBED_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\thello xxx world . \u{15}100_600\u{15}\n@End\n";
         let mut chat = Chat::parse(
             UNTRANSCRIBED_CHAT,
@@ -1121,6 +1131,7 @@ mod tests {
     fn mixed_file_reuses_only_clean_wor_utterances() {
         const MIXED_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\thello world . \u{15}100_500\u{15}\n\
 %wor:\thello \u{15}100_200\u{15} world \u{15}300_500\u{15} .\n\
 *PAR:\tgoodbye friend . \u{15}1000_1500\u{15}\n\
@@ -1270,6 +1281,7 @@ mod tests {
     fn untimed_fa_result_clears_zero_duration_authoritative_bullet() {
         const ZERO_BULLET_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\tz@l . \u{15}245000_246000\u{15}\n@End\n";
         let mut chat = Chat::parse(
             ZERO_BULLET_CHAT,
@@ -1279,7 +1291,7 @@ mod tests {
         let utterance = chat
             .ast_mut()
             .lines
-            .0
+            .as_mut_slice()
             .iter_mut()
             .find_map(|line| match line {
                 Line::Utterance(utterance) => Some(utterance),
@@ -1307,7 +1319,7 @@ mod tests {
         let utterance = chat
             .ast()
             .lines
-            .0
+            .as_slice()
             .iter()
             .find_map(|line| match line {
                 Line::Utterance(utterance) => Some(utterance),
@@ -1321,6 +1333,7 @@ mod tests {
     fn timed_fa_words_overwrite_provisional_utr_window() {
         const UTR_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\thello world . \u{15}800_3000\u{15}\n@End\n";
         let mut chat = Chat::parse(
             UTR_CHAT,
@@ -1330,7 +1343,7 @@ mod tests {
         let utterance = chat
             .ast_mut()
             .lines
-            .0
+            .as_mut_slice()
             .iter_mut()
             .find_map(|line| match line {
                 Line::Utterance(utterance) => Some(utterance),
@@ -1375,6 +1388,7 @@ mod tests {
     fn fa_replaces_wor_tier_at_its_original_position() {
         const ORDERED_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\thello . \u{15}100_500\u{15}\n\
 %wor:\thello \u{15}100_500\u{15} .\n\
 %mor:\tintj|hello .\n@End\n";
@@ -1407,6 +1421,7 @@ mod tests {
     fn fa_rebalances_near_zero_word_from_following_span() {
         const SHORT_WORD_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\ta boat . \u{15}100_500\u{15}\n@End\n";
         let mut chat = Chat::parse(
             SHORT_WORD_CHAT,
@@ -1444,6 +1459,7 @@ mod tests {
     fn fa_rebalances_near_zero_word_from_preceding_span() {
         const SHORT_FINAL_WORD_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\t&-um I . \u{15}100_520\u{15}\n@End\n";
         let mut chat = Chat::parse(
             SHORT_FINAL_WORD_CHAT,
@@ -1484,6 +1500,7 @@ mod tests {
     fn timed_fa_words_preserve_authoritative_bullet_envelope() {
         const AUTHORITATIVE_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\thello world . \u{15}800_3000\u{15}\n@End\n";
         let mut chat = Chat::parse(
             AUTHORITATIVE_CHAT,
@@ -1558,6 +1575,7 @@ mod tests {
     fn fa_rerun_discards_large_stale_authoritative_start() {
         const STALE_START_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\thow this happened ? \u{15}2000_9970\u{15}\n\
 %wor:\thow this happened ?\n@End\n";
         let mut chat = Chat::parse(
@@ -1602,6 +1620,7 @@ mod tests {
     fn fa_rerun_preserves_start_for_untimed_leading_filler() {
         const LEADING_FILLER_CHAT: &str = "@UTF8\n@Begin\n@Languages:\teng\n\
 @Participants:\tPAR Participant\n@ID:\teng|test|PAR|||||Participant|||\n\
+@Media:\ttest, audio\n\
 *PAR:\t&-um happened . \u{15}2000_9970\u{15}\n\
 %wor:\t&-um happened .\n@End\n";
         let mut chat = Chat::parse(
@@ -1635,7 +1654,7 @@ mod tests {
         let bullet = chat
             .ast()
             .lines
-            .0
+            .as_slice()
             .iter()
             .find_map(|line| match line {
                 Line::Utterance(utterance) => utterance.main.content.bullet.as_ref(),
@@ -1653,7 +1672,7 @@ mod tests {
 
         let mut source = String::from(
             "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tPAR Participant\n\
-             @ID:\teng|test|PAR|||||Participant|||\n",
+             @ID:\teng|test|PAR|||||Participant|||\n@Media:\ttest, audio, missing\n",
         );
         for _ in 0..500 {
             writeln!(&mut source, "*PAR:\thello .").expect("write fixture");
@@ -1701,7 +1720,7 @@ mod tests {
         let utterances: Vec<_> = chat
             .ast()
             .lines
-            .0
+            .as_slice()
             .iter()
             .filter_map(|line| match line {
                 Line::Utterance(utterance) => Some(utterance),
@@ -1724,7 +1743,7 @@ mod tests {
             !utterances[400]
                 .dependent_tiers
                 .iter()
-                .any(|tier| matches!(tier, DependentTier::Wor(_))),
+                .any(|tier| matches!(&tier.tier, DependentTier::Wor(_))),
             "stripped drift anchor must not retain stale word timing"
         );
         Chat::parse(

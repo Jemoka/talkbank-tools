@@ -25,7 +25,7 @@
 //! the upstream tokenization unless `retokenize`), the raw text (for
 //! `retokenize=true`), and the resolved language.
 
-use crate::cache::{hash_serialized, CacheKey};
+use crate::cache::{CacheKey, hash_serialized};
 use crate::proto::asr::LanguageSpec;
 use crate::register_proto_schema;
 use crate::utils::SourceId;

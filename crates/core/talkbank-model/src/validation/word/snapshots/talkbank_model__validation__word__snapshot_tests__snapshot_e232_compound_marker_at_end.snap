@@ -1,6 +1,0 @@
----
-source: talkbank-model/src/validation/word/snapshot_tests.rs
-assertion_line: 53
-expression: format_errors(&errors)
----
-[E233] error - Compound marker '+' cannot have an empty trailing part

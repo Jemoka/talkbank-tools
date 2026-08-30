@@ -102,7 +102,7 @@ py_test(
     # Landing 3 #16/#17 guards.
     data = [
         "//resources/test_fixtures:parity_fixtures",
-        "//crates/core/talkbank-transform:data/num2lang.json",
+        "//crates/batchalign/batchalign-core:asr_data",
         "//resources/spec/errors:E316_angle_bracket_in_mor_stem.md",
     ],
     # Same package-collision tolerance as `:batchalign` — heavy ML extras

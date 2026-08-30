@@ -1,8 +1,0 @@
----
-source: tests/clan_golden.rs
-expression: rust_output
----
-Speaker: SPE
-  Utterances scored: 2
-  Grand total: 8
-  DSS score: 4.00

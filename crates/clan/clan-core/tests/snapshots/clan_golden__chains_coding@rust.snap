@@ -1,9 +1,0 @@
----
-source: tests/clan_golden.rs
-expression: rust_output
----
-Speaker: CHI
-  Code  # Chains  Avg Length  Std Dev  Min  Max
-  ----  --------  ----------  -------  ---  ---
-  $ADJ  1         1.00        0.00     1    1  
-  $NOM  1         1.00        0.00     1    1

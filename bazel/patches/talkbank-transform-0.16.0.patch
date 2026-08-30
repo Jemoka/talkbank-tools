@@ -1,0 +1,12 @@
+# crate_universe materializes a git dependency at its Cargo package root, so
+# talkbank-transform cannot reach the Chatter repository's top-level schema via
+# ../../../schema. Bazel supplies the schema as compile_data and this patch
+# makes the include path explicit through a rustc environment variable.
+diff --git a/src/json.rs b/src/json.rs
+index 4f72c2e..36cb782 100644
+--- a/src/json.rs
++++ b/src/json.rs
+@@ -39,2 +39,2 @@
+ /// The CHAT JSON Schema, embedded at compile time.
+-pub const SCHEMA_JSON: &str = include_str!("../../../schema/chat-file.schema.json");
++pub const SCHEMA_JSON: &str = include_str!(env!("TALKBANK_CHAT_SCHEMA"));

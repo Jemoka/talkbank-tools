@@ -1,9 +1,0 @@
----
-source: tests/clan_golden.rs
-expression: clan_output
----
-----------------------------------------
-*** File "pipeout": line 11.
-*CHI:	it's I (1)want cookies .
-
-    Strings matched 1 times

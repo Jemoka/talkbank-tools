@@ -1,9 +1,0 @@
-================================================================================
-participants_single - @Participants header with single participant
-================================================================================
-@Participants:	CHI Target_Child
-
-
---------------------------------------------------------------------------------
-
-(source_file (participants_header (participants_prefix) (header_sep (colon) (tab)) (participants_contents (participant code: (speaker) (whitespaces) (participant_word))) (newline)))

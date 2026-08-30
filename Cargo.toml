@@ -1,31 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    # Core (parser / model / transform / shared utilities)
-    "crates/core/talkbank-model",
-    "crates/core/talkbank-derive",
-    "crates/core/talkbank-parser",
-    "crates/core/talkbank-transform",
-    "crates/core/talkbank-cache",
-    "crates/core/talkbank-parser-re2c",
-    "crates/core/talkbank-parser-tests",
-    "crates/utils",
-    # CHAT spec generators (static codegen + live-parser verification)
-    "crates/spec/talkbank-spec-testgen",
-    "crates/spec/talkbank-spec-testrun",
-    # Chatter (CLI + LSP, both produce `chatter`-branded binaries)
-    "crates/chatter/chatter-cli",
-    "crates/chatter/chatter-lsp",
-    # CLAN (analysis library + FFI to the legacy CLAN app)
-    "crates/clan/clan-core",
-    "crates/clan/send2clan-sys",
     # Batchalign rewrite (spec2.md): types+traits crate, then tokio engine.
     "crates/batchalign/batchalign-core",
     "crates/batchalign/batchalign-engine",
-    # Workspace dev tooling
-    "crates/xtask",
-    # Tauri desktop shells (tiered by product)
-    "apps/chatter/chatter-gui/src-tauri",
+    # Batchalign desktop shell.
     "apps/batchalign/batchalign-gui/src-tauri",
 ]
 # Third-party Rust crates that aren't on crates.io (or that we want
@@ -34,7 +13,6 @@ members = [
 # members, so cargo doesn't require them to be present for any cargo
 # command. Bazel pulls them lazily, only on the path that needs them.
 exclude = [
-    "fuzz",  # cargo-fuzz uses its own nightly toolchain with sanitizer flags
     # Writable working copies of vendored-binary crate sources made
     # by their genrules at build time (//python/batchalign:sidecar
     # via pyapp_install.sh, //bazel/tauri:cargo_tauri via

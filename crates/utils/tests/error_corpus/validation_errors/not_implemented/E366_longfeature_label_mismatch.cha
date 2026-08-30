@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	Expected error: E366 (Long feature label mismatch)
-@Comment:	Trigger: Long feature begin/end labels don't match
-*CHI:	hello ⌈label1⌉ world ⌊label2⌋ .
-@End

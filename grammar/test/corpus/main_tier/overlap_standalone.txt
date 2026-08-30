@@ -1,9 +1,0 @@
-================================================================================
-overlap_standalone - Standalone overlap markers (space-separated from words) parse as content items, not as part of a word. Verifies theGLR conflict resolves correctly whenoverlap markers are whitespace-delimited.
-================================================================================
-*CHI:	⌈ hello ⌉ .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (overlap_point) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (overlap_point) (whitespaces)) ending: (utterance_end (period) (newline)))))

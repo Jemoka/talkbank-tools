@@ -344,7 +344,7 @@ fn parse_chat(text: &str) -> BAResult<ChatFile<ModelValidated>> {
         other => BAError::Internal(format!("pipeline: {other}")),
     })?;
     let collector = talkbank_model::ErrorCollector::new();
-    Ok(chat_file.validate_into(&collector, None))
+    Ok(chat_file.validate_into(&collector, talkbank_model::model::TranscriptName::Anonymous))
 }
 
 // ---------------------------------------------------------------------------
@@ -399,23 +399,27 @@ fn extract_words(ast: &ChatFile<ModelValidated>) -> Vec<SrcWord> {
         // yet — index alignment with `%mor:` depends on producing one
         // slot per main-tier word).
         let mut raw_words: Vec<String> = Vec::new();
-        walk_words(&utt.main.content.content.0, None, &mut |item| match item {
-            WordItem::Word(w) => raw_words.push(w.cleaned_text().to_owned()),
-            WordItem::ReplacedWord(rw) => {
-                let r = rw
-                    .replacement
-                    .words
-                    .first()
-                    .map(|w| w.cleaned_text().to_owned())
-                    .unwrap_or_default();
-                raw_words.push(if r.is_empty() {
-                    rw.word.cleaned_text().to_owned()
-                } else {
-                    r
-                });
-            }
-            WordItem::Separator(_) => {}
-        });
+        walk_words(
+            &utt.main.content.content.as_slice(),
+            None,
+            &mut |item| match item {
+                WordItem::Word(w) => raw_words.push(w.cleaned_text().to_owned()),
+                WordItem::ReplacedWord(rw) => {
+                    let r = rw
+                        .replacement
+                        .words
+                        .first()
+                        .map(|w| w.cleaned_text().to_owned())
+                        .unwrap_or_default();
+                    raw_words.push(if r.is_empty() {
+                        rw.word.cleaned_text().to_owned()
+                    } else {
+                        r
+                    });
+                }
+                WordItem::Separator(_) => {}
+            },
+        );
 
         // POS lookup table for this utterance, indexed by raw_words position.
         let mor_pos = utterance_pos_by_index(utt);
@@ -454,10 +458,11 @@ fn utterance_pos_by_index(utt: &Utterance) -> Option<Vec<String>> {
         let _ = mor.write_content(&mut s);
         s
     } else {
-        utt.dependent_tiers.iter().find_map(|t| match t {
-            DependentTier::UserDefined(udt) if udt.label.as_str() == "mor" => {
-                Some(udt.content.as_str().to_owned())
-            }
+        utt.dependent_tiers.iter().find_map(|t| match &t.tier {
+            DependentTier::UserDefined(udt) if udt.label.as_str() == "mor" => udt
+                .content
+                .as_ref()
+                .map(|content| content.as_str().to_owned()),
             _ => None,
         })?
     };
@@ -1156,7 +1161,7 @@ fn inject_per_utt_tiers(ast: &mut ChatFile<ModelValidated>, per_utt: &[UttCmp]) 
     }
 
     let mut idx = 0usize;
-    for line in ast.lines.iter_mut() {
+    for line in ast.lines.as_mut_slice() {
         if let Line::Utterance(u) = line {
             if let Some(cmp) = by_main.get(&idx)
                 && !cmp.tokens.is_empty()
@@ -1176,17 +1181,19 @@ fn inject_per_utt_tiers(ast: &mut ChatFile<ModelValidated>, per_utt: &[UttCmp]) 
 fn push_user_tier(u: &mut Utterance, label: &str, payload: &str) -> BAResult<()> {
     let label = ne(label)?;
     let content = ne(payload)?;
-    u.dependent_tiers
-        .push(DependentTier::UserDefined(UserDefinedDependentTier {
+    u.dependent_tiers.push(
+        DependentTier::UserDefined(UserDefinedDependentTier {
             label,
-            content,
+            content: Some(content),
             span: Span::DUMMY,
-        }));
+        })
+        .into(),
+    );
     Ok(())
 }
 
 fn ne(s: &str) -> BAResult<NonEmptyString> {
-    NonEmptyString::new(s).ok_or_else(|| {
+    NonEmptyString::new(s).map_err(|_| {
         BAError::Internal(format!(
             "compare: refusing to construct empty NonEmptyString for {s:?}"
         ))

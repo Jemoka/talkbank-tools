@@ -1,6 +1,0 @@
-# header_utf8 — 1 samples extracted from ~/talkbank/data/*-data
-# Each entry is separated by a blank line.
-# Lines may include tab-continuations (multi-physical-line entries).
-
-@UTF8
-

@@ -1,9 +1,0 @@
-================================================================================
-options_ca - header with a known option token.
-================================================================================
-@Options:	CA
-
-
---------------------------------------------------------------------------------
-
-(source_file (options_header (options_prefix) (header_sep (colon) (tab)) (options_contents (option_name)) (newline)))

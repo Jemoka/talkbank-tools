@@ -191,8 +191,8 @@ def _hirschberg(reference: Sequence[ReferenceTarget],
 def _try_rust_align(payload_seq, reference_seq, match_fn):
     """Attempt the Rust dp_align fast path; return None if unavailable.
 
-    The Rust implementation is the canonical aligner (`crates/core/
-    talkbank-transform/src/dp_align/mod.rs`) and is wired into the PyO3
+    The Rust implementation is the canonical aligner
+    (`batchalign_core::alignment`) and is wired into the PyO3
     extension as `batchalign._core.dp_align` (Landing 1 #1).
     """
     # The Rust dispatcher only handles default `==` and case-insensitive
@@ -275,4 +275,3 @@ def align(source_payload_sequence,
             progress.close()
 
 # align([1,2,3,4,4,5,5,5], [1,1,3,4,4,12,5,5,18])
-

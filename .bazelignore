@@ -11,12 +11,8 @@ bazel-testlogs
 # Cargo
 target
 
-# Node — every node_modules path enumerated explicitly (no `**`).
+# Node
 node_modules
-apps/vscode-extension/node_modules
-apps/vscode-extension/out
-apps/vscode-extension/dist
-apps/chatter/chatter-gui/node_modules
 
 # Python
 .venv
@@ -29,11 +25,6 @@ python/target
 book/book
 book/build
 
-# Tree-sitter grammar generated artifacts
-grammar/build
-grammar/prebuilds
-grammar/.tree-sitter
-
 # Tauri build outputs
-apps/chatter/chatter-gui/src-tauri/target
-apps/chatter/chatter-gui/src-tauri/gen
+apps/batchalign/batchalign-gui/src-tauri/target
+apps/batchalign/batchalign-gui/src-tauri/gen

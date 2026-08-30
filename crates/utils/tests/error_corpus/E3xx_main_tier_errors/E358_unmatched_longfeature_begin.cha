@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|test|CHI||||Target_Child|||
-@Comment:	Expected error: E358
-*CHI:	I am &{l=singing happy birthday to you .
-*CHI:	another utterance .
-@End

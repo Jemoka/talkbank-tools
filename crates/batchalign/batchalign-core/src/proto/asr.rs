@@ -6,7 +6,7 @@
 //! Edits MUST happen in both places. Tests in
 //! `tests/proto_parity.rs` pin existence only.
 
-use crate::cache::{hash_serialized, CacheKey};
+use crate::cache::{CacheKey, hash_serialized};
 use crate::register_proto_schema;
 use crate::utils::SourceId;
 use crate::utils::{PreparedAudio, SpeakerLabel};

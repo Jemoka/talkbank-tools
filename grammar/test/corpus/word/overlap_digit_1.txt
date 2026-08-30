@@ -1,9 +1,0 @@
-================================================================================
-overlap_digit_1 - Overlap marker with digit 1 (⌊1) must parse as a single token, not as + . The digit is partof the overlap marker notation.
-================================================================================
-*CHI:	⌊1hello .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (overlap_point) (word_segment)))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

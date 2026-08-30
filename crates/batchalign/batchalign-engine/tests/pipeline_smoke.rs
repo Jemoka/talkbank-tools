@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use _core::{Cache, CachePolicy};
+use batchalign_engine::{Cache, CachePolicy};
 
 #[test]
 fn engine_components_compile() {

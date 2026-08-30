@@ -32,7 +32,10 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .it.workarounds import LegacyMwtRule
 
 
 # --- structured result types ----------------------------------------------
@@ -101,6 +104,13 @@ class _NormalizedWord:
 class _NormalizedToken:
     text: str
     id: list[int]
+
+
+@dataclass
+class _ItalianTokenRow:
+    token: Any
+    word_ids: list[int]
+    legacy_rule: LegacyMwtRule | None
 
 
 _UD_POS = {
@@ -259,7 +269,7 @@ def _normalize_words(
     return normalized, anomalies
 
 
-def _apply_italian_compound_imperatives(
+def _normalize_italian_compound_imperatives(
     words: list[_NormalizedWord],
     tokens: list[Any],
     anomalies: list[AnalysisAnomaly],
@@ -354,7 +364,7 @@ def _apply_italian_compound_imperatives(
     return expanded_words, expanded_tokens
 
 
-def _collapse_italian_false_mwts(
+def _normalize_italian_false_mwts(
     words: list[_NormalizedWord],
     tokens: list[Any],
     anomalies: list[AnalysisAnomaly],
@@ -447,7 +457,7 @@ def _collapse_italian_false_mwts(
     return rewritten_words, rewritten_tokens
 
 
-def _rewrite_italian_mwt_components(
+def _normalize_italian_mwt_components(
     words: list[_NormalizedWord],
     tokens: list[Any],
     anomalies: list[AnalysisAnomaly],
@@ -493,6 +503,95 @@ def _rewrite_italian_mwt_components(
             rule.retire_when,
         )
     return rewritten_words
+
+
+def _normalize_italian_legacy_mwts(
+    words: list[_NormalizedWord],
+    tokens: list[Any],
+    anomalies: list[AnalysisAnomaly],
+) -> tuple[list[_NormalizedWord], list[Any]]:
+    """Normalize closed legacy surfaces regardless of Stanza's MWT shape."""
+    from .it.workarounds import legacy_mwt_rule_for
+
+    by_id = {word.id: word for word in words}
+    token_rows: list[_ItalianTokenRow] = []
+    for token in tokens:
+        ids = list(getattr(token, "id", []) or [])
+        rule = legacy_mwt_rule_for(str(getattr(token, "text", "")))
+        if not ids or not all(word_id in by_id for word_id in ids):
+            return words, tokens
+        token_rows.append(_ItalianTokenRow(token, ids, rule))
+
+    if not any(row.legacy_rule is not None for row in token_rows):
+        return words, tokens
+
+    old_to_new: dict[int, int] = {}
+    next_id = 1
+    for row in token_rows:
+        if row.legacy_rule is None:
+            for offset, old_id in enumerate(row.word_ids):
+                old_to_new[old_id] = next_id + offset
+        else:
+            for old_id in row.word_ids:
+                old_to_new[old_id] = next_id
+        next_id += (
+            len(row.word_ids)
+            if row.legacy_rule is None
+            else len(row.legacy_rule.components)
+        )
+
+    rewritten_words: list[_NormalizedWord] = []
+    rewritten_tokens: list[Any] = []
+    for row in token_rows:
+        token = row.token
+        ids = row.word_ids
+        rule = row.legacy_rule
+        first = by_id[ids[0]]
+        if rule is None:
+            mapped_ids = [old_to_new[word_id] for word_id in ids]
+            for word_id in ids:
+                word = by_id[word_id]
+                rewritten_words.append(
+                    _NormalizedWord(
+                        word.text,
+                        word.lemma,
+                        word.upos,
+                        word.feats,
+                        old_to_new.get(word.head, word.head),
+                        word.deprel,
+                        old_to_new[word.id],
+                    )
+                )
+            rewritten_tokens.append(_NormalizedToken(str(token.text), mapped_ids))
+            continue
+
+        main_id = old_to_new[ids[0]]
+        span_ids: list[int] = []
+        for offset, component in enumerate(rule.components):
+            component_id = main_id + offset
+            span_ids.append(component_id)
+            rewritten_words.append(
+                _NormalizedWord(
+                    component.surface,
+                    component.lemma,
+                    component.upos,
+                    component.feats,
+                    old_to_new.get(first.head, first.head) if offset == 0 else main_id,
+                    first.deprel if offset == 0 else "fixed",
+                    component_id,
+                )
+            )
+        rewritten_tokens.append(_NormalizedToken(rule.surface, span_ids))
+        _anomaly(
+            anomalies,
+            first.id,
+            str(token.text),
+            f"italian_defect_{rule.defect}",
+            {"chunks": len(ids)},
+            {"legacy_surface": rule.surface, "chunks": len(span_ids)},
+            rule.retire_when,
+        )
+    return rewritten_words, rewritten_tokens
 
 
 def _validate_root_structure(words: list[_NormalizedWord]) -> None:
@@ -1014,13 +1113,16 @@ def parse_sentence(
     normalized_words, anomalies = _normalize_words(sentence)
     sentence_tokens = list(getattr(sentence, "tokens", []) or [])
     if lang == "it":
-        normalized_words, sentence_tokens = _apply_italian_compound_imperatives(
+        normalized_words, sentence_tokens = _normalize_italian_compound_imperatives(
             normalized_words, sentence_tokens, anomalies
         )
-        normalized_words = _rewrite_italian_mwt_components(
+        normalized_words, sentence_tokens = _normalize_italian_legacy_mwts(
             normalized_words, sentence_tokens, anomalies
         )
-        normalized_words, sentence_tokens = _collapse_italian_false_mwts(
+        normalized_words = _normalize_italian_mwt_components(
+            normalized_words, sentence_tokens, anomalies
+        )
+        normalized_words, sentence_tokens = _normalize_italian_false_mwts(
             normalized_words, sentence_tokens, anomalies
         )
     elif lang == "en":
@@ -1080,7 +1182,7 @@ def parse_sentence(
         elif (
             lang == "fr"
             and token.text.strip() == "au"
-            and type(token.id) == tuple
+            and isinstance(token.id, tuple)
             and indx != 0
             and sentence_tokens[indx - 1].text != "jusqu'"
         ):

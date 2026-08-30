@@ -316,7 +316,8 @@ impl Chat<Validated> {
             other => BAError::Internal(format!("pipeline: {other}")),
         })?;
         let collector = talkbank_model::ErrorCollector::new();
-        let validated = chat_file.validate_into(&collector, None);
+        let validated =
+            chat_file.validate_into(&collector, talkbank_model::model::TranscriptName::Anonymous);
         Ok(Self {
             ast: validated,
             source_id,
@@ -378,15 +379,28 @@ impl Chat<Validated> {
     /// but an earlier task may have mutated the AST. Rechecking the cumulative
     /// L2 gate here prevents a later backend from receiving corrupted CHAT.
     pub fn validate_stage_input(&self, task: Task) -> BAResult<()> {
-        validate_to_level(&self.ast, &[], ValidityLevel::MainTierValid).map_err(|errors| {
+        let ast = self.reparse_stage_ast(task, "pre-stage")?;
+        validate_to_level(&ast, &[], ValidityLevel::MainTierValid).map_err(|errors| {
             BAError::Validation(format_validation_errors(task, "pre-stage", &errors))
         })
     }
 
     /// Enforce the typed output contract immediately after a task runs.
     pub fn validate_stage_output(&self, task: Task) -> BAResult<()> {
-        validate_output(&self.ast, validation_command(task)).map_err(|errors| {
+        let ast = self.reparse_stage_ast(task, "post-stage")?;
+        validate_output(&ast, validation_command(task)).map_err(|errors| {
             BAError::Validation(format_validation_errors(task, "post-stage", &errors))
+        })
+    }
+
+    /// Reparse a mutated typed AST before applying Chatter's validation gates.
+    ///
+    /// Chatter deliberately accepts an unvalidated typestate at these gates.
+    /// Batchalign keeps a validated AST between stages, then mutates it, so the
+    /// serialization boundary is the honest way to regain the required state.
+    fn reparse_stage_ast(&self, task: Task, phase: &'static str) -> BAResult<ChatFile> {
+        parse_and_validate(&self.ast.to_chat(), ParseValidateOptions::default()).map_err(|error| {
+            BAError::Validation(format!("{} {phase} reparse failed: {error}", task.as_str()))
         })
     }
 
@@ -632,7 +646,6 @@ fn metrics_extension(kind: crate::metrics::MetricsKind) -> &'static str {
 
 /// Render one `MetricsArtifact` as CSV to `<path>.with_extension(<kind>.csv)`.
 fn write_metrics_csv(artifact: &MetricsArtifact, path: &Path) -> BAResult<()> {
-    use std::fmt::Write as _;
     let target = path.with_extension(metrics_extension(artifact.kind));
     let mut out = String::new();
     write_csv_row(&mut out, &artifact.table.schema);
@@ -774,12 +787,7 @@ impl ProgressEvent {
     /// than on `kind`, and `Task.stage_started` is idempotent in RUN
     /// state, so re-emitting it with non-zero counters is the
     /// no-schema-change path.
-    pub fn stage_tick(
-        source_id: &SourceId,
-        task: Task,
-        completed: u64,
-        total: u64,
-    ) -> Self {
+    pub fn stage_tick(source_id: &SourceId, task: Task, completed: u64, total: u64) -> Self {
         Self {
             source_id: source_id.clone(),
             task: Some(task),
@@ -983,8 +991,12 @@ impl ScaledProgress {
         let inner = if n == 0 { 0 } else { i * PROGRESS_SCALE / n };
         let completed = k_minus_1 * PROGRESS_SCALE + inner;
         let total = self.outer_total * PROGRESS_SCALE;
-        self.outer
-            .emit(ProgressEvent::stage_tick(&self.source_id, self.task, completed, total));
+        self.outer.emit(ProgressEvent::stage_tick(
+            &self.source_id,
+            self.task,
+            completed,
+            total,
+        ));
     }
 }
 
@@ -1172,7 +1184,7 @@ mod tests {
 
         const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
         let mut chat = Chat::parse(FIXTURE, SourceId::try_new("stage-gate")?)?;
-        for line in &mut chat.ast_mut().lines.0 {
+        for line in chat.ast_mut().lines.as_mut_slice() {
             if let Line::Utterance(utterance) = line {
                 utterance.main.content.terminator = None;
             }
@@ -1196,7 +1208,7 @@ mod tests {
 
         const FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello .\n@End\n";
         let mut chat = Chat::parse(FIXTURE, SourceId::try_new("serialize-gate")?)?;
-        for line in &mut chat.ast_mut().lines.0 {
+        for line in chat.ast_mut().lines.as_mut_slice() {
             if let Line::Utterance(utterance) = line {
                 utterance.main.content.terminator = None;
             }
@@ -1218,10 +1230,7 @@ mod tests {
     fn serialized_batchalign_output_passes_chatter_validation_pipeline() -> BAResult<()> {
         const ANNOTATED_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Media:\tfixture, audio\n*CHI:\thello world . \u{15}0_600\u{15}\n%mor:\tintj|hello noun|world .\n%gra:\t1|2|DISCOURSE 2|0|ROOT 3|2|PUNCT\n%wor:\thello \u{15}0_200\u{15} world \u{15}250_500\u{15} .\n@End\n";
 
-        let chat = Chat::parse(
-            ANNOTATED_FIXTURE,
-            SourceId::try_new("chatter-output-gate")?,
-        )?;
+        let chat = Chat::parse(ANNOTATED_FIXTURE, SourceId::try_new("chatter-output-gate")?)?;
         let emitted = chat.validated_chat_text()?;
 
         // `chatter validate` and Batchalign's final write gate share this

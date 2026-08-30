@@ -1,6 +1,0 @@
----
-source: talkbank-model/src/validation/word/snapshot_tests.rs
-assertion_line: 46
-expression: format_errors(&errors)
----
-[E232] error - Compound marker '+' cannot start a word

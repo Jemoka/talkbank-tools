@@ -1,9 +1,0 @@
----
-source: tests/converter_golden.rs
-expression: "&clan_output"
----
-@UTF8
-@Begin
-@Languages:	eng
-@Comment:	Context: Test
-@End

@@ -1,9 +1,0 @@
-================================================================================
-pho_example_4 - Example %pho tier: mɛ sɛ sk ja ɑ̃o
-================================================================================
-%pho:	mɛ sɛ sk ja ɑ̃o
-
-
---------------------------------------------------------------------------------
-
-(source_file (pho_dependent_tier (pho_tier_prefix) (tier_sep (colon) (tab)) (pho_groups (pho_group (pho_words (pho_word))) (whitespaces) (pho_group (pho_words (pho_word))) (whitespaces) (pho_group (pho_words (pho_word))) (whitespaces) (pho_group (pho_words (pho_word))) (whitespaces) (pho_group (pho_words (pho_word)))) (newline)))

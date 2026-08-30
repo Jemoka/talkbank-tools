@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|test|CHI||||Target_Child|||
-@Comment:	Expected error: E367
-*CHI:	&{n=crying I want mommy .
-*CHI:	please .
-@End

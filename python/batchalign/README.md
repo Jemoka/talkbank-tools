@@ -131,7 +131,7 @@ This package is one slice of the `talkbank-tools` monorepo:
 
 - `python/batchalign/` — Python package (this file).
 - `crates/batchalign/` — Rust crates (`batchalign-core`, `batchalign-engine`).
-- `crates/core/` — shared CHAT parser / model / transform.
+- The pinned TalkBank Chatter dependency supplies CHAT parsing, models, and transforms.
 - `apps/batchalign/batchalign-gui/` — Tauri desktop GUI.
 - `book/` — user + developer documentation (mdBook; source of truth).
 

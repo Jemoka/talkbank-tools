@@ -1,9 +1,0 @@
-================================================================================
-ca_delimiter_in_word_lint - Word wrapped in CA delimiter markers (voice quality) — verifies at word boundaries parses correctly despite prec non-propagation.
-================================================================================
-*CHI:	°soft° .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (ca_delimiter) (word_segment) (ca_delimiter)))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

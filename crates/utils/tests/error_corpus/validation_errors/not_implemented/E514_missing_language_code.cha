@@ -1,8 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	|corpus|CHI|||||Child|||
-@Comment:	Expected error: E514 (Missing language code in @ID)
-*CHI:	hello .
-@End

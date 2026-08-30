@@ -139,10 +139,10 @@ impl TaskRunner for CompareTaskRunner {
 fn strip_gra_tiers(chat: &mut crate::base::Chat) {
     use talkbank_model::Line;
     use talkbank_model::model::DependentTier;
-    for line in chat.ast_mut().lines.0.iter_mut() {
+    for line in chat.ast_mut().lines.as_mut_slice().iter_mut() {
         if let Line::Utterance(u) = line {
             u.dependent_tiers
-                .retain(|t| !matches!(t, DependentTier::Gra(_)));
+                .retain(|t| !matches!(&t.tier, DependentTier::Gra(_)));
         }
     }
 }
@@ -160,19 +160,18 @@ fn strip_compare_tiers(chat: &mut crate::base::Chat) {
         let Header::Comment { content } = header else {
             return false;
         };
-        content.segments.0.iter().any(|seg| {
+        content.segments.as_slice().iter().any(|seg| {
             matches!(seg, BulletContentSegment::Text(t) if t.text.trim_start().starts_with("ba.compare.summary:"))
         })
     };
 
-    let lines = &mut chat.ast_mut().lines.0;
-    lines.retain(|line| match line {
+    chat.ast_mut().lines.retain(|line| match line {
         Line::Header { header, .. } => !is_compare_summary(header),
         _ => true,
     });
-    for line in lines.iter_mut() {
+    for line in chat.ast_mut().lines.as_mut_slice() {
         if let Line::Utterance(u) = line {
-            u.dependent_tiers.retain(|t| match t {
+            u.dependent_tiers.retain(|t| match &t.tier {
                 DependentTier::UserDefined(ud) => {
                     let label = ud.label.as_str();
                     label != "xsrep" && label != "xsmor" && label != "xcmp"

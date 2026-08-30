@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: Form type must be valid (b, c, d, etc.)
-@Comment:	Invalid: 'hello@invalid' - Unknown form type
-*CHI:	hello@xyz .
-@End

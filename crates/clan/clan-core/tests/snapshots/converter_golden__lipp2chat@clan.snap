@@ -1,5 +1,0 @@
----
-source: tests/converter_golden.rs
-expression: "&clan_output"
----
-

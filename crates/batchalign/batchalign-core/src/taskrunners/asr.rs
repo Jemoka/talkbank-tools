@@ -8,6 +8,9 @@
 //!
 //! Per spec2.md §8 and the BA2 `pipelines/asr/` reference.
 
+use crate::asr::{
+    AsrElement, AsrElementKind, AsrMonologue, AsrRawText, AsrTimestampSecs, SpeakerIndex,
+};
 use crate::base::BAValue;
 use crate::base::Chat;
 use crate::base::Task;
@@ -21,9 +24,6 @@ use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
 use smol_str::SmolStr;
 use std::collections::BTreeMap;
-use talkbank_transform::asr_postprocess::{
-    AsrElement, AsrElementKind, AsrMonologue, AsrRawText, AsrTimestampSecs, SpeakerIndex,
-};
 
 /// ASR runner — `Task::Asr` entry point. The runner ships an `AsrInput`
 /// with `LanguageSpec::Auto` and default `AsrOptions`; the backend supplies
@@ -100,7 +100,7 @@ impl TaskRunner for AsrTaskRunner {
 
 /// Build a fresh validated CHAT document from ASR output.
 ///
-/// Builds the typed AST directly via `talkbank_transform::build_chat` (the
+/// Builds the typed AST directly via Batchalign's ASR CHAT builder (the
 /// official ASR→CHAT constructor): segments become typed utterances, the
 /// segment media window becomes the utterance bullet, and the headers
 /// (`@Languages`/`@Participants`/`@ID`) are derived from the speaker set. No
@@ -111,10 +111,8 @@ fn build_chat_from_asr(
     language: &LanguageSpec,
     output: &AsrOutput,
 ) -> BAResult<Chat> {
+    use crate::asr::chat::{ParticipantDesc, build_chat, transcript_from_asr_utterances};
     use talkbank_model::ErrorCollector;
-    use talkbank_transform::build_chat::{
-        ParticipantDesc, build_chat, transcript_from_asr_utterances,
-    };
 
     let lang_code = resolve_lang_code(language);
 
@@ -140,7 +138,7 @@ fn build_chat_from_asr(
     }
 
     let raw_output = asr_output_for_postprocess(output, &speaker_codes)?;
-    let utterances = talkbank_transform::asr_postprocess::process_raw_asr(&raw_output, &lang_code);
+    let utterances = crate::asr::process_raw_asr(&raw_output, &lang_code);
 
     // Emit `@Media: <media stem>, <audio|video>` so downstream consumers
     // (BA2's align, third-party tools) can resolve the media file. The CHAT
@@ -181,7 +179,8 @@ fn build_chat_from_asr(
     // git SHA + per-stage engine accumulation). No per-runner stamping.
 
     let collector = ErrorCollector::new();
-    let validated = chat_file.validate_into(&collector, None);
+    let validated =
+        chat_file.validate_into(&collector, talkbank_model::model::TranscriptName::Anonymous);
     if collector.has_errors() {
         let joined = collector
             .into_vec()
@@ -202,7 +201,7 @@ fn build_chat_from_asr(
 fn asr_output_for_postprocess(
     output: &AsrOutput,
     speaker_codes: &BTreeMap<String, String>,
-) -> BAResult<talkbank_transform::asr_postprocess::AsrOutput> {
+) -> BAResult<crate::asr::AsrOutput> {
     let mut monologues = Vec::with_capacity(output.segments.len());
     for segment in &output.segments {
         let raw_speaker = segment
@@ -240,7 +239,7 @@ fn asr_output_for_postprocess(
             });
         }
     }
-    Ok(talkbank_transform::asr_postprocess::AsrOutput { monologues })
+    Ok(crate::asr::AsrOutput { monologues })
 }
 
 fn postprocess_element(text: &str, start_ms: u64, end_ms: u64) -> AsrElement {
@@ -522,23 +521,28 @@ mod tests {
     #[tokio::test]
     async fn apply_routes_through_dispatcher_and_replaces_media_with_chat() {
         let sid = SourceId::try_new("tst").expect("sid");
-        // Use an audio fixture we know symphonia can decode. If none is
-        // available we fall back to building the chat directly — the
-        // dispatcher path is what we care about; audio_prep is exercised
-        // by the engine's smoke tests.
+        // Use a tracked audio fixture so the dispatcher path cannot silently
+        // skip when runfiles change.
         let canned = AsrOutput {
             source_id: sid.clone(),
             segments: vec![fake_segment("spk_0", "hello", 0, 500)],
         };
 
-        // The apply() path needs a real audio file. Skip if we can't find
-        // one in the repo's test fixtures.
-        let fixture = find_audio_fixture();
-        if fixture.is_none() {
-            eprintln!("skip: no audio fixture available for AsrTaskRunner::apply");
-            return;
-        }
-        let path = fixture.expect("checked Some");
+        let path = match (
+            std::env::var_os("TEST_SRCDIR"),
+            std::env::var_os("TEST_WORKSPACE"),
+        ) {
+            (Some(runfiles), Some(workspace)) => PathBuf::from(runfiles)
+                .join(workspace)
+                .join("resources/fixtures/tts/transcribe-regression.mp3"),
+            _ => PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../resources/fixtures/tts/transcribe-regression.mp3"),
+        };
+        assert!(
+            path.is_file(),
+            "tracked ASR audio fixture missing at {}",
+            path.display()
+        );
 
         let mut value = BAValue::Media(MediaInput::new(sid.clone(), path));
         let disp = StubDispatcher {
@@ -554,28 +558,8 @@ mod tests {
             .await
             .expect("apply ok");
         match value {
-            BAValue::Chat(c) => assert!(c.to_chat().contains("*PAR0:\thello .")),
+            BAValue::Chat(c) => assert!(c.to_chat().contains("*PAR0:\tHello .")),
             other => panic!("expected Chat, got {}", other.kind()),
         }
-    }
-
-    fn find_audio_fixture() -> Option<PathBuf> {
-        // Look for any .wav under the repo's test fixtures.
-        let candidates = [
-            "../../core/talkbank-parser-re2c/tests/fixtures",
-            "../../../resources/corpus/reference",
-        ];
-        for c in &candidates {
-            let p = PathBuf::from(c);
-            if let Ok(rd) = std::fs::read_dir(&p) {
-                for entry in rd.flatten() {
-                    let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) == Some("wav") {
-                        return Some(path);
-                    }
-                }
-            }
-        }
-        None
     }
 }

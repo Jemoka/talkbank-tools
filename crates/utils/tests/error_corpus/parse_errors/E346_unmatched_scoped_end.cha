@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	Expected error: E346 (Unmatched scoped annotation end)
-@Comment:	Trigger: Closing > without matching <
-*CHI:	hello world> [/] .
-@End

@@ -8,6 +8,7 @@ assert the cache is hit on the second backend.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -114,6 +115,83 @@ def test_pipeline_cache_misses_on_different_langs() -> None:
     assert a._nlp is mock.sentinel.PIPE_EN
     assert b._nlp is mock.sentinel.PIPE_ES
     assert fake_stanza.Pipeline.call_count == 2
+
+
+def test_pipeline_cache_evicts_least_recently_used_language_set() -> None:
+    """A corpus cannot retain every full Stanza model it encounters."""
+    _reset_cache()
+    from batchalign.backends.morphosyntax import stanza as stanza_backend_mod
+    from batchalign.backends.morphosyntax.stanza import StanzaBackend
+
+    fake_stanza = mock.MagicMock()
+    fake_stanza.Pipeline.side_effect = [
+        mock.sentinel.PIPE_EN,
+        mock.sentinel.PIPE_ES,
+        mock.sentinel.PIPE_FR,
+    ]
+    fake_stanza.__version__ = "test"
+
+    with (
+        _fake_runtime(fake_stanza),
+        mock.patch.object(stanza_backend_mod.gc, "collect") as collect,
+    ):
+        StanzaBackend(lang="en")
+        StanzaBackend(lang="es")
+        StanzaBackend(lang="en")
+        StanzaBackend(lang="fr")
+
+    assert len(stanza_backend_mod._pipeline_cache) == 2
+    assert fake_stanza.Pipeline.call_count == 3
+    collect.assert_called_once_with()
+    assert (frozenset({"es"}), False) not in stanza_backend_mod._pipeline_cache
+    assert (frozenset({"en"}), False) in stanza_backend_mod._pipeline_cache
+    assert (frozenset({"fr"}), False) in stanza_backend_mod._pipeline_cache
+
+
+def test_language_group_releases_postprocessor_sentences() -> None:
+    """Completed inference must not retain the batch's source text."""
+    _reset_cache()
+    from batchalign.backends.morphosyntax import stanza as stanza_backend_mod
+    from batchalign.backends.morphosyntax.stanza import StanzaBackend
+
+    fake_stanza = mock.MagicMock()
+    fake_stanza.__version__ = "test"
+    item = SimpleNamespace(
+        text="ciao",
+        tokens=["ciao"],
+        source_id="sample.cha",
+        utterance_id=0,
+    )
+    nlp = mock.MagicMock(
+        return_value=SimpleNamespace(sentences=[mock.sentinel.SENTENCE])
+    )
+    outputs = [None]
+    key = (frozenset({"it"}), False)
+
+    with _fake_runtime(fake_stanza):
+        backend = StanzaBackend()
+    with (
+        mock.patch.object(
+            stanza_backend_mod.render,
+            "parse_sentence",
+            return_value=mock.sentinel.ANALYSIS,
+        ),
+        mock.patch.object(
+            backend,
+            "_analysis_to_output",
+            return_value=mock.sentinel.OUTPUT,
+        ),
+    ):
+        backend._run_language_group(
+            key,
+            ["it"],
+            nlp,
+            [(0, item, ("it",))],
+            outputs,
+        )
+
+    assert outputs == [mock.sentinel.OUTPUT]
+    assert stanza_backend_mod._current_sentences_for(key) == []
 
 
 def test_hindi_pipeline_does_not_request_missing_mwt_model() -> None:

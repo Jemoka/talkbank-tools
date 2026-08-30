@@ -1,9 +1,0 @@
-================================================================================
-location_simple - header with free-text location value.
-================================================================================
-@Location:	lab room 1
-
-
---------------------------------------------------------------------------------
-
-(source_file (location_header (location_prefix) (header_sep (colon) (tab)) (free_text (rest_of_line)) (newline)))

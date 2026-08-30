@@ -1,5 +1,0 @@
-error: Variant MissingAttr missing #[code("...")] attribute
- --> tests/ui/fail_error_code_enum_missing_code_attr.rs:7:5
-  |
-7 |     MissingAttr,
-  |     ^^^^^^^^^^^

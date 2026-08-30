@@ -3,7 +3,7 @@
 //! !!! HAND-MIRRORED with `python/batchalign/_core/proto.py::TranslateInput,
 //! TranslateOutput`. !!!
 
-use crate::cache::{hash_serialized, CacheKey};
+use crate::cache::{CacheKey, hash_serialized};
 use crate::proto::asr::LanguageSpec;
 use crate::register_proto_schema;
 use crate::utils::SourceId;

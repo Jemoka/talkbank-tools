@@ -1,9 +1,0 @@
-================================================================================
-situation_simple - header with free-text scene description.
-================================================================================
-@Situation:	free play at table
-
-
---------------------------------------------------------------------------------
-
-(source_file (situation_header (situation_prefix) (header_sep (colon) (tab)) (free_text (rest_of_line)) (newline)))

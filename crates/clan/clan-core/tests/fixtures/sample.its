@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<ITS>
-  <ProcessingUnit>
-    <item spkr="CHN" startTime="PT1S" endTime="PT3.5S" wordCnt="2"/>
-    <item spkr="FAN" startTime="PT4S" endTime="PT6.5S" wordCnt="3"/>
-    <item spkr="MAN" startTime="PT7S" endTime="PT9S" wordCnt="1"/>
-  </ProcessingUnit>
-</ITS>

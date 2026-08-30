@@ -1,9 +1,0 @@
-================================================================================
-types_simple - header with language and activity entries.
-================================================================================
-@Types:	cross, narrative, TD
-
-
---------------------------------------------------------------------------------
-
-(source_file (types_header (types_prefix) (header_sep (colon) (tab)) (types_design) (comma) (whitespaces) (types_activity) (comma) (whitespaces) (types_group) (newline)))

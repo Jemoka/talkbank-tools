@@ -1,9 +1,0 @@
-================================================================================
-time_start_simple - header with strict time syntax.
-================================================================================
-@Time Start:	17:30-18:00
-
-
---------------------------------------------------------------------------------
-
-(source_file (time_start_header (time_start_prefix) (header_sep (colon) (tab)) (time_duration_contents (generic_time)) (newline)))

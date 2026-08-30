@@ -1,0 +1,23 @@
+{
+  "language": "ita",
+  "cases": [
+    {"surface": "nel", "mor": "adp|in~det|il-Masc-Def-Art-Sing"},
+    {"surface": "del", "mor": "adp|di~det|il-Masc-Def-Art-Sing"},
+    {"surface": "sulla", "mor": "adp|su~det|il-Fem-Def-Art-Sing"},
+    {"surface": "dei", "mor": "adp|di~det|il-Masc-Def-Art-Plur"},
+    {"surface": "alla", "mor": "adp|a~det|il-Fem-Def-Art-Sing"},
+    {"surface": "della", "mor": "det|il-Masc-Def-Art-Sing"},
+    {"surface": "al", "mor": "adp|a~det|il-Masc-Def-Art-Sing"},
+    {"surface": "col", "mor": "adp|con~det|il-Masc-Def-Art-Sing"},
+    {"surface": "allo", "mor": "adp|a~det|il-Masc-Def-Art-Sing"},
+    {"surface": "sul", "mor": "adp|su~det|il-Masc-Def-Art-Sing"},
+    {"surface": "ai", "mor": "adp|a~det|il-Masc-Def-Art-Plur"},
+    {"surface": "alzarci", "mor": "verb|alzare-Inf-S~pron|ci-Prs-P1"},
+    {"surface": "eccolo", "mor": "adv|ecco~pron|lo-Prs-S3"},
+    {"surface": "eccola", "mor": "adv|ecco~pron|la-Prs-S3"},
+    {"surface": "sporcarsi", "mor": "verb|sporcare-Inf-S~pron|si-Prs-S3"},
+    {"surface": "vederla", "mor": "verb|vedere-Inf-S~pron|la-Prs-S3"},
+    {"surface": "guardalo", "mor": "verb|guardare-Fin-Imp-Pres-S2~pron|lo-Prs-S3"}
+  ],
+  "must_not_rewrite": ["dai"]
+}

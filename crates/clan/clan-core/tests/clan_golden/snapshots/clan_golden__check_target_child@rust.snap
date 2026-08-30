@@ -1,7 +1,0 @@
----
-source: crates/talkbank-clan/tests/clan_golden/check.rs
-assertion_line: 62
-expression: rust_output
----
-*** File "reference/core/basic-conversation.cha": line 0.
-PARTICIPANTS TIER IS MISSING "CHI Target_Child".(68)

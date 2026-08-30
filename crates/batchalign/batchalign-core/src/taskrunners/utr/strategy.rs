@@ -5,10 +5,10 @@
 //! itself comes from `talkbank_transform::dp_align`, which is the same
 //! Hirschberg implementation tbtbt uses; we removed tbtbt's private copy.
 
-use talkbank_model::model::{Bullet, ChatFile, Line, Linker, OverlapIndex};
+use talkbank_model::model::{Bullet, ChatFile, Line, LinkerKind, OverlapIndex};
 use talkbank_model::validation::Validated;
 
-use talkbank_transform::dp_align::{self, MatchMode};
+use crate::alignment::{self as dp_align, MatchMode};
 
 use super::extraction::collect_fa_words;
 use super::overlap_markers;
@@ -39,7 +39,7 @@ pub struct UtrResult {
     /// Per-utterance decision records for unmatched / zero-duration cases.
     /// Skipped in serialization — this is provenance, not result semantics.
     #[serde(skip)]
-    pub decisions: Vec<talkbank_transform::decisions::DecisionRecord>,
+    pub decisions: Vec<crate::decisions::DecisionRecord>,
 }
 
 impl PartialEq for UtrResult {
@@ -76,7 +76,11 @@ impl UtrStrategy for GlobalUtr {
         "global"
     }
 
-    fn inject(&self, chat_file: &mut ChatFile<Validated>, asr_tokens: &[AsrTimingToken]) -> UtrResult {
+    fn inject(
+        &self,
+        chat_file: &mut ChatFile<Validated>,
+        asr_tokens: &[AsrTimingToken],
+    ) -> UtrResult {
         run_global_utr(chat_file, asr_tokens, false, MatchMode::CaseInsensitive)
     }
 }
@@ -123,7 +127,10 @@ pub(super) struct UtrAlignmentPlan {
 }
 
 /// Convenience entry that runs [`GlobalUtr`].
-pub fn inject_utr_timing(chat_file: &mut ChatFile<Validated>, asr_tokens: &[AsrTimingToken]) -> UtrResult {
+pub fn inject_utr_timing(
+    chat_file: &mut ChatFile<Validated>,
+    asr_tokens: &[AsrTimingToken],
+) -> UtrResult {
     GlobalUtr.inject(chat_file, asr_tokens)
 }
 
@@ -146,7 +153,7 @@ pub(super) fn run_global_utr(
     };
 
     if asr_tokens.is_empty() {
-        for line in &chat_file.lines.0 {
+        for line in &chat_file.lines {
             if let Line::Utterance(utt) = line {
                 if utt.main.content.bullet.is_some() {
                     result.skipped += 1;
@@ -183,7 +190,7 @@ pub(super) fn run_global_utr(
 
     let utt_line_indices: Vec<usize> = chat_file
         .lines
-        .0
+        .as_slice()
         .iter()
         .enumerate()
         .filter_map(|(i, line)| {
@@ -215,14 +222,14 @@ pub(super) fn run_global_utr(
                     // `chat_ops/fa/utr.rs:300-336`.
                     result.unmatched += 1;
                     if let Some(&line_idx) = utt_line_indices.get(utt_idx)
-                        && let Some(Line::Utterance(utt)) = chat_file.lines.0.get(line_idx)
+                        && let Some(Line::Utterance(utt)) = chat_file.lines.get(line_idx)
                     {
                         result.decisions.push(
-                            talkbank_transform::decisions::DecisionRecord {
+                            crate::decisions::DecisionRecord {
                                 line_idx,
                                 speaker: utt.main.speaker.as_str().to_string(),
-                                strategy: talkbank_transform::decisions::DecisionStrategy::Utr(
-                                    talkbank_transform::decisions::UtrStrategy::ZeroDurationSkipped,
+                                strategy: crate::decisions::DecisionStrategy::Utr(
+                                    crate::decisions::UtrStrategy::ZeroDurationSkipped,
                                 ),
                                 reason: format!(
                                     "words={} asr_range=[{min_asr},{max_asr}] start_ms={start_ms} end_ms={end_ms} reason=zero_or_negative_duration",
@@ -237,19 +244,17 @@ pub(super) fn run_global_utr(
             None => {
                 result.unmatched += 1;
                 if let Some(&line_idx) = utt_line_indices.get(utt_idx)
-                    && let Some(Line::Utterance(utt)) = chat_file.lines.0.get(line_idx)
+                    && let Some(Line::Utterance(utt)) = chat_file.lines.get(line_idx)
                 {
-                    result
-                        .decisions
-                        .push(talkbank_transform::decisions::DecisionRecord {
-                            line_idx,
-                            speaker: utt.main.speaker.as_str().to_string(),
-                            strategy: talkbank_transform::decisions::DecisionStrategy::Utr(
-                                talkbank_transform::decisions::UtrStrategy::Unmatched,
-                            ),
-                            reason: format!("words={} no_asr_match", info.words.len()),
-                            needs_review: true,
-                        });
+                    result.decisions.push(crate::decisions::DecisionRecord {
+                        line_idx,
+                        speaker: utt.main.speaker.as_str().to_string(),
+                        strategy: crate::decisions::DecisionStrategy::Utr(
+                            crate::decisions::UtrStrategy::Unmatched,
+                        ),
+                        reason: format!("words={} no_asr_match", info.words.len()),
+                        needs_review: true,
+                    });
                 }
             }
         }
@@ -262,7 +267,7 @@ pub(super) fn run_global_utr(
     {
         let existing_timing: Vec<Option<(u64, u64)>> = chat_file
             .lines
-            .0
+            .as_slice()
             .iter()
             .filter_map(|l| {
                 if let Line::Utterance(u) = l {
@@ -304,7 +309,7 @@ pub(super) fn run_global_utr(
 
     // Apply bullets to the actual ChatFile utterances.
     let mut utt_idx = 0;
-    for line in &mut chat_file.lines.0 {
+    for line in chat_file.lines.as_mut_slice() {
         if let Line::Utterance(utt) = line {
             if let Some((start_ms, end_ms)) = bullets_to_set[utt_idx] {
                 utt.main.content.bullet = Some(Bullet::utr_hint(start_ms, end_ms));
@@ -320,17 +325,18 @@ pub(super) fn run_global_utr(
 /// overlap marker info for every utterance in the order UTR sees them.
 pub(super) fn collect_utr_utterance_info(chat_file: &ChatFile<Validated>) -> Vec<UtrUtteranceInfo> {
     let mut utt_infos = Vec::new();
-    for line in &chat_file.lines.0 {
+    for line in &chat_file.lines {
         if let Line::Utterance(utt) = line {
             let mut words = Vec::new();
-            collect_fa_words(&utt.main.content.content.0, &mut words);
+            collect_fa_words(&utt.main.content.content.as_slice(), &mut words);
             let has_lazy_overlap = utt
                 .main
                 .content
                 .linkers
-                .0
-                .contains(&Linker::LazyOverlapPrecedes);
-            let overlap_info = overlap_markers::extract_overlap_info(&utt.main.content.content.0);
+                .iter()
+                .any(|linker| linker.kind == LinkerKind::LazyOverlapPrecedes);
+            let overlap_info =
+                overlap_markers::extract_overlap_info(&utt.main.content.content.as_slice());
 
             let bottom_indices: Vec<_> = overlap_info
                 .regions
@@ -543,7 +549,7 @@ mod tests {
 
         // Verify both utterances now carry a UTR-hint bullet.
         let mut bullets = Vec::new();
-        for line in chat.ast().lines.0.iter() {
+        for line in chat.ast().lines.as_slice().iter() {
             if let Line::Utterance(u) = line {
                 if let Some(b) = u.main.content.bullet.as_ref() {
                     bullets.push((b.timing.start_ms, b.timing.end_ms));
@@ -556,7 +562,7 @@ mod tests {
     /// Already-timed CHAT → all utterances skipped, no bullets touched.
     #[test]
     fn global_utr_skips_already_timed_utterances() {
-        const CHA: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n*CHI:\thello world . \u{15}100_1100\u{15}\n@End\n";
+        const CHA: &str = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Child\n@ID:\teng|corpus|CHI|||||Child|||\n@Media:\ttest, audio\n*CHI:\thello world . \u{15}100_1100\u{15}\n@End\n";
         let mut chat = parse_chat(CHA);
         let tokens = make_tokens(&[("hello", 100, 500), ("world", 600, 1100)]);
         let result = inject_utr_timing(chat.ast_mut(), &tokens);

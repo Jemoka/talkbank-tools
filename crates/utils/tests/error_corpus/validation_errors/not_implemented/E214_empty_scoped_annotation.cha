@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: Scoped annotation cannot be empty
-@Comment:	Invalid: 'hello [*]' - Empty error annotation
-*CHI:	hello [*] .
-@End

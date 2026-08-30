@@ -1,6 +1,0 @@
----
-source: tests/clan_golden.rs
-expression: clan_output
----
-IF YOU DID NOT MARK ERRORS, DSS TOTAL WILL BE INFLATED.
-Please be sure to mark utterances with errors with [*] to ensure accurate DSS computation.

@@ -1,9 +1,0 @@
-================================================================================
-example_2 - Standalone overlap point without index
-================================================================================
-*CHI:	⌈ word .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (overlap_point) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

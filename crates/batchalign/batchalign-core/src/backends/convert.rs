@@ -78,7 +78,9 @@ impl Backend for ConvertBackend {
 
 fn pcm_f32(audio: &PreparedAudio) -> BAResult<Vec<f32>> {
     if audio.channels == 0 {
-        return Err(BAError::Worker("convert: decoded audio has zero channels".into()));
+        return Err(BAError::Worker(
+            "convert: decoded audio has zero channels".into(),
+        ));
     }
     if audio.pcm_f32le.len() % 4 != 0 {
         return Err(BAError::Worker(
@@ -174,13 +176,9 @@ fn encode_mp3(audio: &PreparedAudio) -> BAResult<Vec<u8>> {
     } else {
         128
     };
-    let mut encoder = Mp3Encoder::new_with_quality_preset(
-        bitrate_kbps,
-        target_rate,
-        mode,
-        QualityPreset::High,
-    )
-    .map_err(|err| BAError::Worker(format!("convert: initialize MP3 encoder: {err:?}")))?;
+    let mut encoder =
+        Mp3Encoder::new_with_quality_preset(bitrate_kbps, target_rate, mode, QualityPreset::High)
+            .map_err(|err| BAError::Worker(format!("convert: initialize MP3 encoder: {err:?}")))?;
     encoder
         .push_samples(&pcm_i16)
         .map_err(|err| BAError::Worker(format!("convert: encode MP3 samples: {err:?}")))?;
@@ -200,7 +198,12 @@ fn nearest_mp3_rate(source: u32) -> u32 {
 }
 
 /// Channel-interleaved linear resampler used only for off-ladder rates.
-fn resample_linear(samples: &[f32], channels: usize, source_rate: u32, target_rate: u32) -> Vec<f32> {
+fn resample_linear(
+    samples: &[f32],
+    channels: usize,
+    source_rate: u32,
+    target_rate: u32,
+) -> Vec<f32> {
     if samples.is_empty() || source_rate == target_rate {
         return samples.to_vec();
     }
@@ -237,7 +240,12 @@ mod tests {
                 pcm_f32le.extend_from_slice(&sample.to_le_bytes());
             }
         }
-        PreparedAudio { pcm_f32le, sample_rate: rate, channels, frame_count: u64::from(frames) }
+        PreparedAudio {
+            pcm_f32le,
+            sample_rate: rate,
+            channels,
+            frame_count: u64::from(frames),
+        }
     }
 
     #[test]
@@ -258,7 +266,9 @@ mod tests {
             audio: sine_audio(44_100, 1),
         };
         let output = backend.call(vec![TaskInput::Convert(input)]).unwrap();
-        let TaskOutput::Convert(output) = &output[0] else { panic!("wrong output") };
+        let TaskOutput::Convert(output) = &output[0] else {
+            panic!("wrong output")
+        };
         assert!(output.encoded_bytes.len() > 100);
         assert_eq!(output.encoded_bytes[0], 0xff);
         assert_eq!(output.encoded_bytes[1] & 0xe0, 0xe0);

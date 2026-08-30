@@ -1,9 +1,0 @@
-================================================================================
-stacked_ca_markers - Word with multiple stacked CA markers before the text body. InConversation Analysis transcription, markers commonly stack: ispiano voice + pitch up, is pianissimo (double piano), isoverlap begin + piano voice.
-================================================================================
-*CHI:	°↑hello° .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (ca_delimiter) (ca_element) (word_segment) (ca_delimiter)))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

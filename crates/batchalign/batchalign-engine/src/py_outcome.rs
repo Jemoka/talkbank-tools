@@ -125,15 +125,15 @@ fn strip_word_timing_from_value(value: &mut BAValue) {
 }
 
 fn strip_word_timing_from_chat(chat: &mut batchalign_core::Chat) {
-    for line in chat.ast_mut().lines.0.iter_mut() {
+    for line in chat.ast_mut().lines.as_mut_slice() {
         let Line::Utterance(utterance) = line else {
             continue;
         };
         utterance
             .dependent_tiers
-            .retain(|tier| !matches!(tier, DependentTier::Wor(_)));
+            .retain(|tier| !matches!(&tier.tier, DependentTier::Wor(_)));
         walk_words_mut(
-            &mut utterance.main.content.content.0,
+            utterance.main.content.content.as_mut_slice(),
             None,
             &mut |item| match item {
                 WordItemMut::Word(word) => word.inline_bullet = None,
@@ -152,19 +152,19 @@ fn strip_word_timing_from_chat(chat: &mut batchalign_core::Chat) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use batchalign_core::{Chat, SourceId};
-    use talkbank_model::alignment::helpers::{WordItem, walk_words};
-    use talkbank_transform::asr_postprocess;
-    use talkbank_transform::build_chat::{
+    use batchalign_core::asr::chat::{
         ParticipantDesc, TranscriptDescription, UtteranceDesc, WordDesc, build_chat,
     };
+    use batchalign_core::asr::{ChatWordText, WordKind};
+    use batchalign_core::{Chat, SourceId};
+    use talkbank_model::alignment::helpers::{WordItem, walk_words};
 
     fn word(text: &str, start_ms: Option<u64>, end_ms: Option<u64>) -> WordDesc {
         WordDesc {
-            text: asr_postprocess::ChatWordText::try_from(text).expect("valid CHAT word"),
+            text: ChatWordText::try_from(text).expect("valid CHAT word"),
             start_ms,
             end_ms,
-            kind: asr_postprocess::WordKind::Regular,
+            kind: WordKind::Regular,
         }
     }
 
@@ -197,7 +197,8 @@ mod tests {
 
         let collector = talkbank_model::ErrorCollector::new();
         let chat_file = build_chat(&desc).expect("build chat");
-        let validated = chat_file.validate_into(&collector, None);
+        let validated =
+            chat_file.validate_into(&collector, talkbank_model::model::TranscriptName::Anonymous);
         let mut chat = Chat::from_validated_ast(
             validated,
             SourceId::try_new("strip-test").expect("source id"),
@@ -210,11 +211,15 @@ mod tests {
         assert!(utterance.wor_tier().is_none());
 
         let mut any_word_bullet = false;
-        walk_words(&utterance.main.content.content.0, None, &mut |item| {
-            if let WordItem::Word(word) = item {
-                any_word_bullet |= word.inline_bullet.is_some();
-            }
-        });
+        walk_words(
+            utterance.main.content.content.as_slice(),
+            None,
+            &mut |item| {
+                if let WordItem::Word(word) = item {
+                    any_word_bullet |= word.inline_bullet.is_some();
+                }
+            },
+        );
         assert!(!any_word_bullet);
     }
 }

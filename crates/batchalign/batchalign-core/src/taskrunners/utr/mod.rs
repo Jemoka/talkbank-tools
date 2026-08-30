@@ -75,16 +75,14 @@ use crate::base::ProgressSink;
 use crate::base::Task;
 use crate::base::TaskInput;
 use crate::base::{Dispatcher, TaskRunner};
+use crate::decisions::{ReviewLevel, inject_decision_tiers};
 use crate::proto::asr::{AsrInput, AsrOptions, AsrOutput, LanguageSpec};
 use crate::proto::utr::UtrInput;
-use crate::utils::{
-    BAError, BAResult, MediaInput, SourceId, clear_media_unlinked, prepare_pcm,
-};
+use crate::utils::{BAError, BAResult, MediaInput, SourceId, clear_media_unlinked, prepare_pcm};
 use async_trait::async_trait;
 use smol_str::SmolStr;
 use std::path::Path;
 use talkbank_model::Line;
-use talkbank_transform::decisions::{ReviewLevel, inject_decision_tiers};
 
 /// Audio extensions to probe for a CHAT file's sibling media, in priority
 /// order. Same list as the FA runner.
@@ -111,7 +109,7 @@ fn sibling_media(source_id: &SourceId) -> Option<MediaInput> {
 /// whole file via ASR. Running UTR on a partially-timed file would also
 /// risk overwriting hand-set bullets with weaker ASR-derived ones.
 fn any_utterance_already_timed(chat: &Chat) -> bool {
-    for line in chat.ast().lines.0.iter() {
+    for line in chat.ast().lines.as_slice().iter() {
         if let Line::Utterance(u) = line {
             if let Some(b) = u.main.content.bullet.as_ref() {
                 if b.timing.start_ms < b.timing.end_ms {
@@ -250,7 +248,7 @@ impl TaskRunner for UtrTaskRunner {
 
         // We just injected bullets — clear `, unlinked` from any
         // `@Media` header so the now-linked state is reflected on disk.
-        clear_media_unlinked(&mut chat.ast_mut().lines.0);
+        clear_media_unlinked(chat.ast_mut().lines.as_mut_slice());
 
         // Provenance `@Comment` stamping happens once at end-of-pipeline in
         // `batchalign_engine::pipeline::run_one` rather than per-runner.

@@ -1,9 +1,0 @@
-================================================================================
-trailing_off_question_terminator - Main tier ending with trailing-off question terminator .
-================================================================================
-*CHI:	hello +..?
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces)) ending: (utterance_end (trailing_off_question) (newline)))))

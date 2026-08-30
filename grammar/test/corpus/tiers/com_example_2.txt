@@ -1,9 +1,0 @@
-================================================================================
-com_example_2 - Example com tier
-================================================================================
-%com:	TTHIS can (happen) in "quotes" or even with !! sometimes.
-
-
---------------------------------------------------------------------------------
-
-(source_file (com_dependent_tier (com_tier_prefix) (tier_sep (colon) (tab)) (text_with_bullets_and_pics (text_segment)) (newline)))

@@ -1,9 +1,0 @@
----
-source: tests/clan_golden.rs
-expression: clan_output
----
-MLU for Speaker: *CHI:
-  MLU (xxx, yyy and www are EXCLUDED from the utterance and morpheme counts):
-	Number of: utterances = 1, morphemes = 6
-	Ratio of morphemes over utterances = 6.000
-	Standard deviation = NA

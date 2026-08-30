@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: Bullet timestamps must be monotonically increasing
-*CHI:	1000_2000hello .
-*CHI:	500_1500world .
-@End

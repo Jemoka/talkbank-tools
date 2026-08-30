@@ -8,7 +8,7 @@ package(default_visibility = ["//visibility:public"])
 filegroup(
     name = "parity_fixtures",
     srcs = glob(
-        ["parity/*.cha", "parity/*.wav", "parity/*.json"],
+        ["**/*.cha", "**/*.wav", "**/*.json"],
         allow_empty = True,
     ),
 )

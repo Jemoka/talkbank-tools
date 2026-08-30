@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: %gra requires %mor to be present
-*CHI:	I want cookie .
-%gra:	1|2|SUBJ 2|0|ROOT 3|2|OBJ 4|2|PUNCT
-@End

@@ -1,9 +1,0 @@
-================================================================================
-transcriber_simple - header with free-text value.
-================================================================================
-@Transcriber:	J Doe
-
-
---------------------------------------------------------------------------------
-
-(source_file (transcriber_header (transcriber_prefix) (header_sep (colon) (tab)) (free_text (rest_of_line)) (newline)))

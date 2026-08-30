@@ -4,8 +4,8 @@ Pure-Rust crate (no tokio, no sqlite). PyO3 #[pyclass] bindings are gated
 behind the `python` cargo feature; `batchalign-engine` enables that feature
 when compiling its #[pymodule].
 
-External deps flow through `crate_universe`'s `all_crate_deps()`; intra-
-workspace links are listed explicitly per MEMORY.md.
+Dependencies, including the pinned upstream Chatter crates, flow through
+`crate_universe`'s `all_crate_deps()`.
 """
 
 load("@crates//:defs.bzl", "aliases", "all_crate_deps")
@@ -13,11 +13,10 @@ load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
-_INTRA = [
-    "//crates/core/talkbank-model:talkbank_model",
-    "//crates/core/talkbank-parser:talkbank_parser",
-    "//crates/core/talkbank-transform:talkbank_transform",
-]
+filegroup(
+    name = "asr_data",
+    srcs = glob(["src/asr/data/*.json"]),
+)
 
 # `srcs` excludes `src/bin/**` so the library compile doesn't double-count
 # the binary entry points. The schema emitter is built as its own
@@ -26,11 +25,12 @@ rust_library(
     name = "batchalign_core",
     srcs = glob(["src/**/*.rs"], exclude = ["src/bin/**"]),
     aliases = aliases(),
+    compile_data = [":asr_data"],
     crate_features = ["python"],
     crate_name = "batchalign_core",
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
-    deps = all_crate_deps(normal = True) + _INTRA,
+    deps = all_crate_deps(normal = True),
     # Bake the workspace SHA in via rules_rust stamping (sourced from
     # `bazel/stamp.sh` → stable-status.txt). build.rs sets the same env
     # var on the Cargo path; the two converge at compile time so
@@ -54,7 +54,7 @@ rust_binary(
     crate_features = ["python"],
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
-    deps = all_crate_deps(normal = True) + _INTRA + [":batchalign_core"],
+    deps = all_crate_deps(normal = True) + [":batchalign_core"],
 )
 
 # `proto.schema.json` — the unified JSON Schema for every wire type.
@@ -72,6 +72,8 @@ rust_test(
     name = "batchalign_core_unit_test",
     crate = ":batchalign_core",
     aliases = aliases(normal_dev = True, proc_macro_dev = True),
+    compile_data = ["//resources/fixtures:all_files"],
+    data = ["//resources/fixtures:all_files"],
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
     deps = all_crate_deps(normal_dev = True),
 )
@@ -90,7 +92,7 @@ rust_test(
     # link-time proto registry). The test enumerates registered types so
     # it needs to depend on inventory directly, not just transitively.
     deps = all_crate_deps(normal_dev = True) + all_crate_deps(normal = True) +
-        _INTRA + [":batchalign_core"],
+        [":batchalign_core"],
 )
 
 # Each of the four spec2.md goal scenarios — ASR, UtSeg, Compare,

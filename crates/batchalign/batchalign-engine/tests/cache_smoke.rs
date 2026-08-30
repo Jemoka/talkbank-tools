@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use _core::{Cache, CachePolicy};
+use batchalign_engine::{Cache, CachePolicy};
 
 #[test]
 fn cache_open_creates_file_and_parent() {

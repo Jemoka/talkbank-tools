@@ -45,7 +45,7 @@ impl TaskRunner for AiTaskRunner {
         sink.emit(ProgressEvent::stage_started(&source_id, Task::Ai));
 
         let media = chat.media().cloned();
-        let lines = chat.ast().lines.0.clone();
+        let lines = chat.ast().lines.as_slice().to_vec();
         let utterance_indices = utterance_line_indices(&lines);
         let utterances = utterance_indices
             .iter()
@@ -211,7 +211,7 @@ fn apply_revisions(
         match parse_lines_with_replacement(source_id, &lines, line_idx, &replacement) {
             Ok(parsed) => {
                 accepted = parsed;
-                lines = accepted.ast().lines.0.clone();
+                lines = accepted.ast().lines.as_slice().to_vec();
                 utterance_indices = utterance_line_indices(&lines);
             }
             Err(err) => {
@@ -321,10 +321,8 @@ mod tests {
     }
 
     fn chat_from_texts(texts: &[&str]) -> Chat {
+        use crate::asr::chat::{ParticipantDesc, TranscriptDescription, UtteranceDesc, build_chat};
         use talkbank_model::ErrorCollector;
-        use talkbank_transform::build_chat::{
-            ParticipantDesc, TranscriptDescription, UtteranceDesc, build_chat,
-        };
 
         let sid = SourceId::try_new("test").expect("source id");
         let utterances = texts
@@ -354,7 +352,10 @@ mod tests {
         };
         let ast = build_chat(&desc).expect("build chat");
         let collector = ErrorCollector::new();
-        Chat::from_validated_ast(ast.validate_into(&collector, None), sid)
+        Chat::from_validated_ast(
+            ast.validate_into(&collector, talkbank_model::model::TranscriptName::Anonymous),
+            sid,
+        )
     }
 
     #[tokio::test]
@@ -410,7 +411,7 @@ mod tests {
     fn invalid_revision_is_ignored() {
         let source_id = SourceId::try_new("test").expect("source id");
         let chat = chat_from_texts(&["hello .", "goodbye ."]);
-        let lines = chat.ast().lines.0.clone();
+        let lines = chat.ast().lines.as_slice().to_vec();
         let indices = utterance_line_indices(&lines);
         let output = AiOutput {
             source_id: source_id.clone(),
@@ -430,7 +431,7 @@ mod tests {
     fn parsed_utterance_revision_is_replaced_as_typed_chat() {
         let source_id = SourceId::try_new("test").expect("source id");
         let chat = chat_from_texts(&["hello ?", "goodbye ."]);
-        let lines = chat.ast().lines.0.clone();
+        let lines = chat.ast().lines.as_slice().to_vec();
         let indices = utterance_line_indices(&lines);
         let output = AiOutput {
             source_id: source_id.clone(),
@@ -450,7 +451,7 @@ mod tests {
     fn revision_can_split_one_source_utterance_into_many() {
         let source_id = SourceId::try_new("test").expect("source id");
         let chat = chat_from_texts(&["hello there .", "goodbye ."]);
-        let lines = chat.ast().lines.0.clone();
+        let lines = chat.ast().lines.as_slice().to_vec();
         let indices = utterance_line_indices(&lines);
         let output = AiOutput {
             source_id: source_id.clone(),
@@ -488,7 +489,7 @@ mod tests {
             source_id.clone(),
         )
         .expect("chat");
-        let lines = chat.ast().lines.0.clone();
+        let lines = chat.ast().lines.as_slice().to_vec();
         let indices = utterance_line_indices(&lines);
         let output = AiOutput {
             source_id: source_id.clone(),
@@ -521,7 +522,7 @@ mod tests {
     fn split_revision_does_not_shift_later_original_indices() {
         let source_id = SourceId::try_new("test").expect("source id");
         let chat = chat_from_texts(&["alpha beta .", "gamma ."]);
-        let lines = chat.ast().lines.0.clone();
+        let lines = chat.ast().lines.as_slice().to_vec();
         let indices = utterance_line_indices(&lines);
         let output = AiOutput {
             source_id: source_id.clone(),
@@ -554,7 +555,7 @@ mod tests {
     fn parsed_utterance_that_breaks_full_chat_validation_is_ignored() {
         let source_id = SourceId::try_new("test").expect("source id");
         let chat = chat_from_texts(&["hello .", "goodbye ."]);
-        let lines = chat.ast().lines.0.clone();
+        let lines = chat.ast().lines.as_slice().to_vec();
         let indices = utterance_line_indices(&lines);
         let output = AiOutput {
             source_id: source_id.clone(),

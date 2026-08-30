@@ -1,5 +1,0 @@
-error: ErrorCode enum must have UnknownError variant
- --> tests/ui/fail_error_code_enum_missing_unknown.rs:4:6
-  |
-4 | enum MissingUnknown {
-  |      ^^^^^^^^^^^^^^

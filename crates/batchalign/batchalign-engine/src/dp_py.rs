@@ -3,8 +3,7 @@
 //! Exposes `batchalign._core.dp_align(payload, reference)` so the Python
 //! morphosyntax pipeline can stop maintaining its own duplicate aligner
 //! (`python/batchalign/backends/morphosyntax/ud/dp.py`, 224 LOC) and call
-//! the Rust implementation directly (`crates/core/talkbank-transform/src/
-//! dp_align/mod.rs`, 444 LOC).
+//! the Rust implementation directly (`batchalign_core::alignment`).
 //!
 //! Match semantics are exact equality on the supplied strings (the Python
 //! side normalizes ahead of time when it wants case-insensitive behavior).
@@ -14,7 +13,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
-use talkbank_transform::dp_align::{AlignResult, MatchMode, align};
+use batchalign_core::alignment::{AlignResult, MatchMode, align};
 
 /// Align two sequences with the Rust Hirschberg DP.
 ///

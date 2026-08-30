@@ -1,8 +1,0 @@
----
-source: tests/converter_golden.rs
-expression: "&rust_output"
----
-CHI: I want some cookies
-MOT: what kind of cookies
-CHI: the chocolate ones
-MOT: we can make some together

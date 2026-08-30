@@ -1,9 +1,0 @@
-================================================================================
-overlap_with_action - Action marker 0 within overlap markers should parse as separate elements
-================================================================================
-*CHI:	⌈ 0 &=laughter⌉ .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (overlap_point) (whitespaces) (content_item (base_content_item (nonword_with_optional_annotations nonword: (nonword (zero))))) (whitespaces) (content_item (base_content_item (nonword_with_optional_annotations nonword: (nonword (event (event_marker) description: (event_segment)))))) (overlap_point) (whitespaces)) ending: (utterance_end (period) (newline)))))

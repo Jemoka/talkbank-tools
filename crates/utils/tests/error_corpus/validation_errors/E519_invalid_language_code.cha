@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	xyz
-@Participants:	CHI Target_Child
-@ID:	xyz|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: Language code must be valid ISO 639-3
-@Comment:	Invalid: 'xyz' - Not a valid ISO language code
-*CHI:	hello .
-@End

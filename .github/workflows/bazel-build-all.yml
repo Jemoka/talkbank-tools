@@ -23,10 +23,6 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}
           repository-cache: true
-      - name: Install re2c
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then sudo apt-get update && sudo apt-get install -y re2c
-          elif [ "$RUNNER_OS" = "macOS" ]; then brew install re2c; fi
       - uses: astral-sh/setup-uv@v3
       - name: bazel build //...
         run: bazel build --config=ci //...

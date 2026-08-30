@@ -1,8 +1,0 @@
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	ERROR: Bracket must be closed
-@Comment:	Invalid: 'hello [: world' - Missing ]
-*CHI:	hello [: world .
-@End

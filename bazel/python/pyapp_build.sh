@@ -197,8 +197,12 @@ case "$resolved_profile" in
 esac
 echo "pyapp_build.sh: compilation_mode=$COMPILATION_MODE -> profile=$resolved_profile"
 
+# Maturin starts Cargo beneath this Bazel action, so Bazel's own --jobs limit
+# cannot constrain rustc fan-out. Default the nested build to one job; callers
+# with a known memory budget can opt in to more parallelism explicitly.
+export CARGO_BUILD_JOBS="${BATCHALIGN_CARGO_JOBS:-${CARGO_BUILD_JOBS:-1}}"
 
-echo "pyapp_build.sh: building wheel via maturin..."
+echo "pyapp_build.sh: building wheel via maturin (cargo_jobs=$CARGO_BUILD_JOBS)..."
 "$UV" run maturin build "${maturin_flag[@]+"${maturin_flag[@]}"}" --out target/wheels
 
 # Locate the freshly-built wheel. maturin doesn't print the artifact

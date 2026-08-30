@@ -1,9 +1,0 @@
-================================================================================
-wor_example_1 - Example %wor tier
-================================================================================
-%wor:	word 123_456 .
-
-
---------------------------------------------------------------------------------
-
-(source_file (wor_dependent_tier (wor_tier_prefix) (tier_sep (colon) (tab)) (wor_tier_body (wor_word_item (standalone_word (word_body (word_segment)))) (whitespaces) (wor_word_item (standalone_word (word_body (word_segment)))) (whitespaces) (period) (newline))))

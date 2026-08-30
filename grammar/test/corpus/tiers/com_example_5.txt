@@ -1,9 +1,0 @@
-================================================================================
-com_example_5 - Example com tier
-================================================================================
-%com:	and there are the CA characters ↓↑∆∇t☺ and so on (see manual)
-
-
---------------------------------------------------------------------------------
-
-(source_file (com_dependent_tier (com_tier_prefix) (tier_sep (colon) (tab)) (text_with_bullets_and_pics (text_segment)) (newline)))

@@ -1,9 +1,0 @@
-================================================================================
-lengthening_between_segments - Colon between word segments (no spaces) is prosodic lengthening, not aseparator. is ONE word with lengthening after the first segment.
-================================================================================
-*CHI:	a:b .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment) (lengthening) (word_segment)))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

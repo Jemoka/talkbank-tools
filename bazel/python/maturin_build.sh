@@ -75,6 +75,11 @@ export CC="$CC_ABS"
 export CXX="$CXX_ABS"
 export AR="$AR_ABS"
 export RANLIB="$RANLIB_ABS"
+# Bazel's --jobs limit does not propagate into the Cargo process spawned by
+# maturin. Keep that nested build serialized by default so a wheel action
+# cannot fan out into one rustc per CPU and compete with the Bazel server for
+# memory. Release automation may opt into a larger, explicit budget.
+export CARGO_BUILD_JOBS="${BATCHALIGN_CARGO_JOBS:-${CARGO_BUILD_JOBS:-1}}"
 host_triple="$(rustc -vV 2>/dev/null | sed -n 's/^host: //p')"
 if [[ -n "$host_triple" ]]; then
     triple_underscored="${host_triple//-/_}"
@@ -96,7 +101,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     export CXXFLAGS="${CXXFLAGS:-} -D_DARWIN_C_SOURCE"
 fi
 
-echo "maturin_build.sh: CC=$CC_ABS  source=$toolchain_source"
+echo "maturin_build.sh: CC=$CC_ABS  source=$toolchain_source  cargo_jobs=$CARGO_BUILD_JOBS"
 
 # SDKROOT: maturin shellouts run in a non-interactive subshell; xcrun
 # fills in the gap when the user's profile hasn't exported SDKROOT.

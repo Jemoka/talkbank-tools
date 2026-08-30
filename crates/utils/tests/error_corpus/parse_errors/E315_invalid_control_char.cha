@@ -1,8 +1,0 @@
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	ERROR: Invalid control character in unexpected location
-@Comment:	Invalid: Control char in word
-*CHI:	helloworld .
-@End

@@ -4,7 +4,7 @@
 //! call the UtSeg backend with the utterance's spoken text wrapped as an
 //! `AsrSegment`; the backend returns `UtteranceSpan`s (each its own
 //! sub-utterance, carrying the BERT-predicted terminator). The runner then
-//! rebuilds the document via the typed `talkbank_transform::build_chat`
+//! rebuilds the document via Batchalign's typed ASR CHAT builder
 //! constructor — no CHAT text is assembled by hand and nothing round-trips
 //! through `to_chat()`/`parse` (building/inspecting CHAT as strings is
 //! forbidden; see `CLAUDE.md`).
@@ -139,7 +139,7 @@ impl TaskRunner for UtSegTaskRunner {
             // so case, CHAT structure, dependent tiers, and the parent's
             // utterance bullet are preserved exactly. The shared transform
             // deliberately attaches that bullet to the final child only.
-            talkbank_transform::utseg::apply_utseg_results(chat.ast_mut(), &assignment_map);
+            crate::segmentation::apply_utseg_results(chat.ast_mut(), &assignment_map);
         }
         sink.emit(ProgressEvent::stage_injected(&source_id, Task::UtSeg));
         Ok(())
@@ -346,10 +346,8 @@ fn build_chat_from_utterances(
     media_type: Option<&str>,
     utts: &[NewUtterance],
 ) -> BAResult<Chat> {
+    use crate::asr::chat::{ParticipantDesc, TranscriptDescription, UtteranceDesc, build_chat};
     use talkbank_model::ErrorCollector;
-    use talkbank_transform::build_chat::{
-        ParticipantDesc, TranscriptDescription, UtteranceDesc, build_chat,
-    };
 
     // Participants: unique speaker codes in first-appearance order.
     let mut seen: BTreeSet<String> = BTreeSet::new();
@@ -449,7 +447,8 @@ fn build_chat_from_utterances(
         BAError::Internal(format!("build_chat: {e}"))
     })?;
     let collector = ErrorCollector::new();
-    let validated = chat_file.validate_into(&collector, None);
+    let validated =
+        chat_file.validate_into(&collector, talkbank_model::model::TranscriptName::Anonymous);
     let mut chat = Chat::from_validated_ast(validated, source_id.clone());
     inject_word_timings(&mut chat, utts)?;
     Ok(chat)
@@ -460,7 +459,7 @@ fn inject_word_timings(chat: &mut Chat, utts: &[NewUtterance]) -> BAResult<()> {
     use talkbank_model::model::{Bullet, WorTier, Word};
 
     let mut idx = 0usize;
-    for line in chat.ast_mut().lines.0.iter_mut() {
+    for line in chat.ast_mut().lines.as_mut_slice().iter_mut() {
         let talkbank_model::Line::Utterance(u) = line else {
             continue;
         };
@@ -482,8 +481,8 @@ fn inject_word_timings(chat: &mut Chat, utts: &[NewUtterance]) -> BAResult<()> {
                 .collect();
             let wor = WorTier::from_words(words).with_terminator(u.main.content.terminator.clone());
             u.dependent_tiers
-                .retain(|t| !matches!(t, DependentTier::Wor(_)));
-            u.dependent_tiers.push(DependentTier::Wor(wor));
+                .retain(|t| !matches!(&t.tier, DependentTier::Wor(_)));
+            u.dependent_tiers.push(DependentTier::Wor(wor).into());
         }
         idx += 1;
     }

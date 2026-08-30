@@ -32,7 +32,9 @@ impl std::str::FromStr for MediaFormat {
         match value.to_ascii_lowercase().as_str() {
             "mp3" => Ok(Self::Mp3),
             "wav" => Ok(Self::Wav),
-            _ => Err(format!("unsupported media output format {value:?}; expected mp3 or wav")),
+            _ => Err(format!(
+                "unsupported media output format {value:?}; expected mp3 or wav"
+            )),
         }
     }
 }
@@ -67,10 +69,7 @@ pub struct MediaOutput {
 impl MediaOutput {
     /// Write without replacing any existing file.
     pub fn write(&self, path: &Path) -> crate::utils::BAResult<()> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)?;
+        let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
         file.write_all(&self.encoded_bytes)?;
         file.flush()?;
         Ok(())

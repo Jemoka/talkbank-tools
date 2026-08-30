@@ -1,9 +1,0 @@
-================================================================================
-com_example_4 - Example com tier
-================================================================================
-%com:	then there is IPA ɟɮɬːɟɮːɬʉɨɤθ and so on
-
-
---------------------------------------------------------------------------------
-
-(source_file (com_dependent_tier (com_tier_prefix) (tier_sep (colon) (tab)) (text_with_bullets_and_pics (text_segment)) (newline)))

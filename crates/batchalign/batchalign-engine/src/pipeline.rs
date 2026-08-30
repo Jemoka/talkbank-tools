@@ -706,14 +706,14 @@ fn stamp_chats_in_value(
 ) {
     match value {
         BAValue::Chat(chat) => {
-            let lines = &mut chat.ast_mut().lines.0;
+            let lines = &mut chat.ast_mut().lines;
             for &task in order {
                 let engine = dispatcher.engine_name(task);
                 batchalign_core::utils::stamp_provenance(lines, task.as_str(), engine.as_deref());
             }
         }
         BAValue::Ai { chat, .. } => {
-            let lines = &mut chat.ast_mut().lines.0;
+            let lines = &mut chat.ast_mut().lines;
             for &task in order {
                 let engine = dispatcher.engine_name(task);
                 batchalign_core::utils::stamp_provenance(lines, task.as_str(), engine.as_deref());
@@ -862,7 +862,7 @@ mod stage_gate_tests {
     fn shared_stage_boundary_rejects_corrupt_chat_values() {
         let source_id = SourceId::try_new("stage-boundary").expect("valid source id");
         let mut chat = Chat::parse(FIXTURE, source_id).expect("valid fixture");
-        for line in &mut chat.ast_mut().lines.0 {
+        for line in chat.ast_mut().lines.as_mut_slice() {
             if let Line::Utterance(utterance) = line {
                 utterance.main.content.terminator = None;
             }

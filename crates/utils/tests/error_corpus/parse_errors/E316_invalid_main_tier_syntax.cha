@@ -1,9 +1,0 @@
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	ERROR: Invalid syntax in main tier (generic parse error)
-@Comment:	Invalid: Unmatched bracket "[" without closing "]"
-@Comment:	This tests generic syntax errors at utterance level
-*CHI:	hello [ world .
-@End

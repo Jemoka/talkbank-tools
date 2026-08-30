@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	Expected error: E251 (Empty word content text)
-@Comment:	Trigger: Word with annotations but empty text
-*CHI:	@s:eng .
-@End

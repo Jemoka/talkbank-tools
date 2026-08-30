@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	ERROR CORPUS TEST FILE
-@Comment:	Expected error: E504 (Missing required header)
-@Comment:	Trigger: Missing @Languages header
-@Comment:	Category: Header validation
-@End

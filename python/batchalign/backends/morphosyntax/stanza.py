@@ -27,6 +27,7 @@ This project supports UD `%mor` syntax only (see CLAUDE.md). Legacy CLAN-mor
 
 from __future__ import annotations
 
+import gc
 import importlib
 import json
 import logging
@@ -34,15 +35,16 @@ import os
 import re
 import threading
 import urllib.request
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
-
-_log = logging.getLogger("batchalign.stanza")
 
 from batchalign.backends.base import Morphosyntax, BatchPolicy
 from batchalign.backends.morphosyntax.ud import render
 from batchalign.backends.morphosyntax.ud.lang import to_stanza
 from batchalign.backends.morphosyntax.ud.tokenize import tokenizer_processor
+
+_log = logging.getLogger("batchalign.stanza")
 
 
 def _log_analysis_anomalies(item: Any, analysis: "render.SentenceAnalysis") -> None:
@@ -87,10 +89,20 @@ def _set_current_sentences(pipeline_key: tuple, value: list[str]) -> None:
     bucket[pipeline_key] = value
 
 
-# Process-wide cache: (frozenset(langs), retokenize) -> Stanza Pipeline.
-# Construction is gated by an instance lock so concurrent backends don't
-# race when warming the same pipeline.
-_pipeline_cache: dict[tuple, Any] = {}
+def _clear_current_sentences(pipeline_key: tuple) -> None:
+    bucket = getattr(_postproc_state, "sentences", None)
+    if bucket is None:
+        return
+    bucket.pop(pipeline_key, None)
+    if not bucket:
+        del _postproc_state.sentences
+
+
+# Process-wide LRU: (frozenset(langs), retokenize) -> Stanza Pipeline.
+# Two resident language sets preserve locality when files alternate languages
+# without retaining every full model encountered by a multilingual corpus.
+_PIPELINE_CACHE_CAPACITY = 2
+_pipeline_cache: OrderedDict[tuple, Any] = OrderedDict()
 _pipeline_cache_lock = threading.Lock()
 
 # Process-wide memo of pipeline keys whose construction has already failed
@@ -275,7 +287,6 @@ class StanzaBackend(Morphosyntax):
         batch_size: int = 64,
         batch_window_ms: int = 100,
         retokenize: bool = False,
-        processors: str | None = None,
     ) -> None:
         stanza = _import_stanza_runtime()
 
@@ -293,10 +304,6 @@ class StanzaBackend(Morphosyntax):
                 self._normalize_pipeline_lang(to_stanza(p)) for p in parts
             ] or ["en"]
         self._retokenize = retokenize
-        # The tokenize postprocessor (retokenize=False) needs the raw sentence
-        # currently being tagged so it can align Stanza's tokens to the
-        # upstream word split. We stash it here before each `nlp()` call.
-        self._current_sentence = ""
         # Eager-build only when a language was pinned; otherwise defer until
         # the first input arrives (header-driven dispatch).
         if self._pinned_langs is not None:
@@ -371,6 +378,7 @@ class StanzaBackend(Morphosyntax):
         with _pipeline_cache_lock:
             hit = _pipeline_cache.get(key)
             if hit is not None:
+                _pipeline_cache.move_to_end(key)
                 return hit
             if len(langs) > 1:
                 configs = {lang: self._lang_config(lang, langs, key) for lang in langs}
@@ -383,6 +391,10 @@ class StanzaBackend(Morphosyntax):
                 lang = langs[0]
                 nlp = stanza.Pipeline(lang=lang, **self._lang_config(lang, langs, key))
             _pipeline_cache[key] = nlp
+            while len(_pipeline_cache) > _PIPELINE_CACHE_CAPACITY:
+                _, evicted = _pipeline_cache.popitem(last=False)
+                del evicted
+                gc.collect()
             return nlp
 
     def _langs_for_input(self, language_spec: Any) -> list[str]:
@@ -417,7 +429,7 @@ class StanzaBackend(Morphosyntax):
         # Invalidate empty cache entries written by older builds when pipeline
         # construction failed, plus analyses where Unicode lexical words were
         # dropped after Stanza mislabeled them as punctuation.
-        return f"stanza:{version}:{retok}:strict-init2"
+        return f"stanza:{version}:{retok}:strict-init3"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -552,8 +564,11 @@ class StanzaBackend(Morphosyntax):
         joined = "\n\n".join(sentences)
 
         try:
-            doc = nlp(joined)
-            stanza_sents = getattr(doc, "sentences", [])
+            try:
+                doc = nlp(joined)
+                stanza_sents = getattr(doc, "sentences", [])
+            finally:
+                _clear_current_sentences(key)
         except Exception as exc:  # noqa: BLE001 — recover per-input below.
             _log.warning(
                 "morphotag: Stanza batched call failed for langs=%s (%d utts, %s); "
@@ -607,7 +622,10 @@ class StanzaBackend(Morphosyntax):
         for idx, item, line_cut, special_forms in prepared:
             _set_current_sentences(key, [line_cut])
             try:
-                doc = nlp(line_cut)
+                try:
+                    doc = nlp(line_cut)
+                finally:
+                    _clear_current_sentences(key)
                 sents = getattr(doc, "sentences", [])
                 if not sents:
                     outputs[idx] = self._empty_output(item)

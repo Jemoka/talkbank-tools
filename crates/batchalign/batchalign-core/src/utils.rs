@@ -540,7 +540,7 @@ pub fn clear_media_unlinked(lines: &mut [talkbank_model::Line]) {
 /// goes through `BATCHALIGN_GIT_SHA`; cargo via `VERGEN_GIT_SHA`. Falls back
 /// to `"unknown"` when neither is set (test runs, IDE checks).
 pub fn stamp_provenance(
-    lines: &mut Vec<talkbank_model::Line>,
+    lines: &mut talkbank_model::model::ChatFileLines,
     stage: &str,
     engine: Option<&str>,
 ) {
@@ -557,7 +557,7 @@ pub fn stamp_provenance(
 
     // If a prior comment for this exact stage exists, replace it in place.
     let mut replaced = false;
-    for l in lines.iter_mut() {
+    for l in lines.as_mut_slice() {
         if let Some(Header::Comment { content }) = l.as_header() {
             let text = content.to_chat_string();
             if text.starts_with(PROVENANCE_PREFIX) && text.contains(&stage_marker) {
@@ -600,12 +600,15 @@ pub fn stamp_provenance(
             // Synthetic/incomplete documents may omit participant headers.
             // Keep their prior safe placement before the first utterance (or
             // @End) rather than inserting before @UTF8.
-            lines.iter().position(Line::is_utterance).unwrap_or_else(|| {
-                lines
-                    .iter()
-                    .rposition(|line| matches!(line.as_header(), Some(Header::End)))
-                    .unwrap_or(lines.len())
-            })
+            lines
+                .iter()
+                .position(Line::is_utterance)
+                .unwrap_or_else(|| {
+                    lines
+                        .iter()
+                        .rposition(|line| matches!(line.as_header(), Some(Header::End)))
+                        .unwrap_or(lines.len())
+                })
         });
     lines.insert(insert_at, comment);
 }
@@ -692,7 +695,7 @@ mod stamp_provenance_tests {
 
     #[test]
     fn one_comment_per_stage_with_date() {
-        let mut lines: Vec<Line> = Vec::new();
+        let mut lines = talkbank_model::model::ChatFileLines::new(Vec::new());
         stamp_provenance(&mut lines, "utr", Some("rev:rev_lang_en"));
         stamp_provenance(&mut lines, "fa", Some("wav2vec2-fa:mms_fa-v3"));
         let comments = ba_comments(&lines);
@@ -707,7 +710,7 @@ mod stamp_provenance_tests {
 
     #[test]
     fn rerunning_same_stage_replaces_not_duplicates() {
-        let mut lines: Vec<Line> = Vec::new();
+        let mut lines = talkbank_model::model::ChatFileLines::new(Vec::new());
         stamp_provenance(&mut lines, "utr", Some("rev:rev_lang_en"));
         stamp_provenance(&mut lines, "utr", Some("whisper:large-v3"));
         let comments = ba_comments(&lines);
@@ -719,7 +722,7 @@ mod stamp_provenance_tests {
 
     #[test]
     fn full_pipeline_rerun_replaces_per_stage_keeps_others() {
-        let mut lines: Vec<Line> = Vec::new();
+        let mut lines = talkbank_model::model::ChatFileLines::new(Vec::new());
         stamp_provenance(&mut lines, "utr", Some("rev:en"));
         stamp_provenance(&mut lines, "fa", Some("wav2vec2:v3"));
         stamp_provenance(&mut lines, "utr", Some("whisper:large-v3"));
@@ -734,7 +737,7 @@ mod stamp_provenance_tests {
 
     #[test]
     fn engine_none_records_unknown() {
-        let mut lines: Vec<Line> = Vec::new();
+        let mut lines = talkbank_model::model::ChatFileLines::new(Vec::new());
         stamp_provenance(&mut lines, "asr", None);
         let comments = ba_comments(&lines);
         assert_eq!(comments.len(), 1);
@@ -747,9 +750,9 @@ mod stamp_provenance_tests {
         let source_id = SourceId::try_new("constant-headers.cha").unwrap();
         let mut chat = Chat::parse(CHAT, source_id).unwrap();
 
-        stamp_provenance(&mut chat.ast_mut().lines.0, "morphotag", Some("stanza"));
+        stamp_provenance(&mut chat.ast_mut().lines, "morphotag", Some("stanza"));
 
-        let lines = &chat.ast().lines.0;
+        let lines = &chat.ast().lines.as_slice();
         let l1_index = lines
             .iter()
             .position(|line| matches!(line.as_header(), Some(Header::L1Of { .. })))
@@ -769,8 +772,14 @@ mod stamp_provenance_tests {
             .position(|line| matches!(line.as_header(), Some(Header::Date { .. })))
             .unwrap();
 
-        assert!(l1_index < comment_index, "constant headers precede provenance");
-        assert!(comment_index < date_index, "provenance precedes changeable metadata");
+        assert!(
+            l1_index < comment_index,
+            "constant headers precede provenance"
+        );
+        assert!(
+            comment_index < date_index,
+            "provenance precedes changeable metadata"
+        );
     }
 
     /// True iff `s` ends with ` | YYYY-MM-DDTHH:MM:SSZ`.
@@ -783,8 +792,12 @@ mod stamp_provenance_tests {
             return false;
         }
         let b = tail.as_bytes();
-        let punct_ok = b[4] == b'-' && b[7] == b'-' && b[10] == b'T'
-            && b[13] == b':' && b[16] == b':' && b[19] == b'Z';
+        let punct_ok = b[4] == b'-'
+            && b[7] == b'-'
+            && b[10] == b'T'
+            && b[13] == b':'
+            && b[16] == b':'
+            && b[19] == b'Z';
         let digits_ok = [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18]
             .iter()
             .all(|&i| b[i].is_ascii_digit());

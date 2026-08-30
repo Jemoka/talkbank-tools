@@ -1,9 +1,0 @@
-================================================================================
-ca_no_break_separator - CA no-break remains a separator at the end of a main tier rather than anutterance terminator. Based on .
-================================================================================
-*SPK:	no break continuation ⇘ ≈
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (separator (non_colon_separator (falling_to_low))) (whitespaces) (separator (non_colon_separator (ca_no_break)))) ending: (utterance_end (newline)))))

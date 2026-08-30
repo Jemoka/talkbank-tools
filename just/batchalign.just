@@ -1,6 +1,6 @@
 # Batchalign — pyo3 Rust engine + Python wheel + `batchalign3` CLI.
 #
-# Uniform recipe shape across products (batchalign + chatter):
+# Batchalign build, test, CLI, and release recipes:
 #   build [profile]   build every Bazel target for the product
 #   test  [profile]   run every Bazel test target for the product
 #   cli  *args        primary user-facing CLI for the product
@@ -66,6 +66,10 @@
 set shell := ["bash", "-c"]
 set positional-arguments := true
 
+# Keep local Bazel-backed Batchalign workflows memory-bounded by default.
+# Maintainers can raise this explicitly on larger build hosts.
+bazel_jobs := env_var_or_default("BATCHALIGN_BAZEL_JOBS", "1")
+
 # Default: list available recipes.
 default:
     @just --list --justfile {{ justfile() }}
@@ -75,13 +79,21 @@ default:
 # `bazel build //apps/batchalign/...` only builds the frontend filegroup
 # (sh_binary's `data` graph is materialized at `bazel run` time).
 build profile="release":
-    bazel build --config={{ if profile == "release" { "release" } else { "dev" } }} \
+    bazel build --jobs={{ bazel_jobs }} --config={{ if profile == "release" { "release" } else { "dev" } }} \
         //crates/batchalign/... //python/batchalign/... //apps/batchalign/...
 
-# Run every Batchalign Bazel test target.
+# Run every Batchalign Rust test plus the Python pytest target. The engine
+# tests are tagged manual to keep broad Bazel wildcards from rebuilding the
+# extension, so the authoritative recipe names them explicitly. Naming the
+# Python test explicitly keeps ordinary tests from building release-only
+# non-test targets such as the maturin wheel artifact.
 test profile="release":
-    bazel test --config={{ if profile == "release" { "release" } else { "dev" } }} \
-        //crates/batchalign/... //python/batchalign/...
+    bazel test --jobs={{ bazel_jobs }} --config={{ if profile == "release" { "release" } else { "dev" } }} \
+        //crates/batchalign/... \
+        //crates/batchalign/batchalign-engine:batchalign_engine_unit_test \
+        //crates/batchalign/batchalign-engine:cache_smoke \
+        //crates/batchalign/batchalign-engine:pipeline_smoke \
+        //python/batchalign:pytest
 
 # Run the Python `batchalign3` CLI via py_binary.
 #
@@ -90,16 +102,18 @@ test profile="release":
 # prepended as a shell command, so cd-ing back to the user's invocation
 # directory restores the expected cwd semantics for path arguments.
 cli *args:
-    bazel run --run_under="cd '{{ invocation_directory() }}' && " \
+    bazel run --jobs={{ bazel_jobs }} --run_under="cd '{{ invocation_directory() }}' && " \
         //python/batchalign -- "$@"
 
 # Pytest via py_test.
 pytest *args:
-    bazel test //python/batchalign:pytest -- "$@"
+    test_args=(); \
+    for arg in "$@"; do test_args+=(--test_arg="$arg"); done; \
+    bazel test --jobs={{ bazel_jobs }} "${test_args[@]}" //python/batchalign:pytest
 
 # mypy + ruff.
 lint:
-    bazel run //python/batchalign:lint
+    bazel run --jobs={{ bazel_jobs }} //python/batchalign:lint
 
 # ---------------------------------------------------------------------------
 # Wheel build.
@@ -122,7 +136,7 @@ lint:
 # `python/target/wheels/<tagged-name>.whl`. Building both targets
 # back-to-back doesn't double-invoke maturin.
 wheel:
-    bazel run -c opt //python/batchalign:wheel
+    bazel run --jobs={{ bazel_jobs }} -c opt //python/batchalign:wheel
 
 # Standalone production daemon sidecar binary via PyApp.
 #
@@ -141,7 +155,7 @@ wheel:
 # First build: ~few minutes (cargo build of pyapp + maturin wheel).
 # Incremental rebuilds: sub-second when nothing changed.
 sidecar:
-    bazel build -c opt //python/batchalign:sidecar
+    bazel build --jobs={{ bazel_jobs }} -c opt //python/batchalign:sidecar
 
 # Desktop GUI submodule.
 #

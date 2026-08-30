@@ -1,9 +1,0 @@
-================================================================================
-time_duration_simple - header with strict time syntax.
-================================================================================
-@Time Duration:	17:30-18:00
-
-
---------------------------------------------------------------------------------
-
-(source_file (time_duration_header (time_duration_prefix) (header_sep (colon) (tab)) (time_duration_contents (generic_time)) (newline)))

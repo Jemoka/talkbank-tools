@@ -1,9 +1,0 @@
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	ERROR: Form marker @ must be followed by form type (b, c, d, etc.)
-@Comment:	Invalid: "hello@" - Missing form type after @
-@Comment:	Valid: "hello@b" - Babbling form marker
-*CHI:	hello@ .
-@End

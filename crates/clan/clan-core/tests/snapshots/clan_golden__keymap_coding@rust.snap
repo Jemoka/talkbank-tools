@@ -1,8 +1,0 @@
----
-source: tests/clan_golden.rs
-expression: rust_output
----
-Speaker: CHI — Keyword: $NOM
-  Total occurrences: 1
-  Following Speaker  Following Code  Count
-  -----------------  --------------  -----

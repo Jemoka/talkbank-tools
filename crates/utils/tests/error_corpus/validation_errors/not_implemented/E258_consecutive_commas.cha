@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	Expected error: E258 (Consecutive commas)
-@Comment:	Trigger: Two comma separators in a row
-*CHI:	hello ,, world .
-@End

@@ -1,9 +1,0 @@
-================================================================================
-ca_technical_break_separator - CA technical-break remains a separator at the end of a main tier ratherthan an utterance terminator. Based on .
-================================================================================
-*SPK:	technical break continuation ⇗ ≋
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment)))))) (whitespaces) (separator (non_colon_separator (rising_to_high))) (whitespaces) (separator (non_colon_separator (ca_technical_break)))) ending: (utterance_end (newline)))))

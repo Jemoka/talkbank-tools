@@ -12,13 +12,13 @@ parity against BA2 we render the structure back to CHAT text **here, in the
 test** with `_mor_str` / `_gra_str`, mirroring the typed writer's format. That
 keeps the production path string-free while still pinning the exact output.
 
-End-to-end parity (real Stanza vs BA2) is proven by the parity harness in
-`scripts/parity/`; this file guards the porting logic itself against
-regressions.
+End-to-end parity (real Stanza vs BA2) is checked separately against the
+cross-checking corpus; this file guards the porting logic itself.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from types import SimpleNamespace
@@ -27,6 +27,16 @@ import pytest
 
 from batchalign.backends.morphosyntax import stanza
 from batchalign.backends.morphosyntax.ud import render
+from batchalign.backends.morphosyntax.ud.it.workarounds import legacy_mwt_rule_for
+from batchalign.tests.fixture_paths import fixture_root
+
+_ITALIAN_LEGACY_GOLD = json.loads(
+    (fixture_root("morphotag") / "italian_legacy.gold.json").read_text(encoding="utf-8")
+)
+_ITALIAN_LEGACY_CASES = [
+    (case["surface"], case["mor"] + " .")
+    for case in _ITALIAN_LEGACY_GOLD["cases"]
+]
 
 
 @dataclass
@@ -433,6 +443,89 @@ def test_italian_defect10_posa_clitics_use_canonical_verb_lemma():
         assert [anomaly.field for anomaly in analysis.anomalies] == [
             "italian_defect_10"
         ]
+
+
+@pytest.mark.parametrize(
+    ("surface", "expected"),
+    _ITALIAN_LEGACY_CASES,
+)
+def test_italian_defect14_restores_legacy_talkbank_mwts(
+    surface: str, expected: str
+):
+    """Pinned golds from the pre-regression Italian TalkBank output."""
+    assert legacy_mwt_rule_for(surface) is not None
+    words = [
+        FakeWord(
+            "wrong-head",
+            "wrong-head",
+            "NOUN",
+            "Gender=Fem|Number=Plur",
+            0,
+            "root",
+            id=1,
+        ),
+        FakeWord(
+            "wrong-tail",
+            "wrong-tail",
+            "PRON",
+            "Number=Plur|Person=2|PronType=Int",
+            1,
+            "dep",
+            id=2,
+        ),
+    ]
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=[FakeToken(surface, [1, 2])]),
+        ".",
+        [],
+        "it",
+    )
+
+    assert _mor_str(analysis, ".") == expected
+    assert [anomaly.field for anomaly in analysis.anomalies] == [
+        "italian_defect_14"
+    ]
+
+
+def test_italian_defect14_does_not_revert_newly_correct_dai():
+    """The attachment explicitly identifies Stanza's verb reading as correct."""
+    sentence = _sentence(
+        [
+            (
+                "dai",
+                "dare",
+                "VERB",
+                "Mood=Ind|Number=Sing|Person=2|Tense=Pres|VerbForm=Fin",
+                0,
+                "root",
+            )
+        ]
+    )
+
+    analysis = render.parse_sentence(sentence, ".", [], "it")
+
+    assert _mor_str(analysis, ".") == "verb|dare-Fin-Ind-Pres-S2 ."
+    assert not any(a.field == "italian_defect_14" for a in analysis.anomalies)
+
+
+def test_italian_defect14_preserves_ids_in_neighboring_genuine_mwt():
+    """A legacy repair must not collapse another token's component IDs."""
+    words = [
+        FakeWord("wrong-in", "wrong-in", "NOUN", None, 3, "case", id=1),
+        FakeWord("wrong-il", "wrong-il", "PRON", None, 1, "fixed", id=2),
+        FakeWord("da", "dare", "VERB", "Mood=Imp|VerbForm=Fin", 0, "root", id=3),
+        FakeWord("me", "me", "PRON", "Number=Sing|Person=1", 3, "iobj", id=4),
+        FakeWord("la", "la", "PRON", "Gender=Fem|Number=Sing", 3, "obj", id=5),
+    ]
+    tokens = [FakeToken("nel", [1, 2]), FakeToken("dammela", [3, 4, 5])]
+
+    normalized, anomalies = render._normalize_words(FakeSentence(words=words, tokens=tokens))
+    rewritten_words, rewritten_tokens = render._normalize_italian_legacy_mwts(
+        normalized, tokens, anomalies
+    )
+
+    assert [word.id for word in rewritten_words] == [1, 2, 3, 4, 5]
+    assert [token.id for token in rewritten_tokens] == [[1, 2], [3, 4, 5]]
 
 
 def test_question_terminator_is_carried_through():

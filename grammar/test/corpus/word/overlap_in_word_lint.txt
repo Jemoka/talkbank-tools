@@ -1,9 +1,0 @@
-================================================================================
-overlap_in_word_lint - Word with internal overlap markers — verifies inside parses correctly despite prec non-propagation from (prec 6)through (prec 0).
-================================================================================
-*CHI:	butt⌈er⌉ .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment) (overlap_point) (word_segment) (overlap_point)))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

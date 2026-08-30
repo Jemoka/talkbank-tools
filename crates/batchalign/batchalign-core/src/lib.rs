@@ -15,11 +15,15 @@
 
 #![allow(dead_code)]
 
+pub mod alignment;
+pub mod asr;
 pub mod backends;
 pub mod base;
 pub mod cache;
+pub mod decisions;
 pub mod metrics;
 pub mod proto;
+pub mod segmentation;
 pub mod taskrunners;
 pub mod utils;
 

@@ -1,8 +1,0 @@
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	Expected error: E302 (Missing required node)
-@Comment:	Trigger: Speaker code format invalid
-*ch:	hello .
-@End

@@ -1,8 +1,0 @@
-@Begin
-@Languages:	eng
-@Participants:	CHI Child
-@ID:	eng|corpus|CHI|||||Child|||
-@Comment:	ERROR: Annotation bracket incomplete
-@Comment:	Invalid: '[' - Bare bracket without content
-*CHI:	[ .
-@End

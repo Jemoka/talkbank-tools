@@ -1,6 +1,0 @@
----
-source: talkbank-model/src/validation/word/snapshot_tests.rs
-assertion_line: 96
-expression: format_errors(&errors)
----
-[No errors]

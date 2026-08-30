@@ -1,9 +1,0 @@
-================================================================================
-id_trailing_whitespace - @ID header with trailing whitespace in the custom field (10th field).Trailing whitespace must be trimmed — it is not semantically meaningful.
-================================================================================
-@ID:	eng|corpus|PAR|43;|male|Broca||Participant||73.9 |
-
-
---------------------------------------------------------------------------------
-
-(source_file (id_header (id_prefix) (header_sep (colon) (tab)) (id_contents (id_languages (languages_contents (language_code))) (pipe) (id_corpus) (pipe) (id_speaker) (pipe) (id_age) (pipe) (id_sex (male_value)) (pipe) (id_group) (pipe) (pipe) (id_role) (pipe) (pipe) (id_custom_field) (whitespaces) (pipe)) (newline)))

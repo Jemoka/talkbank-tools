@@ -1,8 +1,0 @@
----
-source: tests/converter_golden.rs
-expression: "&rust_output"
----
-I want some cookies
-what kind of cookies
-the chocolate ones
-we can make some together

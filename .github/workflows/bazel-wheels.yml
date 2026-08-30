@@ -12,9 +12,6 @@ on:
     paths:
       - "python/**"
       - "crates/batchalign/**"
-      - "crates/core/talkbank-model/**"
-      - "crates/core/talkbank-parser/**"
-      - "crates/core/talkbank-transform/**"
       - "bazel/python/**"
       - "MODULE.bazel"
       - ".bazelignore"
@@ -27,9 +24,6 @@ on:
     paths:
       - "python/**"
       - "crates/batchalign/**"
-      - "crates/core/talkbank-model/**"
-      - "crates/core/talkbank-parser/**"
-      - "crates/core/talkbank-transform/**"
       - "bazel/python/**"
       - "MODULE.bazel"
       - ".bazelignore"

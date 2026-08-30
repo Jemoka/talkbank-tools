@@ -1,8 +1,0 @@
-"""Shell scripts that drive the VS Code extension build / package / test."""
-
-# Only the vscode-extension package consumes these.
-package(default_visibility = [
-    "//apps/vscode-extension:__pkg__",
-])
-
-exports_files(["build.sh", "package.sh", "test.sh"])

@@ -55,17 +55,24 @@ use crate::proto::morphosyntax::{
 };
 use crate::utils::{BAError, BAResult};
 use async_trait::async_trait;
+use futures::{StreamExt, TryStreamExt};
 use smol_str::SmolStr;
 use talkbank_model::ParseError;
 use talkbank_model::Span;
 use talkbank_model::alignment::helpers::TierDomain;
 use talkbank_model::alignment::{MorGraTerminatorSlot, align_main_to_mor, try_align_mor_gra};
 use talkbank_model::model::{
-    DependentTier, GraTier, GrammaticalRelation, Mor, MorFeature, MorStem, MorTier, MorWord,
-    PosCategory, Terminator,
+    ChatOptionFlag, DependentTier, GraTier, GrammaticalRelation, Mor, MorFeature, MorStem, MorTier,
+    MorWord, PosCategory, Terminator,
 };
+use talkbank_model::validation::GoverningMarkKind;
 use talkbank_model::{Line, Utterance};
 use talkbank_transform::extract::collect_utterance_content;
+
+/// Keep each CHAT's pending utterances bounded at the same default admission
+/// budget as the engine. Eight requests are enough for the backend batcher to
+/// coalesce same-language work without materializing one future per utterance.
+const MORPHOTAG_DISPATCH_WINDOW: usize = 8;
 
 /// Runner that drops typed `%mor` and `%gra` tiers on a CHAT document.
 pub struct MorphosyntaxTaskRunner;
@@ -124,7 +131,7 @@ async fn process_chat(
         .ast()
         .options
         .iter()
-        .any(|option| option.enables_ca_mode())
+        .any(|option| matches!(option, ChatOptionFlag::Ca))
     {
         sink.emit(ProgressEvent::stage_injected(
             &source_id,
@@ -133,45 +140,13 @@ async fn process_chat(
         return Ok(());
     }
 
-    // Reject an unsupported *primary* language before dispatching any
-    // utterance. The Python backend historically converted Stanza pipeline
-    // construction failures into empty analyses, which made the file appear
-    // successful while returning no morphology. A per-file typed error is
-    // both honest and safe for mixed-language batches: other files continue
-    // independently and no backend batch is poisoned.
-    if let Some(primary) = chat.primary_language()
-        && !is_stanza_supported(&primary)
-    {
-        return Err(BAError::Validation(format!(
-            "morphotag: primary @Languages '{primary}' is not supported by Stanza. \
-             Fix the @Languages header to use a supported ISO-639-3 code and re-run. \
-             Supported codes: {}.",
-            SUPPORTED_STANZA_CODES.join(", ")
-        )));
-    }
-
-    let default_language = resolve_per_file_language(chat);
-
-    // Phase 1: extract per-utterance NLP inputs AND check which utterances
-    // already carry a `%mor:` tier. Pre-tagged utterances are skipped end-to-
-    // end (no dispatch, no re-injection) — the existing tier is authoritative.
-    // This is the "morphotag is idempotent" contract Compare relies on.
     let t_phase1 = std::time::Instant::now();
-    let per_utt_inputs: Vec<ExtractedMorphosyntaxInput> = chat
-        .ast()
-        .utterances()
-        .map(|utterance| extract_input(utterance, &default_language))
-        .collect();
-    let already_tagged: Vec<bool> = chat
-        .ast()
-        .utterances()
-        .map(utterance_has_mor_tier)
-        .collect();
+    let batch = MorphotagBatch::new(chat)?;
     tracing::info!(
         target: "batchalign::morphosyntax",
         sid = %source_id,
         phase = "extract_tokens",
-        utterances = per_utt_inputs.len(),
+        utterances = batch.len(),
         elapsed_ms = t_phase1.elapsed().as_millis() as u64,
     );
 
@@ -186,7 +161,7 @@ async fn process_chat(
     // ignores it; only `start_step` advances the bar. `total_to_tag`
     // excludes already-tagged utterances — the bar reflects real work
     // to do, matching BA2's `status_hook` semantics.
-    let total_to_tag = already_tagged.iter().filter(|t| !**t).count() as u64;
+    let total_to_tag = batch.len() as u64;
     let progress = Arc::new(ScaledProgress::new(
         sink.clone(),
         source_id.clone(),
@@ -194,30 +169,10 @@ async fn process_chat(
         total_to_tag,
     ));
     let progress_dyn: Arc<dyn crate::base::BackendProgress> = progress.clone();
-    let mut dispatched: Vec<(usize, MorphosyntaxOutput)> = Vec::new();
     let t_dispatch = std::time::Instant::now();
-    for (idx, extracted) in per_utt_inputs.iter().enumerate() {
-        if already_tagged[idx] {
-            continue;
-        }
-        let input = MorphosyntaxInput {
-            source_id: source_id.clone(),
-            utterance_id: idx as u32,
-            language: extracted.language.clone(),
-            tokens: extracted.tokens.clone(),
-            // Retokenize off by default — preserves upstream main-tier
-            // tokenization. Backends that want to resplit (BA2's
-            // `retokenize=True`) flip it via their own constructor.
-            retokenize: false,
-            text: extracted.text.clone(),
-        };
-        progress.start_step();
-        let task_out = dispatcher
-            .dispatch_with_progress(input.into(), progress_dyn.clone())
-            .await?;
-        let out: MorphosyntaxOutput = task_out.try_into()?;
-        dispatched.push((idx, out));
-    }
+    let dispatched = batch
+        .dispatch(dispatcher, progress.clone(), progress_dyn)
+        .await?;
     // Final ceiling tick so the bar reaches 100% after the loop.
     progress.finish();
 
@@ -279,6 +234,77 @@ const SUPPORTED_STANZA_CODES: &[&str] = &[
     "zho",
 ];
 
+/// The untagged utterances from one CHAT, ready for bounded backend dispatch.
+/// Existing `%mor` tiers never enter the batch, so applying morphotag twice is
+/// idempotent and does not wake Stanza for already-complete work.
+struct MorphotagBatch {
+    inputs: Vec<MorphosyntaxInput>,
+}
+
+impl MorphotagBatch {
+    fn new(chat: &Chat) -> BAResult<Self> {
+        if let Some(primary) = chat.primary_language()
+            && !is_stanza_supported(&primary)
+        {
+            return Err(BAError::Validation(format!(
+                "morphotag: primary @Languages '{primary}' is not supported by Stanza. \
+                 Fix the @Languages header to use a supported ISO-639-3 code and re-run. \
+                 Supported codes: {}.",
+                SUPPORTED_STANZA_CODES.join(", ")
+            )));
+        }
+
+        let source_id = chat.source_id().clone();
+        let default_language = resolve_per_file_language(chat);
+        let inputs = chat
+            .ast()
+            .utterances()
+            .enumerate()
+            .filter(|(_, utterance)| !utterance_has_mor_tier(utterance))
+            .map(|(utterance_id, utterance)| {
+                let extracted = extract_input(utterance, &default_language);
+                MorphosyntaxInput {
+                    source_id: source_id.clone(),
+                    utterance_id: utterance_id as u32,
+                    language: extracted.language,
+                    tokens: extracted.tokens,
+                    retokenize: false,
+                    text: extracted.text,
+                }
+            })
+            .collect();
+        Ok(Self { inputs })
+    }
+
+    fn len(&self) -> usize {
+        self.inputs.len()
+    }
+
+    async fn dispatch(
+        self,
+        dispatcher: &dyn Dispatcher,
+        progress: std::sync::Arc<crate::base::ScaledProgress>,
+        backend_progress: std::sync::Arc<dyn crate::base::BackendProgress>,
+    ) -> BAResult<Vec<(usize, MorphosyntaxOutput)>> {
+        futures::stream::iter(self.inputs.into_iter().map(|input| {
+            let progress = progress.clone();
+            let backend_progress = backend_progress.clone();
+            async move {
+                progress.start_step();
+                let utterance_id = input.utterance_id as usize;
+                let task_out = dispatcher
+                    .dispatch_with_progress(input.into(), backend_progress)
+                    .await?;
+                let output = task_out.try_into()?;
+                Ok::<_, BAError>((utterance_id, output))
+            }
+        }))
+        .buffered(MORPHOTAG_DISPATCH_WINDOW)
+        .try_collect()
+        .await
+    }
+}
+
 fn is_stanza_supported(language: &str) -> bool {
     SUPPORTED_STANZA_CODES.binary_search(&language).is_ok()
 }
@@ -289,7 +315,7 @@ fn utterance_has_mor_tier(u: &Utterance) -> bool {
     }
     u.dependent_tiers.iter().any(|t| {
         matches!(
-            t,
+            &t.tier,
             DependentTier::UserDefined(udt) if udt.label.as_str() == "mor"
         )
     })
@@ -337,17 +363,14 @@ fn resolve_utterance_language(u: &Utterance, default: &LanguageSpec) -> Language
 /// Extract the clean alignment tokens and the markup-aware Stanza text.
 fn extract_input(u: &Utterance, default_language: &LanguageSpec) -> ExtractedMorphosyntaxInput {
     let mut extracted = Vec::new();
-    collect_utterance_content(&u.main.content.content.0, TierDomain::Mor, &mut extracted);
+    collect_utterance_content(&u.main.content.content, TierDomain::Mor, &mut extracted);
 
-    let tokens: Vec<String> = extracted
-        .iter()
-        .map(|word| word.text.to_string())
-        .collect();
+    let tokens: Vec<String> = extracted.iter().map(|word| word.text.to_string()).collect();
     let text = extracted
         .iter()
         .map(|word| {
             let surface = word.text.to_string();
-            if word.lang.is_some() {
+            if !matches!(word.language_kind(), GoverningMarkKind::Utterance) {
                 format!("{surface}@s")
             } else {
                 surface
@@ -494,7 +517,7 @@ fn inject_mor_gra_tiers_selective(
 
     let mut stats = InjectStats::default();
     let mut utt_idx = 0usize;
-    for line in chat.ast_mut().lines.0.iter_mut() {
+    for line in chat.ast_mut().lines.as_mut_slice().iter_mut() {
         if let Line::Utterance(u) = line {
             if let Some(out) = by_idx.get(&utt_idx) {
                 // The %mor/%gra terminator kind comes from the utterance's own
@@ -527,8 +550,8 @@ fn inject_mor_gra_tiers_selective(
                     continue;
                 }
 
-                u.dependent_tiers.push(DependentTier::Mor(mor_tier));
-                u.dependent_tiers.push(DependentTier::Gra(gra_tier));
+                u.dependent_tiers.push(DependentTier::Mor(mor_tier).into());
+                u.dependent_tiers.push(DependentTier::Gra(gra_tier).into());
                 stats.injected += 1;
             }
             utt_idx += 1;
@@ -576,6 +599,38 @@ mod tests {
     use crate::utils::SourceId;
     use async_trait::async_trait;
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn tagged_output(input: MorphosyntaxInput) -> TaskOutput {
+        let tokens: Vec<MorphosyntaxToken> = input
+            .tokens
+            .iter()
+            .enumerate()
+            .map(|(i, token)| MorphosyntaxToken {
+                text: token.clone(),
+                units: vec![MorphosyntaxUnit {
+                    pos: "noun".to_owned(),
+                    lemma: token.clone(),
+                    features: vec![],
+                    index: (i + 1) as u32,
+                    head: 0,
+                    deprel: "ROOT".to_owned(),
+                }],
+            })
+            .collect();
+        let token_count = tokens.len() as u32;
+        MorphosyntaxOutput {
+            source_id: input.source_id,
+            utterance_id: input.utterance_id,
+            tokens,
+            terminator: Some(GraTerminator {
+                index: token_count + 1,
+                head: usize::from(token_count > 0) as u32,
+                deprel: "PUNCT".to_owned(),
+            }),
+        }
+        .into()
+    }
 
     /// Stub dispatcher: records inputs and returns one `noun|<token>` unit per
     /// input token, with sequential `%gra` indices and a trailing PUNCT
@@ -601,35 +656,27 @@ mod tests {
                     return Err(BAError::Internal(format!("unexpected: {:?}", other.task())));
                 }
             };
-            let tokens: Vec<MorphosyntaxToken> = m
-                .tokens
-                .iter()
-                .enumerate()
-                .map(|(i, t)| MorphosyntaxToken {
-                    text: t.clone(),
-                    units: vec![MorphosyntaxUnit {
-                        pos: "noun".to_owned(),
-                        lemma: t.clone(),
-                        features: vec![],
-                        index: (i + 1) as u32,
-                        head: 0,
-                        deprel: "ROOT".to_owned(),
-                    }],
-                })
-                .collect();
-            let n = tokens.len() as u32;
-            let out = MorphosyntaxOutput {
-                source_id: m.source_id.clone(),
-                utterance_id: m.utterance_id,
-                tokens,
-                terminator: Some(GraTerminator {
-                    index: n + 1,
-                    head: if n == 0 { 0 } else { 1 },
-                    deprel: "PUNCT".to_owned(),
-                }),
+            self.seen.lock().expect("poisoned").push(m.clone());
+            Ok(tagged_output(m))
+        }
+    }
+
+    struct MeasuringDispatcher {
+        active: AtomicUsize,
+        maximum: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl Dispatcher for MeasuringDispatcher {
+        async fn dispatch(&self, input: TaskInput) -> BAResult<TaskOutput> {
+            let TaskInput::Morphosyntax(input) = input else {
+                return Err(BAError::Internal("expected morphosyntax input".into()));
             };
-            self.seen.lock().expect("poisoned").push(m);
-            Ok(out.into())
+            let active = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+            self.maximum.fetch_max(active, Ordering::SeqCst);
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            self.active.fetch_sub(1, Ordering::SeqCst);
+            Ok(tagged_output(input))
         }
     }
 
@@ -639,7 +686,7 @@ mod tests {
 
     const UNSUPPORTED_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\tsrp\n@Participants:\tCHI Child\n@ID:\tsrp|corpus|CHI|||||Child|||\n*CHI:\tnešto .\n@End\n";
 
-    const MULTILINGUAL_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng, hin, tam\n@Participants:\tTEA Teacher\n@ID:\teng|corpus|TEA|||||Teacher|||\n*TEA:\thello .\n*TEA:\t[- hin] हाँ .\n*TEA:\tGandhi जी@s:hin .\n*TEA:\t[- hin] so@s:eng group@s:eng में .\n*TEA:\t[- tam] யாரு ?\n@End\n";
+    const MULTILINGUAL_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng, hin, tam\n@Participants:\tTEA Teacher\n@ID:\teng|corpus|TEA|||||Teacher|||\n*TEA:\thello .\n*TEA:\t[- hin] हाँ .\n*TEA:\tGandhi जी@s:hin .\n*TEA:\t[- hin] so@s:eng group@s:eng में .\n*TEA:\t[- tam] யாரு ?\n*TEA:\t<how to do it> [@s] .\n*TEA:\t<தமிழ் சொற்கள்> [@s:tam] .\n@End\n";
 
     /// Capturing sink for tick-sequence assertions.
     struct CapturingSink {
@@ -656,6 +703,42 @@ mod tests {
         fn emit(&self, event: crate::base::ProgressEvent) {
             self.events.lock().expect("poisoned").push(event);
         }
+    }
+
+    #[tokio::test]
+    async fn dispatch_batches_without_exceeding_the_memory_window() -> BAResult<()> {
+        let source_id = SourceId::try_new("bounded")?;
+        let batch = MorphotagBatch {
+            inputs: (0..17)
+                .map(|utterance_id| MorphosyntaxInput {
+                    source_id: source_id.clone(),
+                    utterance_id,
+                    language: LanguageSpec::Code(SmolStr::new("eng")),
+                    tokens: vec!["word".to_owned()],
+                    retokenize: false,
+                    text: "word".to_owned(),
+                })
+                .collect(),
+        };
+        let dispatcher = MeasuringDispatcher {
+            active: AtomicUsize::new(0),
+            maximum: AtomicUsize::new(0),
+        };
+        let progress = std::sync::Arc::new(crate::base::ScaledProgress::new(
+            std::sync::Arc::new(NullSink),
+            source_id,
+            Task::Morphosyntax,
+            batch.len() as u64,
+        ));
+        let outputs = batch
+            .dispatch(&dispatcher, progress.clone(), progress)
+            .await?;
+
+        assert_eq!(outputs.len(), 17);
+        let maximum = dispatcher.maximum.load(Ordering::SeqCst);
+        assert!(maximum > 1, "dispatch must expose a batch to the engine");
+        assert!(maximum <= MORPHOTAG_DISPATCH_WINDOW);
+        Ok(())
     }
 
     #[tokio::test]
@@ -703,7 +786,11 @@ mod tests {
         let mut value = BAValue::Chat(chat);
         let dispatcher = RecordingDispatcher::new();
         MorphosyntaxTaskRunner
-            .apply(&mut value, &dispatcher, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
+            .apply(
+                &mut value,
+                &dispatcher,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
             .await?;
 
         // Inputs: one per utterance, language resolved per-file from the
@@ -734,10 +821,7 @@ mod tests {
 
     #[tokio::test]
     async fn preserves_utterance_and_word_code_switches_for_dispatch() -> BAResult<()> {
-        let chat = Chat::parse(
-            MULTILINGUAL_FIXTURE,
-            SourceId::try_new("multilingual")?,
-        )?;
+        let chat = Chat::parse(MULTILINGUAL_FIXTURE, SourceId::try_new("multilingual")?)?;
         let mut value = BAValue::Chat(chat);
         let dispatcher = RecordingDispatcher::new();
 
@@ -750,7 +834,7 @@ mod tests {
             .await?;
 
         let seen = dispatcher.seen.lock().expect("poisoned");
-        assert_eq!(seen.len(), 5);
+        assert_eq!(seen.len(), 7);
 
         assert_eq!(seen[0].language, LanguageSpec::Code(SmolStr::new("eng")));
         assert_eq!(seen[0].tokens, ["hello"]);
@@ -771,6 +855,14 @@ mod tests {
         assert_eq!(seen[4].language, LanguageSpec::Code(SmolStr::new("tam")));
         assert_eq!(seen[4].tokens, ["யாரு"]);
         assert_eq!(seen[4].text, "யாரு");
+
+        assert_eq!(seen[5].language, LanguageSpec::Code(SmolStr::new("eng")));
+        assert_eq!(seen[5].tokens, ["how", "to", "do", "it"]);
+        assert_eq!(seen[5].text, "how@s to@s do@s it@s");
+
+        assert_eq!(seen[6].language, LanguageSpec::Code(SmolStr::new("eng")));
+        assert_eq!(seen[6].tokens, ["தமிழ்", "சொற்கள்"]);
+        assert_eq!(seen[6].text, "தமிழ்@s சொற்கள்@s");
         Ok(())
     }
 
@@ -876,7 +968,11 @@ mod tests {
                     return Err(BAError::Internal(format!("unexpected: {:?}", other.task())));
                 }
             };
-            let kept: Vec<&String> = m.tokens.iter().take(m.tokens.len().saturating_sub(1)).collect();
+            let kept: Vec<&String> = m
+                .tokens
+                .iter()
+                .take(m.tokens.len().saturating_sub(1))
+                .collect();
             let tokens: Vec<MorphosyntaxToken> = kept
                 .into_iter()
                 .enumerate()
@@ -917,7 +1013,11 @@ mod tests {
         let chat = Chat::parse(FIXTURE, SourceId::try_new("fixture")?)?;
         let mut value = BAValue::Chat(chat);
         MorphosyntaxTaskRunner
-            .apply(&mut value, &DropLastTokenDispatcher, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
+            .apply(
+                &mut value,
+                &DropLastTokenDispatcher,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
             .await
             .expect("misaligned utterances must not fail the file");
 
@@ -926,8 +1026,14 @@ mod tests {
             other => panic!("expected Chat, got {}", other.kind()),
         };
         let s = chat.to_chat();
-        assert!(!s.contains("%mor:"), "%mor must be skipped on mismatch: {s}");
-        assert!(!s.contains("%gra:"), "%gra must be skipped on mismatch: {s}");
+        assert!(
+            !s.contains("%mor:"),
+            "%mor must be skipped on mismatch: {s}"
+        );
+        assert!(
+            !s.contains("%gra:"),
+            "%gra must be skipped on mismatch: {s}"
+        );
         // Main tier survives unchanged.
         assert!(s.contains("*CHI:\tit's red ."), "main tier missing: {s}");
         assert!(s.contains("*CHI:\tcat dog ."), "main tier missing: {s}");
@@ -1027,7 +1133,11 @@ mod tests {
         });
         let dispatcher = RecordingDispatcher::new();
         let err = MorphosyntaxTaskRunner
-            .apply(&mut value, &dispatcher, std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>)
+            .apply(
+                &mut value,
+                &dispatcher,
+                std::sync::Arc::new(NullSink) as std::sync::Arc<dyn ProgressSink>,
+            )
             .await
             .expect_err("must reject non-Chat or Paired");
         match err {

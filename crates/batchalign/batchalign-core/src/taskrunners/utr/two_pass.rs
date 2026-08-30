@@ -16,7 +16,7 @@
 use talkbank_model::model::{Bullet, ChatFile, Line};
 use talkbank_model::validation::Validated;
 
-use talkbank_transform::dp_align::{self, MatchMode};
+use crate::alignment::{self as dp_align, MatchMode};
 
 use super::strategy::{
     AsrTimingToken, UtrResult, UtrStrategy, UtrUtteranceInfo, collect_utr_utterance_info,
@@ -146,7 +146,11 @@ impl UtrStrategy for TwoPassOverlapUtr {
         "two_pass"
     }
 
-    fn inject(&self, chat_file: &mut ChatFile<Validated>, asr_tokens: &[AsrTimingToken]) -> UtrResult {
+    fn inject(
+        &self,
+        chat_file: &mut ChatFile<Validated>,
+        asr_tokens: &[AsrTimingToken],
+    ) -> UtrResult {
         // Run two-pass on a clone so we can compare against global.
         let mut two_pass_file = chat_file.clone();
         let two_pass_result = run_two_pass_inner(&mut two_pass_file, asr_tokens, &self.config);
@@ -222,7 +226,7 @@ fn run_two_pass_inner(
     let utt_infos = collect_utr_utterance_info(chat_file);
     let utt_bullets: Vec<Option<(u64, u64)>> = chat_file
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter_map(|line| {
             if let Line::Utterance(utt) = line {
@@ -269,7 +273,7 @@ fn run_two_pass_inner(
     if !pass2_bullets.is_empty() {
         let mut utt_idx = 0;
         let mut bullet_iter = pass2_bullets.iter().peekable();
-        for line in &mut chat_file.lines.0 {
+        for line in chat_file.lines.as_mut_slice() {
             if let Line::Utterance(utt) = line {
                 if let Some(&&(target_idx, start_ms, end_ms)) = bullet_iter.peek()
                     && utt_idx == target_idx
@@ -288,7 +292,7 @@ fn run_two_pass_inner(
 fn count_timed_utterances(chat_file: &ChatFile<Validated>) -> usize {
     chat_file
         .lines
-        .0
+        .as_slice()
         .iter()
         .filter(|line| {
             if let Line::Utterance(utt) = line {

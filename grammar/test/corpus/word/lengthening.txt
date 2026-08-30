@@ -1,9 +1,0 @@
-================================================================================
-lengthening - Word-internal lengthening — trailing colons indicate prolonged sound.
-================================================================================
-*CHI:	no::: .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (base_content_item (word_with_optional_annotations word: (standalone_word (word_body (word_segment) (lengthening)))))) (whitespaces)) ending: (utterance_end (period) (newline)))))

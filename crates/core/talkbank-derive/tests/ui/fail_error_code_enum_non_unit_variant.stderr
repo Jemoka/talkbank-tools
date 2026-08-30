@@ -1,5 +1,0 @@
-error: error_code_enum only supports unit variants
- --> tests/ui/fail_error_code_enum_non_unit_variant.rs:8:17
-  |
-8 |     TupleVariant(String),
-  |                 ^^^^^^^^

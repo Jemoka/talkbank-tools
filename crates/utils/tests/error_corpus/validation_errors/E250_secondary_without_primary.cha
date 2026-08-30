@@ -1,9 +1,0 @@
-@UTF8
-@Begin
-@Languages:	eng
-@Participants:	CHI Target_Child
-@ID:	eng|corpus|CHI|||||Target_Child|||
-@Comment:	ERROR: Secondary stress requires primary stress
-@Comment:	Invalid: 'ˌhello' - Secondary stress without primary
-*CHI:	ˌhello .
-@End

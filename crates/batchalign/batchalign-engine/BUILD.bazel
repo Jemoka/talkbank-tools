@@ -21,8 +21,8 @@ builds the cdylib for the dev/test path, maturin builds it again for
 the wheel. Double-compile is the explicit tradeoff for keeping
 pyproject.toml as the wheel source of truth.
 
-External deps flow through crate_universe's `all_crate_deps()`;
-intra-workspace links are explicit (batchalign-core, talkbank-*).
+External dependencies, including pinned upstream Chatter crates, flow through
+crate_universe's `all_crate_deps()`; only batchalign-core is intra-workspace.
 """
 
 load("@crates//:defs.bzl", "aliases", "all_crate_deps")
@@ -32,9 +32,6 @@ package(default_visibility = ["//visibility:public"])
 
 _INTRA = [
     "//crates/batchalign/batchalign-core:batchalign_core",
-    "//crates/core/talkbank-model:talkbank_model",
-    "//crates/core/talkbank-parser:talkbank_parser",
-    "//crates/core/talkbank-transform:talkbank_transform",
 ]
 
 rust_library(

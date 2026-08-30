@@ -96,10 +96,10 @@ fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
 
 fn utterance_texts(chat: &Chat) -> Vec<String> {
     let mut out = Vec::new();
-    for line in chat.ast().lines.0.iter() {
+    for line in chat.ast().lines.as_slice().iter() {
         let Line::Utterance(u) = line else { continue };
         let mut parts: Vec<String> = Vec::new();
-        walk_words(&u.main.content.content.0, None, &mut |w| {
+        walk_words(&u.main.content.content.as_slice(), None, &mut |w| {
             if let Some(t) = word_text(&w) {
                 if !t.is_empty() {
                     parts.push(t.to_string());
@@ -129,7 +129,7 @@ fn inject_translation_tiers(
     let source_id = chat.source_id().clone();
     let total = translations.len() as u64;
     let mut idx = 0usize;
-    for line in chat.ast_mut().lines.0.iter_mut() {
+    for line in chat.ast_mut().lines.as_mut_slice().iter_mut() {
         let Line::Utterance(u) = line else { continue };
         let Some(text) = translations.get(idx) else {
             return Err(BAError::Internal(format!(
@@ -140,15 +140,17 @@ fn inject_translation_tiers(
         let trimmed = text.trim();
         if !trimmed.is_empty() {
             let label = NonEmptyString::new("xtra")
-                .ok_or_else(|| BAError::Internal("xtra label empty".into()))?;
+                .map_err(|_| BAError::Internal("xtra label empty".into()))?;
             let content = NonEmptyString::new(trimmed)
-                .ok_or_else(|| BAError::Internal("xtra content empty".into()))?;
-            u.dependent_tiers
-                .push(DependentTier::UserDefined(UserDefinedDependentTier {
+                .map_err(|_| BAError::Internal("xtra content empty".into()))?;
+            u.dependent_tiers.push(
+                DependentTier::UserDefined(UserDefinedDependentTier {
                     label,
-                    content,
+                    content: Some(content),
                     span: Span::DUMMY,
-                }));
+                })
+                .into(),
+            );
         }
         sink.emit(ProgressEvent::stage_tick(
             &source_id,

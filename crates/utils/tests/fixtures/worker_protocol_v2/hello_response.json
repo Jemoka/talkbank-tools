@@ -1,8 +1,0 @@
-{
-  "protocol_version": 2,
-  "worker_pid": 41234,
-  "runtime": {
-    "python_version": "3.12.11",
-    "free_threaded": false
-  }
-}

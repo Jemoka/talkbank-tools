@@ -1,0 +1,17 @@
+{
+  "language": "eng",
+  "cases": [
+    {
+      "main": "I know <how to do it> [@s] .",
+      "tokens": ["I", "know", "how", "to", "do", "it"],
+      "stanza_text": "I know how@s to@s do@s it@s",
+      "switched_mor": ["L2|xxx", "L2|xxx", "L2|xxx", "L2|xxx"]
+    },
+    {
+      "main": "I know <தமிழ் சொற்கள்> [@s:tam] .",
+      "tokens": ["I", "know", "தமிழ்", "சொற்கள்"],
+      "stanza_text": "I know தமிழ்@s சொற்கள்@s",
+      "switched_mor": ["L2|xxx", "L2|xxx"]
+    }
+  ]
+}

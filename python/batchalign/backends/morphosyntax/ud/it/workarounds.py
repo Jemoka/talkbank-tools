@@ -52,6 +52,26 @@ class ComponentRewriteRule:
     retire_when: str
 
 
+@dataclass(frozen=True)
+class LegacyMwtComponent:
+    """One exact component in a corpus-pinned legacy Italian MWT analysis."""
+
+    surface: str
+    upos: str
+    lemma: str
+    feats: str | None
+
+
+@dataclass(frozen=True)
+class LegacyMwtRule:
+    """An Italian MWT whose Stanza analysis must retain the legacy contract."""
+
+    defect: int
+    surface: str
+    components: tuple[LegacyMwtComponent, ...]
+    retire_when: str
+
+
 _ME = CliticRule("me", "me", "Number=Sing|Person=1|PronType=Prs", "iobj")
 _LA = CliticRule("la", "la", "Gender=Fem|Number=Sing|Person=3|PronType=Prs", "obj")
 _LO = CliticRule("lo", "lo", "Gender=Masc|Number=Sing|Person=3|PronType=Prs", "obj")
@@ -61,6 +81,111 @@ _LE = CliticRule("le", "le", "Gender=Fem|Number=Plur|Person=3|PronType=Prs", "ob
 _REPROBE = (
     "retire only after a pinned Italian Stanza probe returns a correct MWT expansion"
 )
+
+_MASC_SING_ART = "Definite=Def|Gender=Masc|Number=Sing|PronType=Art"
+_FEM_SING_ART = "Definite=Def|Gender=Fem|Number=Sing|PronType=Art"
+_MASC_PLUR_ART = "Definite=Def|Gender=Masc|Number=Plur|PronType=Art"
+
+
+def _adp(surface: str, lemma: str) -> LegacyMwtComponent:
+    return LegacyMwtComponent(surface, "ADP", lemma, None)
+
+
+def _det(surface: str, feats: str) -> LegacyMwtComponent:
+    return LegacyMwtComponent(surface, "DET", "il", feats)
+
+
+def _verb(surface: str, lemma: str, feats: str) -> LegacyMwtComponent:
+    return LegacyMwtComponent(surface, "VERB", lemma, feats)
+
+
+def _pron(surface: str, lemma: str, feats: str) -> LegacyMwtComponent:
+    return LegacyMwtComponent(surface, "PRON", lemma, feats)
+
+
+_LEGACY_REPROBE = (
+    "retire only when the pinned Stanza model reproduces the established "
+    "Italian TalkBank morphology on the real legacy fixture"
+)
+
+_LEGACY_MWT_RULES: tuple[LegacyMwtRule, ...] = (
+    LegacyMwtRule(14, "nel", (_adp("in", "in"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(14, "del", (_adp("di", "di"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(14, "sulla", (_adp("su", "su"), _det("la", _FEM_SING_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(14, "dei", (_adp("di", "di"), _det("i", _MASC_PLUR_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(14, "alla", (_adp("a", "a"), _det("la", _FEM_SING_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(
+        14,
+        "della",
+        (LegacyMwtComponent("della", "DET", "il", _MASC_SING_ART),),
+        _LEGACY_REPROBE,
+    ),
+    LegacyMwtRule(14, "al", (_adp("a", "a"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(14, "col", (_adp("con", "con"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(14, "allo", (_adp("a", "a"), _det("lo", _MASC_SING_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(14, "sul", (_adp("su", "su"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(14, "ai", (_adp("a", "a"), _det("i", _MASC_PLUR_ART)), _LEGACY_REPROBE),
+    LegacyMwtRule(
+        14,
+        "alzarci",
+        (
+            _verb("alzare", "alzare", "VerbForm=Inf"),
+            _pron("ci", "ci", "Number=Plur|Person=1|PronType=Prs"),
+        ),
+        _LEGACY_REPROBE,
+    ),
+    LegacyMwtRule(
+        14,
+        "eccolo",
+        (
+            LegacyMwtComponent("ecco", "ADV", "ecco", None),
+            _pron("lo", "lo", "Gender=Masc|Number=Sing|Person=3|PronType=Prs"),
+        ),
+        _LEGACY_REPROBE,
+    ),
+    LegacyMwtRule(
+        14,
+        "eccola",
+        (
+            LegacyMwtComponent("ecco", "ADV", "ecco", None),
+            _pron("la", "la", "Gender=Fem|Number=Sing|Person=3|PronType=Prs"),
+        ),
+        _LEGACY_REPROBE,
+    ),
+    LegacyMwtRule(
+        14,
+        "sporcarsi",
+        (
+            _verb("sporcare", "sporcare", "VerbForm=Inf"),
+            _pron("si", "si", "Number=Sing|Person=3|PronType=Prs"),
+        ),
+        _LEGACY_REPROBE,
+    ),
+    LegacyMwtRule(
+        14,
+        "vederla",
+        (
+            _verb("vedere", "vedere", "VerbForm=Inf"),
+            _pron("la", "la", "Gender=Fem|Number=Sing|Person=3|PronType=Prs"),
+        ),
+        _LEGACY_REPROBE,
+    ),
+    LegacyMwtRule(
+        14,
+        "guardalo",
+        (
+            _verb(
+                "guarda",
+                "guardare",
+                "Mood=Imp|Number=Sing|Person=2|Tense=Pres|VerbForm=Fin",
+            ),
+            _pron("lo", "lo", "Gender=Masc|Number=Sing|Person=3|PronType=Prs"),
+        ),
+        _LEGACY_REPROBE,
+    ),
+)
+
+_LEGACY_MWT_BY_SURFACE = {rule.surface: rule for rule in _LEGACY_MWT_RULES}
 
 COMPOUND_IMPERATIVE_RULES: tuple[CompoundImperativeRule, ...] = (
     CompoundImperativeRule(8, "dammela", "da", "dare", (_ME, _LA), _REPROBE),
@@ -171,3 +296,8 @@ def false_mwt_rule_for(surface: str) -> FalseMwtRule | None:
 def component_rewrite_rule_for(surface: str) -> ComponentRewriteRule | None:
     """Return a closed component rewrite for an original MWT surface."""
     return _COMPONENT_REWRITE_BY_SURFACE.get(surface.casefold())
+
+
+def legacy_mwt_rule_for(surface: str) -> LegacyMwtRule | None:
+    """Return an exact legacy analysis only for an enumerated MWT surface."""
+    return _LEGACY_MWT_BY_SURFACE.get(surface.casefold())

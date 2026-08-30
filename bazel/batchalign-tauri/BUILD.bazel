@@ -1,7 +1,6 @@
 """Wrapper script for the Batchalign desktop GUI bundle.
 
-Mirrors bazel/chatter-tauri/ — Bazel orchestrates, cargo tauri build
-does the actual compile. The extra wrinkle here vs chatter is that the
+Bazel orchestrates while cargo tauri build does the actual compile. The
 batchalign-gui bundle includes the Python daemon as an external sidecar,
 which must be staged with the target-triple suffix Tauri v2 expects
 before bundling. The bundle script handles that staging.

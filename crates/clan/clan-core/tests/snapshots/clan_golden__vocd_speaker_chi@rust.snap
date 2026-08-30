@@ -1,7 +1,0 @@
----
-source: tests/clan_golden.rs
-expression: rust_output
----
-****** Speaker: *CHI:
-WARNING: Not enough tokens for random sampling without replacement.
-  (4 tokens available, 50 required)

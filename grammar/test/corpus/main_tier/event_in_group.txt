@@ -1,9 +1,0 @@
-================================================================================
-event_in_group - Event () inside an angle bracket group with overlap annotation.The closing must NOT be part of the event description text.
-================================================================================
-*CHI:	<&=laughs> [<] .
-
-
---------------------------------------------------------------------------------
-
-(source_file (main_tier (star) speaker: (speaker) (colon) (tab) (tier_body content: (contents (content_item (group_with_annotations (less_than) content: (contents (content_item (base_content_item (nonword_with_optional_annotations nonword: (nonword (event (event_marker) description: (event_segment))))))) (greater_than) annotations: (base_annotations (whitespaces) (indexed_overlap_precedes)))) (whitespaces)) ending: (utterance_end (period) (newline)))))

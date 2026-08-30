@@ -21,9 +21,8 @@ extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 batchalign-core = { path = "../batchalign-core", version = "0.3.0", features = ["python"] }
-talkbank-model = { path = "../../core/talkbank-model", version = "0.2.0" }
-talkbank-parser = { path = "../../core/talkbank-parser", version = "0.2.0" }
-talkbank-transform = { path = "../../core/talkbank-transform", version = "0.2.0" }
+talkbank-model = { git = "https://github.com/talkbank/chatter", rev = "fd919fb9769d4ee001282d26caac49c6bd0bfde6", version = "0.16.0" }
+talkbank-parser = { git = "https://github.com/talkbank/chatter", rev = "fd919fb9769d4ee001282d26caac49c6bd0bfde6", version = "0.16.0" }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 # Cache backend: LMDB via `heed` (vendored C; cargo + bazel build it

@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from batchalign.tests.fixture_paths import fixture_root
+
 
 # Vendored fixtures: copies of the user's one-off
 # `/Users/houjun/Documents/Projects/talkbank-alignment` files, simplified
@@ -30,19 +32,7 @@ import pytest
 # Storing them in-tree means the tests run anywhere the repo is cloned
 # without ever depending on the developer's local corpus directory.
 #
-# Resolved relative to the runfiles tree under Bazel; falls back to the
-# source-tree path for `pytest` / `uv run pytest` invocations.
-def _find_fixture_root() -> Path:
-    here = Path(__file__).resolve()
-    # Bazel runfiles: <runfiles>/_main/resources/test_fixtures/parity
-    for ancestor in here.parents:
-        candidate = ancestor / "resources/test_fixtures/parity"
-        if candidate.is_dir():
-            return candidate
-    return Path("resources/test_fixtures/parity")
-
-
-_FIXTURE_ROOT = _find_fixture_root()
+_FIXTURE_ROOT = fixture_root("parity")
 
 
 def _skip_if_missing(p: Path) -> None:
@@ -146,7 +136,7 @@ def test_malayalam_num2lang_populated() -> None:
     """
     import json
 
-    p = _find_repo_file("crates/core/talkbank-transform/data/num2lang.json")
+    p = _find_repo_file("crates/batchalign/batchalign-core/src/asr/data/num2lang.json")
     if p is None:
         pytest.skip("num2lang.json not in runfiles tree")
     data = json.loads(p.read_text())

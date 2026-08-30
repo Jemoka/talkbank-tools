@@ -55,25 +55,18 @@ Overlaps, intonation contours, uptake/special, nonvocal and long features. All f
 
 ara, dan, deu, ell, eng, est, fra, heb, hrv, hun, isl, ita, jpn, nld, pol, por, rus, spa, tur, zho. Each file has 3–5 utterances with %mor/%gra from batchalign3 morphotag.
 
-## Direct Parser Skip List
-
-`headers-unsupported.cha` contains constructs the direct parser does not support (unsupported headers, tiers, and lines). This file is tested with tree-sitter only — the direct parser comparison is skipped.
-
 ## Validation
 
 ```bash
-bazel build //... && bazel test //...                    # All pre-merge gates (G0–G10)
-just spec coverage                  # Node coverage check (G10)
-cargo run --release -p chatter-cli -- validate resources/corpus/reference/ --roundtrip --force
+just batchalign test
 ```
 
 ## Key Policies
 
-- All 74 files MUST pass parser equivalence at 100% (except skip-listed files).
-- If a grammar/parser change breaks even one file, revert immediately.
+- All 74 files must remain valid Batchalign fixture inputs.
 - Every file has `@Comment:` headers explaining its purpose and constructs.
 - Language files have fresh %mor/%gra from batchalign3 morphotag.
-- Never hand-edit generated artifacts.
+- Canonical parser and grammar validation lives in Chatter.
 
 ---
 Last Updated: 2026-03-01
