@@ -42,6 +42,9 @@ concurrency:
   group: bazel-tauri-batchalign-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  BAZELISK_SKIP_WRAPPER: true
+
 jobs:
   # Cheap host-platform smoke that runs on every PR. The full matrix
   # (next job) only triggers on `main` / dispatch so PR CI stays fast.

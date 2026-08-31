@@ -9,6 +9,9 @@ on:
     - cron: "0 6 * * *"  # 06:00 UTC daily
   workflow_dispatch: {}
 
+env:
+  BAZELISK_SKIP_WRAPPER: true
+
 jobs:
   build-all:
     runs-on: ${{ matrix.os }}

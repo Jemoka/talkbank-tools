@@ -32,6 +32,9 @@ concurrency:
   group: bazel-rust-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  BAZELISK_SKIP_WRAPPER: true
+
 jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}

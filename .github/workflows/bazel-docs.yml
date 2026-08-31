@@ -20,6 +20,9 @@ concurrency:
   group: bazel-docs-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  BAZELISK_SKIP_WRAPPER: true
+
 jobs:
   build-and-linkcheck:
     runs-on: ubuntu-latest

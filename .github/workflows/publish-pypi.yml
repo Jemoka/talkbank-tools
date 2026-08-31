@@ -19,13 +19,6 @@ name: publish · pypi (batchalign)
 # [tool.batchalign.pinned_tools]. We do not pre-install rust/uv/etc on
 # the runner; the hermeticity guard inside the sh_binary asserts pins.
 #
-# (One residual leak: maturin's cargo discovery still uses `cargo` from
-# PATH inside the Bazel sandbox. On GitHub-hosted runners, `cargo`
-# comes pre-installed via the rustup toolchain shim. Plugging this is
-# a separate refactor — `bazel/python/maturin_build.sh` would need to
-# pass `CARGO=$(rootpath @rust_toolchains//:cargo_alias)` so the
-# bazel-managed cargo is used instead of host.)
-#
 # manylinux retagging happens via auditwheel inside the Linux cells
 # (maturin invokes it when MATURIN_USE_AUDITWHEEL is set).
 #
@@ -87,10 +80,18 @@ jobs:
           repository-cache: true
           cache-version: 2-${{ matrix.platform }}
 
+      - name: Enable long git paths on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          git config --system core.longpaths true
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 1
+
       - name: Build wheel for ${{ matrix.platform }}
         shell: bash
         env:
-          BAZELISK_SKIP_WRAPPER: ${{ runner.os == 'Windows' && 'true' || '' }}
+          BAZELISK_SKIP_WRAPPER: true
+          CARGO_NET_GIT_FETCH_WITH_CLI: ${{ runner.os == 'Windows' && 'true' || 'false' }}
           # `MATURIN_USE_AUDITWHEEL=1` triggers manylinux retagging on Linux;
           # no-op on macOS/Windows. Linux cells produce manylinux_2_28-tagged
           # wheels that work across modern glibc distributions.
