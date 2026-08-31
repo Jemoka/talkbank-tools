@@ -72,7 +72,9 @@ jobs:
       - name: Build wheel for ${{ matrix.platform }}
         shell: bash
         env:
-          BAZELISK_SKIP_WRAPPER: ${{ runner.os == 'Windows' && 'true' || '' }}
+          # CI verifies committed locks. The local mtime-reactivity wrapper
+          # treats fresh checkout timestamps as stale and needlessly repins.
+          BAZELISK_SKIP_WRAPPER: true
           CARGO_NET_GIT_FETCH_WITH_CLI: ${{ runner.os == 'Windows' && 'true' || 'false' }}
           MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
         run: bazel run -c opt //python/batchalign:wheel
