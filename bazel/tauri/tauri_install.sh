@@ -15,23 +15,27 @@
 #   $1 = output binary path (the genrule's $@)
 #   $2 = tauri-cli Cargo.toml (@tauri_cli_src//:Cargo.toml — we take
 #        dirname to get the source-tree root)
-#   $3 = compilation mode (opt|dbg|fastbuild)
+#   $3 = matching upstream Cargo.lock (@tauri_cli_lock//file)
+#   $4 = compilation mode (opt|dbg|fastbuild)
 
 set -euo pipefail
 
-if [[ $# -lt 3 ]]; then
-    echo "tauri_install.sh: usage: <output> <cargo_toml> <mode>" >&2
+if [[ $# -lt 4 ]]; then
+    echo "tauri_install.sh: usage: <output> <cargo_toml> <cargo_lock> <mode>" >&2
     exit 2
 fi
 case "$1" in /*) OUTPUT="$1" ;; *) OUTPUT="$PWD/$1" ;; esac
 shift
 CARGO_TOML="$1"; shift
+CARGO_LOCK="$1"; shift
 COMPILATION_MODE="${1:-opt}"; shift
 
 case "$CARGO_TOML" in /*) ;; *) CARGO_TOML="$PWD/$CARGO_TOML" ;; esac
+case "$CARGO_LOCK" in /*) ;; *) CARGO_LOCK="$PWD/$CARGO_LOCK" ;; esac
 SRC_DIR="$(cd "$(dirname "$CARGO_TOML")" && pwd -P)"
 
 [[ -d "$SRC_DIR" ]] || { echo "tauri source not found: $SRC_DIR" >&2; exit 2; }
+[[ -f "$CARGO_LOCK" ]] || { echo "tauri lock not found: $CARGO_LOCK" >&2; exit 2; }
 
 self_real="$(realpath "${BASH_SOURCE[0]}")"
 ws="$(dirname "$self_real")"
@@ -70,6 +74,7 @@ build_src="$BUILD_WORKSPACE_DIRECTORY/python/target/tauri-cli-src"
 rm -rf "$build_src"
 mkdir -p "$build_src"
 cp -R "$SRC_DIR/." "$build_src/"
+cp "$CARGO_LOCK" "$build_src/Cargo.lock"
 chmod -R u+w "$build_src"
 
 out_dir="$BUILD_WORKSPACE_DIRECTORY/python/target/tauri-cli"
@@ -80,6 +85,7 @@ echo "tauri_install.sh: tauri-cli source = $build_src"
 
 cargo install \
     --path "$build_src" \
+    --locked \
     --force \
     --root "$out_dir" \
     "${cargo_flag[@]+"${cargo_flag[@]}"}"

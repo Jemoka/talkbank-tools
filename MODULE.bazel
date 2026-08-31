@@ -264,6 +264,20 @@ exports_files(["Cargo.toml"])
 """,
 )
 
+# crates.io packages omit Cargo.lock. Pair the pinned CLI source with the lock
+# from its matching upstream release tag so fresh CI runs cannot resolve a
+# different, internally incompatible transitive graph.
+http_file = use_repo_rule(
+    "@bazel_tools//tools/build_defs/repo:http.bzl",
+    "http_file",
+)
+http_file(
+    name = "tauri_cli_lock",
+    downloaded_file_path = "Cargo.lock",
+    sha256 = "045da6ee8370fc701e1d5196469c862c029fb5da47a22862749ea6a0757d67d5",
+    urls = ["https://raw.githubusercontent.com/tauri-apps/tauri/tauri-cli-v2.11.2/Cargo.lock"],
+)
+
 # =============================================================================
 # Python — rules_uv (deps) → rules_python (py_*) → rules_rust (cdylib via
 # maturin) → wheel ready to ship.

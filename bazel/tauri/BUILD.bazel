@@ -26,6 +26,7 @@ genrule(
     srcs = [
         "@tauri_cli_src//:srcs",
         "@tauri_cli_src//:Cargo.toml",
+        "@tauri_cli_lock//file",
     ],
     tools = [
         ":tauri_install.sh",
@@ -37,6 +38,7 @@ genrule(
         "$(execpath :tauri_install.sh)",
         "$@",
         "$(execpath @tauri_cli_src//:Cargo.toml)",
+        "$(execpath @tauri_cli_lock//file)",
         "$(COMPILATION_MODE)",
     ]),
     local = True,
