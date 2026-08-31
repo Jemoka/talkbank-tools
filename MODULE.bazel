@@ -63,6 +63,25 @@ filegroup(
     patches = ["//bazel/patches:talkbank-parser-re2c-0.16.0.patch"],
 )
 
+# The git crate exposes `src/` through a symlink into its checkout root. Windows
+# runfiles do not recreate that directory symlink, so declare the generated C
+# parser and the headers it includes as ordinary build-script inputs.
+crate.annotation(
+    additive_build_file_content = """
+filegroup(
+    name = "parser_sources",
+    srcs = [
+        "src/parser.c",
+        "src/tree_sitter/alloc.h",
+        "src/tree_sitter/array.h",
+        "src/tree_sitter/parser.h",
+    ],
+)
+""",
+    build_script_data = [":parser_sources"],
+    crate = "tree-sitter-talkbank",
+)
+
 # The model build script reads the vendored ISO registry and fingerprints its
 # source tree. The generated catch-all data glob does not preserve those
 # symlinked directory roots in Windows runfiles, so name both inputs explicitly.
