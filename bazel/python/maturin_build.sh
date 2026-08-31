@@ -14,26 +14,37 @@
 # Hermeticity:
 #   - The guard script asserts uv/maturin/python/rustc versions match
 #     the pins in pyproject.toml before any host-tool invocation.
-#   - CC/CXX/AR/RANLIB are pointed at toolchains_llvm-managed binaries
-#     staged into the sh_binary's runfiles (see MODULE.bazel), so cargo's
-#     cc-rs never touches /usr/bin/cc on the host. The SDK still comes
-#     from xcrun on macOS; the toolchain cflag policy in MODULE.bazel
-#     mirrors the SDK workaround into the env below.
+#   - Linux CC/CXX/AR/RANLIB point at toolchains_llvm-managed binaries.
+#     macOS uses Xcode's clang paired with its SDK, and Windows uses the
+#     Visual Studio toolchain because toolchains_llvm disables Windows.
 #
 # Args (all passed by the sh_binary; users do not set env vars):
 #   $1 = uv binary                                    (@multitool//tools/uv)
 #   $2 = path to the Bazel-built `_proto_generated.py` artifact
 #   $3 = Bazel compilation_mode ($(COMPILATION_MODE)): opt|dbg|fastbuild
-#   $4 = hermetic clang   (@llvm_toolchain_llvm//:clang)
-#   $5 = hermetic ar      (@llvm_toolchain_llvm//:ar)
-#   $6 = hermetic ranlib  (@llvm_toolchain_llvm//:ranlib)
+#   $4 = C toolchain mode: `llvm` or `host`
+#   $5..$7 = LLVM clang/ar/ranlib paths when mode is `llvm`
 set -euo pipefail
 UV="$1"; shift
 PROTO_GENERATED="$1"; shift
 COMPILATION_MODE="${1:-opt}"; shift || true
-CC_RLOC="$1"; shift
-AR_RLOC="$1"; shift
-RANLIB_RLOC="$1"; shift
+TOOLCHAIN_MODE="${1:-}"; shift || true
+case "$TOOLCHAIN_MODE" in
+    llvm)
+        if [[ $# -lt 3 ]]; then
+            echo "maturin_build.sh: llvm mode requires clang, ar, and ranlib paths" >&2
+            exit 2
+        fi
+        CC_RLOC="$1"; shift
+        AR_RLOC="$1"; shift
+        RANLIB_RLOC="$1"; shift
+        ;;
+    host) ;;
+    *)
+        echo "maturin_build.sh: unknown C toolchain mode '$TOOLCHAIN_MODE'" >&2
+        exit 2
+        ;;
+esac
 
 # shellcheck source=hermeticity_guard.sh
 source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/hermeticity_guard.sh"
@@ -41,8 +52,9 @@ hermeticity_guard "$UV"
 UV="$HERMETIC_UV"
 
 # C toolchain wiring -- see pyapp_build.sh header for the full rationale.
-# macOS: use Xcode's bundled clang (matched to its SDK). Linux/Windows:
-# use the hermetic toolchains_llvm clang shipped in runfiles.
+# macOS uses Xcode's clang paired with its SDK. Linux uses hermetic LLVM.
+# toolchains_llvm intentionally provides no Windows repository, so the
+# native Windows wheel uses the Visual Studio toolchain on the hosted runner.
 # shellcheck source=runfiles_resolve.sh
 source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/runfiles_resolve.sh"
 case "$(uname -s)" in
@@ -63,7 +75,18 @@ case "$(uname -s)" in
         fi
         toolchain_source="Xcode"
         ;;
+    MINGW*|MSYS*|CYGWIN*)
+        if [[ "$TOOLCHAIN_MODE" != "host" ]]; then
+            echo "maturin_build.sh: Windows requires host C toolchain mode" >&2
+            exit 2
+        fi
+        toolchain_source="Visual Studio host"
+        ;;
     *)
+        if [[ "$TOOLCHAIN_MODE" != "llvm" ]]; then
+            echo "maturin_build.sh: Linux requires llvm C toolchain mode" >&2
+            exit 2
+        fi
         CC_ABS="$(runfiles_resolve "$CC_RLOC")"
         CXX_ABS="$CC_ABS"
         AR_ABS="$(runfiles_resolve "$AR_RLOC")"
@@ -71,23 +94,25 @@ case "$(uname -s)" in
         toolchain_source="toolchains_llvm (runfiles)"
         ;;
 esac
-export CC="$CC_ABS"
-export CXX="$CXX_ABS"
-export AR="$AR_ABS"
-export RANLIB="$RANLIB_ABS"
 # Bazel's --jobs limit does not propagate into the Cargo process spawned by
 # maturin. Keep that nested build serialized by default so a wheel action
 # cannot fan out into one rustc per CPU and compete with the Bazel server for
 # memory. Release automation may opt into a larger, explicit budget.
 export CARGO_BUILD_JOBS="${BATCHALIGN_CARGO_JOBS:-${CARGO_BUILD_JOBS:-1}}"
-host_triple="$(rustc -vV 2>/dev/null | sed -n 's/^host: //p')"
-if [[ -n "$host_triple" ]]; then
-    triple_underscored="${host_triple//-/_}"
-    triple_upper="$(printf '%s' "$triple_underscored" | tr '[:lower:]' '[:upper:]')"
-    export "CC_${triple_underscored}=$CC_ABS"
-    export "CXX_${triple_underscored}=$CXX_ABS"
-    export "AR_${triple_underscored}=$AR_ABS"
-    export "CARGO_TARGET_${triple_upper}_LINKER=$CC_ABS"
+if [[ -n "${CC_ABS:-}" ]]; then
+    export CC="$CC_ABS"
+    export CXX="$CXX_ABS"
+    export AR="$AR_ABS"
+    export RANLIB="$RANLIB_ABS"
+    host_triple="$(rustc -vV 2>/dev/null | sed -n 's/^host: //p')"
+    if [[ -n "$host_triple" ]]; then
+        triple_underscored="${host_triple//-/_}"
+        triple_upper="$(printf '%s' "$triple_underscored" | tr '[:lower:]' '[:upper:]')"
+        export "CC_${triple_underscored}=$CC_ABS"
+        export "CXX_${triple_underscored}=$CXX_ABS"
+        export "AR_${triple_underscored}=$AR_ABS"
+        export "CARGO_TARGET_${triple_upper}_LINKER=$CC_ABS"
+    fi
 fi
 if [[ "${BATCHALIGN_FORCE_DARWIN_SDK_WORKAROUND:-0}" == "1" ]]; then
     # Mismatched cross-compile fallback -- see pyapp_build.sh for rationale.
@@ -101,7 +126,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     export CXXFLAGS="${CXXFLAGS:-} -D_DARWIN_C_SOURCE"
 fi
 
-echo "maturin_build.sh: CC=$CC_ABS  source=$toolchain_source  cargo_jobs=$CARGO_BUILD_JOBS"
+echo "maturin_build.sh: C toolchain=$toolchain_source  cargo_jobs=$CARGO_BUILD_JOBS"
 
 # SDKROOT: maturin shellouts run in a non-interactive subshell; xcrun
 # fills in the gap when the user's profile hasn't exported SDKROOT.

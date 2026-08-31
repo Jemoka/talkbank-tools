@@ -174,11 +174,19 @@ py_test(
 # so `:emit_proto_schema` doesn't pull all of `batchalign_core`, or
 # (c) move schema emission into maturin's build itself and ship the
 # generated `.py` inside the wheel.
-_LLVM_TOOLS = [
-    "//bazel/python:llvm_clang",
-    "//bazel/python:llvm_ar",
-    "//bazel/python:llvm_ranlib",
-]
+config_setting(
+    name = "windows",
+    constraint_values = ["@platforms//os:windows"],
+)
+
+_LLVM_TOOLS = select({
+    ":windows": [],
+    "//conditions:default": [
+        "//bazel/python:llvm_clang",
+        "//bazel/python:llvm_ar",
+        "//bazel/python:llvm_ranlib",
+    ],
+})
 
 genrule(
     name = "_wheel_artifact",
@@ -224,14 +232,18 @@ genrule(
         "$(execpath @multitool//tools/uv)",
         "$(execpath //python/batchalign/_core:_proto_generated_py)",
         "$(COMPILATION_MODE)",
-        "$(execpath //bazel/python:llvm_clang)",
-        "$(execpath //bazel/python:llvm_ar)",
-        "$(execpath //bazel/python:llvm_ranlib)",
-    ]),
+    ]) + select({
+        ":windows": " host",
+        "//conditions:default": " llvm " + " ".join([
+            "$(execpath //bazel/python:llvm_clang)",
+            "$(execpath //bazel/python:llvm_ar)",
+            "$(execpath //bazel/python:llvm_ranlib)",
+        ]),
+    }),
     # `local = True`: maturin needs network access (cargo fetches) and a
     # persistent target/ cache that a sandboxed action can't supply.
-    # All other hermeticity holds — uv, rustc, cargo, the LLVM toolchain
-    # all come from Bazel-managed deps.
+    # uv, rustc, and cargo remain Bazel-managed. The C toolchain follows the
+    # platform contract in maturin_build.sh (LLVM, Xcode, or Visual Studio).
     local = True,
     # `no-cache`: disables caching of the action's outputs (local disk
     # cache + remote cache). The `.rs` under `crates/` and `.py` under

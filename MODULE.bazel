@@ -352,9 +352,11 @@ llvm.toolchain(
         ],
     },
     # LLVM's published host archives vary by release. Keep the established
-    # 17.0.6 toolchain where it exists, and select 19.1.7 for the two hosts
-    # without a usable 17.0.6 archive. The map is resolved by exec host, so
-    # ARM macOS does not download the much larger Intel distribution.
+    # 17.0.6 toolchain where it exists, and select 19.1.7 for Intel macOS,
+    # which lacks a usable 17.0.6 archive. The map is resolved by exec host,
+    # so ARM macOS does not download the much larger Intel distribution.
+    # toolchains_llvm deliberately disables itself on Windows; wheel builds
+    # there use the hosted Visual Studio toolchain.
     #
     # Note: hermetic LLVM alone does NOT make the wheel build hermetic
     # against host-toolchain breakage -- the macOS SDK still comes from
@@ -369,7 +371,6 @@ llvm.toolchain(
     llvm_versions = {
         "": "17.0.6",
         "darwin-x86_64": "19.1.7",
-        "windows-x86_64": "19.1.7",
     },
 )
 use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")

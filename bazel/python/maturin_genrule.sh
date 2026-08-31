@@ -23,6 +23,7 @@
 #       $(execpath @multitool//tools/uv) \
 #       $(execpath //python/batchalign/_core:_proto_generated_py) \
 #       opt \
+#       llvm \
 #       $(execpath //bazel/python:llvm_clang) \
 #       $(execpath //bazel/python:llvm_ar) \
 #       $(execpath //bazel/python:llvm_ranlib)
