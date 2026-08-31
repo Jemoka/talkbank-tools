@@ -135,11 +135,22 @@ crate.annotation(
 )
 
 # iana-time-zone uses windows-core's Error as a std::io::Error payload on
-# Windows. Cargo enables windows-core's default `std` feature, but
-# crate_universe omits it when generating the Windows exec graph unless it is
-# explicit, leaving the Error type without its std::error::Error impl.
+# Windows. Cargo enables windows-core's default `std` feature and forwards it
+# to windows-result and windows-strings. crate_universe does not carry those
+# forwarded dependency features into this exec graph, so keep the trio
+# explicit; windows-result owns the std::error::Error implementation.
 crate.annotation(
     crate = "windows-core",
+    crate_features = ["std"],
+    repositories = ["crates"],
+)
+crate.annotation(
+    crate = "windows-result",
+    crate_features = ["std"],
+    repositories = ["crates"],
+)
+crate.annotation(
+    crate = "windows-strings",
     crate_features = ["std"],
     repositories = ["crates"],
 )
