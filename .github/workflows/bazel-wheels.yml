@@ -62,23 +62,20 @@ jobs:
           repository-cache: true
           cache-version: 2-${{ matrix.platform }}
 
+      - name: Enable long git paths on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          git config --system core.longpaths true
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 1
+
       - name: Build wheel for ${{ matrix.platform }}
         shell: bash
         env:
           BAZELISK_SKIP_WRAPPER: ${{ runner.os == 'Windows' && 'true' || '' }}
+          CARGO_NET_GIT_FETCH_WITH_CLI: ${{ runner.os == 'Windows' && 'true' || '' }}
           MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
         run: bazel run -c opt //python/batchalign:wheel
-
-      - name: Inspect Windows LLVM repository after failure
-        if: failure() && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Get-ChildItem -Force D:\_bazel\external |
-            Where-Object Name -Like '*llvm_toolchain_llvm*' |
-            ForEach-Object {
-              Get-Content (Join-Path $_.FullName 'BUILD.bazel')
-              Get-ChildItem -Force -Recurse $_.FullName
-            }
 
       # The wheel itself is `cp310-abi3`, so verify the minimum supported
       # interpreter on every native platform. `setup-python` is the only
