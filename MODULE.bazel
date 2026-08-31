@@ -144,11 +144,23 @@ filegroup(
     patches = ["//bazel/patches:talkbank-model-0.16.0.patch"],
 )
 
-# The git crate references a schema stored above its Cargo package root.
-# crate_universe isolates package roots, so expose the tracked schema through
-# an explicit compile-time path until upstream packages it inside the crate.
+# The git crate references a schema stored above its Cargo package root and
+# embeds number-word data from a symlinked directory. Expose both compile-time
+# inputs explicitly; Windows runfiles cannot recreate the directory symlink.
 crate.annotation(
-    compile_data = ["@@//schemas/chat-file:chat-file.schema.json"],
+    additive_build_file_content = """
+filegroup(
+    name = "num_word_data",
+    srcs = [
+        "data/eng_ordinal_year_fixtures.json",
+        "data/num2lang.json",
+    ],
+)
+""",
+    compile_data = [
+        "@@//schemas/chat-file:chat-file.schema.json",
+        ":num_word_data",
+    ],
     crate = "talkbank-transform",
     patch_args = ["-p1"],
     patches = ["//bazel/patches:talkbank-transform-0.16.0.patch"],
