@@ -50,9 +50,10 @@ def main() -> int:
         "--output-model-type",
         "pydantic_v2.BaseModel",
         "--target-python-version",
-        "3.12",
+        "3.10",
         "--use-standard-collections",
         "--use-union-operator",
+        "--use-subclass-enum",
         # `--use-annotated` emits `Annotated[int, Field(ge=0, le=65535)]` instead of
         # `conint(ge=0, le=65535)`. The latter is a function call that pydantic
         # can't resolve when type hints are strings (which they are under

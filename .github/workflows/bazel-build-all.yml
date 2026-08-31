@@ -23,6 +23,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}
           repository-cache: true
+          cache-version: 2-${{ runner.os }}-${{ runner.arch }}
       - uses: astral-sh/setup-uv@v3
       - name: bazel build //...
         run: bazel build --config=ci //...

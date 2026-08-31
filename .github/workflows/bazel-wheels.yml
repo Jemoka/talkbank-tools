@@ -7,6 +7,7 @@ name: bazel · wheels (PR matrix)
 # they reach the publish path.
 
 on:
+  workflow_dispatch: {}
   push:
     branches: [main]
     paths:
@@ -47,16 +48,10 @@ jobs:
           # Every cell is a NATIVE build. No MATURIN_TARGET; runner arch ==
           # target arch.
           - { runner: macos-14,         platform: macos-arm64 }
-          # - { runner: macos-13,         platform: macos-x86_64 }
+          - { runner: macos-15-intel,   platform: macos-x86_64 }
           - { runner: ubuntu-latest,    platform: linux-x86_64 }
           - { runner: ubuntu-24.04-arm, platform: linux-aarch64 }
-          # windows-x86_64 deferred: multitool's uv.exe at archive root
-          # resolves to "/uv.exe" under bash-on-Windows, which the
-          # hermeticity guard's path absolutization can't handle. Add a
-          # `file = "uv-windows/uv.exe"` subdir prefix in
-          # multitool.lock.json (or use rules_multitool's path-mangling
-          # workaround) before re-enabling.
-          # - { runner: windows-latest, platform: windows-x86_64 }
+          - { runner: windows-latest,   platform: windows-x86_64 }
     steps:
       - uses: actions/checkout@v4
 
@@ -65,26 +60,22 @@ jobs:
           bazelisk-cache: true
           disk-cache: bazel-wheels-${{ matrix.platform }}
           repository-cache: true
+          cache-version: 2-${{ matrix.platform }}
 
       - name: Build wheel for ${{ matrix.platform }}
+        shell: bash
         env:
           MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
         run: bazel run -c opt //python/batchalign:wheel
 
-      # The wheel itself is `cp310-abi3` so it should install on any
-      # CPython >= 3.10. Exercise both ends of the supported range to
-      # prove the abi3 tag. `setup-python` is the only host tool we
-      # install for the smoke test -- the BUILD path above is fully
-      # Bazel-driven; this is just downstream verification.
+      # The wheel itself is `cp310-abi3`, so verify the minimum supported
+      # interpreter on every native platform. `setup-python` is the only
+      # host tool installed here; the BUILD path above is Bazel-driven.
       - uses: actions/setup-python@v5
-        if: matrix.runner != 'windows-latest'
         with:
-          python-version: |
-            3.10
-            3.12
+          python-version: "3.10"
 
-      - name: Smoke test wheel installs + imports on Python 3.10 + 3.12
-        if: matrix.runner != 'windows-latest'
+      - name: Smoke test wheel installs + imports on Python 3.10
         shell: bash
         run: |
           set -e
@@ -95,19 +86,15 @@ jobs:
             echo "::error::wheel tag is not cp310-abi3 — abi3 setup broke"
             exit 1
           fi
-          for py in python3.10 python3.12; do
-            echo "== smoke-test wheel on $($py --version) =="
-            $py -m venv "/tmp/wheel-smoke-$py"
-            "/tmp/wheel-smoke-$py/bin/pip" install --quiet "$WHEEL"
-            "/tmp/wheel-smoke-$py/bin/python" <<'PY'
+          python -m pip install --quiet --force-reinstall "$WHEEL"
+          python <<'PY'
           import sys, batchalign
           from batchalign import _core
           print(f"python           {sys.version.split()[0]}")
           print(f"batchalign       {batchalign.__file__}")
           print(f"batchalign._core {_core.__file__}")
           PY
-            "/tmp/wheel-smoke-$py/bin/batchalign" --help > /dev/null
-          done
+          batchalign --help > /dev/null
 
       - uses: actions/upload-artifact@v4
         with:

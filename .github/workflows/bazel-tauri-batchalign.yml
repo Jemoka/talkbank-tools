@@ -54,6 +54,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-smoke
           repository-cache: true
+          cache-version: 2-${{ runner.os }}-${{ runner.arch }}
 
       - name: bazel build frontend filegroup
         run: bazel build --config=ci //apps/batchalign/batchalign-gui:frontend_sources
@@ -73,7 +74,7 @@ jobs:
       matrix:
         runner:
           - { os: macos-14,       target: aarch64-apple-darwin }
-          - { os: macos-13,       target: x86_64-apple-darwin }
+          - { os: macos-15-intel, target: x86_64-apple-darwin }
           - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu }
           # Windows bundle: tools/bazel is a bash wrapper that bazelisk
           # rejects on PowerShell hosts ("unexpected wrapper type").
@@ -89,6 +90,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-${{ matrix.runner.target }}
           repository-cache: true
+          cache-version: 2-${{ matrix.runner.target }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:

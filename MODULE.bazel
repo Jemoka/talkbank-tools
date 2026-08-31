@@ -386,7 +386,7 @@ register_toolchains("@llvm_toolchain//:all")
 # are fetched as platform-specific
 # prebuilt binaries from their upstream GitHub releases and exposed as
 # `@multitool//tools/<name>`. SHA256s live in `multitool.lock.json`.
-bazel_dep(name = "rules_multitool", version = "1.0.0")
+bazel_dep(name = "rules_multitool", version = "1.11.1")
 
 multitool = use_extension("@rules_multitool//multitool:extension.bzl", "multitool")
 multitool.hub(lockfile = "//:multitool.lock.json")

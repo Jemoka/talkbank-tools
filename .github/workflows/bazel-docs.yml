@@ -3,6 +3,7 @@ name: bazel · docs
 # Build the mdBook and run the linkcheck.
 
 on:
+  workflow_dispatch: {}
   push:
     branches: [main]
     paths:
@@ -28,6 +29,7 @@ jobs:
         with:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}
+          cache-version: 2-${{ runner.os }}-${{ runner.arch }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Install mdbook + mdbook-mermaid + mdbook-linkcheck2
         run: cargo install mdbook mdbook-mermaid mdbook-linkcheck2 --locked

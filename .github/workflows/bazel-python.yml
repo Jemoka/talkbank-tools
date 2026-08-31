@@ -11,6 +11,7 @@ name: bazel · python
 # the multi-platform tagging matrix); that's the publish-pypi workflow.
 
 on:
+  workflow_dispatch: {}
   push:
     branches: [main]
     paths:
@@ -54,6 +55,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}
           repository-cache: true
+          cache-version: 2-${{ runner.os }}-${{ runner.arch }}
 
       # Lockfile drift test exists at //python:requirements_test but is
       # tagged `manual` (see python/BUILD.bazel) because uv 0.5.18 with

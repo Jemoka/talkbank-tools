@@ -20,7 +20,7 @@
 #   under [tool.batchalign.pinned_tools]. Update there + MODULE.bazel.
 #
 # Wheel artifact path:
-#   python/target/wheels/batchalign-<version>-cp312-cp312-<host-plat>.whl
+#   python/target/wheels/batchalign-<version>-cp310-abi3-<host-plat>.whl
 #
 # Cross-platform wheel builds are CI-only via
 # `.github/workflows/publish-pypi.yml` (5-runner matrix, OIDC trusted

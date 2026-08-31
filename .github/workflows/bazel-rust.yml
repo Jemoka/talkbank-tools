@@ -5,6 +5,7 @@ name: bazel · rust
 # under the Rust tiers, plus shared infra).
 
 on:
+  workflow_dispatch: {}
   push:
     branches: [main]
     paths:
@@ -46,6 +47,7 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}
           repository-cache: true
+          cache-version: 2-${{ runner.os }}-${{ runner.arch }}
 
       - name: bazel build (Rust tiers)
         run: |

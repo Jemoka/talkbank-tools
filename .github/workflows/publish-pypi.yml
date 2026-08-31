@@ -73,7 +73,7 @@ jobs:
           # No MATURIN_TARGET, no cross-compile sysroot. Maturin tags the
           # wheel with the runner's platform automatically.
           - { runner: macos-14,         platform: macos-arm64 }
-          - { runner: macos-13,         platform: macos-x86_64 }
+          - { runner: macos-15-intel,   platform: macos-x86_64 }
           - { runner: ubuntu-latest,    platform: linux-x86_64 }
           - { runner: ubuntu-24.04-arm, platform: linux-aarch64 }
           - { runner: windows-latest,   platform: windows-x86_64 }
@@ -85,8 +85,10 @@ jobs:
           bazelisk-cache: true
           disk-cache: publish-pypi-${{ matrix.platform }}
           repository-cache: true
+          cache-version: 2-${{ matrix.platform }}
 
       - name: Build wheel for ${{ matrix.platform }}
+        shell: bash
         env:
           # `MATURIN_USE_AUDITWHEEL=1` triggers manylinux retagging on Linux;
           # no-op on macOS/Windows. Linux cells produce manylinux_2_28-tagged
