@@ -38,7 +38,7 @@ groups, scripts, classifiers).
 # filter is a per-name list of *marker-excluded names from
 # requirements.lock.txt*, not a list of deps to include).
 load("//bazel/python:deps.bzl", "all_runtime_deps")
-load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library", "py_test")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 package(default_visibility = ["//visibility:public"])
@@ -68,24 +68,11 @@ py_library(
 )
 
 # Default runnable target — `bazel run //python/batchalign` invokes
-# `python -m batchalign` against the Bazel-built `.so`. Some pypi
-# packages overlap on benign data paths (e.g. `docs/index.rst`);
-# `package_collisions = "warning"` lets the venv build finish with a
-# warning instead of erroring on the duplicate file.
+# `python -m batchalign` against the Bazel-built `.so`.
 py_binary(
     name = "batchalign",
     srcs = ["__main__.py"],
     main = "__main__.py",
-    # Many pypi packages ship overlapping benign `docs/` / `tests/`
-    # paths that aspect's venv-builder flags as conflicts; suppress
-    # entirely since none are runtime-load-relevant.
-    package_collisions = "ignore",
-    # The upstream launcher normally materializes one mutable venv inside the
-    # target's shared runfiles tree at process startup. Concurrent CLI
-    # invocations can then observe half-refreshed Torch/certifi symlinks.
-    # Give this long-running product binary a per-process runtime venv; tests
-    # retain the faster shared default.
-    isolate_runtime_venv = True,
     deps = [":batchalign_lib"],
 )
 
@@ -105,12 +92,6 @@ py_test(
         "//crates/batchalign/batchalign-core:asr_data",
         "//resources/spec/errors:E316_angle_bracket_in_mor_stem.md",
     ],
-    # Same package-collision tolerance as `:batchalign` — heavy ML extras
-    # ship overlapping benign data paths (e.g. `audmath/docs/index.rst`).
-    # Many pypi packages ship overlapping benign `docs/` / `tests/`
-    # paths that aspect's venv-builder flags as conflicts; suppress
-    # entirely since none are runtime-load-relevant.
-    package_collisions = "ignore",
     # all_requirements already contains pytest + pytest-xdist via the
     # dev extra in pyproject; don't re-list them or Bazel errors on
     # duplicate-deps.
@@ -223,7 +204,7 @@ genrule(
         # still skips when declared inputs are unchanged. Declaring a
         # plain TOML file in `srcs` does not trigger any `rust_library`
         # rebuild (that concern only applies to `.rs` files reached via
-        # rules_rust/aspect_rules_py).
+        # rules_rust).
         "//python:pyproject.toml",
     ] + _LLVM_TOOLS,
     tools = [

@@ -110,9 +110,8 @@ dev = [
     # by hand — Bazel rebuilds `_proto_generated.py` whenever the Rust
     # schema emitter output changes.
     "datamodel-code-generator>=0.26",
-    # PEP 517 build frontends. aspect_rules_py's uv extension needs
-    # versions for any build backend in the resolution graph; pulling
-    # them in via dev ensures they land in uv.lock.
+    # PEP 517 build frontends used while resolving and building locked
+    # source distributions. Pulling them in via dev keeps them in uv.lock.
     "build",
     "wheel",
     "setuptools",
@@ -186,10 +185,9 @@ pyapp = "0.27.0"     # https://crates.io/crates/pyapp -- consumed by
                      # between minor releases).
 
 [dependency-groups]
-# PEP 735 dependency groups. aspect_rules_py's `uv.project` extension
-# reads these (not `[project] dependencies` directly) to populate
-# `@pypi//*` Bazel deps. Adding a runtime/dev/etc. dep here makes it
-# reachable as `@pypi//<name>` after the next `cd python && uv lock`.
+# PEP 735 dependency groups used to produce the checked-in universal
+# lock. Adding a runtime/dev/etc. dep here makes it reachable through
+# the generated requirements lock after the next dependency update.
 #
 # `runtime` mirrors `[project] dependencies` + the lazily-imported
 # optional groups that batchalign actually wires for the Bazel-run path
@@ -222,8 +220,8 @@ dev = [
     # Proto codegen toolchain (see [project.optional-dependencies].dev for
     # rationale). Bazel-only invocation; no hand step.
     "datamodel-code-generator>=0.26",
-    # PEP 517 build frontends — aspect_rules_py needs versions for
-    # build backends in the resolution graph.
+    # PEP 517 build frontends used for source distributions in the
+    # resolution graph.
     "build",
     "wheel",
     "setuptools",

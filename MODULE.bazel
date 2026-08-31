@@ -142,6 +142,16 @@ crate.from_cargo(
     # Only the root manifest is listed. crate_universe walks the
     # [workspace] members table to discover every member crate.
     manifests = ["//:Cargo.toml"],
+    # crate_universe's reduced defaults omit Intel macOS. Keep this list in
+    # lockstep with the native wheel matrix so generated third-party crates
+    # are compatible on every release host.
+    supported_platform_triples = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "x86_64-unknown-linux-gnu",
+    ],
 )
 use_repo(crate, "crates")
 
@@ -239,21 +249,6 @@ exports_files(["Cargo.toml"])
 # cdylib + ABI-tagged rename + wheel packaging in Bazel buys nothing here.
 bazel_dep(name = "rules_python", version = "1.6.3")
 bazel_dep(name = "rules_uv", version = "0.59.0")
-
-# aspect_rules_py provides the bash-based py_binary launcher (no
-# system-python bootstrap) which fixes the
-# `/usr/bin/env: 'python3': Permission denied` failure under clean
-# Linux containers. aspect's uv-direct extension is more invasive
-# (introduces a venv-config layer) than this repo needs today — we
-# stay on rules_uv/pip_compile for dep resolution and only borrow
-# aspect's py_* defs.
-bazel_dep(name = "aspect_rules_py", version = "1.11.5")
-single_version_override(
-    module_name = "aspect_rules_py",
-    patch_strip = 1,
-    patches = ["//bazel/patches:aspect-rules-py-isolated-runtime-venv.patch"],
-    version = "1.11.5",
-)
 
 # Single source of truth for the Python interpreter pin. Flows into the
 # rules_python toolchain, the uv-managed venv, and the maturin host

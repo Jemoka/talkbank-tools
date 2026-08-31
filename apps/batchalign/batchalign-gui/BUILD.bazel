@@ -12,7 +12,7 @@ surface. They are not checked into the source tree.
 """
 
 load("//bazel/python:deps.bzl", "all_runtime_deps")
-load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@rules_python//python:defs.bzl", "py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -38,7 +38,6 @@ py_binary(
     name = "_gen_openapi",
     srcs = ["//scripts:gen_openapi.py"],
     main = "//scripts:gen_openapi.py",
-    package_collisions = "ignore",
     deps = [
         "//python/batchalign:batchalign_lib",
     ] + all_runtime_deps(),

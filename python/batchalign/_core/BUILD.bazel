@@ -31,7 +31,7 @@ proto files is picked up by the next `bazel build`/`bazel test` /
 `bazel run //python/batchalign:wheel`.
 """
 
-load("@aspect_rules_py//py:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_library")
 
 package(default_visibility = ["//visibility:public"])
 

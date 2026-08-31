@@ -12,7 +12,7 @@ PyPI uploads live exclusively in CI
 no local twine wrapper ships from here.
 """
 
-load("@aspect_rules_py//py:defs.bzl", "py_binary")
+load("@rules_python//python:defs.bzl", "py_binary")
 
 # Only the //python package needs these scripts.
 package(default_visibility = ["//python:__subpackages__"])
