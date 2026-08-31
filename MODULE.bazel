@@ -356,14 +356,12 @@ llvm.toolchain(
             "-D__kernel_data_semantics=",
         ],
     },
-    # Pinned to LLVM 17.0.6 -- the highest version `toolchains_llvm`
-    # 1.7.0 ships a prebuilt arm64-apple-darwin tarball for. Newer
-    # versions (18+, 20+, 21+) exist on llvm.org but aren't in this
-    # ruleset's distribution table for darwin-arm64. If we need a newer
-    # clang, bump `toolchains_llvm` to a release that lists it, or use
-    # `llvm.toolchain_root()` to point at a custom URL.
+    # LLVM's published host archives vary by release. Keep the established
+    # 17.0.6 toolchain where it exists, and select 19.1.7 for the two hosts
+    # without a usable 17.0.6 archive. The map is resolved by exec host, so
+    # ARM macOS does not download the much larger Intel distribution.
     #
-    # Note: LLVM 17.0.6 alone does NOT make the wheel build hermetic
+    # Note: hermetic LLVM alone does NOT make the wheel build hermetic
     # against host-toolchain breakage -- the macOS SDK still comes from
     # xcrun (system). On hosts with a broken CommandLineTools (e.g.
     # macOS 26.x CLT 26.4, where clang 21 + the bundled SDK fail to
@@ -373,7 +371,11 @@ llvm.toolchain(
     # for Apple to ship a fixed CLT, or (c) vendor a known-good SDK
     # via http_archive + llvm.sysroot(). See CONTRIBUTING.md for the
     # decision tree.
-    llvm_version = "17.0.6",
+    llvm_versions = {
+        "": "17.0.6",
+        "darwin-x86_64": "19.1.7",
+        "windows-x86_64": "19.1.7",
+    },
 )
 use_repo(llvm, "llvm_toolchain", "llvm_toolchain_llvm")
 

@@ -65,6 +65,7 @@ jobs:
       - name: Build wheel for ${{ matrix.platform }}
         shell: bash
         env:
+          BAZELISK_SKIP_WRAPPER: ${{ runner.os == 'Windows' && 'true' || '' }}
           MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
         run: bazel run -c opt //python/batchalign:wheel
 

@@ -90,6 +90,7 @@ jobs:
       - name: Build wheel for ${{ matrix.platform }}
         shell: bash
         env:
+          BAZELISK_SKIP_WRAPPER: ${{ runner.os == 'Windows' && 'true' || '' }}
           # `MATURIN_USE_AUDITWHEEL=1` triggers manylinux retagging on Linux;
           # no-op on macOS/Windows. Linux cells produce manylinux_2_28-tagged
           # wheels that work across modern glibc distributions.
