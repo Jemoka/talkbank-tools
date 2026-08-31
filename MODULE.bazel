@@ -67,15 +67,29 @@ filegroup(
 )
 
 filegroup(
-    name = "model_sources",
-    srcs = glob(["src/**"], allow_empty = False),
+    name = "model_source_tree",
+    srcs = glob(
+        [".tmp_git_root/crates/talkbank-model/src/**"],
+        allow_empty = False,
+    ),
+)
+
+filegroup(
+    name = "model_source_lib",
+    srcs = [".tmp_git_root/crates/talkbank-model/src/lib.rs"],
 )
 """,
     build_script_data = [
         ":iso639_data",
-        ":model_sources",
+        ":model_source_lib",
+        ":model_source_tree",
     ],
+    build_script_env = {
+        "TALKBANK_MODEL_SOURCE_LIB": "$(execpath :model_source_lib)",
+    },
     crate = "talkbank-model",
+    patch_args = ["-p1"],
+    patches = ["//bazel/patches:talkbank-model-0.16.0.patch"],
 )
 
 # The git crate references a schema stored above its Cargo package root.

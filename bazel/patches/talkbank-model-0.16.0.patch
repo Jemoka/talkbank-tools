@@ -1,0 +1,17 @@
+# crate_universe's Windows repository layout cannot preserve the git crate's
+# symlinked `src/` directory in cargo_build_script runfiles. Accept the declared
+# source-tree anchor while keeping Cargo's ordinary manifest layout as default.
+diff --git a/build.rs b/build.rs
+--- a/build.rs
++++ b/build.rs
+@@ -148,6 +148,9 @@ fn generate_model_behavior_fingerprint() {
+     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+     let crate_root = Path::new(&manifest_dir);
+-    let src_dir = crate_root.join("src");
++    let src_dir = env::var_os("TALKBANK_MODEL_SOURCE_LIB")
++        .map(PathBuf::from)
++        .and_then(|path| path.parent().map(Path::to_path_buf))
++        .unwrap_or_else(|| crate_root.join("src"));
+ 
+     // Recomputed whenever ANY file under src/ changes (added, removed, or
+     // edited), not merely the files enumerated by a previous run: a
