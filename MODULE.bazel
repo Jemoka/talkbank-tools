@@ -176,6 +176,16 @@ crate.annotation(
     repositories = ["crates"],
 )
 
+# errno calls FormatMessageW through windows-sys on Windows. Its target-only
+# dependency features are lost when crate_universe merges the compatible
+# windows-sys requirements into the shared 0.61.2 node, so restore that API
+# surface explicitly for the Windows exec graph.
+crate.annotation(
+    crate = "windows-sys",
+    crate_features = ["Win32_System_Diagnostics_Debug"],
+    repositories = ["crates"],
+)
+
 # Feed hermetic protoc into every crate whose build script invokes it.
 # Without these annotations, crate_universe-generated BUILD files have
 # no protoc input and prost-build panics with "Could not find protoc".
