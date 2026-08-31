@@ -1,17 +1,12 @@
-# Bazel's Windows cargo_build_script runfiles cannot preserve the git crate's
-# symlinked `src/` directory. Accept the explicitly declared lexer anchor while
-# keeping Cargo's manifest-dir contract as the default.
+# Bazel's cargo_build_script runner does not execute with the crate root as its
+# process cwd. Resolve the explicitly declared lexer through Cargo's manifest
+# directory on every platform.
 diff --git a/build.rs b/build.rs
 --- a/build.rs
 +++ b/build.rs
-@@ -7 +7 @@
--use std::path::Path;
-+use std::path::{Path, PathBuf};
-@@ -19,0 +20,4 @@
+@@ -19,0 +20,2 @@
 +    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set by Cargo");
-+    let vendored_lexer = env::var_os("TALKBANK_RE2C_LEXER")
-+        .map(PathBuf::from)
-+        .unwrap_or_else(|| Path::new(&manifest_dir).join(VENDORED_LEXER));
-@@ -44 +48 @@
++    let vendored_lexer = Path::new(&manifest_dir).join(VENDORED_LEXER);
+@@ -44 +46 @@
 -    std::fs::copy(VENDORED_LEXER, &out_path)?;
 +    std::fs::copy(vendored_lexer, &out_path)?;
