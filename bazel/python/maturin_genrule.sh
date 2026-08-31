@@ -23,9 +23,9 @@
 #       $(execpath @multitool//tools/uv) \
 #       $(execpath //python/batchalign/_core:_proto_generated_py) \
 #       opt \
-#       $(execpath @llvm_toolchain_llvm//:bin/clang) \
-#       $(execpath @llvm_toolchain_llvm//:bin/llvm-ar) \
-#       $(execpath @llvm_toolchain_llvm//:bin/llvm-ranlib)
+#       $(execpath //bazel/python:llvm_clang) \
+#       $(execpath //bazel/python:llvm_ar) \
+#       $(execpath //bazel/python:llvm_ranlib)
 
 set -euo pipefail
 
@@ -59,7 +59,7 @@ export BUILD_WORKSPACE_DIRECTORY="$ws"
 if [[ -n "${PYAPP_RUST_BIN_DIRS:-}" ]]; then
     for p in $PYAPP_RUST_BIN_DIRS; do
         case "$p" in
-            */bin/cargo|*/bin/rustc)
+            */bin/cargo|*/bin/cargo.exe|*/bin/rustc|*/bin/rustc.exe)
                 abs="$(cd "$(dirname "$p")" && pwd)"
                 case ":$PATH:" in
                     *":$abs:"*) ;;
