@@ -24,8 +24,13 @@ if [[ $# -ne 2 ]]; then
     echo "install_wheel.sh: usage: <wheel-runfile> <tag-runfile>" >&2
     exit 2
 fi
-WHEEL_RUNFILE="$1"
-TAG_RUNFILE="$2"
+
+# `$(rootpath ...)` arguments are relative to the launcher runfiles, not the
+# workspace cwd used by the Windows rules_shell launcher.
+# shellcheck source=runfiles_resolve.sh
+source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/runfiles_resolve.sh"
+WHEEL_RUNFILE="$(runfiles_resolve "$1")"
+TAG_RUNFILE="$(runfiles_resolve "$2")"
 
 if [[ ! -f "$WHEEL_RUNFILE" || ! -f "$TAG_RUNFILE" ]]; then
     echo "install_wheel.sh: expected runfiles missing" >&2

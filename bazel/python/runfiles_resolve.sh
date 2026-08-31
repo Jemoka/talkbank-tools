@@ -6,14 +6,14 @@
 #   external/toolchains_llvm++llvm+llvm_toolchain_llvm/bin/clang
 #   python/batchalign/foo.py
 # both of which need to be looked up relative to the runfiles directory
-# the launcher prepared. RUNFILES_DIR is set by the rules_shell launcher;
-# fall back to "$0.runfiles" for direct script invocations.
+# the launcher prepared. RUNFILES_DIR is set by directory-based launchers;
+# Windows may instead expose RUNFILES_MANIFEST_FILE.
 #
 # Returns the resolved absolute path on stdout, or exits non-zero with a
 # diagnostic if the file is not findable.
 runfiles_resolve() {
     local rloc="$1"
-    local runfiles_dir="${RUNFILES_DIR:-${BASH_SOURCE[0]}.runfiles}"
+    local runfiles_dir="${RUNFILES_DIR:-$0.runfiles}"
     if [[ -z "$rloc" ]]; then
         echo "runfiles_resolve: empty path argument" >&2
         return 2
@@ -33,6 +33,23 @@ runfiles_resolve() {
             return 0
         fi
     done
+
+    if [[ -n "${RUNFILES_MANIFEST_FILE:-}" && -f "$RUNFILES_MANIFEST_FILE" ]]; then
+        local manifest_path
+        manifest_path="$(awk -v main="_main/$rloc" -v legacy="$rloc" '
+            $1 == main || $1 == legacy {
+                $1 = ""
+                sub(/^ /, "")
+                print
+                exit
+            }
+        ' "$RUNFILES_MANIFEST_FILE")"
+        if [[ -n "$manifest_path" && -f "$manifest_path" ]]; then
+            printf '%s\n' "$manifest_path"
+            return 0
+        fi
+    fi
+
     echo "runfiles_resolve: cannot locate '$rloc' (tried: ${candidates[*]})" >&2
     return 2
 }
