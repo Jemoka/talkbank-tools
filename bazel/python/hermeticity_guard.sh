@@ -112,16 +112,15 @@ hermeticity_guard() {
     hermeticity_scrub_env
 
     # Ensure the uv-managed venv has the dev tools installed (maturin,
-    # pytest, mypy, twine, ...). `uv run` doesn't auto-install from
-    # `[build-system].requires` or `[project.optional-dependencies].dev`,
-    # so without this step every wrapper's first command fails with
-    # `Failed to spawn: maturin` (or similar). The sync is a no-op when
-    # the venv is already populated and pyproject.toml hasn't moved.
+    # pytest, mypy, twine, ...). Do not install the project itself: uv's
+    # editable install writes a native extension into the Python source tree.
+    # On Windows that `_core.pyd` collides with the module maturin adds while
+    # assembling the wheel. The wheel build below is the sole project build.
     if ! _guard_skip sync; then
         ( cd "$BUILD_WORKSPACE_DIRECTORY/python" \
-            && "$uv" sync --extra dev --quiet ) || {
+            && "$uv" sync --extra dev --no-install-project --quiet ) || {
             echo "hermeticity_guard: failed to sync the uv venv ($BUILD_WORKSPACE_DIRECTORY/python)" >&2
-            echo "  fix: run 'cd python && uv sync --extra dev' manually to surface uv's full error message" >&2
+            echo "  fix: run 'cd python && uv sync --extra dev --no-install-project' to surface uv's full error message" >&2
             return 1
         }
     fi

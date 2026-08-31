@@ -159,6 +159,16 @@ cp "$PROTO_GENERATED" "$proto_dst"
 chmod +w "$proto_dst"
 echo "maturin_build.sh: staged $proto_dst from $PROTO_GENERATED"
 
+# Remove extensions left by an earlier editable install. They are build
+# products, not Python-package inputs; retaining one makes maturin add the
+# same module once from the source tree and once from the current Cargo build.
+native_module_dir="${BUILD_WORKSPACE_DIRECTORY}/python/batchalign/_core"
+rm -f \
+    "$native_module_dir/_core.pyd" "$native_module_dir"/_core.*.pyd \
+    "$native_module_dir/_core.so" "$native_module_dir"/_core.*.so \
+    "$native_module_dir/_core.dylib" "$native_module_dir"/_core.*.dylib \
+    "$native_module_dir/_core.dll" "$native_module_dir"/_core.*.dll
+
 cd "$BUILD_WORKSPACE_DIRECTORY/python"
 
 resolved_profile="${MATURIN_PROFILE:-$COMPILATION_MODE}"
