@@ -69,6 +69,17 @@ jobs:
           MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
         run: bazel run -c opt //python/batchalign:wheel
 
+      - name: Inspect Windows LLVM repository after failure
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem -Force D:\_bazel\external |
+            Where-Object Name -Like '*llvm_toolchain_llvm*' |
+            ForEach-Object {
+              Get-Content (Join-Path $_.FullName 'BUILD.bazel')
+              Get-ChildItem -Force -Recurse $_.FullName
+            }
+
       # The wheel itself is `cp310-abi3`, so verify the minimum supported
       # interpreter on every native platform. `setup-python` is the only
       # host tool installed here; the BUILD path above is Bazel-driven.
