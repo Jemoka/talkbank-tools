@@ -50,6 +50,12 @@ crate.annotation(
     patches = ["//bazel/patches:ferrous-opencc-0.4.0.patch"],
 )
 
+crate.annotation(
+    crate = "talkbank-parser-re2c",
+    patch_args = ["-p1"],
+    patches = ["//bazel/patches:talkbank-parser-re2c-0.16.0.patch"],
+)
+
 # The git crate references a schema stored above its Cargo package root.
 # crate_universe isolates package roots, so expose the tracked schema through
 # an explicit compile-time path until upstream packages it inside the crate.

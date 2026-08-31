@@ -1,0 +1,26 @@
+# Bazel's Windows cargo_build_script runner does not execute with the crate
+# root as its process cwd. Resolve committed build inputs through Cargo's
+# manifest-dir contract instead of relying on a relative process path.
+diff --git a/build.rs b/build.rs
+index d6210bd..811b41d 100644
+--- a/build.rs
++++ b/build.rs
+@@ -16,6 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
+     println!("cargo:rerun-if-changed={VENDORED_LEXER}");
+ 
+     let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set by Cargo");
+     let out_path = Path::new(&out_dir).join(LEXER_RUST_FILE);
++    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set by Cargo");
++    let vendored_lexer = Path::new(&manifest_dir).join(VENDORED_LEXER);
+ 
+     // Copy the vendored (pre-generated) lexer to OUT_DIR.
+@@ -40,8 +42,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
+     // exist is worse than admitting there is none, because it stops the next
+     // reader looking.
+     //
+     // See lexer.re header comment for why -Wno-nondeterministic-tags is needed.
+-    std::fs::copy(VENDORED_LEXER, &out_path)?;
++    std::fs::copy(vendored_lexer, &out_path)?;
+ 
+     Ok(())
+ }
