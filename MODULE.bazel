@@ -56,6 +56,20 @@ crate.annotation(
     patches = ["//bazel/patches:talkbank-parser-re2c-0.16.0.patch"],
 )
 
+# The model build script reads the vendored ISO registry at build time. The
+# generated catch-all data glob does not traverse the git crate's symlinked
+# `data/` directory on Windows, so name the input explicitly for its runfiles.
+crate.annotation(
+    additive_build_file_content = """
+filegroup(
+    name = "iso639_data",
+    srcs = ["data/iso639-3.tsv"],
+)
+""",
+    build_script_data = [":iso639_data"],
+    crate = "talkbank-model",
+)
+
 # The git crate references a schema stored above its Cargo package root.
 # crate_universe isolates package roots, so expose the tracked schema through
 # an explicit compile-time path until upstream packages it inside the crate.
