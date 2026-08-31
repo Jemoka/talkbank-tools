@@ -106,6 +106,16 @@ crate.annotation(
     repositories = ["crates"],
 )
 
+# iana-time-zone uses windows-core's Error as a std::io::Error payload on
+# Windows. Cargo enables windows-core's default `std` feature, but
+# crate_universe omits it when generating the Windows exec graph unless it is
+# explicit, leaving the Error type without its std::error::Error impl.
+crate.annotation(
+    crate = "windows-core",
+    crate_features = ["std"],
+    repositories = ["crates"],
+)
+
 # Feed hermetic protoc into every crate whose build script invokes it.
 # Without these annotations, crate_universe-generated BUILD files have
 # no protoc input and prost-build panics with "Could not find protoc".
