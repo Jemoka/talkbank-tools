@@ -67,20 +67,7 @@ jobs:
         env:
           BAZELISK_SKIP_WRAPPER: ${{ runner.os == 'Windows' && 'true' || '' }}
           MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
-        run: |
-          if bazel run -c opt //python/batchalign:wheel; then
-            exit 0
-          fi
-
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "::group::Fetched LLVM executables"
-            ls -la "$(bazel info output_base)"/external/*llvm_toolchain_llvm*/bin
-            echo "Generated LLVM targets:"
-            sed -n '1,180p' \
-              "$(bazel info output_base)"/external/*llvm_toolchain_llvm*/BUILD.bazel
-            echo "::endgroup::"
-          fi
-          exit 1
+        run: bazel run -c opt //python/batchalign:wheel
 
       # The wheel itself is `cp310-abi3`, so verify the minimum supported
       # interpreter on every native platform. `setup-python` is the only

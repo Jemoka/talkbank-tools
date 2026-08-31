@@ -13,37 +13,27 @@ no local twine wrapper ships from here.
 """
 
 load("@rules_python//python:defs.bzl", "py_binary")
+load(":llvm_tool.bzl", "llvm_tool_file")
 
 # Only the //python package needs these scripts.
 package(default_visibility = ["//python:__subpackages__"])
 
-config_setting(
-    name = "windows",
-    constraint_values = ["@platforms//os:windows"],
-)
-
-alias(
+llvm_tool_file(
     name = "llvm_clang",
-    actual = select({
-        ":windows": "@llvm_toolchain_llvm//:bin/clang.exe",
-        "//conditions:default": "@llvm_toolchain_llvm//:bin/clang",
-    }),
+    executable_names = ["clang", "clang.exe"],
+    srcs = ["@llvm_toolchain_llvm//:bin"],
 )
 
-alias(
+llvm_tool_file(
     name = "llvm_ar",
-    actual = select({
-        ":windows": "@llvm_toolchain_llvm//:bin/llvm-ar.exe",
-        "//conditions:default": "@llvm_toolchain_llvm//:bin/llvm-ar",
-    }),
+    executable_names = ["llvm-ar", "llvm-ar.exe"],
+    srcs = ["@llvm_toolchain_llvm//:bin"],
 )
 
-alias(
+llvm_tool_file(
     name = "llvm_ranlib",
-    actual = select({
-        ":windows": "@llvm_toolchain_llvm//:bin/llvm-ranlib.exe",
-        "//conditions:default": "@llvm_toolchain_llvm//:bin/llvm-ranlib",
-    }),
+    executable_names = ["llvm-ranlib", "llvm-ranlib.exe"],
+    srcs = ["@llvm_toolchain_llvm//:bin"],
 )
 
 exports_files([
