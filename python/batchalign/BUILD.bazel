@@ -175,9 +175,9 @@ py_test(
 # (c) move schema emission into maturin's build itself and ship the
 # generated `.py` inside the wheel.
 _LLVM_TOOLS = [
-    "@llvm_toolchain_llvm//:bin/clang",
-    "@llvm_toolchain_llvm//:bin/llvm-ar",
-    "@llvm_toolchain_llvm//:bin/llvm-ranlib",
+    "//bazel/python:llvm_clang",
+    "//bazel/python:llvm_ar",
+    "//bazel/python:llvm_ranlib",
 ]
 
 genrule(
@@ -224,9 +224,9 @@ genrule(
         "$(execpath @multitool//tools/uv)",
         "$(execpath //python/batchalign/_core:_proto_generated_py)",
         "$(COMPILATION_MODE)",
-        "$(execpath @llvm_toolchain_llvm//:bin/clang)",
-        "$(execpath @llvm_toolchain_llvm//:bin/llvm-ar)",
-        "$(execpath @llvm_toolchain_llvm//:bin/llvm-ranlib)",
+        "$(execpath //bazel/python:llvm_clang)",
+        "$(execpath //bazel/python:llvm_ar)",
+        "$(execpath //bazel/python:llvm_ranlib)",
     ]),
     # `local = True`: maturin needs network access (cargo fetches) and a
     # persistent target/ cache that a sandboxed action can't supply.

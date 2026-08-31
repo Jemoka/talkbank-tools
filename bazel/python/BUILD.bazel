@@ -17,6 +17,35 @@ load("@rules_python//python:defs.bzl", "py_binary")
 # Only the //python package needs these scripts.
 package(default_visibility = ["//python:__subpackages__"])
 
+config_setting(
+    name = "windows",
+    constraint_values = ["@platforms//os:windows"],
+)
+
+alias(
+    name = "llvm_clang",
+    actual = select({
+        ":windows": "@llvm_toolchain_llvm//:bin/clang.exe",
+        "//conditions:default": "@llvm_toolchain_llvm//:bin/clang",
+    }),
+)
+
+alias(
+    name = "llvm_ar",
+    actual = select({
+        ":windows": "@llvm_toolchain_llvm//:bin/llvm-ar.exe",
+        "//conditions:default": "@llvm_toolchain_llvm//:bin/llvm-ar",
+    }),
+)
+
+alias(
+    name = "llvm_ranlib",
+    actual = select({
+        ":windows": "@llvm_toolchain_llvm//:bin/llvm-ranlib.exe",
+        "//conditions:default": "@llvm_toolchain_llvm//:bin/llvm-ranlib",
+    }),
+)
+
 exports_files([
     "install_wheel.sh",
     "maturin_build.sh",
