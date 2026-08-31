@@ -31,7 +31,7 @@ load("@rules_rust//rust:defs.bzl", "rust_library", "rust_shared_library", "rust_
 package(default_visibility = ["//visibility:public"])
 
 _INTRA = [
-    "//crates/batchalign/batchalign-core:batchalign_core",
+    "//crates/batchalign/batchalign-core:batchalign_core_python",
 ]
 
 rust_library(

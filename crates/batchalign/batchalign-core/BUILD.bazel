@@ -26,7 +26,6 @@ rust_library(
     srcs = glob(["src/**/*.rs"], exclude = ["src/bin/**"]),
     aliases = aliases(),
     compile_data = [":asr_data"],
-    crate_features = ["python"],
     crate_name = "batchalign_core",
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
@@ -43,6 +42,25 @@ rust_library(
     stamp = 1,
 )
 
+# PyO3-enabled form consumed only by the extension module. Keeping it separate
+# from the pure-Rust target prevents host tools such as `emit_proto_schema`
+# from acquiring a libpython link requirement on Windows.
+rust_library(
+    name = "batchalign_core_python",
+    srcs = glob(["src/**/*.rs"], exclude = ["src/bin/**"]),
+    aliases = aliases(),
+    compile_data = [":asr_data"],
+    crate_features = ["python"],
+    crate_name = "batchalign_core",
+    edition = "2024",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal = True),
+    rustc_env = {
+        "VERGEN_GIT_SHA": "{STABLE_GIT_HASH}",
+    },
+    stamp = 1,
+)
+
 # Schema emitter binary. Consumed by `:proto_schema_json` below as the input
 # to the Python codegen pipeline. The set of emitted types is hand-listed in
 # `src/bin/emit_proto_schema.rs`; adding a Rust proto type means also adding
@@ -51,7 +69,6 @@ rust_binary(
     name = "emit_proto_schema",
     srcs = ["src/bin/emit_proto_schema.rs"],
     aliases = aliases(),
-    crate_features = ["python"],
     edition = "2024",
     proc_macro_deps = all_crate_deps(proc_macro = True),
     deps = all_crate_deps(normal = True) + [":batchalign_core"],
