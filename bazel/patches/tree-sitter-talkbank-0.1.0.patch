@@ -1,0 +1,62 @@
+# Bazel's cargo_build_script runner does not guarantee that the process cwd is
+# the crate root. Resolve generated sources and optional query data through
+# Cargo's manifest directory so declared runfiles work on every platform.
+diff --git a/bindings/rust/build.rs b/bindings/rust/build.rs
+--- a/bindings/rust/build.rs
++++ b/bindings/rust/build.rs
+@@ -91,9 +91,6 @@ fn fnv1a_bytes(mut hash: u64, bytes: &[u8]) -> u64 {
+ /// fingerprint depend on where the repository happens to be checked out,
+ /// which would invalidate every cache on every machine whose checkout path
+ /// differs, for no behavioural reason.
+-fn generate_grammar_fingerprint() {
+-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+-    let crate_root = Path::new(&manifest_dir);
++fn generate_grammar_fingerprint(crate_root: &Path) {
+-
+     // Fixed, already-sorted order: exactly the two files that determine what
+     // this grammar parses. Unlike `talkbank-model`'s whole-tree walk, there is
+@@ -132,12 +130,14 @@ fn generate_grammar_fingerprint() {
+ /// Compile generated grammar C sources and expose optional query cfg flags.
+ fn main() {
+-    generate_grammar_fingerprint();
++    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
++    let crate_root = Path::new(&manifest_dir);
++    generate_grammar_fingerprint(crate_root);
+ 
+     // Compile the generated parser (and optional scanner) into the Rust crate.
+-    let src_dir = std::path::Path::new("src");
++    let src_dir = crate_root.join("src");
+ 
+     let mut c_config = cc::Build::new();
+-    c_config.std("c11").include(src_dir);
++    c_config.std("c11").include(&src_dir);
+ 
+     #[cfg(target_env = "msvc")]
+     c_config.flag("-utf-8");
+@@ -181,22 +181,22 @@ fn main() {
+     // Gate query constants behind cfg flags only when query files are present.
+     println!("cargo:rustc-check-cfg=cfg(with_highlights_query)");
+     if !"queries/highlights.scm".is_empty()
+-        && std::path::Path::new("queries/highlights.scm").exists()
++        && crate_root.join("queries/highlights.scm").exists()
+     {
+         println!("cargo:rustc-cfg=with_highlights_query");
+     }
+     println!("cargo:rustc-check-cfg=cfg(with_injections_query)");
+     if !"queries/injections.scm".is_empty()
+-        && std::path::Path::new("queries/injections.scm").exists()
++        && crate_root.join("queries/injections.scm").exists()
+     {
+         println!("cargo:rustc-cfg=with_injections_query");
+     }
+     println!("cargo:rustc-check-cfg=cfg(with_locals_query)");
+-    if !"queries/locals.scm".is_empty() && std::path::Path::new("queries/locals.scm").exists() {
++    if !"queries/locals.scm".is_empty() && crate_root.join("queries/locals.scm").exists() {
+         println!("cargo:rustc-cfg=with_locals_query");
+     }
+     println!("cargo:rustc-check-cfg=cfg(with_tags_query)");
+-    if !"queries/tags.scm".is_empty() && std::path::Path::new("queries/tags.scm").exists() {
++    if !"queries/tags.scm".is_empty() && crate_root.join("queries/tags.scm").exists() {
+         println!("cargo:rustc-cfg=with_tags_query");
+     }
+ }

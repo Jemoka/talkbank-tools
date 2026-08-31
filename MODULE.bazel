@@ -63,14 +63,20 @@ filegroup(
     patches = ["//bazel/patches:talkbank-parser-re2c-0.16.0.patch"],
 )
 
-# The git crate exposes `src/` through a symlink into its checkout root. Windows
-# runfiles do not recreate that directory symlink, so declare the generated C
-# parser and the headers it includes as ordinary build-script inputs.
+# The git crate exposes `src/` and `queries/` through symlinks into its checkout
+# root. Windows runfiles do not recreate those directory symlinks, so declare
+# the grammar's generated sources and embedded binding data as ordinary inputs.
 crate.annotation(
     additive_build_file_content = """
 filegroup(
-    name = "parser_sources",
+    name = "grammar_sources",
     srcs = [
+        "grammar.js",
+        "queries/highlights.scm",
+        "queries/injections.scm",
+        "queries/locals.scm",
+        "queries/tags.scm",
+        "src/node-types.json",
         "src/parser.c",
         "src/tree_sitter/alloc.h",
         "src/tree_sitter/array.h",
@@ -78,8 +84,11 @@ filegroup(
     ],
 )
 """,
-    build_script_data = [":parser_sources"],
+    build_script_data = [":grammar_sources"],
+    compile_data = [":grammar_sources"],
     crate = "tree-sitter-talkbank",
+    patch_args = ["-p1"],
+    patches = ["//bazel/patches:tree-sitter-talkbank-0.1.0.patch"],
 )
 
 # The model build script reads the vendored ISO registry and fingerprints its
