@@ -91,11 +91,14 @@ filegroup(
     patches = ["//bazel/patches:tree-sitter-talkbank-0.1.0.patch"],
 )
 
-# sqlx::migrate! reads this directory during Rust compilation. The git crate's
-# directory symlink is not usable in Windows sandboxes, so materialize the two
-# tracked migrations as declared compile-time inputs.
+# sqlx::migrate! canonicalizes this directory during Rust compilation. The git
+# crate exposes it through a directory symlink, which Windows sandboxes cannot
+# traverse. Build a real tree artifact and make it the crate's manifest root so
+# the macro sees an ordinary `migrations/` directory on every platform.
 crate.annotation(
     additive_build_file_content = """
+load("@@aspect_bazel_lib+//lib:copy_to_directory.bzl", "copy_to_directory")
+
 filegroup(
     name = "migrations",
     srcs = [
@@ -103,9 +106,17 @@ filegroup(
         "migrations/20260303235000_cache_unique_indexes.sql",
     ],
 )
+
+copy_to_directory(
+    name = "manifest_root",
+    srcs = [":migrations"],
+)
 """,
-    compile_data = [":migrations"],
+    compile_data = [":manifest_root"],
     crate = "talkbank-cache",
+    rustc_env = {
+        "CARGO_MANIFEST_DIR": "$(execpath :manifest_root)",
+    },
 )
 
 # The model build script reads the vendored ISO registry and fingerprints its
