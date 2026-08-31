@@ -74,9 +74,10 @@ jobs:
 
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             echo "::group::Fetched LLVM executables"
-            find "$(bazel info output_base)/external" \
-              -path '*llvm_toolchain_llvm*/bin/*' -type f -print 2>/dev/null \
-              | sort
+            ls -la "$(bazel info output_base)"/external/*llvm_toolchain_llvm*/bin
+            echo "Generated LLVM targets:"
+            sed -n '1,180p' \
+              "$(bazel info output_base)"/external/*llvm_toolchain_llvm*/BUILD.bazel
             echo "::endgroup::"
           fi
           exit 1
