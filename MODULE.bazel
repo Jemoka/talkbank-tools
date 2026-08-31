@@ -182,7 +182,10 @@ crate.annotation(
 # surface explicitly for the Windows exec graph.
 crate.annotation(
     crate = "windows-sys",
-    crate_features = ["Win32_System_Diagnostics_Debug"],
+    crate_features = [
+        "Win32_System_Diagnostics",
+        "Win32_System_Diagnostics_Debug",
+    ],
     repositories = ["crates"],
 )
 
