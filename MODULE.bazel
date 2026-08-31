@@ -107,12 +107,36 @@ filegroup(
     ],
 )
 
+filegroup(
+    name = "cache_sources",
+    srcs = [
+        "src/blocking.rs",
+        "src/cache_impl.rs",
+        "src/cache_location.rs",
+        "src/cache_utils.rs",
+        "src/error.rs",
+        "src/init_lock.rs",
+        "src/lib.rs",
+        "src/maintenance_ops.rs",
+        "src/roundtrip_ops.rs",
+        "src/rules_version.rs",
+        "src/schema_init.rs",
+        "src/trait_def.rs",
+        "src/types.rs",
+        "src/validation_ops.rs",
+        "src/version_prune.rs",
+    ],
+)
+
 copy_to_directory(
     name = "manifest_root",
     srcs = [":migrations"],
 )
 """,
-    compile_data = [":manifest_root"],
+    compile_data = [
+        ":cache_sources",
+        ":manifest_root",
+    ],
     crate = "talkbank-cache",
     rustc_env = {
         "CARGO_MANIFEST_DIR": "$(execpath :manifest_root)",
