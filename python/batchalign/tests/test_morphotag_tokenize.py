@@ -16,12 +16,26 @@ def test_conventional_english_spellings_keep_established_boundaries() -> None:
         [
             ("dunno", True),
             ("gonna", True),
+            ("gotta", True),
             ("wanna", True),
             ("whatnot", True),
         ],
         ["en"],
-        "dunno gonna wanna whatnot",
-    ) == ["dunno", "gonna", "wanna", "whatnot"]
+        "dunno gonna gotta wanna whatnot",
+    ) == ["dunno", "gonna", "gotta", "wanna", "whatnot"]
+
+
+def test_english_native_mwt_rejects_names_but_keeps_contractions() -> None:
+    assert tokenizer_processor(
+        [
+            ("connor", True),
+            ("anna", True),
+            ("arent", True),
+            ("cannot", True),
+        ],
+        ["en"],
+        "connor anna arent cannot",
+    ) == ["connor", "anna", ("arent", True), ("cannot", True)]
 
 
 def test_english_apostrophe_marks_contraction_but_not_possessive_its() -> None:

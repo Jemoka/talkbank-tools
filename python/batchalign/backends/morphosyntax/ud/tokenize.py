@@ -24,6 +24,17 @@ from itertools import groupby
 from .dp import PayloadTarget, ReferenceTarget, align
 
 
+_ENGLISH_APOSTROPHELESS_MWT = re.compile(
+    r"^(?:(?:ai|are|ca|could|did|does|do|had|has|have|is|must|need|sha|should|was|were|wo|would)nt"
+    r"|(?:could|might|must|should|they|we|would|you)ve"
+    r"|cannot|heres|im|ive|thats|theres|theyre|whats|youre)$"
+)
+
+_ENGLISH_CONVENTIONAL_WORDS = frozenset(
+    "cmon dunno gimme gonna gotta kinda lemme lotta outta sorta wanna whatnot".split()
+)
+
+
 def conform(i):
     """A token may be a bare string or a `(text, is_mwt)` tuple; get its text."""
     return i[0] if isinstance(i, tuple) else i
@@ -109,7 +120,7 @@ def tokenizer_processor(tokenized, lang, sent):
                 (("it" in lang) and i[0].casefold() == "dai")
                 or (
                     ("en" in lang)
-                    and i[0].casefold() in {"dunno", "gonna", "wanna", "whatnot"}
+                    and i[0].casefold() in _ENGLISH_CONVENTIONAL_WORDS
                 )
             )
         ):
@@ -119,6 +130,19 @@ def tokenizer_processor(tokenized, lang, sent):
             # ``wanna`` are dictionary-recognized informal spellings. Italian
             # ``dai`` is ambiguous between the verb ``dare`` and ``da + i``.
             # Keep these intact for contextual POS tagging.
+            res.append(i[0])
+        elif (
+            ("en" in lang)
+            and isinstance(i, tuple)
+            and i[1] is True
+            and "'" not in i[0]
+            and _ENGLISH_APOSTROPHELESS_MWT.fullmatch(i[0].casefold()) is None
+        ):
+            # GUM's tokenizer occasionally marks ordinary words and names as
+            # MWT candidates (observed examples include ``connor`` and
+            # ``anna``). Admit punctuation-free English candidates only when
+            # their surface is a known contraction; otherwise retain the
+            # authoritative CHAT word without authorizing an internal split.
             res.append(i[0])
         elif ("it" in lang) and isinstance(i, tuple) and i[0] == "l'" and i[1] is True:
             res.append("l'")
