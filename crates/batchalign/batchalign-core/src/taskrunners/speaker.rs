@@ -186,6 +186,33 @@ fn relabel_utterances_by_diarization(
             used_speaker_codes.push(utterance.main.speaker.clone());
         }
     }
+    let speaker_code_remap: Vec<(SpeakerCode, SpeakerCode)> = speaker_codes
+        .values()
+        .filter(|code| used_speaker_codes.contains(code))
+        .enumerate()
+        .map(|(index, code)| {
+            let projected = declared
+                .get(index)
+                .cloned()
+                .unwrap_or_else(|| SpeakerCode::new(format!("PAR{index}")));
+            (code.clone(), projected)
+        })
+        .collect();
+    for line in &mut new_lines {
+        let Line::Utterance(utterance) = line else {
+            continue;
+        };
+        if let Some((_, projected)) = speaker_code_remap
+            .iter()
+            .find(|(original, _)| original == &utterance.main.speaker)
+        {
+            utterance.main.speaker = projected.clone();
+        }
+    }
+    let used_speaker_codes: Vec<SpeakerCode> = speaker_code_remap
+        .into_iter()
+        .map(|(_, projected)| projected)
+        .collect();
     let mut added_participants = Vec::new();
     if used_speaker_codes
         .iter()
@@ -522,12 +549,12 @@ mod tests {
             DiarizationSegment {
                 start_ms: 801,
                 end_ms: 1600,
-                speaker: "speaker-b".into(),
+                speaker: "speaker-c".into(),
             },
             DiarizationSegment {
                 start_ms: 5000,
                 end_ms: 6000,
-                speaker: "speaker-c".into(),
+                speaker: "speaker-b".into(),
             },
         ]);
 
@@ -545,5 +572,11 @@ mod tests {
         let rendered = chat.to_chat();
         assert!(!rendered.contains("PAR2"));
         assert!(rendered.contains("@Participants:\tPAR0 Participant, PAR1 Participant"));
+        let speakers: Vec<_> = chat
+            .ast()
+            .utterances()
+            .map(|utterance| utterance.main.speaker.as_str())
+            .collect();
+        assert_eq!(speakers, ["PAR0", "PAR1"]);
     }
 }
