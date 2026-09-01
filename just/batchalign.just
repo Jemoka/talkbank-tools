@@ -66,9 +66,9 @@
 set shell := ["bash", "-c"]
 set positional-arguments := true
 
-# Keep local Bazel-backed Batchalign workflows memory-bounded by default.
-# Maintainers can raise this explicitly on larger build hosts.
-bazel_jobs := env_var_or_default("BATCHALIGN_BAZEL_JOBS", "1")
+# Use Bazel's host-adaptive parallelism for normal builds. Resource-constrained
+# automation can set BATCHALIGN_BAZEL_JOBS without changing user defaults.
+bazel_jobs := env_var_or_default("BATCHALIGN_BAZEL_JOBS", "auto")
 
 # Default: list available recipes.
 default:

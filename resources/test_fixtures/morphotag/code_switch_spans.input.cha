@@ -1,8 +1,11 @@
 @UTF8
 @Begin
-@Languages:	eng, tam
+@Languages:	eng, tam, fra
 @Participants:	CHI Child
 @ID:	eng|batchalign|CHI|||||Child|||
 *CHI:	I know <how to do it> [@s] .
 *CHI:	I know <தமிழ் சொற்கள்> [@s:tam] .
+*CHI:	I know bonjour@s:fra .
+*CHI:	I know <bonjour mes amis> [@s:fra] .
+*CHI:	[- fra] bonjour mes amis .
 @End

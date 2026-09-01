@@ -255,7 +255,10 @@ impl MorphotagBatch {
         }
 
         let source_id = chat.source_id().clone();
-        let default_language = resolve_per_file_language(chat);
+        let default_language = chat
+            .primary_language()
+            .map(|code| LanguageSpec::Code(SmolStr::new(code)))
+            .unwrap_or(LanguageSpec::PerFile);
         let inputs = chat
             .ast()
             .utterances()
@@ -321,17 +324,6 @@ fn utterance_has_mor_tier(u: &Utterance) -> bool {
     })
 }
 
-/// Read the chat's `@Languages:` header and emit a concrete `LanguageSpec`.
-/// Falls back to `PerFile` (a no-op marker) when the header is absent so
-/// the backend can do its own per-file resolution.
-fn resolve_per_file_language(chat: &Chat) -> LanguageSpec {
-    if let Some(code) = chat.primary_language() {
-        LanguageSpec::Code(SmolStr::new(code))
-    } else {
-        LanguageSpec::PerFile
-    }
-}
-
 /// NLP input projected from one typed utterance.
 ///
 /// `tokens` keeps the clean main-tier surface forms used for alignment, while
@@ -350,7 +342,9 @@ struct ExtractedMorphosyntaxInput {
 ///
 /// A main-tier precode (`[- hin]`) is narrower than the file-wide default and
 /// must win. Without one, the first `@Languages:` code remains the transcript
-/// default, as specified by the typed CHAT model.
+/// default. Inline word/span switches remain explicit `@s` sentinels in the
+/// text projection and render as `L2|xxx`; they must not make a whole-document
+/// language detector retag the surrounding primary-language words.
 fn resolve_utterance_language(u: &Utterance, default: &LanguageSpec) -> LanguageSpec {
     u.main
         .content
@@ -686,7 +680,7 @@ mod tests {
 
     const UNSUPPORTED_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\tsrp\n@Participants:\tCHI Child\n@ID:\tsrp|corpus|CHI|||||Child|||\n*CHI:\tnešto .\n@End\n";
 
-    const MULTILINGUAL_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng, hin, tam\n@Participants:\tTEA Teacher\n@ID:\teng|corpus|TEA|||||Teacher|||\n*TEA:\thello .\n*TEA:\t[- hin] हाँ .\n*TEA:\tGandhi जी@s:hin .\n*TEA:\t[- hin] so@s:eng group@s:eng में .\n*TEA:\t[- tam] யாரு ?\n*TEA:\t<how to do it> [@s] .\n*TEA:\t<தமிழ் சொற்கள்> [@s:tam] .\n@End\n";
+    const MULTILINGUAL_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng, hin, tam, fra\n@Participants:\tTEA Teacher\n@ID:\teng|corpus|TEA|||||Teacher|||\n*TEA:\thello .\n*TEA:\t[- hin] हाँ .\n*TEA:\tGandhi जी@s:hin .\n*TEA:\t[- hin] so@s:eng group@s:eng में .\n*TEA:\t[- tam] யாரு ?\n*TEA:\t<how to do it> [@s] .\n*TEA:\t<தமிழ் சொற்கள்> [@s:tam] .\n*TEA:\thello bonjour@s:fra teacher .\n*TEA:\t<bonjour mes amis> [@s:fra] .\n*TEA:\t[- fra] bonjour mes amis .\n@End\n";
 
     /// Capturing sink for tick-sequence assertions.
     struct CapturingSink {
@@ -834,9 +828,11 @@ mod tests {
             .await?;
 
         let seen = dispatcher.seen.lock().expect("poisoned");
-        assert_eq!(seen.len(), 7);
+        assert_eq!(seen.len(), 10);
 
-        assert_eq!(seen[0].language, LanguageSpec::Code(SmolStr::new("eng")));
+        let primary = LanguageSpec::Code(SmolStr::new("eng"));
+
+        assert_eq!(seen[0].language, primary);
         assert_eq!(seen[0].tokens, ["hello"]);
         assert_eq!(seen[0].text, "hello");
 
@@ -844,7 +840,7 @@ mod tests {
         assert_eq!(seen[1].tokens, ["हाँ"]);
         assert_eq!(seen[1].text, "हाँ");
 
-        assert_eq!(seen[2].language, LanguageSpec::Code(SmolStr::new("eng")));
+        assert_eq!(seen[2].language, primary);
         assert_eq!(seen[2].tokens, ["Gandhi", "जी"]);
         assert_eq!(seen[2].text, "Gandhi जी@s");
 
@@ -856,13 +852,25 @@ mod tests {
         assert_eq!(seen[4].tokens, ["யாரு"]);
         assert_eq!(seen[4].text, "யாரு");
 
-        assert_eq!(seen[5].language, LanguageSpec::Code(SmolStr::new("eng")));
+        assert_eq!(seen[5].language, primary);
         assert_eq!(seen[5].tokens, ["how", "to", "do", "it"]);
         assert_eq!(seen[5].text, "how@s to@s do@s it@s");
 
-        assert_eq!(seen[6].language, LanguageSpec::Code(SmolStr::new("eng")));
+        assert_eq!(seen[6].language, primary);
         assert_eq!(seen[6].tokens, ["தமிழ்", "சொற்கள்"]);
         assert_eq!(seen[6].text, "தமிழ்@s சொற்கள்@s");
+
+        assert_eq!(seen[7].language, primary);
+        assert_eq!(seen[7].tokens, ["hello", "bonjour", "teacher"]);
+        assert_eq!(seen[7].text, "hello bonjour@s teacher");
+
+        assert_eq!(seen[8].language, primary);
+        assert_eq!(seen[8].tokens, ["bonjour", "mes", "amis"]);
+        assert_eq!(seen[8].text, "bonjour@s mes@s amis@s");
+
+        assert_eq!(seen[9].language, LanguageSpec::Code(SmolStr::new("fra")));
+        assert_eq!(seen[9].tokens, ["bonjour", "mes", "amis"]);
+        assert_eq!(seen[9].text, "bonjour mes amis");
         Ok(())
     }
 

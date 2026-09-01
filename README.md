@@ -1,12 +1,30 @@
 # Batchalign
 
 **Status:** Current
-**Last updated:** 2026-08-30 12:03 EDT
+**Last updated:** 2026-09-01
 
 This repository contains Batchalign: the audio and ML pipeline for producing
 and enriching CHAT transcripts. It supports transcription, forced alignment,
 morphotagging, utterance segmentation, translation, diarization, comparison,
 and the Batchalign desktop shell.
+
+## Install Batchalign
+
+On macOS or Linux:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/Jemoka/talkbank-tools/main/bootstrap/bootstrap.sh | sh
+```
+
+On Windows, from PowerShell or Command Prompt:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/Jemoka/talkbank-tools/main/bootstrap/bootstrap.ps1 | iex"
+```
+
+The bootstrapper installs [uv](https://docs.astral.sh/uv/getting-started/installation/)
+when needed, then installs or upgrades `batchalign[all]` on Python 3.11 with
+prerelease versions enabled.
 
 The CHAT parser, typed model, transformations, and grammar come from the
 version-pinned [TalkBank Chatter repository](https://github.com/TalkBank/chatter).
@@ -25,8 +43,8 @@ just batchalign cli -- --help
 ```
 
 `just batchalign cli` is the authoritative development entrypoint for the CLI.
-Bazel jobs default to one to keep local builds memory-safe; set
-`BATCHALIGN_BAZEL_JOBS` explicitly on a larger build host if needed.
+Bazel uses host-adaptive parallelism by default. Set `BATCHALIGN_BAZEL_JOBS`
+explicitly when a resource-constrained runner needs a lower limit.
 
 The main source areas are:
 
@@ -36,9 +54,8 @@ The main source areas are:
 - `resources/test_fixtures/` — integration and parity fixtures
 - `scripts/parity/` — bounded pre/post parity tooling
 
-Install the published CLI with `uv tool install batchalign3`. See
-[the Batchalign documentation](book/src/batchalign/introduction.md) for usage
-and architecture.
+See [the Batchalign documentation](book/src/batchalign/introduction.md) for
+usage and architecture.
 
 ## License
 

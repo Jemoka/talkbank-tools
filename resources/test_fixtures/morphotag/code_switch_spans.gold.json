@@ -1,5 +1,6 @@
 {
   "language": "eng",
+  "routed_utterance_languages": ["eng", "fra"],
   "cases": [
     {
       "main": "I know <how to do it> [@s] .",
@@ -12,6 +13,24 @@
       "tokens": ["I", "know", "தமிழ்", "சொற்கள்"],
       "stanza_text": "I know தமிழ்@s சொற்கள்@s",
       "switched_mor": ["L2|xxx", "L2|xxx"]
+    },
+    {
+      "main": "I know bonjour@s:fra .",
+      "tokens": ["I", "know", "bonjour"],
+      "stanza_text": "I know bonjour@s",
+      "switched_mor": ["L2|xxx"]
+    },
+    {
+      "main": "I know <bonjour mes amis> [@s:fra] .",
+      "tokens": ["I", "know", "bonjour", "mes", "amis"],
+      "stanza_text": "I know bonjour@s mes@s amis@s",
+      "switched_mor": ["L2|xxx", "L2|xxx", "L2|xxx"]
+    },
+    {
+      "main": "[- fra] bonjour mes amis .",
+      "language": "fra",
+      "tokens": ["bonjour", "mes", "amis"],
+      "stanza_text": "bonjour mes amis"
     }
   ]
 }

@@ -14,7 +14,10 @@ use async_trait::async_trait;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use talkbank_model::alignment::helpers::{TierDomain, WordItem, walk_words};
-use talkbank_model::model::{Bullet, Utterance};
+use talkbank_model::model::{
+    Bullet, Header, IDHeader, Participant, ParticipantEntries, ParticipantEntry, ParticipantRole,
+    Utterance,
+};
 use talkbank_model::{Line, SpeakerCode};
 
 const SIBLING_MEDIA_EXTS: &[&str] = &[
@@ -136,6 +139,53 @@ fn relabel_utterances_by_diarization(
             (label, code)
         })
         .collect();
+    let mut added_participants = Vec::new();
+    if speaker_codes
+        .values()
+        .any(|code| !chat.ast().participants.contains_key(code))
+    {
+        let template = chat
+            .ast()
+            .participants
+            .values()
+            .next()
+            .cloned()
+            .ok_or_else(|| {
+                BAError::Internal(
+                    "SpeakerTaskRunner: cannot declare diarized speakers without a participant template"
+                        .into(),
+                )
+            })?;
+        for code in speaker_codes.values() {
+            if chat.ast().participants.contains_key(code) {
+                continue;
+            }
+            let role = ParticipantRole::new("Participant");
+            let entry = ParticipantEntry {
+                speaker_code: code.clone(),
+                name: None,
+                role: role.clone(),
+            };
+            let id = IDHeader::from_languages(template.id.language.clone(), code.clone(), role)
+                .with_corpus(template.id.corpus.clone());
+            let participant = Participant::new(entry, id);
+            chat.ast_mut()
+                .participants
+                .insert(code.clone(), participant.clone());
+            added_participants.push(participant);
+        }
+    }
+    let participant_entries = ParticipantEntries::new(
+        chat.ast()
+            .participants
+            .values()
+            .map(|participant| ParticipantEntry {
+                speaker_code: participant.code.clone(),
+                name: participant.name.clone(),
+                role: participant.role.clone(),
+            })
+            .collect(),
+    );
     let source_id = chat.source_id().clone();
     let total = chat
         .ast()
@@ -149,7 +199,13 @@ fn relabel_utterances_by_diarization(
     let mut new_lines = Vec::with_capacity(old_lines.len());
     for line in old_lines {
         let Line::Utterance(utterance) = line else {
-            new_lines.push(line);
+            let mut header_line = line;
+            if let Line::Header { header, .. } = &mut header_line
+                && let Header::Participants { entries } = header.as_mut()
+            {
+                *entries = participant_entries.clone();
+            }
+            new_lines.push(header_line);
             continue;
         };
 
@@ -173,6 +229,23 @@ fn relabel_utterances_by_diarization(
             completed,
             total,
         ));
+    }
+    if !added_participants.is_empty() {
+        let insert_at = new_lines
+            .iter()
+            .rposition(|line| {
+                matches!(
+                    line,
+                    Line::Header { header, .. } if matches!(header.as_ref(), Header::ID(_))
+                )
+            })
+            .map_or(0, |index| index + 1);
+        new_lines.splice(
+            insert_at..insert_at,
+            added_participants
+                .into_iter()
+                .map(|participant| Line::header(Header::ID(participant.id))),
+        );
     }
     chat.ast_mut().lines = new_lines.into();
     Ok(())
@@ -369,5 +442,60 @@ mod tests {
             .expect("same-speaker output remains valid CHAT");
 
         assert_eq!(chat.ast().utterances().count(), 1);
+    }
+
+    #[test]
+    fn declares_new_participant_for_third_diarized_speaker() {
+        let source_id = SourceId::new_unchecked("speaker-test");
+        let mut chat = Chat::parse(TIMED_UTTERANCE, source_id).expect("valid timed CHAT");
+        let diarization = output(vec![
+            DiarizationSegment {
+                start_ms: 0,
+                end_ms: 400,
+                speaker: "speaker-a".into(),
+            },
+            DiarizationSegment {
+                start_ms: 401,
+                end_ms: 800,
+                speaker: "speaker-b".into(),
+            },
+            DiarizationSegment {
+                start_ms: 801,
+                end_ms: 1600,
+                speaker: "speaker-c".into(),
+            },
+        ]);
+
+        relabel_utterances_by_diarization(&mut chat, &diarization, &NullSink)
+            .expect("speaker projection succeeds");
+        chat.validate_stage_output(Task::Speaker)
+            .expect("third-speaker output remains valid CHAT");
+
+        let participant = chat
+            .ast()
+            .participants
+            .get(&SpeakerCode::new("PAR2"))
+            .expect("PAR2 participant is declared");
+        assert_eq!(participant.id.speaker.as_str(), "PAR2");
+        assert_eq!(participant.role.as_str(), "Participant");
+
+        let rendered = chat.to_chat();
+        assert!(
+            rendered
+                .contains("@Participants:\tPAR0 Participant, PAR1 Participant, PAR2 Participant")
+        );
+        assert!(rendered.contains("@ID:\teng|test|PAR2|||||Participant|||"));
+        let reparsed = Chat::parse(&rendered, SourceId::new_unchecked("speaker-reparse"))
+            .expect("serialized third-speaker CHAT reparses");
+        reparsed
+            .validate_stage_output(Task::Speaker)
+            .expect("serialized third-speaker CHAT validates");
+
+        let speakers: Vec<_> = chat
+            .ast()
+            .utterances()
+            .map(|utterance| utterance.main.speaker.as_str())
+            .collect();
+        assert_eq!(speakers, ["PAR0", "PAR1", "PAR2"]);
     }
 }
