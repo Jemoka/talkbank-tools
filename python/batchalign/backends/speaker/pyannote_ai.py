@@ -46,7 +46,7 @@ class PyannoteAIBackend(Speaker):
         base_url: str = "https://api.pyannote.ai",
         urlopen: Callable[..., Any] | None = None,
         sleep: Callable[[float], None] = time.sleep,
-        wav_renderer: Callable[[Any], bytes] | None = None,
+        media_renderer: Callable[[Any], bytes] | None = None,
     ) -> None:
         if model not in {"precision-2", "community-1"}:
             raise ValueError(
@@ -72,7 +72,7 @@ class PyannoteAIBackend(Speaker):
         self._base_url = base_url.rstrip("/")
         self._urlopen = urlopen or urllib.request.urlopen
         self._sleep = sleep
-        self._wav_renderer = wav_renderer or _render_wav
+        self._media_renderer = media_renderer or _render_mp3
         self._policy = BatchPolicy(
             max_size=batch_size, window_ms=batch_window_ms
         )
@@ -80,7 +80,7 @@ class PyannoteAIBackend(Speaker):
     @property
     def name(self) -> str:
         speakers = self._num_speakers or "auto"
-        return f"pyannote-ai:{self._model}:speakers-{speakers}:v1"
+        return f"pyannote-ai:{self._model}:speakers-{speakers}:v2"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -144,7 +144,7 @@ class PyannoteAIBackend(Speaker):
         return outputs
 
     def _upload_audio(self, audio: Any) -> str:
-        media_url = f"media://batchalign/{uuid.uuid4().hex}.wav"
+        media_url = f"media://batchalign/{uuid.uuid4().hex}.mp3"
         response = self._request_json(
             "POST", "/v1/media/input", payload={"url": media_url}
         )
@@ -154,7 +154,7 @@ class PyannoteAIBackend(Speaker):
 
         request = urllib.request.Request(
             upload_url,
-            data=self._wav_renderer(audio),
+            data=self._media_renderer(audio),
             headers={"Content-Type": "application/octet-stream"},
             method="PUT",
         )
@@ -266,11 +266,11 @@ class PyannoteAIBackend(Speaker):
         raise RuntimeError(f"pyannoteAI {operation} failed after rate-limit retries")
 
 
-def _render_wav(audio: Any) -> bytes:
-    """Render prepared PCM with Batchalign's native conversion backend."""
+def _render_mp3(audio: Any) -> bytes:
+    """Render prepared speech PCM as a compact cloud-upload payload."""
     from batchalign._core.backends import ConvertBackend
 
-    converter = ConvertBackend("wav")
+    converter = ConvertBackend("mp3", mp3_bitrate_kbps=32)
     return bytes(
         converter.encode_prepared(
             bytes(audio.pcm_f32le),

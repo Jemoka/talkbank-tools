@@ -64,15 +64,15 @@ def test_diarization_upload_submit_poll_and_projection():
 
     rendered = []
 
-    def render_wav(audio):
+    def render_media(audio):
         rendered.append(audio)
-        return b"RIFF-from-convert-backend"
+        return b"\xff\xfb-from-convert-backend"
 
     backend = PyannoteAIBackend(
         api_key="secret",
         num_speakers=2,
         urlopen=urlopen,
-        wav_renderer=render_wav,
+        media_renderer=render_media,
         sleep=lambda _seconds: None,
     )
     output = backend.call(
@@ -86,11 +86,14 @@ def test_diarization_upload_submit_poll_and_projection():
         "POST",
         "GET",
     ]
-    assert requests[1][0].data == b"RIFF-from-convert-backend"
+    assert backend.name == "pyannote-ai:precision-2:speakers-2:v2"
+    declared = json.loads(requests[0][0].data)
+    assert declared["url"].endswith(".mp3")
+    assert requests[1][0].data == b"\xff\xfb-from-convert-backend"
     assert requests[1][0].get_header("Authorization") is None
     submitted = json.loads(requests[2][0].data)
     assert submitted == {
-        "url": json.loads(requests[0][0].data)["url"],
+        "url": declared["url"],
         "model": "precision-2",
         "numSpeakers": 2,
     }
@@ -109,7 +112,7 @@ def test_missing_key_fails_before_upload():
     from batchalign._core.proto import SpeakerInput
     from batchalign.backends.speaker.pyannote_ai import PyannoteAIBackend
 
-    backend = PyannoteAIBackend(api_key="", wav_renderer=lambda _audio: b"")
+    backend = PyannoteAIBackend(api_key="", media_renderer=lambda _audio: b"")
     with pytest.raises(RuntimeError, match=r"\[diarize\].*engine\.pyannote\.key"):
         backend.call([SpeakerInput(source_id="clip", audio=_audio())])
 
@@ -144,9 +147,9 @@ def test_idempotent_upload_retries_transient_write_timeout():
     assert delays == [1, 2]
 
 
-def test_native_converter_renders_wav():
-    from batchalign.backends.speaker.pyannote_ai import _render_wav
+def test_native_converter_renders_compact_mp3():
+    from batchalign.backends.speaker.pyannote_ai import _render_mp3
 
-    rendered = _render_wav(_audio())
-    assert rendered[:4] == b"RIFF"
-    assert rendered[8:12] == b"WAVE"
+    rendered = _render_mp3(_audio())
+    assert rendered[0] == 0xFF
+    assert rendered[1] & 0xE0 == 0xE0

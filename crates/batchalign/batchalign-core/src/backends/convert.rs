@@ -15,6 +15,7 @@ pub struct ConvertBackend {
     name: String,
     tasks: Vec<Task>,
     format: MediaFormat,
+    mp3_bitrate_kbps: Option<u32>,
 }
 
 impl ConvertBackend {
@@ -27,6 +28,21 @@ impl ConvertBackend {
             name: format!("convert:rust:{encoder}:{}:v1", format.extension()),
             tasks: vec![Task::Convert],
             format,
+            mp3_bitrate_kbps: None,
+        }
+    }
+
+    /// Construct an MP3 encoder with an explicit constant bitrate.
+    ///
+    /// The ordinary Convert task deliberately keeps its established
+    /// 128/192 kbps defaults. Cloud backends can select a speech-appropriate
+    /// bitrate when transfer size matters more than music fidelity.
+    pub fn mp3(bitrate_kbps: u32) -> Self {
+        Self {
+            name: format!("convert:rust:oxideav-mp3-0.1.3:mp3:{bitrate_kbps}kbps:v1"),
+            tasks: vec![Task::Convert],
+            format: MediaFormat::Mp3,
+            mp3_bitrate_kbps: Some(bitrate_kbps),
         }
     }
 
@@ -35,7 +51,7 @@ impl ConvertBackend {
     pub fn encode(&self, audio: &PreparedAudio) -> BAResult<Vec<u8>> {
         match self.format {
             MediaFormat::Wav => encode_wav(audio),
-            MediaFormat::Mp3 => encode_mp3(audio),
+            MediaFormat::Mp3 => encode_mp3(audio, self.mp3_bitrate_kbps),
         }
     }
 }
@@ -147,7 +163,7 @@ fn encode_wav(audio: &PreparedAudio) -> BAResult<Vec<u8>> {
     Ok(out)
 }
 
-fn encode_mp3(audio: &PreparedAudio) -> BAResult<Vec<u8>> {
+fn encode_mp3(audio: &PreparedAudio, bitrate_kbps: Option<u32>) -> BAResult<Vec<u8>> {
     let mut samples = pcm_f32(audio)?;
     let mut channels = usize::from(audio.channels);
     // Layer III carries at most two channels. Preserve ordinary mono/stereo
@@ -171,11 +187,13 @@ fn encode_mp3(audio: &PreparedAudio) -> BAResult<Vec<u8>> {
     } else {
         ChannelMode::Stereo
     };
-    let bitrate_kbps = if target_rate >= 32_000 && channels == 2 {
-        192
-    } else {
-        128
-    };
+    let bitrate_kbps = bitrate_kbps.unwrap_or_else(|| {
+        if target_rate >= 32_000 && channels == 2 {
+            192
+        } else {
+            128
+        }
+    });
     let mut encoder =
         Mp3Encoder::new_with_quality_preset(bitrate_kbps, target_rate, mode, QualityPreset::High)
             .map_err(|err| BAError::Worker(format!("convert: initialize MP3 encoder: {err:?}")))?;
@@ -272,6 +290,19 @@ mod tests {
         assert!(output.encoded_bytes.len() > 100);
         assert_eq!(output.encoded_bytes[0], 0xff);
         assert_eq!(output.encoded_bytes[1] & 0xe0, 0xe0);
+    }
+
+    #[test]
+    fn explicit_mp3_bitrate_reduces_cloud_payload_size() {
+        let audio = sine_audio(16_000, 1);
+        let ordinary = ConvertBackend::new(MediaFormat::Mp3)
+            .encode(&audio)
+            .unwrap();
+        let speech = ConvertBackend::mp3(32).encode(&audio).unwrap();
+
+        assert_eq!(speech[0], 0xff);
+        assert_eq!(speech[1] & 0xe0, 0xe0);
+        assert!(speech.len() < ordinary.len());
     }
 
     #[test]
