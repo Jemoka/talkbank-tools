@@ -16,6 +16,7 @@ pub struct ConvertBackend {
     tasks: Vec<Task>,
     format: MediaFormat,
     mp3_bitrate_kbps: Option<u32>,
+    mp3_sample_rate_hz: Option<u32>,
 }
 
 impl ConvertBackend {
@@ -29,6 +30,7 @@ impl ConvertBackend {
             tasks: vec![Task::Convert],
             format,
             mp3_bitrate_kbps: None,
+            mp3_sample_rate_hz: None,
         }
     }
 
@@ -37,12 +39,15 @@ impl ConvertBackend {
     /// The ordinary Convert task deliberately keeps its established
     /// 128/192 kbps defaults. Cloud backends can select a speech-appropriate
     /// bitrate when transfer size matters more than music fidelity.
-    pub fn mp3(bitrate_kbps: u32) -> Self {
+    pub fn mp3(bitrate_kbps: u32, sample_rate_hz: u32) -> Self {
         Self {
-            name: format!("convert:rust:oxideav-mp3-0.1.3:mp3:{bitrate_kbps}kbps:v1"),
+            name: format!(
+                "convert:rust:oxideav-mp3-0.1.3:mp3:{bitrate_kbps}kbps:{sample_rate_hz}hz:v1"
+            ),
             tasks: vec![Task::Convert],
             format: MediaFormat::Mp3,
             mp3_bitrate_kbps: Some(bitrate_kbps),
+            mp3_sample_rate_hz: Some(sample_rate_hz),
         }
     }
 
@@ -51,7 +56,7 @@ impl ConvertBackend {
     pub fn encode(&self, audio: &PreparedAudio) -> BAResult<Vec<u8>> {
         match self.format {
             MediaFormat::Wav => encode_wav(audio),
-            MediaFormat::Mp3 => encode_mp3(audio, self.mp3_bitrate_kbps),
+            MediaFormat::Mp3 => encode_mp3(audio, self.mp3_bitrate_kbps, self.mp3_sample_rate_hz),
         }
     }
 }
@@ -163,7 +168,11 @@ fn encode_wav(audio: &PreparedAudio) -> BAResult<Vec<u8>> {
     Ok(out)
 }
 
-fn encode_mp3(audio: &PreparedAudio, bitrate_kbps: Option<u32>) -> BAResult<Vec<u8>> {
+fn encode_mp3(
+    audio: &PreparedAudio,
+    bitrate_kbps: Option<u32>,
+    sample_rate_hz: Option<u32>,
+) -> BAResult<Vec<u8>> {
     let mut samples = pcm_f32(audio)?;
     let mut channels = usize::from(audio.channels);
     // Layer III carries at most two channels. Preserve ordinary mono/stereo
@@ -176,7 +185,7 @@ fn encode_mp3(audio: &PreparedAudio, bitrate_kbps: Option<u32>) -> BAResult<Vec<
         channels = 1;
     }
 
-    let target_rate = nearest_mp3_rate(audio.sample_rate);
+    let target_rate = sample_rate_hz.unwrap_or_else(|| nearest_mp3_rate(audio.sample_rate));
     if target_rate != audio.sample_rate {
         samples = resample_linear(&samples, channels, audio.sample_rate, target_rate);
     }
@@ -298,7 +307,7 @@ mod tests {
         let ordinary = ConvertBackend::new(MediaFormat::Mp3)
             .encode(&audio)
             .unwrap();
-        let speech = ConvertBackend::mp3(32).encode(&audio).unwrap();
+        let speech = ConvertBackend::mp3(16, 16_000).encode(&audio).unwrap();
 
         assert_eq!(speech[0], 0xff);
         assert_eq!(speech[1] & 0xe0, 0xe0);

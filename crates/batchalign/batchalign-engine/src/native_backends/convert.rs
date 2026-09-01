@@ -15,24 +15,40 @@ pub struct ConvertBackend {
 #[pymethods]
 impl ConvertBackend {
     #[new]
-    #[pyo3(signature = (format, *, mp3_bitrate_kbps=None))]
-    fn py_new(format: &str, mp3_bitrate_kbps: Option<u32>) -> PyResult<Self> {
+    #[pyo3(signature = (format, *, mp3_bitrate_kbps=None, mp3_sample_rate_hz=None))]
+    fn py_new(
+        format: &str,
+        mp3_bitrate_kbps: Option<u32>,
+        mp3_sample_rate_hz: Option<u32>,
+    ) -> PyResult<Self> {
         let format = format
             .parse::<MediaFormat>()
             .map_err(|message| pyo3::exceptions::PyValueError::new_err(message))?;
-        let inner = match mp3_bitrate_kbps {
-            Some(0) => {
+        let inner = match (mp3_bitrate_kbps, mp3_sample_rate_hz) {
+            (Some(0), _) => {
                 return Err(pyo3::exceptions::PyValueError::new_err(
                     "mp3_bitrate_kbps must be positive",
                 ));
             }
-            Some(bitrate) if format == MediaFormat::Mp3 => CoreConvertBackend::mp3(bitrate),
-            Some(_) => {
+            (_, Some(0)) => {
                 return Err(pyo3::exceptions::PyValueError::new_err(
-                    "mp3_bitrate_kbps is only valid for MP3 output",
+                    "mp3_sample_rate_hz must be positive",
                 ));
             }
-            None => CoreConvertBackend::new(format),
+            (Some(bitrate), Some(sample_rate)) if format == MediaFormat::Mp3 => {
+                CoreConvertBackend::mp3(bitrate, sample_rate)
+            }
+            (Some(_), Some(_)) => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "MP3 encoding options are only valid for MP3 output",
+                ));
+            }
+            (None, None) => CoreConvertBackend::new(format),
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "mp3_bitrate_kbps and mp3_sample_rate_hz must be set together",
+                ));
+            }
         };
         Ok(Self {
             inner: Arc::new(inner),

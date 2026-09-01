@@ -29,6 +29,7 @@ from batchalign.backends.base import BatchPolicy, Speaker
 _LOG = logging.getLogger("batchalign.backends.speaker.pyannote_ai")
 _TERMINAL_STATUSES = {"succeeded", "failed", "canceled"}
 _CLOUD_MP3_BITRATE_KBPS = 16
+_CLOUD_MP3_SAMPLE_RATE_HZ = 16_000
 
 
 class PyannoteAIBackend(Speaker):
@@ -82,7 +83,7 @@ class PyannoteAIBackend(Speaker):
     @property
     def name(self) -> str:
         speakers = self._num_speakers or "auto"
-        return f"pyannote-ai:{self._model}:speakers-{speakers}:v3"
+        return f"pyannote-ai:{self._model}:speakers-{speakers}:v4"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -272,7 +273,11 @@ def _render_mp3(audio: Any) -> bytes:
     """Render prepared speech PCM as a compact cloud-upload payload."""
     from batchalign._core.backends import ConvertBackend
 
-    converter = ConvertBackend("mp3", mp3_bitrate_kbps=_CLOUD_MP3_BITRATE_KBPS)
+    converter = ConvertBackend(
+        "mp3",
+        mp3_bitrate_kbps=_CLOUD_MP3_BITRATE_KBPS,
+        mp3_sample_rate_hz=_CLOUD_MP3_SAMPLE_RATE_HZ,
+    )
     return bytes(
         converter.encode_prepared(
             bytes(audio.pcm_f32le),
