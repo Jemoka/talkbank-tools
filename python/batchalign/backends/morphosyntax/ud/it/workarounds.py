@@ -73,6 +73,8 @@ class LegacyMwtRule:
 
 
 _ME = CliticRule("me", "me", "Number=Sing|Person=1|PronType=Prs", "iobj")
+_CI = CliticRule("ci", "ci", "Number=Plur|Person=1|PronType=Prs", "obj")
+_SI = CliticRule("si", "si", "Number=Sing|Person=3|PronType=Prs", "obj")
 _LA = CliticRule("la", "la", "Gender=Fem|Number=Sing|Person=3|PronType=Prs", "obj")
 _LO = CliticRule("lo", "lo", "Gender=Masc|Number=Sing|Person=3|PronType=Prs", "obj")
 _LI = CliticRule("li", "li", "Gender=Masc|Number=Plur|Person=3|PronType=Prs", "obj")
@@ -103,37 +105,91 @@ def _pron(surface: str, lemma: str, feats: str) -> LegacyMwtComponent:
     return LegacyMwtComponent(surface, "PRON", lemma, feats)
 
 
+def _infinitive_clitic(
+    surface: str,
+    lemma: str,
+    clitic: CliticRule,
+    defect: int = 15,
+) -> LegacyMwtRule:
+    return LegacyMwtRule(
+        defect,
+        surface,
+        (
+            _verb(lemma, lemma, "VerbForm=Inf"),
+            _pron(clitic.surface, clitic.lemma, clitic.feats),
+        ),
+        _LEGACY_REPROBE,
+    )
+
+
+def _imperative_clitic(
+    surface: str,
+    stem_surface: str,
+    lemma: str,
+    clitic: CliticRule,
+    defect: int = 15,
+) -> LegacyMwtRule:
+    return LegacyMwtRule(
+        defect,
+        surface,
+        (
+            _verb(
+                stem_surface,
+                lemma,
+                "Mood=Imp|Number=Sing|Person=2|Tense=Pres|VerbForm=Fin",
+            ),
+            _pron(clitic.surface, clitic.lemma, clitic.feats),
+        ),
+        _LEGACY_REPROBE,
+    )
+
+
 _LEGACY_REPROBE = (
     "retire only when the pinned Stanza model reproduces the established "
     "Italian TalkBank morphology on the real legacy fixture"
 )
 
-_LEGACY_MWT_RULES: tuple[LegacyMwtRule, ...] = (
-    LegacyMwtRule(14, "nel", (_adp("in", "in"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
-    LegacyMwtRule(14, "del", (_adp("di", "di"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
-    LegacyMwtRule(14, "sulla", (_adp("su", "su"), _det("la", _FEM_SING_ART)), _LEGACY_REPROBE),
-    LegacyMwtRule(14, "dei", (_adp("di", "di"), _det("i", _MASC_PLUR_ART)), _LEGACY_REPROBE),
-    LegacyMwtRule(14, "alla", (_adp("a", "a"), _det("la", _FEM_SING_ART)), _LEGACY_REPROBE),
+_ARTICULATED_PREPOSITION_RULES: tuple[LegacyMwtRule, ...] = (
+    LegacyMwtRule(
+        14, "nel", (_adp("in", "in"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE
+    ),
+    LegacyMwtRule(
+        14, "del", (_adp("di", "di"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE
+    ),
+    LegacyMwtRule(
+        14, "sulla", (_adp("su", "su"), _det("la", _FEM_SING_ART)), _LEGACY_REPROBE
+    ),
+    LegacyMwtRule(
+        14, "dei", (_adp("di", "di"), _det("i", _MASC_PLUR_ART)), _LEGACY_REPROBE
+    ),
+    LegacyMwtRule(
+        14, "alla", (_adp("a", "a"), _det("la", _FEM_SING_ART)), _LEGACY_REPROBE
+    ),
     LegacyMwtRule(
         14,
         "della",
         (LegacyMwtComponent("della", "DET", "il", _MASC_SING_ART),),
         _LEGACY_REPROBE,
     ),
-    LegacyMwtRule(14, "al", (_adp("a", "a"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
-    LegacyMwtRule(14, "col", (_adp("con", "con"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
-    LegacyMwtRule(14, "allo", (_adp("a", "a"), _det("lo", _MASC_SING_ART)), _LEGACY_REPROBE),
-    LegacyMwtRule(14, "sul", (_adp("su", "su"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE),
-    LegacyMwtRule(14, "ai", (_adp("a", "a"), _det("i", _MASC_PLUR_ART)), _LEGACY_REPROBE),
     LegacyMwtRule(
-        14,
-        "alzarci",
-        (
-            _verb("alzare", "alzare", "VerbForm=Inf"),
-            _pron("ci", "ci", "Number=Plur|Person=1|PronType=Prs"),
-        ),
-        _LEGACY_REPROBE,
+        14, "al", (_adp("a", "a"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE
     ),
+    LegacyMwtRule(
+        14, "col", (_adp("con", "con"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE
+    ),
+    LegacyMwtRule(
+        14, "allo", (_adp("a", "a"), _det("lo", _MASC_SING_ART)), _LEGACY_REPROBE
+    ),
+    LegacyMwtRule(
+        14, "sul", (_adp("su", "su"), _det("il", _MASC_SING_ART)), _LEGACY_REPROBE
+    ),
+    LegacyMwtRule(
+        14, "ai", (_adp("a", "a"), _det("i", _MASC_PLUR_ART)), _LEGACY_REPROBE
+    ),
+)
+
+_REPORTED_LEGACY_CLITIC_RULES: tuple[LegacyMwtRule, ...] = (
+    _infinitive_clitic("alzarci", "alzare", _CI, defect=14),
     LegacyMwtRule(
         14,
         "eccolo",
@@ -152,37 +208,66 @@ _LEGACY_MWT_RULES: tuple[LegacyMwtRule, ...] = (
         ),
         _LEGACY_REPROBE,
     ),
-    LegacyMwtRule(
-        14,
-        "sporcarsi",
-        (
-            _verb("sporcare", "sporcare", "VerbForm=Inf"),
-            _pron("si", "si", "Number=Sing|Person=3|PronType=Prs"),
-        ),
-        _LEGACY_REPROBE,
-    ),
-    LegacyMwtRule(
-        14,
-        "vederla",
-        (
-            _verb("vedere", "vedere", "VerbForm=Inf"),
-            _pron("la", "la", "Gender=Fem|Number=Sing|Person=3|PronType=Prs"),
-        ),
-        _LEGACY_REPROBE,
-    ),
-    LegacyMwtRule(
-        14,
-        "guardalo",
-        (
-            _verb(
-                "guarda",
-                "guardare",
-                "Mood=Imp|Number=Sing|Person=2|Tense=Pres|VerbForm=Fin",
-            ),
-            _pron("lo", "lo", "Gender=Masc|Number=Sing|Person=3|PronType=Prs"),
-        ),
-        _LEGACY_REPROBE,
-    ),
+    _infinitive_clitic("sporcarsi", "sporcare", _SI, defect=14),
+    _infinitive_clitic("vederla", "vedere", _LA, defect=14),
+    _imperative_clitic("guardalo", "guarda", "guardare", _LO, defect=14),
+)
+
+# Common productive forms adjacent to the user-reported regressions. These are
+# intentionally enumerated: suffix-only rewriting would mis-tag lexical
+# homographs such as the noun ``fallo``.
+_COMMON_INFINITIVE_CLITIC_RULES = tuple(
+    _infinitive_clitic(surface, lemma, clitic)
+    for surface, lemma, clitic in (
+        ("alzarsi", "alzare", _SI),
+        ("lavarsi", "lavare", _SI),
+        ("vestirsi", "vestire", _SI),
+        ("sedersi", "sedere", _SI),
+        ("mettersi", "mettere", _SI),
+        ("chiamarsi", "chiamare", _SI),
+        ("svegliarsi", "svegliare", _SI),
+        ("vederlo", "vedere", _LO),
+        ("prenderlo", "prendere", _LO),
+        ("prenderla", "prendere", _LA),
+        ("farlo", "fare", _LO),
+        ("farla", "fare", _LA),
+        ("dirlo", "dire", _LO),
+        ("aprirlo", "aprire", _LO),
+        ("chiuderlo", "chiudere", _LO),
+        ("mangiarlo", "mangiare", _LO),
+        ("berlo", "bere", _LO),
+        ("portarlo", "portare", _LO),
+        ("portarla", "portare", _LA),
+    )
+)
+
+_COMMON_IMPERATIVE_CLITIC_RULES = tuple(
+    _imperative_clitic(surface, stem, lemma, clitic)
+    for surface, stem, lemma, clitic in (
+        ("guardala", "guarda", "guardare", _LA),
+        ("guardali", "guarda", "guardare", _LI),
+        ("guardale", "guarda", "guardare", _LE),
+        ("mettilo", "metti", "mettere", _LO),
+        ("mettila", "metti", "mettere", _LA),
+        ("portalo", "porta", "portare", _LO),
+        ("portala", "porta", "portare", _LA),
+        ("lascialo", "lascia", "lasciare", _LO),
+        ("lasciala", "lascia", "lasciare", _LA),
+        ("chiudilo", "chiudi", "chiudere", _LO),
+        ("chiudila", "chiudi", "chiudere", _LA),
+        ("mangialo", "mangia", "mangiare", _LO),
+        ("mangiala", "mangia", "mangiare", _LA),
+        ("bevilo", "bevi", "bere", _LO),
+        ("bevila", "bevi", "bere", _LA),
+        ("leggilo", "leggi", "leggere", _LO),
+    )
+)
+
+_LEGACY_MWT_RULES = (
+    _ARTICULATED_PREPOSITION_RULES
+    + _REPORTED_LEGACY_CLITIC_RULES
+    + _COMMON_INFINITIVE_CLITIC_RULES
+    + _COMMON_IMPERATIVE_CLITIC_RULES
 )
 
 _LEGACY_MWT_BY_SURFACE = {rule.surface: rule for rule in _LEGACY_MWT_RULES}
@@ -275,9 +360,7 @@ COMPONENT_REWRITE_RULES: tuple[ComponentRewriteRule, ...] = (
     ),
 )
 
-_COMPONENT_REWRITE_BY_SURFACE = {
-    rule.surface: rule for rule in COMPONENT_REWRITE_RULES
-}
+_COMPONENT_REWRITE_BY_SURFACE = {rule.surface: rule for rule in COMPONENT_REWRITE_RULES}
 
 
 def rule_for(surface: str, upos: str) -> CompoundImperativeRule | None:

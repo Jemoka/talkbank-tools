@@ -26,19 +26,19 @@ from .dp import PayloadTarget, ReferenceTarget, align
 
 def conform(i):
     """A token may be a bare string or a `(text, is_mwt)` tuple; get its text."""
-    return i[0] if type(i) == tuple else i
+    return i[0] if isinstance(i, tuple) else i
 
 
 def matches(i, word):
-    return (type(i) == tuple and i[0] == word) or (i == word)
+    return (isinstance(i, tuple) and i[0] == word) or (i == word)
 
 
 def matches_in(i, fragment):
-    return (type(i) == tuple and fragment in i[0]) or (fragment in i)
+    return (isinstance(i, tuple) and fragment in i[0]) or (fragment in i)
 
 
 def front_matches(i, word):
-    return (type(i) == tuple and i[: len(word)] == word) or (i[: len(word)] == word)
+    return (isinstance(i, tuple) and i[: len(word)] == word) or (i[: len(word)] == word)
 
 
 def tokenizer_processor(tokenized, lang, sent):
@@ -47,8 +47,19 @@ def tokenizer_processor(tokenized, lang, sent):
     `lang` is a list of language codes (BA2 passes `list(langs_alpha2)`), so the
     per-language branches use `"en" in lang` membership tests.
     """
-    # split tokenized in case stuff got combined
-    tokenized = [j for i in tokenized for j in conform(i).split(" ")]
+    # Split candidates that contain spaces, but retain Stanza's MWT marker
+    # when the candidate itself remains intact. The marker authorizes the MWT
+    # processor to analyze components *inside* one authoritative CHAT word;
+    # the alignment below still prevents native tokenization from changing
+    # boundaries between CHAT words.
+    split_candidates = []
+    for candidate in tokenized:
+        fragments = conform(candidate).split(" ")
+        if len(fragments) == 1:
+            split_candidates.append(candidate)
+        else:
+            split_candidates.extend(fragments)
+    tokenized = split_candidates
     res: list = []
     split_passage = sent.split(" ")
 
@@ -91,9 +102,32 @@ def tokenizer_processor(tokenized, lang, sent):
     indx = 0
     while indx < len(tokenized):
         i = tokenized[indx]
-        if ("it" in lang) and type(i) == tuple and i[0] == "l'" and i[1] is True:
+        if (
+            isinstance(i, tuple)
+            and i[1] is True
+            and (
+                (("it" in lang) and i[0].casefold() == "dai")
+                or (
+                    ("en" in lang)
+                    and i[0].casefold() in {"dunno", "gonna", "wanna", "whatnot"}
+                )
+            )
+        ):
+            # Preserve the established whole-word analyses for conventional
+            # English CHAT spellings. ``dunno`` is not the unrelated verb
+            # ``dun`` plus ``no``; ``whatnot`` is lexical; and ``gonna`` /
+            # ``wanna`` are dictionary-recognized informal spellings. Italian
+            # ``dai`` is ambiguous between the verb ``dare`` and ``da + i``.
+            # Keep these intact for contextual POS tagging.
+            res.append(i[0])
+        elif ("it" in lang) and isinstance(i, tuple) and i[0] == "l'" and i[1] is True:
             res.append("l'")
-        elif ("it" in lang) and matches(i, "i") and len(res) != 0 and matches(res[-1], "le"):
+        elif (
+            ("it" in lang)
+            and matches(i, "i")
+            and len(res) != 0
+            and matches(res[-1], "le")
+        ):
             res.pop(-1)
             res.append("lei")
         elif ("pt" in lang) and matches(i, "d'água"):
@@ -111,14 +145,22 @@ def tokenizer_processor(tokenized, lang, sent):
             for elem in with_clitic:
                 res.append((f"{elem}'", False))
             res.append((f"{without}", False))
-        elif ("fr" in lang) and conform(i).split("'")[0] in ["jusqu", "puisqu", "quelqu", "aujourd"]:
+        elif ("fr" in lang) and conform(i).split("'")[0] in [
+            "jusqu",
+            "puisqu",
+            "quelqu",
+            "aujourd",
+        ]:
             before, after = conform(i).split("'")
             res.append((f"{before}'", False))
             res.append((after, False))
         elif (
             ("en" in lang)
             and matches_in(i, "'")
-            and not (len(conform(i).split("'")) > 1 and conform(i).split("'")[0].strip() == "o")
+            and not (
+                len(conform(i).split("'")) > 1
+                and conform(i).split("'")[0].strip() == "o"
+            )
         ):
             res.append((conform(i), True))
         elif ("nl" in lang) and conform(i).endswith("'s"):

@@ -426,10 +426,11 @@ class StanzaBackend(Morphosyntax):
     def name(self) -> str:
         version = getattr(self._stanza, "__version__", "unknown")
         retok = "retok" if self._retokenize else "noretok"
-        # Invalidate empty cache entries written by older builds when pipeline
-        # construction failed, plus analyses where Unicode lexical words were
-        # dropped after Stanza mislabeled them as punctuation.
-        return f"stanza:{version}:{retok}:strict-init3"
+        # Cache identity covers both model/runtime behavior and Batchalign's
+        # token-alignment contract. ``native-mwt1`` admits native MWT analysis
+        # inside authoritative CHAT words while preserving conventional whole
+        # spellings such as ``gonna`` and ambiguous Italian ``dai``.
+        return f"stanza:{version}:{retok}:native-mwt1"
 
     @property
     def batch_policy(self) -> BatchPolicy:

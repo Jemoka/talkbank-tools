@@ -520,6 +520,18 @@ def _normalize_italian_legacy_mwts(
         rule = legacy_mwt_rule_for(str(getattr(token, "text", "")))
         if not ids or not all(word_id in by_id for word_id in ids):
             return words, tokens
+        if rule is not None and len(ids) == len(rule.components):
+            native_words = [by_id[word_id] for word_id in ids]
+            native_matches = all(
+                native.text == component.surface
+                and native.lemma == component.lemma
+                and native.upos == component.upos
+                and set((native.feats or "").split("|"))
+                == set((component.feats or "").split("|"))
+                for native, component in zip(native_words, rule.components, strict=True)
+            )
+            if native_matches:
+                rule = None
         token_rows.append(_ItalianTokenRow(token, ids, rule))
 
     if not any(row.legacy_rule is not None for row in token_rows):
@@ -565,6 +577,10 @@ def _normalize_italian_legacy_mwts(
             rewritten_tokens.append(_NormalizedToken(str(token.text), mapped_ids))
             continue
 
+        source = next(
+            (by_id[word_id] for word_id in ids if by_id[word_id].head not in ids),
+            first,
+        )
         main_id = old_to_new[ids[0]]
         span_ids: list[int] = []
         for offset, component in enumerate(rule.components):
@@ -576,8 +592,10 @@ def _normalize_italian_legacy_mwts(
                     component.lemma,
                     component.upos,
                     component.feats,
-                    old_to_new.get(first.head, first.head) if offset == 0 else main_id,
-                    first.deprel if offset == 0 else "fixed",
+                    old_to_new.get(source.head, source.head)
+                    if offset == 0
+                    else main_id,
+                    source.deprel if offset == 0 else "fixed",
                     component_id,
                 )
             )

@@ -14,7 +14,12 @@ import pytest
 
 # Make `python/` importable when pytest is invoked from a different cwd
 # (e.g. from the repo root via `pytest python/batchalign/tests`).
-_PYTHON_ROOT = Path(__file__).resolve().parents[2]
+# Preserve the path pytest used to load this file. Under Bazel that is the
+# runfiles symlink tree, which also contains the staged native extension;
+# resolving the symlink jumps back to a clean checkout where no extension is
+# present. For a direct source-tree pytest invocation, the unresolved path is
+# already the ordinary `python/` package root.
+_PYTHON_ROOT = Path(__file__).absolute().parents[2]
 if str(_PYTHON_ROOT) not in sys.path:
     sys.path.insert(0, str(_PYTHON_ROOT))
 

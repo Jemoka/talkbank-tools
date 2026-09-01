@@ -35,8 +35,19 @@ _ITALIAN_LEGACY_GOLD = json.loads(
 )
 _ITALIAN_LEGACY_CASES = [
     (case["surface"], case["mor"] + " .")
-    for case in _ITALIAN_LEGACY_GOLD["cases"]
+    for case in (
+        _ITALIAN_LEGACY_GOLD["cases"] + _ITALIAN_LEGACY_GOLD["interpolated_cases"]
+    )
 ]
+_ITALIAN_PRESERVED_CURRENT = {
+    case["surface"]: case["mor"] + " ."
+    for case in _ITALIAN_LEGACY_GOLD["preserve_current"]
+}
+_ENGLISH_CONTRACTIONS_GOLD = json.loads(
+    (fixture_root("morphotag") / "english_contractions.gold.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
 @dataclass
@@ -251,6 +262,59 @@ def test_mwt_contraction_groups_into_one_word():
     assert _gra_str(analysis) == "1|5|NSUBJ 2|5|COP 3|5|DET 4|5|AMOD 5|0|ROOT 6|5|PUNCT"
 
 
+def test_english_contraction_does_not_split_possessive_its() -> None:
+    words = [
+        FakeWord(
+            "it",
+            "it",
+            "PRON",
+            "Case=Nom|Number=Sing|Person=3|PronType=Prs",
+            3,
+            "nsubj",
+            id=1,
+        ),
+        FakeWord(
+            "'s",
+            "be",
+            "AUX",
+            "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin",
+            3,
+            "cop",
+            id=2,
+        ),
+        FakeWord("bright", "bright", "ADJ", "Degree=Pos", 0, "root", id=3),
+        FakeWord("outside", "outside", "ADV", None, 3, "advmod", id=4),
+        FakeWord("at", "at", "ADP", None, 7, "case", id=5),
+        FakeWord(
+            "its",
+            "its",
+            "PRON",
+            "Case=Gen|Gender=Neut|Number=Sing|Person=3|Poss=Yes|PronType=Prs",
+            7,
+            "nmod:poss",
+            id=6,
+        ),
+        FakeWord("house", "house", "NOUN", "Number=Sing", 3, "obl", id=7),
+    ]
+    tokens = [
+        FakeToken("it's", [1, 2]),
+        FakeToken("bright", [3]),
+        FakeToken("outside", [4]),
+        FakeToken("at", [5]),
+        FakeToken("its", [6]),
+        FakeToken("house", [7]),
+    ]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=tokens), ".", [], "en"
+    )
+
+    assert _mor_str(analysis, ".") == _ENGLISH_CONTRACTIONS_GOLD["mor"]
+    assert _gra_str(analysis) == _ENGLISH_CONTRACTIONS_GOLD["gra"]
+    assert len(analysis.words[0].units) == 2
+    assert len(analysis.words[4].units) == 1
+
+
 def test_possessive_gerund_mwt_is_rescued_as_copula_progressive():
     # Stanza has emitted this analysis for "sink's overflowing": possessive
     # sink + PART 's + nominal gerund.  The structured rescue must update both
@@ -449,11 +513,10 @@ def test_italian_defect10_posa_clitics_use_canonical_verb_lemma():
     ("surface", "expected"),
     _ITALIAN_LEGACY_CASES,
 )
-def test_italian_defect14_restores_legacy_talkbank_mwts(
-    surface: str, expected: str
-):
-    """Pinned golds from the pre-regression Italian TalkBank output."""
-    assert legacy_mwt_rule_for(surface) is not None
+def test_italian_legacy_rules_restore_talkbank_mwts(surface: str, expected: str):
+    """Pinned reported golds and explicitly interpolated clitic forms."""
+    rule = legacy_mwt_rule_for(surface)
+    assert rule is not None
     words = [
         FakeWord(
             "wrong-head",
@@ -483,8 +546,50 @@ def test_italian_defect14_restores_legacy_talkbank_mwts(
 
     assert _mor_str(analysis, ".") == expected
     assert [anomaly.field for anomaly in analysis.anomalies] == [
-        "italian_defect_14"
+        f"italian_defect_{rule.defect}"
     ]
+
+
+def test_italian_legacy_rule_preserves_matching_native_mwt() -> None:
+    words = [
+        FakeWord("in", "in", "ADP", None, 0, "root", id=1),
+        FakeWord(
+            "il",
+            "il",
+            "DET",
+            "Definite=Def|Gender=Masc|Number=Sing|PronType=Art",
+            1,
+            "fixed",
+            id=2,
+        ),
+    ]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=[FakeToken("nel", [1, 2])]),
+        ".",
+        [],
+        "it",
+    )
+
+    assert _mor_str(analysis, ".") == "adp|in~det|il-Masc-Def-Art-Sing ."
+    assert analysis.anomalies == []
+
+
+def test_italian_legacy_repair_uses_external_mwt_dependency() -> None:
+    words = [
+        FakeWord("wrong-head", "wrong-head", "ADP", None, 2, "case", id=1),
+        FakeWord("wrong-tail", "wrong-tail", "NOUN", None, 0, "root", id=2),
+    ]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=[FakeToken("alla", [1, 2])]),
+        ".",
+        [],
+        "it",
+    )
+
+    assert _mor_str(analysis, ".") == "adp|a~det|il-Fem-Def-Art-Sing ."
+    assert _gra_str(analysis) == "1|0|ROOT 2|1|FIXED 3|1|PUNCT"
 
 
 def test_italian_defect14_does_not_revert_newly_correct_dai():
@@ -504,7 +609,7 @@ def test_italian_defect14_does_not_revert_newly_correct_dai():
 
     analysis = render.parse_sentence(sentence, ".", [], "it")
 
-    assert _mor_str(analysis, ".") == "verb|dare-Fin-Ind-Pres-S2 ."
+    assert _mor_str(analysis, ".") == _ITALIAN_PRESERVED_CURRENT["dai"]
     assert not any(a.field == "italian_defect_14" for a in analysis.anomalies)
 
 

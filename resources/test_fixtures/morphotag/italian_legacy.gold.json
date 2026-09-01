@@ -19,5 +19,44 @@
     {"surface": "vederla", "mor": "verb|vedere-Inf-S~pron|la-Prs-S3"},
     {"surface": "guardalo", "mor": "verb|guardare-Fin-Imp-Pres-S2~pron|lo-Prs-S3"}
   ],
-  "must_not_rewrite": ["dai"]
+  "interpolated_cases": [
+    {"surface": "alzarsi", "mor": "verb|alzare-Inf-S~pron|si-Prs-S3"},
+    {"surface": "lavarsi", "mor": "verb|lavare-Inf-S~pron|si-Prs-S3"},
+    {"surface": "vestirsi", "mor": "verb|vestire-Inf-S~pron|si-Prs-S3"},
+    {"surface": "sedersi", "mor": "verb|sedere-Inf-S~pron|si-Prs-S3"},
+    {"surface": "mettersi", "mor": "verb|mettere-Inf-S~pron|si-Prs-S3"},
+    {"surface": "chiamarsi", "mor": "verb|chiamare-Inf-S~pron|si-Prs-S3"},
+    {"surface": "svegliarsi", "mor": "verb|svegliare-Inf-S~pron|si-Prs-S3"},
+    {"surface": "vederlo", "mor": "verb|vedere-Inf-S~pron|lo-Prs-S3"},
+    {"surface": "prenderlo", "mor": "verb|prendere-Inf-S~pron|lo-Prs-S3"},
+    {"surface": "prenderla", "mor": "verb|prendere-Inf-S~pron|la-Prs-S3"},
+    {"surface": "farlo", "mor": "verb|fare-Inf-S~pron|lo-Prs-S3"},
+    {"surface": "farla", "mor": "verb|fare-Inf-S~pron|la-Prs-S3"},
+    {"surface": "dirlo", "mor": "verb|dire-Inf-S~pron|lo-Prs-S3"},
+    {"surface": "aprirlo", "mor": "verb|aprire-Inf-S~pron|lo-Prs-S3"},
+    {"surface": "chiuderlo", "mor": "verb|chiudere-Inf-S~pron|lo-Prs-S3"},
+    {"surface": "mangiarlo", "mor": "verb|mangiare-Inf-S~pron|lo-Prs-S3"},
+    {"surface": "berlo", "mor": "verb|bere-Inf-S~pron|lo-Prs-S3"},
+    {"surface": "portarlo", "mor": "verb|portare-Inf-S~pron|lo-Prs-S3"},
+    {"surface": "portarla", "mor": "verb|portare-Inf-S~pron|la-Prs-S3"},
+    {"surface": "guardala", "mor": "verb|guardare-Fin-Imp-Pres-S2~pron|la-Prs-S3"},
+    {"surface": "guardali", "mor": "verb|guardare-Fin-Imp-Pres-S2~pron|li-Prs-P3"},
+    {"surface": "guardale", "mor": "verb|guardare-Fin-Imp-Pres-S2~pron|le-Prs-P3"},
+    {"surface": "mettilo", "mor": "verb|mettere-Fin-Imp-Pres-S2~pron|lo-Prs-S3"},
+    {"surface": "mettila", "mor": "verb|mettere-Fin-Imp-Pres-S2~pron|la-Prs-S3"},
+    {"surface": "portalo", "mor": "verb|portare-Fin-Imp-Pres-S2~pron|lo-Prs-S3"},
+    {"surface": "portala", "mor": "verb|portare-Fin-Imp-Pres-S2~pron|la-Prs-S3"},
+    {"surface": "lascialo", "mor": "verb|lasciare-Fin-Imp-Pres-S2~pron|lo-Prs-S3"},
+    {"surface": "lasciala", "mor": "verb|lasciare-Fin-Imp-Pres-S2~pron|la-Prs-S3"},
+    {"surface": "chiudilo", "mor": "verb|chiudere-Fin-Imp-Pres-S2~pron|lo-Prs-S3"},
+    {"surface": "chiudila", "mor": "verb|chiudere-Fin-Imp-Pres-S2~pron|la-Prs-S3"},
+    {"surface": "mangialo", "mor": "verb|mangiare-Fin-Imp-Pres-S2~pron|lo-Prs-S3"},
+    {"surface": "mangiala", "mor": "verb|mangiare-Fin-Imp-Pres-S2~pron|la-Prs-S3"},
+    {"surface": "bevilo", "mor": "verb|bere-Fin-Imp-Pres-S2~pron|lo-Prs-S3"},
+    {"surface": "bevila", "mor": "verb|bere-Fin-Imp-Pres-S2~pron|la-Prs-S3"},
+    {"surface": "leggilo", "mor": "verb|leggere-Fin-Imp-Pres-S2~pron|lo-Prs-S3"}
+  ],
+  "preserve_current": [
+    {"surface": "dai", "mor": "verb|dare-Fin-Ind-Pres-S2"}
+  ]
 }

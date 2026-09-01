@@ -80,7 +80,13 @@ py_test(
     name = "pytest",
     srcs = glob(["tests/**/*.py"]) + ["_pytest_runner.py"],
     main = "_pytest_runner.py",
-    args = ["python/batchalign/tests", "-q"],
+    # The tests form a package (`tests/__init__.py`). Pytest's default
+    # `prepend` mode resolves their source symlinks and inserts the checkout's
+    # `python/` directory ahead of Bazel's runfiles package. That is invisible
+    # on developer machines with a maturin-built `_core.abi3.so`, but clean CI
+    # then loses the staged `_core.so`. Importlib mode leaves Bazel's package
+    # root authoritative throughout collection.
+    args = ["python/batchalign/tests", "-q", "--import-mode=importlib"],
     # Vendored parity fixtures used by `test_golden_fixtures.py`. Must
     # be in runfiles for the test to find them — without this they were
     # silently skipped on every CI run (the earlier copy lived in a
