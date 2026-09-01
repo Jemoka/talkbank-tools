@@ -139,53 +139,6 @@ fn relabel_utterances_by_diarization(
             (label, code)
         })
         .collect();
-    let mut added_participants = Vec::new();
-    if speaker_codes
-        .values()
-        .any(|code| !chat.ast().participants.contains_key(code))
-    {
-        let template = chat
-            .ast()
-            .participants
-            .values()
-            .next()
-            .cloned()
-            .ok_or_else(|| {
-                BAError::Internal(
-                    "SpeakerTaskRunner: cannot declare diarized speakers without a participant template"
-                        .into(),
-                )
-            })?;
-        for code in speaker_codes.values() {
-            if chat.ast().participants.contains_key(code) {
-                continue;
-            }
-            let role = ParticipantRole::new("Participant");
-            let entry = ParticipantEntry {
-                speaker_code: code.clone(),
-                name: None,
-                role: role.clone(),
-            };
-            let id = IDHeader::from_languages(template.id.language.clone(), code.clone(), role)
-                .with_corpus(template.id.corpus.clone());
-            let participant = Participant::new(entry, id);
-            chat.ast_mut()
-                .participants
-                .insert(code.clone(), participant.clone());
-            added_participants.push(participant);
-        }
-    }
-    let participant_entries = ParticipantEntries::new(
-        chat.ast()
-            .participants
-            .values()
-            .map(|participant| ParticipantEntry {
-                speaker_code: participant.code.clone(),
-                name: participant.name.clone(),
-                role: participant.role.clone(),
-            })
-            .collect(),
-    );
     let source_id = chat.source_id().clone();
     let total = chat
         .ast()
@@ -199,13 +152,7 @@ fn relabel_utterances_by_diarization(
     let mut new_lines = Vec::with_capacity(old_lines.len());
     for line in old_lines {
         let Line::Utterance(utterance) = line else {
-            let mut header_line = line;
-            if let Line::Header { header, .. } = &mut header_line
-                && let Header::Participants { entries } = header.as_mut()
-            {
-                *entries = participant_entries.clone();
-            }
-            new_lines.push(header_line);
+            new_lines.push(line);
             continue;
         };
 
@@ -229,6 +176,69 @@ fn relabel_utterances_by_diarization(
             completed,
             total,
         ));
+    }
+    let mut used_speaker_codes = Vec::new();
+    for line in &new_lines {
+        let Line::Utterance(utterance) = line else {
+            continue;
+        };
+        if !used_speaker_codes.contains(&utterance.main.speaker) {
+            used_speaker_codes.push(utterance.main.speaker.clone());
+        }
+    }
+    let mut added_participants = Vec::new();
+    if used_speaker_codes
+        .iter()
+        .any(|code| !chat.ast().participants.contains_key(code))
+    {
+        let template = chat
+            .ast()
+            .participants
+            .values()
+            .next()
+            .cloned()
+            .ok_or_else(|| {
+                BAError::Internal(
+                    "SpeakerTaskRunner: cannot declare diarized speakers without a participant template"
+                        .into(),
+                )
+            })?;
+        for code in used_speaker_codes {
+            if chat.ast().participants.contains_key(&code) {
+                continue;
+            }
+            let role = ParticipantRole::new("Participant");
+            let entry = ParticipantEntry {
+                speaker_code: code.clone(),
+                name: None,
+                role: role.clone(),
+            };
+            let id = IDHeader::from_languages(template.id.language.clone(), code.clone(), role)
+                .with_corpus(template.id.corpus.clone());
+            let participant = Participant::new(entry, id);
+            chat.ast_mut()
+                .participants
+                .insert(code, participant.clone());
+            added_participants.push(participant);
+        }
+    }
+    let participant_entries = ParticipantEntries::new(
+        chat.ast()
+            .participants
+            .values()
+            .map(|participant| ParticipantEntry {
+                speaker_code: participant.code.clone(),
+                name: participant.name.clone(),
+                role: participant.role.clone(),
+            })
+            .collect(),
+    );
+    for line in &mut new_lines {
+        if let Line::Header { header, .. } = line
+            && let Header::Participants { entries } = header.as_mut()
+        {
+            *entries = participant_entries.clone();
+        }
     }
     if !added_participants.is_empty() {
         let insert_at = new_lines
@@ -497,5 +507,43 @@ mod tests {
             .map(|utterance| utterance.main.speaker.as_str())
             .collect();
         assert_eq!(speakers, ["PAR0", "PAR1", "PAR2"]);
+    }
+
+    #[test]
+    fn does_not_declare_unprojected_diarized_speaker() {
+        let source_id = SourceId::new_unchecked("speaker-test");
+        let mut chat = Chat::parse(TIMED_UTTERANCE, source_id).expect("valid timed CHAT");
+        let diarization = output(vec![
+            DiarizationSegment {
+                start_ms: 0,
+                end_ms: 800,
+                speaker: "speaker-a".into(),
+            },
+            DiarizationSegment {
+                start_ms: 801,
+                end_ms: 1600,
+                speaker: "speaker-b".into(),
+            },
+            DiarizationSegment {
+                start_ms: 5000,
+                end_ms: 6000,
+                speaker: "speaker-c".into(),
+            },
+        ]);
+
+        relabel_utterances_by_diarization(&mut chat, &diarization, &NullSink)
+            .expect("speaker projection succeeds");
+        chat.validate_stage_output(Task::Speaker)
+            .expect("projected speaker output remains valid CHAT");
+
+        assert!(
+            !chat
+                .ast()
+                .participants
+                .contains_key(&SpeakerCode::new("PAR2"))
+        );
+        let rendered = chat.to_chat();
+        assert!(!rendered.contains("PAR2"));
+        assert!(rendered.contains("@Participants:\tPAR0 Participant, PAR1 Participant"));
     }
 }
