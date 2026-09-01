@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import io
 import json
+import urllib.error
+import urllib.request
 from typing import Any
 
 
@@ -110,6 +112,36 @@ def test_missing_key_fails_before_upload():
     backend = PyannoteAIBackend(api_key="", wav_renderer=lambda _audio: b"")
     with pytest.raises(RuntimeError, match=r"\[diarize\].*engine\.pyannote\.key"):
         backend.call([SpeakerInput(source_id="clip", audio=_audio())])
+
+
+def test_idempotent_upload_retries_transient_write_timeout():
+    from batchalign.backends.speaker.pyannote_ai import PyannoteAIBackend
+
+    attempts = 0
+    delays = []
+
+    def urlopen(_request, *, timeout):
+        nonlocal attempts
+        assert timeout == 60.0
+        attempts += 1
+        if attempts < 3:
+            raise urllib.error.URLError(TimeoutError("write timed out"))
+        return _Response(b"")
+
+    backend = PyannoteAIBackend(
+        api_key="secret",
+        urlopen=urlopen,
+        sleep=delays.append,
+    )
+    request = urllib.request.Request(
+        "https://upload.test/wav",
+        data=b"RIFF",
+        method="PUT",
+    )
+
+    assert backend._open(request, operation="upload media") == b""
+    assert attempts == 3
+    assert delays == [1, 2]
 
 
 def test_native_converter_renders_wav():

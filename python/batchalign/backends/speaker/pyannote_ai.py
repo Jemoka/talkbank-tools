@@ -257,6 +257,9 @@ class PyannoteAIBackend(Speaker):
                     f"pyannoteAI {operation} failed (HTTP {error.code}): {detail}"
                 ) from error
             except (urllib.error.URLError, TimeoutError) as error:
+                if request.get_method() in {"GET", "PUT"} and attempt < 3:
+                    self._sleep(2**attempt)
+                    continue
                 raise RuntimeError(
                     f"pyannoteAI {operation} failed: {error}"
                 ) from error
