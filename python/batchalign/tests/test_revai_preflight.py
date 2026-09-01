@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 from types import MethodType
 
+import pytest
+
 
 def _audio():
     from batchalign._core.proto import PreparedAudio
@@ -64,3 +66,53 @@ def test_revai_large_batch_submits_every_unique_job_before_polling():
     assert (
         sum(payload == "audio-00" for kind, payload in events if kind == "submit") == 1
     )
+
+
+def test_revai_bounds_every_sdk_http_request(monkeypatch):
+    from rev_ai import apiclient
+
+    from batchalign.backends.asr.rev import RevAI
+    from batchalign.lang import LanguageCode
+
+    calls: list[tuple[str, str, dict[str, object]]] = []
+
+    class FakeClient:
+        def __init__(self, key):
+            assert key == "secret"
+
+        def _make_http_request(self, method, url, **kwargs):
+            calls.append((method, url, kwargs))
+            return object()
+
+    monkeypatch.setattr(apiclient, "RevAiAPIClient", FakeClient)
+    backend = RevAI(
+        api_key="secret",
+        language=LanguageCode.from_str("ita"),
+        http_timeout_s=17.0,
+    )
+
+    backend._client._make_http_request("POST", "https://example.test/upload")
+    backend._client._make_http_request(
+        "GET", "https://example.test/job", timeout=9.0
+    )
+
+    assert calls == [
+        ("POST", "https://example.test/upload", {"timeout": 17.0}),
+        ("GET", "https://example.test/job", {"timeout": 9.0}),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"poll_interval_s": 0}, "poll_interval_s"),
+        ({"timeout_s": 0}, "timeouts"),
+        ({"http_timeout_s": 0}, "timeouts"),
+    ],
+)
+def test_revai_rejects_nonpositive_timeouts(kwargs, message):
+    from batchalign.backends.asr.rev import RevAI
+    from batchalign.lang import LanguageCode
+
+    with pytest.raises(ValueError, match=message):
+        RevAI(api_key="unused", language=LanguageCode.from_str("ita"), **kwargs)

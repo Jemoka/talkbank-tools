@@ -36,10 +36,15 @@ class RevAI(ASR, UTR, Speaker):
         num_speakers: int = 2,
         poll_interval_s: float = 5.0,
         timeout_s: float = 3600.0,
+        http_timeout_s: float = 300.0,
         batch_size: int = 8,
         batch_window_ms: int = 250,
         device: str | None = None,
     ) -> None:
+        if poll_interval_s <= 0:
+            raise ValueError("poll_interval_s must be positive")
+        if timeout_s <= 0 or http_timeout_s <= 0:
+            raise ValueError("timeouts must be positive")
         key = api_key if api_key is not None else config.get_api_key("revai", interactive=True)
         if not key:
             self._client = None
@@ -47,6 +52,16 @@ class RevAI(ASR, UTR, Speaker):
             from rev_ai import apiclient  # type: ignore[import-not-found]
 
             self._client = apiclient.RevAiAPIClient(key)
+            sdk_request = self._client._make_http_request
+
+            def bounded_request(method: str, url: str, **kwargs: Any) -> Any:
+                # The Rev SDK does not set a Requests timeout. In particular,
+                # a stalled audio upload can otherwise block forever before
+                # the job-polling deadline below has even started.
+                kwargs.setdefault("timeout", http_timeout_s)
+                return sdk_request(method, url, **kwargs)
+
+            self._client._make_http_request = bounded_request
         self._poll = poll_interval_s
         self._timeout = timeout_s
         self._num_speakers = num_speakers
