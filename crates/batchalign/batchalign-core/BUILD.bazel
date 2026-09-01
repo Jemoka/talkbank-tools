@@ -89,8 +89,14 @@ rust_test(
     name = "batchalign_core_unit_test",
     crate = ":batchalign_core",
     aliases = aliases(normal_dev = True, proc_macro_dev = True),
-    compile_data = ["//resources/fixtures:all_files"],
-    data = ["//resources/fixtures:all_files"],
+    compile_data = [
+        "//resources/fixtures:all_files",
+        "//resources/test_fixtures:morphotag_code_switch_fixture",
+    ],
+    data = [
+        "//resources/fixtures:all_files",
+        "//resources/test_fixtures:morphotag_code_switch_fixture",
+    ],
     proc_macro_deps = all_crate_deps(proc_macro_dev = True),
     deps = all_crate_deps(normal_dev = True),
 )

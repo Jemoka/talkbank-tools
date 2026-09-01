@@ -6,6 +6,14 @@ Pure data — no build steps; just filegroups for tests to depend on.
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
+    name = "morphotag_code_switch_fixture",
+    srcs = [
+        "morphotag/code_switch_spans.gold.json",
+        "morphotag/code_switch_spans.input.cha",
+    ],
+)
+
+filegroup(
     name = "parity_fixtures",
     srcs = glob(
         ["**/*.cha", "**/*.wav", "**/*.json"],

@@ -680,7 +680,12 @@ mod tests {
 
     const UNSUPPORTED_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\tsrp\n@Participants:\tCHI Child\n@ID:\tsrp|corpus|CHI|||||Child|||\n*CHI:\tnešto .\n@End\n";
 
-    const MULTILINGUAL_FIXTURE: &str = "@UTF8\n@Begin\n@Languages:\teng, hin, tam, fra\n@Participants:\tTEA Teacher\n@ID:\teng|corpus|TEA|||||Teacher|||\n*TEA:\thello .\n*TEA:\t[- hin] हाँ .\n*TEA:\tGandhi जी@s:hin .\n*TEA:\t[- hin] so@s:eng group@s:eng में .\n*TEA:\t[- tam] யாரு ?\n*TEA:\t<how to do it> [@s] .\n*TEA:\t<தமிழ் சொற்கள்> [@s:tam] .\n*TEA:\thello bonjour@s:fra teacher .\n*TEA:\t<bonjour mes amis> [@s:fra] .\n*TEA:\t[- fra] bonjour mes amis .\n@End\n";
+    const CODE_SWITCH_FIXTURE: &str = include_str!(
+        "../../../../../resources/test_fixtures/morphotag/code_switch_spans.input.cha"
+    );
+    const CODE_SWITCH_GOLD: &str = include_str!(
+        "../../../../../resources/test_fixtures/morphotag/code_switch_spans.gold.json"
+    );
 
     /// Capturing sink for tick-sequence assertions.
     struct CapturingSink {
@@ -814,8 +819,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preserves_utterance_and_word_code_switches_for_dispatch() -> BAResult<()> {
-        let chat = Chat::parse(MULTILINGUAL_FIXTURE, SourceId::try_new("multilingual")?)?;
+    async fn preserves_fixture_code_switches_for_dispatch() -> BAResult<()> {
+        let chat = Chat::parse(CODE_SWITCH_FIXTURE, SourceId::try_new("code-switch")?)?;
         let mut value = BAValue::Chat(chat);
         let dispatcher = RecordingDispatcher::new();
 
@@ -827,50 +832,51 @@ mod tests {
             )
             .await?;
 
+        let gold: serde_json::Value = serde_json::from_str(CODE_SWITCH_GOLD)?;
+        let cases = gold["cases"].as_array().expect("gold cases must be an array");
+        let primary = gold["language"]
+            .as_str()
+            .expect("gold language must be a string");
         let seen = dispatcher.seen.lock().expect("poisoned");
-        assert_eq!(seen.len(), 10);
+        assert_eq!(seen.len(), cases.len());
 
-        let primary = LanguageSpec::Code(SmolStr::new("eng"));
+        for (input, case) in seen.iter().zip(cases) {
+            let language = case["language"].as_str().unwrap_or(primary);
+            let tokens: Vec<&str> = case["tokens"]
+                .as_array()
+                .expect("gold tokens must be an array")
+                .iter()
+                .map(|token| token.as_str().expect("gold token must be a string"))
+                .collect();
+            assert_eq!(input.language, LanguageSpec::Code(SmolStr::new(language)));
+            assert_eq!(input.tokens, tokens);
+            assert_eq!(
+                input.text,
+                case["stanza_text"]
+                    .as_str()
+                    .expect("gold stanza_text must be a string")
+            );
+        }
 
-        assert_eq!(seen[0].language, primary);
-        assert_eq!(seen[0].tokens, ["hello"]);
-        assert_eq!(seen[0].text, "hello");
-
-        assert_eq!(seen[1].language, LanguageSpec::Code(SmolStr::new("hin")));
-        assert_eq!(seen[1].tokens, ["हाँ"]);
-        assert_eq!(seen[1].text, "हाँ");
-
-        assert_eq!(seen[2].language, primary);
-        assert_eq!(seen[2].tokens, ["Gandhi", "जी"]);
-        assert_eq!(seen[2].text, "Gandhi जी@s");
-
-        assert_eq!(seen[3].language, LanguageSpec::Code(SmolStr::new("hin")));
-        assert_eq!(seen[3].tokens, ["so", "group", "में"]);
-        assert_eq!(seen[3].text, "so@s group@s में");
-
-        assert_eq!(seen[4].language, LanguageSpec::Code(SmolStr::new("tam")));
-        assert_eq!(seen[4].tokens, ["யாரு"]);
-        assert_eq!(seen[4].text, "யாரு");
-
-        assert_eq!(seen[5].language, primary);
-        assert_eq!(seen[5].tokens, ["how", "to", "do", "it"]);
-        assert_eq!(seen[5].text, "how@s to@s do@s it@s");
-
-        assert_eq!(seen[6].language, primary);
-        assert_eq!(seen[6].tokens, ["தமிழ்", "சொற்கள்"]);
-        assert_eq!(seen[6].text, "தமிழ்@s சொற்கள்@s");
-
-        assert_eq!(seen[7].language, primary);
-        assert_eq!(seen[7].tokens, ["hello", "bonjour", "teacher"]);
-        assert_eq!(seen[7].text, "hello bonjour@s teacher");
-
-        assert_eq!(seen[8].language, primary);
-        assert_eq!(seen[8].tokens, ["bonjour", "mes", "amis"]);
-        assert_eq!(seen[8].text, "bonjour@s mes@s amis@s");
-
-        assert_eq!(seen[9].language, LanguageSpec::Code(SmolStr::new("fra")));
-        assert_eq!(seen[9].tokens, ["bonjour", "mes", "amis"]);
-        assert_eq!(seen[9].text, "bonjour mes amis");
+        let routed: Vec<&str> = seen
+            .iter()
+            .map(|input| match &input.language {
+                LanguageSpec::Code(code) => code.as_str(),
+                other => panic!("expected routed language code, got {other:?}"),
+            })
+            .fold(Vec::new(), |mut languages, language| {
+                if !languages.contains(&language) {
+                    languages.push(language);
+                }
+                languages
+            });
+        let expected_routed: Vec<&str> = gold["routed_utterance_languages"]
+            .as_array()
+            .expect("gold routed languages must be an array")
+            .iter()
+            .map(|language| language.as_str().expect("gold language must be a string"))
+            .collect();
+        assert_eq!(routed, expected_routed);
         Ok(())
     }
 
