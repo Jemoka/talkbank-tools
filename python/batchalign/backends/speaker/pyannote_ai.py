@@ -14,6 +14,7 @@ API key resolution follows the shared Batchalign config system:
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import time
@@ -23,6 +24,8 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
+import urllib3
+
 from batchalign import config
 from batchalign.backends.base import BatchPolicy, Speaker
 
@@ -30,6 +33,36 @@ _LOG = logging.getLogger("batchalign.backends.speaker.pyannote_ai")
 _TERMINAL_STATUSES = {"succeeded", "failed", "canceled"}
 _CLOUD_MP3_BITRATE_KBPS = 16
 _CLOUD_MP3_SAMPLE_RATE_HZ = 16_000
+
+
+class _PooledUrlOpen:
+    """urllib-compatible callable backed by one persistent connection pool."""
+
+    def __init__(self, pool: Any = None) -> None:
+        self._pool = pool or urllib3.PoolManager()
+        self._redirects = urllib3.Retry(
+            total=3,
+            connect=0,
+            read=0,
+            redirect=3,
+            status=0,
+            other=0,
+        )
+
+    def __call__(self, request: Any, *, timeout: float) -> Any:
+        try:
+            return self._pool.request(
+                request.get_method(),
+                request.full_url,
+                body=request.data,
+                headers=dict(request.header_items()),
+                timeout=timeout,
+                retries=self._redirects,
+                redirect=True,
+                preload_content=False,
+            )
+        except urllib3.exceptions.HTTPError as error:
+            raise urllib.error.URLError(error) from error
 
 
 class PyannoteAIBackend(Speaker):
@@ -73,7 +106,7 @@ class PyannoteAIBackend(Speaker):
         self._timeout = timeout_s
         self._http_timeout = http_timeout_s
         self._base_url = base_url.rstrip("/")
-        self._urlopen = urlopen or urllib.request.urlopen
+        self._urlopen = urlopen or _PooledUrlOpen()
         self._sleep = sleep
         self._media_renderer = media_renderer or _render_mp3
         self._policy = BatchPolicy(
@@ -245,7 +278,17 @@ class PyannoteAIBackend(Speaker):
         for attempt in range(4):
             try:
                 with self._urlopen(request, timeout=self._http_timeout) as response:
-                    return bytes(response.read())
+                    body = bytes(response.read())
+                    status = int(getattr(response, "status", 200))
+                    if status >= 400:
+                        raise urllib.error.HTTPError(
+                            request.full_url,
+                            status,
+                            str(getattr(response, "reason", "HTTP error")),
+                            getattr(response, "headers", None),
+                            io.BytesIO(body),
+                        )
+                    return body
             except urllib.error.HTTPError as error:
                 if error.code == 429 and attempt < 3:
                     retry_after = (error.headers or {}).get("Retry-After", "1")

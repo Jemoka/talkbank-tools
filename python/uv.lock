@@ -485,6 +485,7 @@ dependencies = [
     { name = "textual" },
     { name = "tqdm" },
     { name = "typer" },
+    { name = "urllib3" },
 ]
 
 [package.optional-dependencies]
@@ -715,6 +716,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'stanza'", specifier = ">=4.57,<5" },
     { name = "transformers", marker = "extra == 'whisper'", specifier = ">=4.57,<5" },
     { name = "typer", specifier = ">=0.12" },
+    { name = "urllib3", specifier = ">=2" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'all'", specifier = ">=0.27" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.27" },
     { name = "wheel", marker = "extra == 'dev'" },

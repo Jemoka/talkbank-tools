@@ -147,6 +147,79 @@ def test_idempotent_upload_retries_transient_write_timeout():
     assert delays == [1, 2]
 
 
+def test_default_transport_reuses_one_connection_pool():
+    from batchalign.backends.speaker.pyannote_ai import _PooledUrlOpen
+
+    calls = []
+
+    class FakePool:
+        def request(self, method, url, **kwargs):
+            calls.append((method, url, kwargs))
+            response = _Response(b"ok")
+            response.status = 200
+            return response
+
+    opener = _PooledUrlOpen(FakePool())
+    first = urllib.request.Request("https://api.test/one", method="GET")
+    second = urllib.request.Request(
+        "https://upload.test/two",
+        data=b"payload",
+        headers={"Content-Type": "application/octet-stream"},
+        method="PUT",
+    )
+
+    with opener(first, timeout=7.0) as response:
+        assert response.read() == b"ok"
+    with opener(second, timeout=11.0) as response:
+        assert response.read() == b"ok"
+
+    assert [call[:2] for call in calls] == [
+        ("GET", "https://api.test/one"),
+        ("PUT", "https://upload.test/two"),
+    ]
+    assert calls[0][2]["timeout"] == 7.0
+    assert calls[1][2]["body"] == b"payload"
+    headers = {key.lower(): value for key, value in calls[1][2]["headers"].items()}
+    assert headers["content-type"] == "application/octet-stream"
+    assert all(call[2]["redirect"] is True for call in calls)
+    assert all(call[2]["preload_content"] is False for call in calls)
+
+
+def test_pooled_transport_preserves_rate_limit_retries():
+    from batchalign.backends.speaker.pyannote_ai import (
+        PyannoteAIBackend,
+        _PooledUrlOpen,
+    )
+
+    calls = 0
+    delays = []
+
+    class FakePool:
+        def request(self, _method, _url, **_kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                response = _Response(b'{"message":"slow down"}')
+                response.status = 429
+                response.reason = "Too Many Requests"
+                response.headers = {"Retry-After": "2"}
+                return response
+            response = _Response(b"ok")
+            response.status = 200
+            return response
+
+    backend = PyannoteAIBackend(
+        api_key="secret",
+        urlopen=_PooledUrlOpen(FakePool()),
+        sleep=delays.append,
+    )
+    request = urllib.request.Request("https://api.test/job", method="GET")
+
+    assert backend._open(request, operation="poll job") == b"ok"
+    assert calls == 2
+    assert delays == [2.0]
+
+
 def test_native_converter_renders_compact_mp3():
     from batchalign.backends.speaker.pyannote_ai import _render_mp3
 

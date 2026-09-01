@@ -61,6 +61,10 @@ dependencies = [
     # at module import; the wheel smoke test on a clean Python 3.10 env
     # otherwise ImportErrors before any user code runs.
     "pycountry",
+    # pyannoteAI uses a persistent pool for long diarization campaigns.
+    # urllib.request opens a fresh TCP connection per poll and can exhaust
+    # the host's ephemeral ports across a full corpus.
+    "urllib3>=2",
 ]
 
 # Optional dependency groups. A user pulling in heavy ML stacks opts in
