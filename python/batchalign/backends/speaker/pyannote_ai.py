@@ -1,9 +1,10 @@
 """pyannoteAI cloud speaker diarization backend.
 
-Uploads Batchalign's prepared PCM as a temporary WAV, submits a diarization
-job to ``api.pyannote.ai``, polls it to completion, and projects the returned
-speaker turns into Batchalign's typed protocol. Uploaded media is temporary;
-pyannoteAI removes media and job output on its documented retention schedule.
+Encodes Batchalign's prepared PCM as a compact temporary MP3, submits a
+diarization job to ``api.pyannote.ai``, polls it to completion, and projects the
+returned speaker turns into Batchalign's typed protocol. Uploaded media is
+temporary; pyannoteAI removes media and job output on its documented retention
+schedule.
 
 API key resolution follows the shared Batchalign config system:
 
@@ -27,6 +28,7 @@ from batchalign.backends.base import BatchPolicy, Speaker
 
 _LOG = logging.getLogger("batchalign.backends.speaker.pyannote_ai")
 _TERMINAL_STATUSES = {"succeeded", "failed", "canceled"}
+_CLOUD_MP3_BITRATE_KBPS = 16
 
 
 class PyannoteAIBackend(Speaker):
@@ -80,7 +82,7 @@ class PyannoteAIBackend(Speaker):
     @property
     def name(self) -> str:
         speakers = self._num_speakers or "auto"
-        return f"pyannote-ai:{self._model}:speakers-{speakers}:v2"
+        return f"pyannote-ai:{self._model}:speakers-{speakers}:v3"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -270,7 +272,7 @@ def _render_mp3(audio: Any) -> bytes:
     """Render prepared speech PCM as a compact cloud-upload payload."""
     from batchalign._core.backends import ConvertBackend
 
-    converter = ConvertBackend("mp3", mp3_bitrate_kbps=32)
+    converter = ConvertBackend("mp3", mp3_bitrate_kbps=_CLOUD_MP3_BITRATE_KBPS)
     return bytes(
         converter.encode_prepared(
             bytes(audio.pcm_f32le),

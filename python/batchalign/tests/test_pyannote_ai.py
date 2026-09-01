@@ -86,7 +86,7 @@ def test_diarization_upload_submit_poll_and_projection():
         "POST",
         "GET",
     ]
-    assert backend.name == "pyannote-ai:precision-2:speakers-2:v2"
+    assert backend.name == "pyannote-ai:precision-2:speakers-2:v3"
     declared = json.loads(requests[0][0].data)
     assert declared["url"].endswith(".mp3")
     assert requests[1][0].data == b"\xff\xfb-from-convert-backend"
