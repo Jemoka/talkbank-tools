@@ -7,13 +7,14 @@ use crate::base::ProgressSink;
 use crate::base::Task;
 use crate::base::TaskInput;
 use crate::base::{Dispatcher, TaskRunner};
-use crate::proto::speaker::{SpeakerInput, SpeakerOutput};
+use crate::proto::speaker::{DiarizationSegment, SpeakerInput, SpeakerOutput};
+use crate::segmentation::split_utterance;
 use crate::utils::{BAError, BAResult, MediaInput, prepare_pcm};
 use async_trait::async_trait;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
-use talkbank_model::alignment::helpers::{WordItem, walk_words};
-use talkbank_model::content::UtteranceContent;
+use talkbank_model::alignment::helpers::{TierDomain, WordItem, walk_words};
+use talkbank_model::model::{Bullet, Utterance};
 use talkbank_model::{Line, SpeakerCode};
 
 const SIBLING_MEDIA_EXTS: &[&str] = &[
@@ -144,35 +145,26 @@ fn relabel_utterances_by_diarization(
         .filter(|l| matches!(l, Line::Utterance(_)))
         .count() as u64;
     let mut completed: u64 = 0;
-    for line in chat.ast_mut().lines.as_mut_slice().iter_mut() {
-        let Line::Utterance(u) = line else { continue };
-        let midpoint = u
-            .main
-            .content
-            .bullet
-            .as_ref()
-            .and_then(|bullet| {
-                let timing = &bullet.timing;
-                (timing.end_ms >= timing.start_ms)
-                    .then_some(timing.start_ms + (timing.end_ms - timing.start_ms) / 2)
-            })
-            .or_else(|| utterance_midpoint_ms(&u.main.content.content.as_slice()));
-        if let Some(mid) = midpoint {
-            let best = segs
-                .iter()
-                .find(|s| mid >= s.start_ms && mid <= s.end_ms)
-                .or_else(|| {
-                    segs.iter().min_by_key(|s| {
-                        let lo = s.start_ms.abs_diff(mid);
-                        let hi = s.end_ms.abs_diff(mid);
-                        lo.min(hi)
-                    })
-                });
-            if let Some(seg) = best {
-                if let Some(code) = speaker_codes.get(seg.speaker.as_str()) {
-                    u.main.speaker = code.clone();
+    let old_lines = chat.ast_mut().lines.take();
+    let mut new_lines = Vec::with_capacity(old_lines.len());
+    for line in old_lines {
+        let Line::Utterance(utterance) = line else {
+            new_lines.push(line);
+            continue;
+        };
+
+        let assignments = speaker_assignments(&utterance, segs);
+        for mut child in split_utterance(*utterance, &assignments) {
+            if let Some((start_ms, end_ms)) = utterance_timing_ms(&child) {
+                child.main.content.bullet = Some(Bullet::new(start_ms, end_ms));
+                let midpoint = start_ms + (end_ms - start_ms) / 2;
+                if let Some(segment_index) = segment_index_at(segs, midpoint)
+                    && let Some(code) = speaker_codes.get(segs[segment_index].speaker.as_str())
+                {
+                    child.main.speaker = code.clone();
                 }
             }
+            new_lines.push(Line::Utterance(Box::new(child)));
         }
         completed += 1;
         sink.emit(ProgressEvent::stage_tick(
@@ -182,21 +174,110 @@ fn relabel_utterances_by_diarization(
             total,
         ));
     }
+    chat.ast_mut().lines = new_lines.into();
     Ok(())
 }
 
-fn utterance_midpoint_ms(content: &[UtteranceContent]) -> Option<u64> {
+fn speaker_assignments(utterance: &Utterance, segments: &[DiarizationSegment]) -> Vec<usize> {
+    let mut timings = Vec::new();
+    walk_words(
+        utterance.main.content.content.as_slice(),
+        Some(TierDomain::Mor),
+        &mut |word| timings.push(word_timing(&word)),
+    );
+    if timings.iter().all(Option::is_none)
+        && let Some(wor) = utterance.wor_tier()
+    {
+        timings = wor
+            .words()
+            .map(|word| word_timing(&WordItem::Word(word)))
+            .collect();
+    }
+
+    let mut segment_indices: Vec<Option<usize>> = timings
+        .iter()
+        .map(|timing| {
+            timing.and_then(|(start_ms, end_ms)| {
+                segment_index_at(segments, start_ms + (end_ms - start_ms) / 2)
+            })
+        })
+        .collect();
+
+    let mut prior = None;
+    for segment_index in &mut segment_indices {
+        if segment_index.is_some() {
+            prior = *segment_index;
+        } else {
+            *segment_index = prior;
+        }
+    }
+    let mut following = None;
+    for segment_index in segment_indices.iter_mut().rev() {
+        if segment_index.is_some() {
+            following = *segment_index;
+        } else {
+            *segment_index = following;
+        }
+    }
+
+    let mut group = 0;
+    let mut prior_speaker = None;
+    segment_indices
+        .into_iter()
+        .map(|segment_index| {
+            let speaker = segment_index.map(|index| segments[index].speaker.as_str());
+            if prior_speaker.is_some() && speaker != prior_speaker {
+                group += 1;
+            }
+            prior_speaker = speaker;
+            group
+        })
+        .collect()
+}
+
+fn segment_index_at(segments: &[DiarizationSegment], timestamp_ms: u64) -> Option<usize> {
+    segments
+        .iter()
+        .position(|segment| timestamp_ms >= segment.start_ms && timestamp_ms <= segment.end_ms)
+        .or_else(|| {
+            segments
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, segment)| {
+                    segment
+                        .start_ms
+                        .abs_diff(timestamp_ms)
+                        .min(segment.end_ms.abs_diff(timestamp_ms))
+                })
+                .map(|(index, _)| index)
+        })
+}
+
+fn utterance_timing_ms(utterance: &Utterance) -> Option<(u64, u64)> {
     let mut t0: Option<u64> = None;
     let mut t1: Option<u64> = None;
-    walk_words(content, None, &mut |w| {
+    walk_words(utterance.main.content.content.as_slice(), None, &mut |w| {
         if let Some((s, e)) = word_timing(&w) {
             t0 = Some(t0.map_or(s, |c| c.min(s)));
             t1 = Some(t1.map_or(e, |c| c.max(e)));
         }
     });
+    if t0.is_none()
+        && let Some(wor) = utterance.wor_tier()
+    {
+        for word in wor.words() {
+            if let Some((s, e)) = word_timing(&WordItem::Word(word)) {
+                t0 = Some(t0.map_or(s, |current| current.min(s)));
+                t1 = Some(t1.map_or(e, |current| current.max(e)));
+            }
+        }
+    }
     match (t0, t1) {
-        (Some(a), Some(b)) if b >= a => Some(a + (b - a) / 2),
-        _ => None,
+        (Some(start_ms), Some(end_ms)) if end_ms >= start_ms => Some((start_ms, end_ms)),
+        _ => utterance.main.content.bullet.as_ref().and_then(|bullet| {
+            let timing = &bullet.timing;
+            (timing.end_ms >= timing.start_ms).then_some((timing.start_ms, timing.end_ms))
+        }),
     }
 }
 
@@ -208,4 +289,85 @@ fn word_timing(w: &WordItem<'_>) -> Option<(u64, u64)> {
     };
     let b = word.inline_bullet.as_ref()?;
     Some((b.timing.start_ms, b.timing.end_ms))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::base::NullSink;
+    use crate::proto::speaker::Diarization;
+    use crate::utils::SourceId;
+
+    const TIMED_UTTERANCE: &str = "@UTF8\n\
+@Begin\n\
+@Languages:\teng\n\
+@Participants:\tPAR0 Participant, PAR1 Participant\n\
+@ID:\teng|test|PAR0|||||Participant|||\n\
+@ID:\teng|test|PAR1|||||Participant|||\n\
+@Media:\ttest, audio\n\
+*PAR0:\thello there friend now . \u{15}0_1600\u{15}\n\
+%wor:\thello \u{15}0_400\u{15} there \u{15}401_800\u{15} friend \u{15}801_1200\u{15} now \u{15}1201_1600\u{15} .\n\
+@End\n";
+
+    fn output(segments: Vec<DiarizationSegment>) -> SpeakerOutput {
+        SpeakerOutput {
+            source_id: SourceId::new_unchecked("speaker-test"),
+            diarization: Diarization { segments },
+        }
+    }
+
+    #[test]
+    fn splits_utterance_at_speaker_boundary() {
+        let source_id = SourceId::new_unchecked("speaker-test");
+        let mut chat = Chat::parse(TIMED_UTTERANCE, source_id).expect("valid timed CHAT");
+        let diarization = output(vec![
+            DiarizationSegment {
+                start_ms: 0,
+                end_ms: 800,
+                speaker: "speaker-a".into(),
+            },
+            DiarizationSegment {
+                start_ms: 801,
+                end_ms: 1600,
+                speaker: "speaker-b".into(),
+            },
+        ]);
+
+        relabel_utterances_by_diarization(&mut chat, &diarization, &NullSink)
+            .expect("speaker projection succeeds");
+        chat.validate_stage_output(Task::Speaker)
+            .expect("split speaker output remains valid CHAT");
+
+        let utterances: Vec<_> = chat.ast().utterances().collect();
+        assert_eq!(utterances.len(), 2);
+        assert_eq!(utterances[0].main.speaker.as_str(), "PAR0");
+        assert_eq!(utterances[1].main.speaker.as_str(), "PAR1");
+        assert_eq!(utterance_timing_ms(utterances[0]), Some((0, 800)));
+        assert_eq!(utterance_timing_ms(utterances[1]), Some((801, 1600)));
+    }
+
+    #[test]
+    fn adjacent_segments_for_same_speaker_do_not_split() {
+        let source_id = SourceId::new_unchecked("speaker-test");
+        let mut chat = Chat::parse(TIMED_UTTERANCE, source_id).expect("valid timed CHAT");
+        let diarization = output(vec![
+            DiarizationSegment {
+                start_ms: 0,
+                end_ms: 800,
+                speaker: "speaker-a".into(),
+            },
+            DiarizationSegment {
+                start_ms: 801,
+                end_ms: 1600,
+                speaker: "speaker-a".into(),
+            },
+        ]);
+
+        relabel_utterances_by_diarization(&mut chat, &diarization, &NullSink)
+            .expect("speaker projection succeeds");
+        chat.validate_stage_output(Task::Speaker)
+            .expect("same-speaker output remains valid CHAT");
+
+        assert_eq!(chat.ast().utterances().count(), 1);
+    }
 }
