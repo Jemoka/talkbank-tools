@@ -34,6 +34,19 @@ _ENGLISH_CONVENTIONAL_WORDS = frozenset(
     "cmon dunno gimme gonna gotta kinda lemme lotta outta sorta wanna whatnot".split()
 )
 
+_ITALIAN_ARTICULATED_PREPOSITIONS = frozenset(
+    "al allo alla ai agli alle col collo colla coi cogli colle dal dallo dalla "
+    "dai dagli dalle del dello della dei degli delle nel nello nella nei negli "
+    "nelle pel pei sul sullo sulla sui sugli sulle".split()
+)
+
+_ITALIAN_CLITIC_ENDING = re.compile(
+    r"(?:"
+    r"(?:ce|glie|me|se|te|ve)(?:la|le|li|lo)|"
+    r"ci|gli|la|le|li|lo|mi|ne|si|ti|vi"
+    r")$"
+)
+
 
 def conform(i):
     """A token may be a bare string or a `(text, is_mwt)` tuple; get its text."""
@@ -143,6 +156,23 @@ def tokenizer_processor(tokenized, lang, sent):
             # ``anna``). Admit punctuation-free English candidates only when
             # their surface is a known contraction; otherwise retain the
             # authoritative CHAT word without authorizing an internal split.
+            res.append(i[0])
+        elif (
+            ("it" in lang)
+            and isinstance(i, tuple)
+            and i[1] is True
+            and "'" not in i[0]
+            and "’" not in i[0]
+            and i[0].casefold() not in _ITALIAN_ARTICULATED_PREPOSITIONS
+            and _ITALIAN_CLITIC_ENDING.search(i[0].casefold()) is None
+        ):
+            # Italian's tokenizer can mark ordinary inflected words as MWT
+            # candidates.  The MWT model then invents components: observed
+            # ``bianche`` became ``bia + nce + he`` and even emitted the
+            # invalid dependency label ``iob``.  Native Italian MWTs without
+            # apostrophes are articulated prepositions or verb/pronominal
+            # clitic forms; reject candidates outside those shapes before
+            # the destructive MWT expansion runs.
             res.append(i[0])
         elif ("it" in lang) and isinstance(i, tuple) and i[0] == "l'" and i[1] is True:
             res.append("l'")

@@ -11,6 +11,14 @@ def test_native_mwt_marker_survives_inside_one_chat_word() -> None:
     ) == [("nel", True), "gatto"]
 
 
+def test_italian_native_mwt_rejects_inflection_but_keeps_clitic_forms() -> None:
+    assert tokenizer_processor(
+        [("bianche", True), ("portala", True), ("eccolo", True)],
+        ["it"],
+        "bianche portala eccolo",
+    ) == ["bianche", ("portala", True), ("eccolo", True)]
+
+
 def test_conventional_english_spellings_keep_established_boundaries() -> None:
     assert tokenizer_processor(
         [

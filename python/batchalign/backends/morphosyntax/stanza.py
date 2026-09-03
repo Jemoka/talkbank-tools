@@ -430,7 +430,7 @@ class StanzaBackend(Morphosyntax):
         # token-alignment contract. ``native-mwt2`` admits native MWT analysis
         # inside authoritative CHAT words while preserving conventional whole
         # spellings and rejecting false English name candidates.
-        return f"stanza:{version}:{retok}:native-mwt2"
+        return f"stanza:{version}:{retok}:native-mwt3"
 
     @property
     def batch_policy(self) -> BatchPolicy:
