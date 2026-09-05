@@ -54,7 +54,14 @@ def test_diarize_runs_shared_pipeline_on_chat_and_writes_chat(
             captured["strip_word_timing"] = strip_word_timing
 
     class FakePipeline:
-        def run(self, inputs, callbacks=None, outcome_callback=None):
+        def run(
+            self,
+            inputs,
+            callbacks=None,
+            outcome_callback=None,
+            retain_outcomes=True,
+        ):
+            assert retain_outcomes is False
             captured["inputs"] = list(inputs)
             outcome = FakeOutcome()
             if outcome_callback is not None:

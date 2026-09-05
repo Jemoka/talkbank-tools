@@ -248,6 +248,7 @@ class Interface:
                     list(inputs),
                     callbacks=cbs,
                     outcome_callback=on_outcome,
+                    retain_outcomes=False,
                 )
             if self._interrupted:
                 self._finalize_interrupted_tasks()

@@ -144,13 +144,18 @@ impl Pipeline {
     /// duck-typed object with `.path` (+ optional `.source_id`). Returns one
     /// `Outcome` per input. When `outcome_callback` is supplied, each
     /// successful outcome is passed to it as soon as that source completes.
-    #[pyo3(signature = (inputs, callbacks=None, outcome_callback=None))]
+    /// Callers that consume outcomes exclusively through that callback may
+    /// set `retain_outcomes=false` to release each completed document instead
+    /// of keeping the entire run resident. The default preserves the API's
+    /// ordered return-value contract.
+    #[pyo3(signature = (inputs, callbacks=None, outcome_callback=None, retain_outcomes=true))]
     fn run(
         &self,
         py: Python<'_>,
         inputs: Vec<Py<PyAny>>,
         callbacks: Option<Vec<(String, Py<PyAny>)>>,
         outcome_callback: Option<Py<PyAny>>,
+        retain_outcomes: bool,
     ) -> PyResult<Vec<Py<PyOutcome>>> {
         let mut sink_pairs: Vec<(SourceId, Py<PyAny>)> = Vec::new();
         if let Some(cbs) = callbacks {
@@ -163,46 +168,6 @@ impl Pipeline {
         }
         let sink = Arc::new(crate::progress_sink::CallbackSink::from_pairs(sink_pairs))
             as Arc<dyn ProgressSink>;
-        // Per-input fallible conversion. A parse failure on one source must
-        // not abort the rest of the batch — convert it into a
-        // `BAValue::Failed` and emit StageFailed + SourceCompleted so the
-        // per-file bar resolves and the overall counter advances. Genuine
-        // type-mismatch errors (no recoverable source_id) still raise so
-        // the caller learns of the API misuse.
-        let mut bavalues: Vec<BAValue> = Vec::with_capacity(inputs.len());
-        for obj in inputs {
-            let snapshot_sid = recover_source_id(py, &obj);
-            match convert_py_input(py, obj) {
-                Ok(v) => bavalues.push(v),
-                Err(err) => match snapshot_sid {
-                    Some(sid) => {
-                        let msg = err.to_string();
-                        sink.emit(ProgressEvent {
-                            source_id: sid.clone(),
-                            task: None,
-                            kind: ProgressKind::StageFailed,
-                            completed: 0,
-                            total: 0,
-                            label: format_stage_failure_message(&msg),
-                        });
-                        sink.emit(ProgressEvent {
-                            source_id: sid.clone(),
-                            task: None,
-                            kind: ProgressKind::SourceCompleted,
-                            completed: 0,
-                            total: 0,
-                            label: String::new(),
-                        });
-                        bavalues.push(BAValue::Failed {
-                            source_id: sid,
-                            error: BAError::Parse(msg),
-                            partial: None,
-                        });
-                    }
-                    None => return Err(err),
-                },
-            }
-        }
         let inner = self.inner.clone();
 
         // Release the GIL while the runtime drives async work; runners that
@@ -227,8 +192,13 @@ impl Pipeline {
                 let rt = inner.runtime.clone();
                 let engine = inner.engine.clone();
                 rt.block_on(async move {
-                    let work =
-                        run_inner_with_outcome_callback(inner, bavalues, sink, outcome_callback);
+                    let work = run_inner_with_outcome_callback(
+                        inner,
+                        inputs,
+                        sink,
+                        outcome_callback,
+                        retain_outcomes,
+                    );
                     tokio::pin!(work);
                     let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
                     interval.tick().await; // skip the immediate first tick
@@ -251,6 +221,15 @@ impl Pipeline {
                     }
                 })
             });
+        }
+
+        // The ordinary return-value path preserves every output by contract,
+        // so eager conversion does not increase its asymptotic resident set.
+        // Callback-driven CLI runs take the branch above and convert inside
+        // the bounded dispatch window instead.
+        let mut bavalues: Vec<BAValue> = Vec::with_capacity(inputs.len());
+        for obj in inputs {
+            bavalues.push(convert_input_or_failure(py, obj, sink.as_ref())?);
         }
 
         let outcomes = py.detach(|| {
@@ -293,6 +272,45 @@ impl Pipeline {
     /// `Drop` does the harder teardown (`engine.shutdown`).
     fn cancel(&self) {
         self.inner.engine.cancel();
+    }
+}
+
+/// Convert one Python-facing input while preserving per-source failure isolation.
+fn convert_input_or_failure(
+    py: Python<'_>,
+    obj: Py<PyAny>,
+    sink: &dyn ProgressSink,
+) -> PyResult<BAValue> {
+    let snapshot_sid = recover_source_id(py, &obj);
+    match convert_py_input(py, obj) {
+        Ok(value) => Ok(value),
+        Err(err) => match snapshot_sid {
+            Some(sid) => {
+                let msg = err.to_string();
+                sink.emit(ProgressEvent {
+                    source_id: sid.clone(),
+                    task: None,
+                    kind: ProgressKind::StageFailed,
+                    completed: 0,
+                    total: 0,
+                    label: format_stage_failure_message(&msg),
+                });
+                sink.emit(ProgressEvent {
+                    source_id: sid.clone(),
+                    task: None,
+                    kind: ProgressKind::SourceCompleted,
+                    completed: 0,
+                    total: 0,
+                    label: String::new(),
+                });
+                Ok(BAValue::Failed {
+                    source_id: sid,
+                    error: BAError::Parse(msg),
+                    partial: None,
+                })
+            }
+            None => Err(err),
+        },
     }
 }
 
@@ -534,38 +552,43 @@ where
 
 async fn run_inner_with_outcome_callback(
     inner: Arc<PipelineInner>,
-    inputs: Vec<BAValue>,
+    inputs: Vec<Py<PyAny>>,
     sink: Arc<dyn ProgressSink>,
     outcome_callback: Py<PyAny>,
+    retain_outcomes: bool,
 ) -> PyResult<Vec<Py<PyOutcome>>> {
     let total = inputs.len();
-    let futures = inputs.into_iter().enumerate().map(|(idx, value)| {
+    let futures = inputs.into_iter().enumerate().map(|(idx, obj)| {
         let me = inner.clone();
         let sink = sink.clone();
         async move {
             let permit = me.sem.clone().acquire_owned().await;
-            let _permit = match permit {
-                Ok(p) => p,
-                Err(_) => {
-                    let sid = value.source_id();
-                    return (
-                        idx,
-                        BAValue::Failed {
-                            source_id: sid,
-                            error: BAError::Internal("semaphore closed".into()),
-                            partial: Some(Box::new(value)),
-                        },
-                    );
-                }
-            };
-            (idx, run_one(me, value, sink).await)
+            let _permit =
+                permit.map_err(|_| PyRuntimeError::new_err("pipeline semaphore closed"))?;
+
+            // CHAT parsing can produce a large typed document. Perform it
+            // only after admission, off the async runtime, so a directory
+            // run retains at most `workers` parsed inputs instead of all N.
+            let conversion_sink = sink.clone();
+            let value = tokio::task::spawn_blocking(move || {
+                Python::attach(|py| convert_input_or_failure(py, obj, conversion_sink.as_ref()))
+            })
+            .await
+            .map_err(|err| PyRuntimeError::new_err(format!("input parser panicked: {err}")))??;
+
+            Ok::<_, PyErr>((idx, run_one(me, value, sink).await))
         }
     });
     let dispatch_window = inner.dispatch_window;
     let mut futures = stream::iter(futures).buffer_unordered(dispatch_window);
 
-    let mut outcomes: Vec<Option<Py<PyOutcome>>> = (0..total).map(|_| None).collect();
-    while let Some((idx, value)) = futures.next().await {
+    let mut outcomes = retain_outcomes.then(|| {
+        (0..total)
+            .map(|_| None)
+            .collect::<Vec<Option<Py<PyOutcome>>>>()
+    });
+    while let Some(result) = futures.next().await {
+        let (idx, value) = result?;
         let failed = value.is_failed();
         let outcome = Python::attach(|py| -> PyResult<Py<PyOutcome>> {
             let outcome = Py::new(py, PyOutcome::from_value(value))?;
@@ -574,13 +597,17 @@ async fn run_inner_with_outcome_callback(
             }
             Ok(outcome)
         })?;
-        outcomes[idx] = Some(outcome);
+        if let Some(outcomes) = &mut outcomes {
+            outcomes[idx] = Some(outcome);
+        }
     }
 
-    Ok(outcomes
-        .into_iter()
-        .map(|outcome| outcome.expect("one outcome per input"))
-        .collect())
+    Ok(outcomes.map_or_else(Vec::new, |outcomes| {
+        outcomes
+            .into_iter()
+            .map(|outcome| outcome.expect("one outcome per input"))
+            .collect()
+    }))
 }
 
 #[cfg(test)]

@@ -415,8 +415,15 @@ def test_run_pipeline_outcome_callback_writes_during_run(fake_progress_core):
     timeline: list[tuple[str, list[str]]] = []
 
     class FakePipeline:
-        def run(self, inputs, callbacks, outcome_callback=None):
+        def run(
+            self,
+            inputs,
+            callbacks,
+            outcome_callback=None,
+            retain_outcomes=True,
+        ):
             assert outcome_callback is not None
+            assert retain_outcomes is False
             cbs = dict(callbacks)
             outcomes = []
             for inp in inputs:

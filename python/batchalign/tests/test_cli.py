@@ -117,7 +117,14 @@ def test_ai_passes_instruction_to_inputs(tmp_path, monkeypatch):
         pass
 
     class FakePipeline:
-        def run(self, inputs, callbacks=None, outcome_callback=None):
+        def run(
+            self,
+            inputs,
+            callbacks=None,
+            outcome_callback=None,
+            retain_outcomes=True,
+        ):
+            assert retain_outcomes is False
             captured["inputs"] = list(inputs)
             return []
 
@@ -275,7 +282,14 @@ def test_transcribe_wires_pyannote_ai_for_separate_diarization(
     )
 
     class FakePipeline:
-        def run(self, _inputs, callbacks=None, outcome_callback=None):
+        def run(
+            self,
+            _inputs,
+            callbacks=None,
+            outcome_callback=None,
+            retain_outcomes=True,
+        ):
+            assert retain_outcomes is False
             return []
 
     def fake_recipe(**kwargs):
@@ -331,7 +345,14 @@ def test_transcribe_rev_diarize_uses_pyannote_cloud_speaker_task(
             return []
 
     class FakePipeline:
-        def run(self, _inputs, callbacks=None, outcome_callback=None):
+        def run(
+            self,
+            _inputs,
+            callbacks=None,
+            outcome_callback=None,
+            retain_outcomes=True,
+        ):
+            assert retain_outcomes is False
             return []
 
     cloud_speaker = object()
