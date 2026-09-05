@@ -427,10 +427,10 @@ class StanzaBackend(Morphosyntax):
         version = getattr(self._stanza, "__version__", "unknown")
         retok = "retok" if self._retokenize else "noretok"
         # Cache identity covers both model/runtime behavior and Batchalign's
-        # token-alignment contract. ``native-mwt2`` admits native MWT analysis
-        # inside authoritative CHAT words while preserving conventional whole
-        # spellings and rejecting false English name candidates.
-        return f"stanza:{version}:{retok}:native-mwt3"
+        # token-alignment/rendering contract. ``native-mwt5`` admits only the
+        # regression-covered Italian MWT inventory and reflects realized
+        # English present-tense agreement.
+        return f"stanza:{version}:{retok}:native-mwt5"
 
     @property
     def batch_policy(self) -> BatchPolicy:

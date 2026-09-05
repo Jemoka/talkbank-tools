@@ -11,12 +11,28 @@ def test_native_mwt_marker_survives_inside_one_chat_word() -> None:
     ) == [("nel", True), "gatto"]
 
 
-def test_italian_native_mwt_rejects_inflection_but_keeps_clitic_forms() -> None:
+def test_italian_native_mwt_uses_closed_validated_inventory() -> None:
     assert tokenizer_processor(
-        [("bianche", True), ("portala", True), ("eccolo", True)],
+        [
+            (surface, True)
+            for surface in (
+                "bianche quale tutti puzzle rastrello piccoli triangoli cavallo "
+                "pistola dispetti bene vola cane dormi devi portala eccolo"
+            ).split()
+        ],
         ["it"],
-        "bianche portala eccolo",
-    ) == ["bianche", ("portala", True), ("eccolo", True)]
+        (
+            "bianche quale tutti puzzle rastrello piccoli triangoli cavallo "
+            "pistola dispetti bene vola cane dormi devi portala eccolo"
+        ),
+    ) == [
+        *(
+            "bianche quale tutti puzzle rastrello piccoli triangoli cavallo "
+            "pistola dispetti bene vola cane dormi devi"
+        ).split(),
+        ("portala", True),
+        ("eccolo", True),
+    ]
 
 
 def test_conventional_english_spellings_keep_established_boundaries() -> None:

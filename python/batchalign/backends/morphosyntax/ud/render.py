@@ -984,6 +984,23 @@ def handler__VERB(word: Any, lang: str | None = None) -> tuple[str, str, list[st
     number = feats.get("Number", "Sing")
 
     tense = feats.get("Tense", "")
+
+    # Stanza can infer third-person agreement from the subject even when a
+    # child's English verb has the uninflected surface (``it bang``). CHAT's
+    # morphology describes the realized word, so retain S3 for an overtly
+    # inflected form such as ``turns`` but not when a lexical VERB's present
+    # surface is exactly its lemma.
+    if (
+        lang == "en"
+        and word.upos == "VERB"
+        and verbform == "Fin"
+        and tense == "Pres"
+        and number == "Sing"
+        and person == "3"
+        and word.text.casefold() == word.lemma.casefold()
+    ):
+        person = ""
+
     polarity = feats.get("Polarity", "")
     polite = feats.get("Polite", "")
 

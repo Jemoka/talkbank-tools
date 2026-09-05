@@ -87,6 +87,7 @@ _REPROBE = (
 _MASC_SING_ART = "Definite=Def|Gender=Masc|Number=Sing|PronType=Art"
 _FEM_SING_ART = "Definite=Def|Gender=Fem|Number=Sing|PronType=Art"
 _MASC_PLUR_ART = "Definite=Def|Gender=Masc|Number=Plur|PronType=Art"
+_FEM_PLUR_ART = "Definite=Def|Gender=Fem|Number=Plur|PronType=Art"
 
 
 def _adp(surface: str, lemma: str) -> LegacyMwtComponent:
@@ -188,6 +189,36 @@ _ARTICULATED_PREPOSITION_RULES: tuple[LegacyMwtRule, ...] = (
     ),
 )
 
+_COMMON_ARTICULATED_PREPOSITION_RULES = tuple(
+    LegacyMwtRule(
+        16,
+        surface,
+        (_adp(preposition, preposition), _det(article, feats)),
+        _LEGACY_REPROBE,
+    )
+    for surface, preposition, article, feats in (
+        ("agli", "a", "gli", _MASC_PLUR_ART),
+        ("alle", "a", "le", _FEM_PLUR_ART),
+        ("dello", "di", "lo", _MASC_SING_ART),
+        ("degli", "di", "gli", _MASC_PLUR_ART),
+        ("delle", "di", "le", _FEM_PLUR_ART),
+        ("dal", "da", "il", _MASC_SING_ART),
+        ("dallo", "da", "lo", _MASC_SING_ART),
+        ("dalla", "da", "la", _FEM_SING_ART),
+        ("dagli", "da", "gli", _MASC_PLUR_ART),
+        ("dalle", "da", "le", _FEM_PLUR_ART),
+        ("nello", "in", "lo", _MASC_SING_ART),
+        ("nella", "in", "la", _FEM_SING_ART),
+        ("nei", "in", "i", _MASC_PLUR_ART),
+        ("negli", "in", "gli", _MASC_PLUR_ART),
+        ("nelle", "in", "le", _FEM_PLUR_ART),
+        ("sullo", "su", "lo", _MASC_SING_ART),
+        ("sui", "su", "i", _MASC_PLUR_ART),
+        ("sugli", "su", "gli", _MASC_PLUR_ART),
+        ("sulle", "su", "le", _FEM_PLUR_ART),
+    )
+)
+
 _REPORTED_LEGACY_CLITIC_RULES: tuple[LegacyMwtRule, ...] = (
     _infinitive_clitic("alzarci", "alzare", _CI, defect=14),
     LegacyMwtRule(
@@ -265,6 +296,7 @@ _COMMON_IMPERATIVE_CLITIC_RULES = tuple(
 
 _LEGACY_MWT_RULES = (
     _ARTICULATED_PREPOSITION_RULES
+    + _COMMON_ARTICULATED_PREPOSITION_RULES
     + _REPORTED_LEGACY_CLITIC_RULES
     + _COMMON_INFINITIVE_CLITIC_RULES
     + _COMMON_IMPERATIVE_CLITIC_RULES
@@ -361,6 +393,15 @@ COMPONENT_REWRITE_RULES: tuple[ComponentRewriteRule, ...] = (
 )
 
 _COMPONENT_REWRITE_BY_SURFACE = {rule.surface: rule for rule in COMPONENT_REWRITE_RULES}
+
+# The tokenizer's MWT bit is only a candidate signal; the Italian model also
+# raises it for ordinary words such as ``bianche`` and ``cavallo``. Keep the
+# admission boundary synchronized with the closed rules below rather than
+# guessing from productive-looking suffixes (``-la``, ``-lo``, ``-ti``, ...),
+# which are common endings of unrelated lexical words.
+NATIVE_MWT_SURFACES = frozenset(
+    _LEGACY_MWT_BY_SURFACE | _BY_SURFACE | _COMPONENT_REWRITE_BY_SURFACE
+)
 
 
 def rule_for(surface: str, upos: str) -> CompoundImperativeRule | None:

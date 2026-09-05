@@ -22,6 +22,7 @@ import re
 from itertools import groupby
 
 from .dp import PayloadTarget, ReferenceTarget, align
+from .it.workarounds import NATIVE_MWT_SURFACES
 
 
 _ENGLISH_APOSTROPHELESS_MWT = re.compile(
@@ -32,19 +33,6 @@ _ENGLISH_APOSTROPHELESS_MWT = re.compile(
 
 _ENGLISH_CONVENTIONAL_WORDS = frozenset(
     "cmon dunno gimme gonna gotta kinda lemme lotta outta sorta wanna whatnot".split()
-)
-
-_ITALIAN_ARTICULATED_PREPOSITIONS = frozenset(
-    "al allo alla ai agli alle col collo colla coi cogli colle dal dallo dalla "
-    "dai dagli dalle del dello della dei degli delle nel nello nella nei negli "
-    "nelle pel pei sul sullo sulla sui sugli sulle".split()
-)
-
-_ITALIAN_CLITIC_ENDING = re.compile(
-    r"(?:"
-    r"(?:ce|glie|me|se|te|ve)(?:la|le|li|lo)|"
-    r"ci|gli|la|le|li|lo|mi|ne|si|ti|vi"
-    r")$"
 )
 
 
@@ -163,16 +151,15 @@ def tokenizer_processor(tokenized, lang, sent):
             and i[1] is True
             and "'" not in i[0]
             and "’" not in i[0]
-            and i[0].casefold() not in _ITALIAN_ARTICULATED_PREPOSITIONS
-            and _ITALIAN_CLITIC_ENDING.search(i[0].casefold()) is None
+            and i[0].casefold() not in NATIVE_MWT_SURFACES
         ):
             # Italian's tokenizer can mark ordinary inflected words as MWT
             # candidates.  The MWT model then invents components: observed
             # ``bianche`` became ``bia + nce + he`` and even emitted the
-            # invalid dependency label ``iob``.  Native Italian MWTs without
-            # apostrophes are articulated prepositions or verb/pronominal
-            # clitic forms; reject candidates outside those shapes before
-            # the destructive MWT expansion runs.
+            # invalid dependency label ``iob``. Admit only the closed Italian
+            # inventory whose resulting analysis is covered by regression
+            # tests; suffix inference confuses nouns such as ``pistola`` with
+            # productive verb/pronominal clitics.
             res.append(i[0])
         elif ("it" in lang) and isinstance(i, tuple) and i[0] == "l'" and i[1] is True:
             res.append("l'")

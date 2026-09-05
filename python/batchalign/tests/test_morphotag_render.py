@@ -147,6 +147,33 @@ def test_english_declarative_matches_ba2():
     assert _gra_str(analysis) == "1|2|NSUBJ 2|0|ROOT 3|5|DET 4|5|AMOD 5|2|OBJ 6|2|PUNCT"
 
 
+def test_english_present_agreement_tracks_realized_surface() -> None:
+    feats = "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin"
+    subject = (
+        "it",
+        "it",
+        "PRON",
+        "Case=Nom|Number=Sing|Person=3|PronType=Prs",
+        2,
+        "nsubj",
+    )
+    turns = _sentence(
+        [
+            subject,
+            ("turns", "turn", "VERB", feats, 0, "root"),
+            ("back", "back", "ADV", None, 2, "advmod"),
+        ]
+    )
+    bang = _sentence([subject, ("bang", "bang", "VERB", feats, 0, "root")])
+
+    assert _mor_str(render.parse_sentence(turns, ".", [], "en"), ".") == (
+        "pron|it-Prs-Nom-S3 verb|turn-Fin-Ind-Pres-S3 adv|back ."
+    )
+    assert _mor_str(render.parse_sentence(bang, ".", [], "en"), ".") == (
+        "pron|it-Prs-Nom-S3 verb|bang-Fin-Ind-Pres-S ."
+    )
+
+
 def test_code_switched_root_keeps_root_relation():
     sent = _sentence(
         [
