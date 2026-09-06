@@ -106,7 +106,19 @@ def tokenizer_processor(tokenized, lang, sent):
         elif len(i) == 0:
             continue
         else:
-            new_toks.append(("".join([conform(tokenized[j]) for j in i]), False))
+            text = "".join(conform(tokenized[j]) for j in i)
+            if "it" in lang and ("'" in text or "’" in text):
+                # Keep Stanza's native prefix+noun tokenization so its MWT
+                # model expands only the marked prefix (``sull'`` → ``su`` +
+                # ``l'``), not the recombined CHAT word. The renderer groups
+                # these adjacent tokens back under the authoritative word.
+                new_toks.extend(tokenized[j] for j in i)
+            else:
+                is_mwt = any(
+                    isinstance(tokenized[j], tuple) and tokenized[j][1] is True
+                    for j in i
+                )
+                new_toks.append((text, is_mwt))
         seen += i
 
     tokenized = new_toks
@@ -119,10 +131,7 @@ def tokenizer_processor(tokenized, lang, sent):
             and i[1] is True
             and (
                 (("it" in lang) and i[0].casefold() == "dai")
-                or (
-                    ("en" in lang)
-                    and i[0].casefold() in _ENGLISH_CONVENTIONAL_WORDS
-                )
+                or (("en" in lang) and i[0].casefold() in _ENGLISH_CONVENTIONAL_WORDS)
             )
         ):
             # Preserve the established whole-word analyses for conventional
@@ -161,8 +170,11 @@ def tokenizer_processor(tokenized, lang, sent):
             # tests; suffix inference confuses nouns such as ``pistola`` with
             # productive verb/pronominal clitics.
             res.append(i[0])
-        elif ("it" in lang) and isinstance(i, tuple) and i[0] == "l'" and i[1] is True:
-            res.append("l'")
+        elif ("it" in lang) and isinstance(i, tuple) and ("'" in i[0] or "’" in i[0]):
+            # Preserve Stanza's native MWT marker on an elided preposition
+            # prefix such as ``sull'``. The following noun remains a separate
+            # Stanza token until the renderer groups both under the CHAT word.
+            res.append(i)
         elif (
             ("it" in lang)
             and matches(i, "i")

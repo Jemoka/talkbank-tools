@@ -13,12 +13,15 @@ from ._options import cli_options
 from .tui import Interface, Task
 
 
-def _strip_existing_mor_gra(src: Path, dst: Path) -> None:
-    """Copy `src` to `dst`, dropping any `%mor:` / `%gra:` tier lines.
+def _prepare_morphotag_input(src: Path, dst: Path) -> None:
+    """Stage `src` for fresh morphology without obsolete generated data.
 
     Used when --clear-existing is set (default) so a re-run of morphotag
     on a file that already has those tiers regenerates them from scratch
-    instead of being skipped by the engine's "already tagged" guard.
+    instead of being skipped by the engine's "already tagged" guard. Old
+    conversion outputs also carry the retired ``@Options: multi`` header;
+    it has no modern CHAT behavior and must not prevent the rest of an
+    otherwise valid transcript from being retagged.
     """
     dropping_continuations = False
     with src.open("r", encoding="utf-8") as fin, dst.open("w", encoding="utf-8") as fout:
@@ -29,6 +32,8 @@ def _strip_existing_mor_gra(src: Path, dst: Path) -> None:
             stripped = line.lstrip()
             if stripped.startswith("%mor:") or stripped.startswith("%gra:"):
                 dropping_continuations = True
+                continue
+            if stripped.rstrip("\r\n") == "@Options:\tmulti":
                 continue
             fout.write(line)
 
@@ -110,7 +115,7 @@ def register(app: typer.Typer) -> None:
                         src = Path(inp.path)
                         staged_path = tmpdir / src.relative_to(root)
                         staged_path.parent.mkdir(parents=True, exist_ok=True)
-                        _strip_existing_mor_gra(src, staged_path)
+                        _prepare_morphotag_input(src, staged_path)
                         inp.path = str(staged_path)
                         staged.append(inp)
                     inputs = staged

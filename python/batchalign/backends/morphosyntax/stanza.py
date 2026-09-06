@@ -427,10 +427,10 @@ class StanzaBackend(Morphosyntax):
         version = getattr(self._stanza, "__version__", "unknown")
         retok = "retok" if self._retokenize else "noretok"
         # Cache identity covers both model/runtime behavior and Batchalign's
-        # token-alignment/rendering contract. ``native-mwt5`` admits only the
-        # regression-covered Italian MWT inventory and reflects realized
-        # English present-tense agreement.
-        return f"stanza:{version}:{retok}:native-mwt5"
+        # token-alignment/rendering contract. ``native-mwt7`` admits only the
+        # regression-covered Italian MWT inventory, preserves Italian
+        # elisions, and reflects realized English present-tense agreement.
+        return f"stanza:{version}:{retok}:native-mwt7"
 
     @property
     def batch_policy(self) -> BatchPolicy:
@@ -595,11 +595,17 @@ class StanzaBackend(Morphosyntax):
             self._tag_per_input_fallback(key, langs, nlp, prepared, outputs)
             return
 
-        for (idx, item, _, special_forms), sent in zip(
+        for (idx, item, line_cut, special_forms), sent in zip(
             prepared, stanza_sents, strict=False
         ):
             try:
-                analysis = render.parse_sentence(sent, ".", special_forms, langs[0])
+                analysis = render.parse_sentence(
+                    sent,
+                    ".",
+                    special_forms,
+                    langs[0],
+                    authoritative_words=line_cut.split(" "),
+                )
                 outputs[idx] = self._analysis_to_output(item, analysis)
             except Exception as exc:  # noqa: BLE001 — render fault on one utt.
                 _log.warning(
@@ -631,7 +637,13 @@ class StanzaBackend(Morphosyntax):
                 if not sents:
                     outputs[idx] = self._empty_output(item)
                     continue
-                analysis = render.parse_sentence(sents[0], ".", special_forms, langs[0])
+                analysis = render.parse_sentence(
+                    sents[0],
+                    ".",
+                    special_forms,
+                    langs[0],
+                    authoritative_words=line_cut.split(" "),
+                )
                 outputs[idx] = self._analysis_to_output(item, analysis)
             except Exception as exc:  # noqa: BLE001 — give up on just this one.
                 _log.warning(

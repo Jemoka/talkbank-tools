@@ -11,9 +11,8 @@
 #   wheel             host-platform wheel into python/target/wheels/
 #   sidecar           self-contained daemon binary via PyApp
 #
-# Profile is `release` (default) or `debug`. Maps to:
-#   - Bazel: --config=release | --config=dev
-#   - maturin: --release | (dev)
+# Profile is `release` (default) or `debug` for Bazel compilation. Published
+# wheels always use Maturin's release profile; editable installs use dev.
 #
 # Pinned tools (asserted at script entry by `bazel/python/hermeticity_guard.sh`):
 #   uv, maturin, python, rustc — pins live in `python/pyproject.toml`

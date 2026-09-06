@@ -98,6 +98,10 @@ jobs:
           MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
         run: bazel run -c opt //python/batchalign:wheel
 
+      - name: Verify wheel contents
+        shell: bash
+        run: python bazel/python/verify_wheel.py python/target/wheels/batchalign-*.whl
+
       - uses: actions/upload-artifact@v4
         with:
           name: batchalign-wheel-${{ matrix.platform }}

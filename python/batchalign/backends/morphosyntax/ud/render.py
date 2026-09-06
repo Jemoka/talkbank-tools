@@ -622,6 +622,45 @@ def _validate_root_structure(words: list[_NormalizedWord]) -> None:
         )
 
 
+def _group_italian_elision_tokens(
+    tokens: list[Any], authoritative_words: list[str]
+) -> list[Any]:
+    """Group Stanza's native elision tokens under their CHAT word.
+
+    Free Italian tokenization correctly analyzes ``sull'`` + ``altalena``
+    (including the prefix's own MWT expansion), while CHAT represents the
+    surface as one word: ``sull'altalena``. Replacing that native structure
+    with a single MWT candidate makes Stanza invent a second, malformed split.
+    This pass retains the native words and dependencies and changes only the
+    token Range that controls `%mor` grouping.
+    """
+    grouped: list[Any] = []
+    cursor = 0
+    for authoritative in authoritative_words:
+        if cursor >= len(tokens):
+            return tokens
+        token = tokens[cursor]
+        if str(getattr(token, "text", "")) == authoritative:
+            grouped.append(token)
+            cursor += 1
+            continue
+        if "'" not in authoritative and "’" not in authoritative:
+            return tokens
+
+        surface = ""
+        word_ids: list[int] = []
+        while cursor < len(tokens) and len(surface) < len(authoritative):
+            token = tokens[cursor]
+            surface += str(getattr(token, "text", ""))
+            word_ids.extend(list(getattr(token, "id", []) or []))
+            cursor += 1
+        if surface != authoritative or not word_ids:
+            return tokens
+        grouped.append(_NormalizedToken(authoritative, word_ids))
+
+    return grouped if cursor == len(tokens) else tokens
+
+
 def _apply_english_copula_progressive(
     words: list[_NormalizedWord],
     tokens: list[Any],
@@ -1131,6 +1170,7 @@ def parse_sentence(
     delimiter: str = ".",
     special_forms: list | None = None,
     lang: str = "$nospecial$",
+    authoritative_words: list[str] | None = None,
 ) -> SentenceAnalysis:
     """Render a Stanza sentence into a structured [`SentenceAnalysis`].
 
@@ -1148,6 +1188,10 @@ def parse_sentence(
     normalized_words, anomalies = _normalize_words(sentence)
     sentence_tokens = list(getattr(sentence, "tokens", []) or [])
     if lang == "it":
+        if authoritative_words is not None:
+            sentence_tokens = _group_italian_elision_tokens(
+                sentence_tokens, authoritative_words
+            )
         normalized_words, sentence_tokens = _normalize_italian_compound_imperatives(
             normalized_words, sentence_tokens, anomalies
         )

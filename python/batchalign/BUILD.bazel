@@ -143,11 +143,9 @@ py_test(
 # for the cflag injection that papers over the macOS 26.x SDK
 # `__kernel_ptr_semantics` regression.
 #
-# `$(COMPILATION_MODE)` is a Bazel make-variable that expands to
-# `opt`, `dbg`, or `fastbuild` based on `-c <mode>`. The shell scripts
-# translate that into maturin's `--release` / dev profile, so users
-# never need PYAPP_PROFILE / MATURIN_PROFILE env vars — `bazel run
-# -c opt //...` is the only knob.
+# Published wheels use the release profile declared in pyproject.toml;
+# editable installs use its separate dev profile. The PyApp sidecar below
+# still receives Bazel's `$(COMPILATION_MODE)` to select its own profile.
 #
 # Historical note: this used to be two parallel targets (a
 # `sh_binary :wheel` that ran maturin and dropped a wheel into the
@@ -237,7 +235,6 @@ genrule(
         "$(location wheel_tag.txt)",
         "$(execpath @multitool//tools/uv)",
         "$(execpath //python/batchalign/_core:_proto_generated_py)",
-        "$(COMPILATION_MODE)",
     ]) + select({
         ":windows": " host",
         "//conditions:default": " llvm " + " ".join([

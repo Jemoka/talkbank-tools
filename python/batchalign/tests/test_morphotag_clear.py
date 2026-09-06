@@ -1,6 +1,6 @@
-"""Test the --clear-existing pre-processing helper for morphotag.
+"""Test the --clear-existing input-preparation helper for morphotag.
 
-Verifies that `_strip_existing_mor_gra` drops `%mor:` / `%gra:` lines
+Verifies that `_prepare_morphotag_input` drops `%mor:` / `%gra:` lines
 and continuation lines (tab-indented) while preserving every other
 tier and the file header.
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from batchalign.cli.morphotag import _strip_existing_mor_gra
+from batchalign.cli.morphotag import _prepare_morphotag_input
 
 
 SAMPLE = """\
@@ -31,7 +31,7 @@ def test_strip_drops_mor_gra(tmp_path: Path) -> None:
     src = tmp_path / "in.cha"
     dst = tmp_path / "out.cha"
     src.write_text(SAMPLE)
-    _strip_existing_mor_gra(src, dst)
+    _prepare_morphotag_input(src, dst)
     out = dst.read_text()
     assert "%mor:" not in out
     assert "%gra:" not in out
@@ -53,7 +53,7 @@ def test_strip_preserves_unrelated_tiers(tmp_path: Path) -> None:
         "%pho:\tw3rd .\n"
         "@End\n"
     )
-    _strip_existing_mor_gra(src, dst)
+    _prepare_morphotag_input(src, dst)
     out = dst.read_text()
     assert "%mor:" not in out
     assert "%com:\tnote on this utterance" in out
@@ -74,7 +74,7 @@ def test_strip_drops_wrapped_mor_and_gra_continuations(tmp_path: Path) -> None:
         "@End\n"
     )
 
-    _strip_existing_mor_gra(src, dst)
+    _prepare_morphotag_input(src, dst)
 
     assert dst.read_text() == (
         "@Begin\n"

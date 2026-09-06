@@ -43,6 +43,7 @@ _ITALIAN_PRESERVED_CURRENT = {
     case["surface"]: case["mor"] + " ."
     for case in _ITALIAN_LEGACY_GOLD["preserve_current"]
 }
+_ITALIAN_ELISION_PHRASES = _ITALIAN_LEGACY_GOLD["elision_phrases"]
 _ENGLISH_CONTRACTIONS_GOLD = json.loads(
     (fixture_root("morphotag") / "english_contractions.gold.json").read_text(
         encoding="utf-8"
@@ -577,6 +578,15 @@ def test_italian_legacy_rules_restore_talkbank_mwts(surface: str, expected: str)
     ]
 
 
+def test_italian_elision_phrase_golds_are_present_in_input_fixture() -> None:
+    fixture = (fixture_root("morphotag") / "italian_legacy.input.cha").read_text(
+        encoding="utf-8"
+    )
+
+    for case in _ITALIAN_ELISION_PHRASES:
+        assert f"*CHI:\t{case['text']}" in fixture
+
+
 def test_italian_legacy_rule_preserves_matching_native_mwt() -> None:
     words = [
         FakeWord("in", "in", "ADP", None, 0, "root", id=1),
@@ -600,6 +610,63 @@ def test_italian_legacy_rule_preserves_matching_native_mwt() -> None:
 
     assert _mor_str(analysis, ".") == "adp|in~det|il-Masc-Def-Art-Sing ."
     assert analysis.anomalies == []
+
+
+def test_italian_article_elision_groups_native_tokens_under_chat_word() -> None:
+    words = [
+        FakeWord(
+            "l'",
+            "il",
+            "DET",
+            "Definite=Def|Number=Sing|PronType=Art",
+            2,
+            "det",
+            id=1,
+        ),
+        FakeWord("uva", "uva", "NOUN", "Gender=Fem|Number=Sing", 0, "root", id=2),
+    ]
+    tokens = [FakeToken("l'", [1]), FakeToken("uva", [2])]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=tokens),
+        ".",
+        [],
+        "it",
+        authoritative_words=["l'uva"],
+    )
+
+    assert _mor_str(analysis, ".") == "det|il-Def-Art-Sing~noun|uva-Fem ."
+    assert _gra_str(analysis) == "1|2|DET 2|0|ROOT 3|2|PUNCT"
+
+
+def test_italian_preposition_elision_groups_prefix_mwt_and_noun() -> None:
+    words = [
+        FakeWord("su", "su", "ADP", None, 3, "case", id=1),
+        FakeWord(
+            "l'",
+            "il",
+            "DET",
+            "Definite=Def|Number=Sing|PronType=Art",
+            3,
+            "det",
+            id=2,
+        ),
+        FakeWord(
+            "altalena", "altalena", "NOUN", "Gender=Fem|Number=Sing", 0, "root", id=3
+        ),
+    ]
+    tokens = [FakeToken("sull'", [1, 2]), FakeToken("altalena", [3])]
+
+    analysis = render.parse_sentence(
+        FakeSentence(words=words, tokens=tokens),
+        ".",
+        [],
+        "it",
+        authoritative_words=["sull'altalena"],
+    )
+
+    assert _mor_str(analysis, ".") == ("adp|su~det|il-Def-Art-Sing~noun|altalena-Fem .")
+    assert _gra_str(analysis) == "1|3|CASE 2|3|DET 3|0|ROOT 4|3|PUNCT"
 
 
 def test_italian_legacy_repair_uses_external_mwt_dependency() -> None:

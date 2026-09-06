@@ -161,15 +161,16 @@ def test_e316_spec_marked_implemented() -> None:
 # --- Landing 8 — recipe smoke ----------------------------------------------
 
 
-def test_morphotag_recipe_strips_existing_tiers() -> None:
+def test_morphotag_recipe_prepares_legacy_input() -> None:
     """`morphotag --clear-existing` reads a sample with existing tiers and
     re-writes a stripped copy. Hermetic — no Stanza load.
     """
-    from batchalign.cli.morphotag import _strip_existing_mor_gra
+    from batchalign.cli.morphotag import _prepare_morphotag_input
 
     src_text = (
         "@Begin\n"
         "@Languages:\tcat\n"
+        "@Options:\tmulti\n"
         "*CHI:\thola .\n"
         "%mor:\tco|hola .\n"
         "%gra:\t1|2|COM 2|0|ROOT\n"
@@ -179,10 +180,11 @@ def test_morphotag_recipe_strips_existing_tiers() -> None:
     out = Path(os.path.abspath("_morphotag_test_out.cha"))
     try:
         tmp.write_text(src_text)
-        _strip_existing_mor_gra(tmp, out)
+        _prepare_morphotag_input(tmp, out)
         text = out.read_text()
         assert "%mor:" not in text
         assert "%gra:" not in text
+        assert "@Options:\tmulti" not in text
         assert "*CHI:\thola ." in text
     finally:
         for f in (tmp, out):

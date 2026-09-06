@@ -97,6 +97,7 @@ jobs:
             echo "::error::wheel tag is not cp310-abi3 — abi3 setup broke"
             exit 1
           fi
+          python bazel/python/verify_wheel.py "$WHEEL"
           python -m pip install --quiet --force-reinstall "$WHEEL"
           python <<'PY'
           import sys, batchalign

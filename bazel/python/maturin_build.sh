@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # Build the batchalign wheel via maturin.
 #
-# Profile selection follows Bazel's compilation_mode, propagated via the
-# `$(COMPILATION_MODE)` make-variable in BUILD.bazel `args` so users
-# never set env vars themselves -- `bazel run -c opt|dbg|fastbuild ...`
-# is the single source of truth. MATURIN_PROFILE remains as an escape
-# hatch for direct (non-Bazel) script invocations.
+# Wheel builds use the release profile configured in pyproject.toml. Editable
+# installs use its separate editable-profile setting so local development stays
+# fast without allowing a debug-profile artifact into a release workflow.
 #
 # Platform targeting: set MATURIN_TARGET to a Rust target triple to
 # cross-compile (e.g. `MATURIN_TARGET=aarch64-apple-darwin`). Defaults to
@@ -21,13 +19,11 @@
 # Args (all passed by the sh_binary; users do not set env vars):
 #   $1 = uv binary                                    (@multitool//tools/uv)
 #   $2 = path to the Bazel-built `_proto_generated.py` artifact
-#   $3 = Bazel compilation_mode ($(COMPILATION_MODE)): opt|dbg|fastbuild
-#   $4 = C toolchain mode: `llvm` or `host`
-#   $5..$7 = LLVM clang/ar/ranlib paths when mode is `llvm`
+#   $3 = C toolchain mode: `llvm` or `host`
+#   $4..$6 = LLVM clang/ar/ranlib paths when mode is `llvm`
 set -euo pipefail
 UV="$1"; shift
 PROTO_GENERATED="$1"; shift
-COMPILATION_MODE="${1:-opt}"; shift || true
 TOOLCHAIN_MODE="${1:-}"; shift || true
 case "$TOOLCHAIN_MODE" in
     llvm)
@@ -171,13 +167,7 @@ rm -f \
 
 cd "$BUILD_WORKSPACE_DIRECTORY/python"
 
-resolved_profile="${MATURIN_PROFILE:-$COMPILATION_MODE}"
-case "$resolved_profile" in
-    release|opt) profile_flag=(--release) ;;
-    dev|dbg|fastbuild) profile_flag=() ;;
-    *) echo "maturin_build.sh: unknown profile $resolved_profile (from \$(COMPILATION_MODE)=$COMPILATION_MODE)" >&2; exit 2 ;;
-esac
-echo "maturin_build.sh: compilation_mode=$COMPILATION_MODE -> profile=$resolved_profile"
+echo "maturin_build.sh: wheel profile=release (configured by pyproject.toml)"
 
 target_flag=()
 if [[ -n "${MATURIN_TARGET:-}" ]]; then
@@ -195,7 +185,6 @@ fi
 # Cargo.toml path while keeping pyproject as the metadata source of
 # truth, which produces `batchalign-<version>-<tag>.whl`.
 "$UV" run maturin build \
-    "${profile_flag[@]+"${profile_flag[@]}"}" \
     "${target_flag[@]+"${target_flag[@]}"}" \
     --out target/wheels \
     "$@"

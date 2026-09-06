@@ -77,5 +77,27 @@
   ],
   "preserve_current": [
     {"surface": "dai", "mor": "verb|dare-Fin-Ind-Pres-S2"}
+  ],
+  "elision_phrases": [
+    {
+      "text": "prendo l'uva con l'amico .",
+      "mor": "verb|prendere-Fin-Ind-Pres-S1 det|il-Def-Art-Sing~noun|uva-Fem-Acc adp|con det|il-Def-Art-Sing~noun|amico-Masc ."
+    },
+    {
+      "text": "mettilo sull'altalena sulla sedia .",
+      "mor": "verb|mettere-Fin-Imp-Pres-S2~pron|lo-Prs-S3 adp|su~det|il-Def-Art-Sing~noun|altalena-Fem adp|su~det|il-Fem-Def-Art-Sing noun|sedia-Fem ."
+    },
+    {
+      "text": "parlo dell'amico e della casa .",
+      "mor": "verb|parlare-Fin-Ind-Pres-S1 adp|di~det|il-Def-Art-Sing~noun|amico-Masc cconj|e det|il-Masc-Def-Art-Sing noun|casa-Fem ."
+    },
+    {
+      "text": "vengo dall'orto e dalla scuola .",
+      "mor": "verb|venire-Fin-Ind-Pres-S1 adp|da~det|il-Def-Art-Sing~noun|orto-Masc cconj|e adp|da~det|il-Fem-Def-Art-Sing noun|scuola-Fem ."
+    },
+    {
+      "text": "sono nell'acqua e nella stanza .",
+      "mor": "aux|essere-Fin-Ind-Pres-P3 adp|in~det|il-Def-Art-Sing~noun|acqua-Fem cconj|e adp|in~det|il-Fem-Def-Art-Sing noun|stanza-Fem ."
+    }
   ]
 }
