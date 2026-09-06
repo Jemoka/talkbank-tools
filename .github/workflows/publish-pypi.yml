@@ -19,8 +19,8 @@ name: publish · pypi (batchalign)
 # [tool.batchalign.pinned_tools]. We do not pre-install rust/uv/etc on
 # the runner; the hermeticity guard inside the sh_binary asserts pins.
 #
-# manylinux retagging happens via auditwheel inside the Linux cells
-# (maturin invokes it when MATURIN_USE_AUDITWHEEL is set).
+# Linux portability is enforced by the wheel builder's Zig-backed
+# manylinux_2_28 target rather than inferred from the hosted runner's glibc.
 #
 # Dry-run: leave `publish` unchecked → builds for every supported platform
 # and uploads as workflow artifacts only.
@@ -92,10 +92,6 @@ jobs:
         env:
           BAZELISK_SKIP_WRAPPER: true
           CARGO_NET_GIT_FETCH_WITH_CLI: ${{ runner.os == 'Windows' && 'true' || 'false' }}
-          # `MATURIN_USE_AUDITWHEEL=1` triggers manylinux retagging on Linux;
-          # no-op on macOS/Windows. Linux cells produce manylinux_2_28-tagged
-          # wheels that work across modern glibc distributions.
-          MATURIN_USE_AUDITWHEEL: ${{ startsWith(matrix.runner, 'ubuntu') && '1' || '' }}
         run: bazel run -c opt //python/batchalign:wheel
 
       - name: Verify wheel contents

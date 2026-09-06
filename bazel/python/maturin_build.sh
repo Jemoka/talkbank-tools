@@ -70,6 +70,7 @@ case "$(uname -s)" in
             exit 2
         fi
         toolchain_source="Xcode"
+        platform_flags=()
         ;;
     MINGW*|MSYS*|CYGWIN*)
         if [[ "$TOOLCHAIN_MODE" != "host" ]]; then
@@ -77,6 +78,7 @@ case "$(uname -s)" in
             exit 2
         fi
         toolchain_source="Visual Studio host"
+        platform_flags=()
         ;;
     *)
         if [[ "$TOOLCHAIN_MODE" != "llvm" ]]; then
@@ -88,6 +90,10 @@ case "$(uname -s)" in
         AR_ABS="$(runfiles_resolve "$AR_RLOC")"
         RANLIB_ABS="$(runfiles_resolve "$RANLIB_RLOC")"
         toolchain_source="toolchains_llvm (runfiles)"
+        # Hosted Ubuntu runners expose their host glibc to native C builds.
+        # Zig supplies the requested older sysroot so the wheel cannot silently
+        # regress to the runner's manylinux_2_38 compatibility floor.
+        platform_flags=(--compatibility manylinux_2_28 --zig)
         ;;
 esac
 # Bazel's --jobs limit does not propagate into the Cargo process spawned by
@@ -186,6 +192,7 @@ fi
 # truth, which produces `batchalign-<version>-<tag>.whl`.
 "$UV" run maturin build \
     "${target_flag[@]+"${target_flag[@]}"}" \
+    "${platform_flags[@]+"${platform_flags[@]}"}" \
     --out target/wheels \
     "$@"
 

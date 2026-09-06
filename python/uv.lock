@@ -544,7 +544,7 @@ dev = [
     { name = "build" },
     { name = "datamodel-code-generator" },
     { name = "hatchling" },
-    { name = "maturin" },
+    { name = "maturin", extra = ["zig"] },
     { name = "mypy" },
     { name = "poetry-core" },
     { name = "pytest" },
@@ -653,7 +653,7 @@ requires-dist = [
     { name = "googletrans", marker = "extra == 'all'" },
     { name = "googletrans", marker = "extra == 'translate'" },
     { name = "hatchling", marker = "extra == 'dev'" },
-    { name = "maturin", marker = "extra == 'dev'", specifier = "==1.7.4" },
+    { name = "maturin", extras = ["zig"], marker = "extra == 'dev'", specifier = "==1.7.4" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "nltk", marker = "extra == 'all'", specifier = ">=3.8" },
     { name = "nltk", marker = "extra == 'whisper'", specifier = ">=3.8" },
@@ -3577,6 +3577,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a5/5d/59765561ea1a5f993141a403eb4ae85b7a8bd118971de0ed14048e3faf7f/maturin-1.7.4-py3-none-win32.whl", hash = "sha256:35487a424467d1fda4567cbb02d21f09febb10eda22f5fd647b130bc0767dc61", size = 6578873, upload-time = "2024-09-26T03:36:10.964Z" },
     { url = "https://files.pythonhosted.org/packages/72/50/a9b402aa506bad6c066c7775b1cb3036b7b1c74b9de708ed537ee804ea4a/maturin-1.7.4-py3-none-win_amd64.whl", hash = "sha256:f70c1c8ec9bd4749a53c0f3ae8fdbb326ce45be4f1c5551985ee25a6d7150328", size = 7442039, upload-time = "2024-09-26T03:36:13.81Z" },
     { url = "https://files.pythonhosted.org/packages/30/38/8e27282ab6ff94291f04e3eb11ba960dfb487605d73cec75177d3a29879a/maturin-1.7.4-py3-none-win_arm64.whl", hash = "sha256:f3d38a6d0c7fd7b04bec30dd470b2173cf9bd184ab6220c1acaf49df6b48faf5", size = 6388008, upload-time = "2024-09-26T03:36:16.663Z" },
+]
+
+[package.optional-dependencies]
+zig = [
+    { name = "ziglang" },
 ]
 
 [[package]]
@@ -8471,6 +8476,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8f/be/f9f7594e23b5b93affff0318e4593c1920331bcaefda326cabcad94296a1/yarl-1.24.2-cp314-cp314t-win_amd64.whl", hash = "sha256:a7624b1ca46ca5d7b864ef0d2f8efe3091454085ee1855b4e992314529972215", size = 102980, upload-time = "2026-05-19T21:30:59.735Z" },
     { url = "https://files.pythonhosted.org/packages/65/a4/ba80dccd3593ff1f01051a818694d07b58cb8232677ee9a22a5a1f93a9fc/yarl-1.24.2-cp314-cp314t-win_arm64.whl", hash = "sha256:e434a45ce2e7a947f951fc5a8944c8cc080b7e59f9c50ae80fd39107cf88126d", size = 91219, upload-time = "2026-05-19T21:31:01.934Z" },
     { url = "https://files.pythonhosted.org/packages/fd/4d/4b880086bd0d3e034d25647be1d830afc3e3f610e98c4ab3490af6b1b6d5/yarl-1.24.2-py3-none-any.whl", hash = "sha256:2783d9226db8797636cd6896e4de81feed252d1db72265686c9558d97a4d94b9", size = 53576, upload-time = "2026-05-19T21:31:03.909Z" },
+]
+
+[[package]]
+name = "ziglang"
+version = "0.12.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/cf/755ab2dae976e87ec85dc49684786dd156c441a87b2002f2d3d253889775/ziglang-0.12.1-py3-none-macosx_12_0_arm64.whl", hash = "sha256:e166297bc3fa4e8f7e4f8ca4fdd3e20fc6821a27fd3b6ca04268654a5003a8ba", size = 78664906, upload-time = "2024-06-26T13:38:23.234Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/8a/5b168d21f2e83c83bc6c712d68cd11d1affdc50a185416a6810e90f3e1dc/ziglang-0.12.1-py3-none-macosx_12_0_x86_64.whl", hash = "sha256:5164d25349441c890b8cf928317a533e3338e3603285c394001ea12ba6af7687", size = 81221242, upload-time = "2024-06-26T13:38:35.919Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/63/8e64f3a525a9e48dbd4ae430fe44846b64e8b897216b8884673c3bcc0353/ziglang-0.12.1-py3-none-manylinux_2_12_i686.manylinux2010_i686.musllinux_1_1_i686.whl", hash = "sha256:66fbb91889d7cfca5a9e3820e07cbbaa6ffbeadb1402b2db3cd7702b5fe43372", size = 85688857, upload-time = "2024-06-26T13:38:48.022Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/13/9f4f45a6e6467fdc7e952043fc3e1449d185bcc3d4095b4b01d45241c0f9/ziglang-0.12.1-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.musllinux_1_1_x86_64.whl", hash = "sha256:dcde948140b9e5776c2295b9b808fb4950df7ecadaecb54623dd701502be2017", size = 78197715, upload-time = "2024-06-26T13:39:00.89Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/f7/f29b79b60dfe53d0c541c12211cfb74c9e4064b93c4ca9788ca18fc39b66/ziglang-0.12.1-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl", hash = "sha256:945ea8ac157373e8437b377f7eac39f16fe63cd21b2b27fb4e518466e1cd561d", size = 75570292, upload-time = "2024-06-26T13:39:12.496Z" },
+    { url = "https://files.pythonhosted.org/packages/33/ff/870ec09ced4953e9c64131d5e1a16d4f086768f6033e6916594ee0b94bbc/ziglang-0.12.1-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.musllinux_1_1_armv7l.whl", hash = "sha256:011717479951d820e9a0fe0b61b9132560f4094861fca54d66595b66f8aee23a", size = 76388277, upload-time = "2024-06-26T13:39:24.739Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/38/41530e821a92856cc7b247caa5d209356416a5e417d1c314c18baa7b6f8e/ziglang-0.12.1-py3-none-win32.whl", hash = "sha256:0489dfbc6186f528fd7a18c713d13303bcc62f0a281e469599ba5645ecbf4ac0", size = 82343902, upload-time = "2024-06-26T13:39:50.642Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/63/00558cded5202f5648a8bf13da4857060d0d231080b4ea34fdb25406b7b9/ziglang-0.12.1-py3-none-win_amd64.whl", hash = "sha256:c5344e28e9ce4a48949f140c2bb6457e10107dfed27da8af7611f7640bc50177", size = 77654574, upload-time = "2024-06-26T13:40:19.445Z" },
 ]
 
 [[package]]

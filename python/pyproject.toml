@@ -2,7 +2,7 @@
 # Exact pin (==) rather than a range so the build is reproducible. Bump in
 # lockstep with `[tool.batchalign.pinned_tools].maturin` below; the
 # hermeticity guard asserts the runtime version matches.
-requires = ["maturin==1.7.4"]
+requires = ["maturin[zig]==1.7.4"]
 build-backend = "maturin"
 
 [project]
@@ -105,7 +105,7 @@ all = [
     "fastapi>=0.110", "uvicorn[standard]>=0.27", "sse-starlette>=2.0", "python-multipart>=0.0.9",
 ]
 dev = [
-    "maturin==1.7.4",  # mirror [build-system].requires + pinned_tools
+    "maturin[zig]==1.7.4",  # mirror [build-system].requires + pinned_tools
     "pytest>=7",
     "pytest-xdist",
     "mypy",
