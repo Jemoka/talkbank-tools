@@ -103,6 +103,14 @@ esac
 # cannot fan out into one rustc per CPU and compete with the Bazel server for
 # memory. Release automation may opt into a larger, explicit budget.
 export CARGO_BUILD_JOBS="${BATCHALIGN_CARGO_JOBS:-${CARGO_BUILD_JOBS:-1}}"
+if [[ "$use_zig" == "1" ]]; then
+    # Bazel actions intentionally do not promise HOME/XDG state. Give Zig
+    # explicit persistent caches so its Python-distributed binary can locate
+    # writable application data without depending on a runner user profile.
+    export ZIG_GLOBAL_CACHE_DIR="${BUILD_WORKSPACE_DIRECTORY}/target/zig-global-cache"
+    export ZIG_LOCAL_CACHE_DIR="${BUILD_WORKSPACE_DIRECTORY}/target/zig-local-cache"
+    mkdir -p "$ZIG_GLOBAL_CACHE_DIR" "$ZIG_LOCAL_CACHE_DIR"
+fi
 if [[ -n "${CC_ABS:-}" && "$use_zig" != "1" ]]; then
     export CC="$CC_ABS"
     export CXX="$CXX_ABS"
