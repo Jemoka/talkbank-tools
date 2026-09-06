@@ -47,7 +47,7 @@ dependencies = [
     "numpy>=1.24",
     "polars>=0.20",
     "soundfile>=0.12",
-    "pyarrow<21.0.0",
+    "pyarrow<26.0.0",
     # CLI presentation layer. Textual owns the responsive interactive TUI;
     # Rich remains the renderer for plain output, errors, and logging.
     "textual>=0.80",
