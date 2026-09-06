@@ -10,7 +10,7 @@ handler. Everything here is verified against the current source on
 both sides — if an endpoint's behavior drifts, update this page in
 the same commit.
 
-[lsp]: https://github.com/TalkBank/talkbank-tools/tree/main/crates/chatter-lsp
+[lsp]: https://github.com/TalkBank/batchalign/tree/main/crates/chatter-lsp
 
 ## One typical call at runtime
 

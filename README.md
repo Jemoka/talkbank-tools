@@ -1,25 +1,26 @@
 # Batchalign
 
 **Status:** Current
-**Last updated:** 2026-09-01
+**Last updated:** 2026-09-06
 
-This repository contains Batchalign: the audio and ML pipeline for producing
-and enriching CHAT transcripts. It supports transcription, forced alignment,
-morphotagging, utterance segmentation, translation, diarization, comparison,
-and the Batchalign desktop shell.
+This repository contains [Batchalign](https://github.com/TalkBank/batchalign):
+the audio and ML pipeline for producing and enriching CHAT transcripts. It
+supports transcription, forced alignment, morphotagging, utterance
+segmentation, translation, diarization, comparison, and the Batchalign desktop
+shell.
 
 ## Install Batchalign
 
 On macOS or Linux:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/Jemoka/talkbank-tools/main/bootstrap/bootstrap.sh | sh
+curl -LsSf https://raw.githubusercontent.com/TalkBank/batchalign/main/bootstrap/bootstrap.sh | sh
 ```
 
 On Windows, from PowerShell or Command Prompt:
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/Jemoka/talkbank-tools/main/bootstrap/bootstrap.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/TalkBank/batchalign/main/bootstrap/bootstrap.ps1 | iex"
 ```
 
 The bootstrapper installs [uv](https://docs.astral.sh/uv/getting-started/installation/)

@@ -283,7 +283,7 @@ match what NLP pipelines (Stanza, etc.) expect as input.
 
 **Characters NOT in word_segment (excluded by symbol registry):**
 See the full exclusion table in
-[Precedence Decisions](https://github.com/TalkBank/talkbank-tools/blob/main/grammar/docs/precedence-decisions.md#word-segment-purity-invariant)
+[Precedence Decisions](https://github.com/TalkBank/batchalign/blob/main/grammar/docs/precedence-decisions.md#word-segment-purity-invariant)
 in the grammar docs.
 
 ### Comparison with batchalign2

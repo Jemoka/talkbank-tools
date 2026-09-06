@@ -42,4 +42,4 @@ editor backed by a Rust language server.
 - **VS Code Insiders** (version 1.110 or later)
 - **macOS, Windows, or Linux**
 - The `chatter` CLI binary (installed automatically from the
-  [talkbank-tools](https://github.com/TalkBank/talkbank-tools) release)
+  [talkbank-tools](https://github.com/TalkBank/batchalign) release)

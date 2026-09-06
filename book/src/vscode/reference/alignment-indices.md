@@ -12,7 +12,7 @@ This page is the canonical source for which space each integer lives
 in, how the spaces convert into each other, and a worked example on a
 post-clitic utterance.
 
-[indices]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/alignment/indices.rs
+[indices]: https://github.com/TalkBank/batchalign/blob/main/crates/talkbank-model/src/alignment/indices.rs
 
 ## The three spaces
 
@@ -22,15 +22,15 @@ post-clitic utterance.
 | [`MorChunkIndex`][MorChunkIndex] | 0-indexed | `MorTier::chunks()` (item main word, then each post-clitic, then the optional terminator) | `GraAlignmentPair.mor_chunk_index` on the `%mor`↔`%gra` alignment |
 | [`SemanticWordIndex1`][SemanticWordIndex1] | **1-indexed** | Author-written position in a `%gra` relation | `GrammaticalRelation::index`, `::head` |
 
-[MorItemIndex]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/alignment/indices.rs
-[MorChunkIndex]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/alignment/indices.rs
-[SemanticWordIndex1]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/alignment/indices.rs
+[MorItemIndex]: https://github.com/TalkBank/batchalign/blob/main/crates/talkbank-model/src/alignment/indices.rs
+[MorChunkIndex]: https://github.com/TalkBank/batchalign/blob/main/crates/talkbank-model/src/alignment/indices.rs
+[SemanticWordIndex1]: https://github.com/TalkBank/batchalign/blob/main/crates/talkbank-model/src/alignment/indices.rs
 
 The `%gra` ROOT sentinel (`head == 0`) is not a chunk — it is
 represented separately as [`GraHeadRef::Root`][GraHeadRef] so the
 sentinel is a variant, not a magic number.
 
-[GraHeadRef]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/alignment/indices.rs
+[GraHeadRef]: https://github.com/TalkBank/batchalign/blob/main/crates/talkbank-model/src/alignment/indices.rs
 
 ```mermaid
 %% Verified against: crates/talkbank-model/src/alignment/indices.rs,
@@ -129,8 +129,8 @@ let host_item_idx = mor_tier.item_index_of_chunk(chunk_idx)?;
 | "Is this relation pointing at ROOT?" | `relation.head_ref()` → match on `GraHeadRef::Root` |
 | "Walk all chunks in order" | `mor_tier.chunks()` (never hand-roll `items.iter().flat_map(|i| ... i.post_clitics ...)`) |
 
-[chunk_at]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/model/dependent_tier/mor/tier.rs
-[item_index_of_chunk]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/model/dependent_tier/mor/tier.rs
+[chunk_at]: https://github.com/TalkBank/batchalign/blob/main/crates/talkbank-model/src/model/dependent_tier/mor/tier.rs
+[item_index_of_chunk]: https://github.com/TalkBank/batchalign/blob/main/crates/talkbank-model/src/model/dependent_tier/mor/tier.rs
 
 ## The other alignments
 
@@ -149,7 +149,7 @@ alignable words. Their typed pairs are:
 `Drifted { main_count, wor_count }` shape rather than a pair list.
 Count mismatches are tolerated rather than diagnosed.
 
-[WorTimingSidecar]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/talkbank-model/src/alignment/wor.rs
+[WorTimingSidecar]: https://github.com/TalkBank/batchalign/blob/main/crates/talkbank-model/src/alignment/wor.rs
 
 ## See also
 
@@ -157,4 +157,4 @@ Count mismatches are tolerated rather than diagnosed.
 - [Architecture](../developer/architecture.md) — three-layer design and chunk-projection flow.
 - [`chatter-lsp/CLAUDE.md`][lsp-claude] — AI-assistant discipline for any future LSP code that touches these indices.
 
-[lsp-claude]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/chatter-lsp/CLAUDE.md
+[lsp-claude]: https://github.com/TalkBank/batchalign/blob/main/crates/chatter-lsp/CLAUDE.md

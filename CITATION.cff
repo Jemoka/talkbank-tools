@@ -1,7 +1,7 @@
 cff-version: 1.2.0
-title: TalkBank Tools
+title: Batchalign
 message: >-
-  If you use this repository or one of its released tools, please cite it using
+  If you use Batchalign, please cite it using
   the metadata from this file.
 type: software
 authors:
@@ -11,16 +11,14 @@ authors:
     family-names: Liu
   - given-names: Franklin
     family-names: Chen
-repository-code: 'https://github.com/TalkBank/talkbank-tools'
-url: 'https://github.com/TalkBank/talkbank-tools'
+repository-code: 'https://github.com/TalkBank/batchalign'
+url: 'https://github.com/TalkBank/batchalign'
 abstract: >-
-  Unified repository for the TalkBank CHAT toolchain, including the chatter CLI,
-  public TalkBank Rust crates, the talkbank-lsp language server, and the
-  Batchalign3 transcript-processing stack.
+  Batchalign audio and language-processing pipelines for enriching TalkBank
+  CHAT transcripts.
 license: BSD-3-Clause
 keywords:
   - TalkBank
   - CHAT
-  - chatter
-  - batchalign3
+  - batchalign
   - linguistics

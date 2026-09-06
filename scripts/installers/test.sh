@@ -7,7 +7,7 @@
 #
 # Prerequisites:
 #   - uv, Rust toolchain
-#   - run from the talkbank-tools repo root
+#   - run from the Batchalign repository root
 #
 # Usage:
 #   bash scripts/installers/test.sh              # run from repo root

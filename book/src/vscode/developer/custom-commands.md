@@ -76,7 +76,7 @@ sequenceDiagram
   failure modes — see
   [`executeCommandErrors.ts`][errors].
 
-[errors]: https://github.com/TalkBank/talkbank-tools/blob/main/apps/vscode-extension/src/lsp/executeCommandErrors.ts
+[errors]: https://github.com/TalkBank/batchalign/blob/main/apps/vscode-extension/src/lsp/executeCommandErrors.ts
 
 ## Usage from TypeScript
 

@@ -131,7 +131,7 @@ model (e.g. a chunk-walking iterator), add it in `talkbank-model`
 and delegate — do not grow the primitive in the LSP crate. See
 [`crates/chatter-lsp/CLAUDE.md`][lsp-claude].
 
-[lsp-claude]: https://github.com/TalkBank/talkbank-tools/blob/main/crates/chatter-lsp/CLAUDE.md
+[lsp-claude]: https://github.com/TalkBank/batchalign/blob/main/crates/chatter-lsp/CLAUDE.md
 
 ## Adding a VS Code command
 

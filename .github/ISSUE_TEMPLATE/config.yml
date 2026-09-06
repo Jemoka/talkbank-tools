@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security report
-    url: https://github.com/TalkBank/talkbank-tools/blob/main/SECURITY.md
+    url: https://github.com/talkbank/batchalign/blob/main/SECURITY.md
     about: Please report security issues via the security policy process.

@@ -16,7 +16,7 @@ For every CHAT utterance the pipeline visits:
 > Mor-alignable words on the main tier.**
 
 "Mor-alignable" is defined by
-[`counts_for_tier(word, TierDomain::Mor)`](https://github.com/TalkBank/talkbank-tools)
+[`counts_for_tier(word, TierDomain::Mor)`](https://github.com/TalkBank/batchalign)
 in `talkbank-model`. It is the authoritative CHAT policy: regular words
 count, replacement words count, tag-marker separators (comma `,`,
 tag `„`, vocative `‡`) count; fillers (`&-hmm`), nonwords (`&~uh`),

@@ -8,7 +8,7 @@
 #
 # Prerequisites:
 #   - gh CLI authenticated with repo access (`gh auth status`)
-#   - uv, Rust toolchain, and this talkbank-tools checkout
+#   - uv, Rust toolchain, and this Batchalign checkout
 #
 # Usage:
 #   bash scripts/installers/test-github-release.sh              # build + test
@@ -22,7 +22,7 @@ DIST_DIR="$REPO_ROOT/dist"
 BUILD_WHEEL=true
 
 TAG="v0.0.0-installer-test"
-REPO="TalkBank/talkbank-tools"
+REPO="TalkBank/batchalign"
 
 for arg in "$@"; do
     case "$arg" in

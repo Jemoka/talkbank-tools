@@ -34,8 +34,8 @@ package under `python/batchalign/`, and the desktop GUI under
 ## Development Install
 
 ```bash
-git clone https://github.com/Jemoka/talkbank-tools.git
-cd talkbank-tools
+git clone https://github.com/TalkBank/batchalign.git
+cd batchalign
 cd python && uv sync --group dev && cd ..   # provisions python/.venv
 bazel build //...                           # full workspace
 ```

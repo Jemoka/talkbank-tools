@@ -127,9 +127,9 @@ dev = [
 batchalign = "batchalign.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/TalkBank/talkbank-tools"
-Repository = "https://github.com/TalkBank/talkbank-tools"
-Issues = "https://github.com/TalkBank/talkbank-tools/issues"
+Homepage = "https://github.com/TalkBank/batchalign"
+Repository = "https://github.com/TalkBank/batchalign"
+Issues = "https://github.com/TalkBank/batchalign/issues"
 
 # Maturin builds the engine crate's cdylib and drops the resulting .so
 # at `python/batchalign/_core/_core.<abi>.so`. Python imports the symbols

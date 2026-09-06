@@ -7,7 +7,7 @@ This page documents how `batchalign3` handles CHAT replacement
 annotations (`[: ...]`) end-to-end. For the canonical CHAT-format
 definition of what a replacement *is* (syntax, scope, AST shape,
 per-domain alignment rule), see
-[`talkbank-tools/book/src/chat-format/replacements.md`](https://github.com/TalkBank/talkbank-tools/blob/main/book/src/chat-format/replacements.md).
+[`talkbank-tools/book/src/chat-format/replacements.md`](https://github.com/TalkBank/batchalign/blob/main/book/src/chat-format/replacements.md).
 That doc is the source of truth; this doc is the pipeline-specific
 companion.
 
@@ -209,7 +209,7 @@ use cases, `[%]` is the working candidate, not `[:]`.
 | `%mor` injection (count check) | `crates/batchalign/src/inject.rs:38-100` |
 | Retokenize preserves `ReplacedWord` | `crates/batchalign/src/retokenize/rebuild.rs:77-91` |
 | Read-only consumption test | `crates/batchalign/src/fa/tests.rs::test_wor_policy_replacements_use_original_surface` |
-| CHAT-format canonical reference | [`talkbank-tools/book/src/chat-format/replacements.md`](https://github.com/TalkBank/talkbank-tools/blob/main/book/src/chat-format/replacements.md) |
+| CHAT-format canonical reference | [`talkbank-tools/book/src/chat-format/replacements.md`](https://github.com/TalkBank/batchalign/blob/main/book/src/chat-format/replacements.md) |
 
 ## See Also
 
@@ -220,5 +220,5 @@ use cases, `[%]` is the working candidate, not `[:]`.
 - [ASR Token Pipeline](./asr-token-pipeline.md) — the disfluency /
   normalization rules that mutate `AsrWord.text` (a different
   mechanism from replacements).
-- [The %mor Tier](https://github.com/TalkBank/talkbank-tools/blob/main/book/src/chat-format/mor-tier.md)
+- [The %mor Tier](https://github.com/TalkBank/batchalign/blob/main/book/src/chat-format/mor-tier.md)
   in talkbank-tools — for what `%mor` represents and how it aligns.

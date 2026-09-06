@@ -103,4 +103,4 @@ Before any release goes out:
 
 - [Release Pipeline](./release-pipeline.md)
 - [CI and Release](../contributing/ci-and-release.md)
-- [`.github/workflows/bazel-tauri-batchalign.yml`](https://github.com/TalkBank/talkbank-tools/blob/main/.github/workflows/bazel-tauri-batchalign.yml) — see the TODO at the bottom for the signing-secrets shape.
+- [`.github/workflows/bazel-tauri-batchalign.yml`](https://github.com/TalkBank/batchalign/blob/main/.github/workflows/bazel-tauri-batchalign.yml) — see the TODO at the bottom for the signing-secrets shape.

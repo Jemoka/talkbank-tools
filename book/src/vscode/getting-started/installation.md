@@ -61,7 +61,7 @@ sudo snap install code-insiders --classic
 
 ### Option A: Platform-specific VSIX (recommended)
 
-1. Open <https://github.com/TalkBank/talkbank-tools/releases>
+1. Open <https://github.com/TalkBank/batchalign/releases>
 2. Choose the `vscode-vX.Y.Z` release entry and download the `.vsix` that
    matches your host:
    - `talkbank-chat-darwin-arm64.vsix` (Apple Silicon Macs)

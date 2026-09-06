@@ -39,7 +39,7 @@ and contains one or more replacement words inside the brackets:
 
 The grammar rules are
 `word_with_optional_annotations` and `replacement` in
-[`grammar/grammar.js`](https://github.com/TalkBank/talkbank-tools/blob/main/grammar/grammar.js)
+[`grammar/grammar.js`](https://github.com/TalkBank/batchalign/blob/main/grammar/grammar.js)
 — grep for the rule names rather than line numbers so this stays
 accurate as the grammar evolves. Replacement words can be separated
 by whitespace, so `[: going to]` is a single replacement of `gonna`
@@ -105,10 +105,10 @@ generalizes consistently:
 - `%gra` produces **two** entries — paired to the two `%mor` items.
 
 The alignment-counting code that enforces this is in
-[`alignment/units.rs`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/core/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs)
+[`alignment/units.rs`](https://github.com/TalkBank/batchalign/blob/main/crates/core/talkbank-model/src/model/file/utterance/metadata/alignment/units.rs)
 — look for the `UtteranceContent::ReplacedWord` arm. The full table
 of per-domain rules is in
-[`resources/spec/docs/ALIGNMENT_RULES.md`](https://github.com/TalkBank/talkbank-tools/blob/main/resources/spec/docs/ALIGNMENT_RULES.md).
+[`resources/spec/docs/ALIGNMENT_RULES.md`](https://github.com/TalkBank/batchalign/blob/main/resources/spec/docs/ALIGNMENT_RULES.md).
 
 ## Rust AST
 
@@ -155,7 +155,7 @@ This produces `[E220] "C-3PO" is not a legal word in language(s) "eng":
 numeric digits not allowed` — exactly as if `C-3PO` had appeared on the
 main tier directly. **The replacement does not provide an escape from
 word-level validation.** The implementation is in
-[`replacement.rs:117-202`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/core/talkbank-model/src/model/annotation/replacement.rs).
+[`replacement.rs:117-202`](https://github.com/TalkBank/batchalign/blob/main/crates/core/talkbank-model/src/model/annotation/replacement.rs).
 
 This is critical for any code generating replacements programmatically:
 do not assume `[: ...]` lets you smuggle arbitrary text past the word

@@ -430,7 +430,7 @@ import probe or did not report an engine version.
 
 ## See also
 
-- [INTERFACE_MAP.md](https://github.com/TalkBank/talkbank-tools/blob/main/INTERFACE_MAP.md)
+- [INTERFACE_MAP.md](https://github.com/TalkBank/batchalign/blob/main/INTERFACE_MAP.md)
   — unified reference for all 9+ Python/Rust interface boundaries
   (file locations, schema definitions, responsibility splits).
 - Per-command engine surfaces (request/response shapes per task,

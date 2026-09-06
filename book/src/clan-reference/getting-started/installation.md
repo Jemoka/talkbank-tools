@@ -7,10 +7,10 @@ CLAN commands are part of the `chatter` CLI tool.
 
 ```bash
 # Clone the repository
-git clone https://github.com/TalkBank/talkbank-tools.git
+git clone https://github.com/TalkBank/batchalign.git
 
 # Build
-cd talkbank-tools
+cd batchalign
 cargo install --path crates/chatter/chatter-cli
 ```
 

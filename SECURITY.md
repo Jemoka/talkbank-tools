@@ -1,7 +1,7 @@
 # Security Policy
 
 **Status:** Current
-**Last updated:** 2026-04-29 07:58 EDT
+**Last updated:** 2026-09-06
 
 ## Reporting a Vulnerability
 
@@ -10,13 +10,12 @@ requests, discussions, or commit messages.
 
 Preferred reporting channels:
 
-1. GitHub private vulnerability reporting for `TalkBank/talkbank-tools`
+1. GitHub private vulnerability reporting for `TalkBank/batchalign`
 2. Email [franklinchen@franklinchen.com](mailto:franklinchen@franklinchen.com)
 
 Please include:
 
-- the affected surface (`chatter`, public TalkBank crates, `batchalign3`,
-  `chatter-lsp`, VS Code extension, or another repo path)
+- the affected Batchalign command, engine, application, or other repository path
 - the commit SHA, branch, or released version you tested
 - reproduction steps or a proof of concept
 - impact assessment
@@ -27,8 +26,7 @@ and disclosure plan before public discussion when the report is validated.
 
 ## Scope and Supported Versions
 
-This repository currently ships multiple release lines. For security triage,
-please report the issue against one of these:
+For security triage, please report the issue against one of these:
 
 - the current `main` branch, or
 - the latest tagged release for the affected public surface

@@ -45,12 +45,12 @@ server/control-plane architecture is still evolving.
 
 If you want a repo-hosted wrapper around the same `uv` install flow:
 
-- **macOS:** [Download install-batchalign3.command](https://github.com/TalkBank/talkbank-tools/raw/main/scripts/installers/macos/install-batchalign3.command)
-- **Windows:** [Download install-batchalign3.bat](https://github.com/TalkBank/talkbank-tools/raw/main/scripts/installers/windows/install-batchalign3.bat)
+- **macOS:** [Download install-batchalign3.command](https://github.com/TalkBank/batchalign/raw/main/scripts/installers/macos/install-batchalign3.command)
+- **Windows:** [Download install-batchalign3.bat](https://github.com/TalkBank/batchalign/raw/main/scripts/installers/windows/install-batchalign3.bat)
 
 Those scripts install `uv` if needed and then run `uv tool install
 batchalign3`. They are convenience helpers only. For release-policy details and
-Gatekeeper/SmartScreen notes, see the [installers README](https://github.com/TalkBank/talkbank-tools/blob/main/scripts/installers/README.md).
+Gatekeeper/SmartScreen notes, see the [installers README](https://github.com/TalkBank/batchalign/blob/main/scripts/installers/README.md).
 
 ### macOS
 
@@ -207,8 +207,8 @@ See [Rev.AI Integration](rev-ai.md) for details.
 For contributors working from a source checkout:
 
 ```bash
-git clone https://github.com/TalkBank/talkbank-tools.git
-cd talkbank-tools
+git clone https://github.com/TalkBank/batchalign.git
+cd batchalign
 just batchalign develop    # build wheel + sync uv env + install
 bazel build //...                         # full workspace cargo build (release)
 ```

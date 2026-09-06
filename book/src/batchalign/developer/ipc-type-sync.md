@@ -11,7 +11,7 @@ validation errors deep in the pipeline with no indication of which field
 changed. This has caused production bugs (e.g., `MorphosyntaxBatchItem.
 special_forms` serialization mismatch).
 
-**See also:** [INTERFACE_MAP.md](https://github.com/TalkBank/talkbank-tools/blob/main/INTERFACE_MAP.md) section "10. Worker V2 IPC Schema"
+**See also:** [INTERFACE_MAP.md](https://github.com/TalkBank/batchalign/blob/main/INTERFACE_MAP.md) section "10. Worker V2 IPC Schema"
 for the unified reference to all schema, generated, and conformance-test locations.
 
 ## Solution: One Source of Truth

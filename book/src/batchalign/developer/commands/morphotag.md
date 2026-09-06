@@ -127,9 +127,9 @@ A separate layer at the Rust orchestrator handles **pool-level** failures:
 worker saturation, timeouts, worker crashes, and the now-retired
 "would deadlock" bailout (replaced by idle-cross-group
 eviction in `worker/pool/eviction.rs`). The typed
-[`LanguageGroupFailure`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/batchalign/src/morphosyntax/outcomes.rs)
+[`LanguageGroupFailure`](https://github.com/TalkBank/batchalign/blob/main/crates/batchalign/src/morphosyntax/outcomes.rs)
 aggregator receives per-group outcomes, and
-[`classify_file_for_injection`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/batchalign/src/morphosyntax/outcomes.rs)
+[`classify_file_for_injection`](https://github.com/TalkBank/batchalign/blob/main/crates/batchalign/src/morphosyntax/outcomes.rs)
 routes every file whose utterance range intersects a failed group to
 `TextBatchFileResult::err`, skipping `inject_results()` so no CHAT is
 serialized with stripped tiers.

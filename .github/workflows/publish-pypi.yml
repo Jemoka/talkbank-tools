@@ -1,6 +1,8 @@
 name: publish · pypi (batchalign)
 
-# Multi-platform wheel matrix + trusted-publisher upload to PyPI.
+# Multi-platform wheel matrix + trusted-publisher upload to PyPI from
+# TalkBank/batchalign. PyPI must trust this repository, this workflow filename,
+# and the `pypi` environment exactly.
 #
 # Each matrix cell runs on a native runner for its target, so every wheel
 # is a host build (no cross-compile). The wheel is `cp310-abi3-<plat>`,
@@ -108,10 +110,13 @@ jobs:
     if: ${{ inputs.publish }}
     runs-on: ubuntu-latest
     needs: [build]
-    environment: pypi
+    environment:
+      name: pypi
+      url: https://pypi.org/project/batchalign/
     permissions:
-      # Required for the trusted-publisher OIDC flow (configure on PyPI
-      # side at https://pypi.org/manage/project/batchalign/settings/publishing/).
+      # Required for the trusted-publisher OIDC flow. Configure PyPI with
+      # owner `TalkBank`, repository `batchalign`, workflow
+      # `publish-pypi.yml`, and environment `pypi`.
       id-token: write
     steps:
       - uses: actions/download-artifact@v4

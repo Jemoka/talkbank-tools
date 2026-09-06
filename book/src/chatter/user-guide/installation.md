@@ -4,7 +4,7 @@
 **Last updated:** 2026-06-01 00:50 PDT
 
 `chatter` runs on **Windows, macOS, and Linux**. Pre-built binaries are
-available from the [GitHub Releases](https://github.com/TalkBank/talkbank-tools/releases)
+available from the [GitHub Releases](https://github.com/TalkBank/batchalign/releases)
 page; choose the plain `vX.Y.Z` TalkBank core release entry and its
 `chatter-v...` assets (VS Code preview releases use `vscode-vX.Y.Z` tags in the
 same repository). To build from source, follow the instructions below.
@@ -30,13 +30,13 @@ Clone the repository:
 
 ```bash
 mkdir -p ~/talkbank && cd ~/talkbank
-git clone https://github.com/TalkBank/talkbank-tools.git talkbank-tools
+git clone https://github.com/TalkBank/batchalign.git
 ```
 
 Build and install:
 
 ```bash
-cd ~/talkbank/talkbank-tools
+cd ~/talkbank/batchalign
 cargo install --path crates/chatter/chatter-cli
 ```
 
@@ -54,7 +54,7 @@ chatter --help
 If you're developing with the Rust crates directly:
 
 ```bash
-cd ~/talkbank/talkbank-tools
+cd ~/talkbank/batchalign
 cargo build           # Build all crates
 cargo test            # Run all tests
 cargo clippy          # Lint check
@@ -68,7 +68,7 @@ Everything lives in a single repository:
 
 ```text
 ~/talkbank/
-└── talkbank-tools/         # This repo (grammar, crates, CLI, LSP, VS Code, CLAN, Batchalign)
+└── batchalign/             # This repository
     ├── grammar/            # Tree-sitter grammar
     ├── crates/             # All Rust crates (talkbank-* and batchalign-*)
     ├── resources/spec/     # CHAT specification (source of truth)

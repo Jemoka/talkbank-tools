@@ -268,6 +268,6 @@ from their own private patterns file.
   typed-status mapping; the `PayloadTooLarge` variant lives here.
 - [Errors — Batchalign Runtime](batchalign-errors.md) — end-to-end
   error flow.
-- [INTERFACE_MAP.md](https://github.com/TalkBank/talkbank-tools/blob/main/INTERFACE_MAP.md)
+- [INTERFACE_MAP.md](https://github.com/TalkBank/batchalign/blob/main/INTERFACE_MAP.md)
   — Rust ↔ Python boundary inventory.
 - `crates/batchalign/CLAUDE.md` — server-side error-handling rules.

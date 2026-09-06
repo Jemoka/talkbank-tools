@@ -15,13 +15,13 @@ Development is supported on **Windows, macOS, and Linux**. The instructions belo
 
 ```bash
 mkdir -p ~/talkbank && cd ~/talkbank
-git clone <talkbank-tools-url> talkbank-tools
+git clone https://github.com/TalkBank/batchalign.git
 ```
 
 ## Build
 
 ```bash
-cd ~/talkbank/talkbank-tools
+cd ~/talkbank/batchalign
 cargo build               # Build all crates
 cargo build --all-targets # Including tests and benchmarks
 ```
@@ -35,7 +35,7 @@ The repository has two independent Cargo workspaces:
 Contains all Rust crates for parsing, model, validation, and transform:
 
 ```bash
-cd ~/talkbank/talkbank-tools
+cd ~/talkbank/batchalign
 cargo build
 cargo test
 ```
@@ -45,10 +45,10 @@ cargo test
 Contains two sibling crates for spec-driven artifacts:
 
 ```bash
-cargo build --manifest-path ~/talkbank/talkbank-tools/crates/spec/talkbank-spec-testgen/Cargo.toml
-cargo build --manifest-path ~/talkbank/talkbank-tools/crates/spec/talkbank-spec-testrun/Cargo.toml
-cargo run --manifest-path ~/talkbank/talkbank-tools/crates/spec/talkbank-spec-testgen/Cargo.toml --bin gen_tree_sitter_tests -- --help
-cargo run --manifest-path ~/talkbank/talkbank-tools/crates/spec/talkbank-spec-testrun/Cargo.toml --bin validate_error_specs -- --help
+cargo build --manifest-path ~/talkbank/batchalign/crates/spec/talkbank-spec-testgen/Cargo.toml
+cargo build --manifest-path ~/talkbank/batchalign/crates/spec/talkbank-spec-testrun/Cargo.toml
+cargo run --manifest-path ~/talkbank/batchalign/crates/spec/talkbank-spec-testgen/Cargo.toml --bin gen_tree_sitter_tests -- --help
+cargo run --manifest-path ~/talkbank/batchalign/crates/spec/talkbank-spec-testrun/Cargo.toml --bin validate_error_specs -- --help
 ```
 
 ## Makefile Targets

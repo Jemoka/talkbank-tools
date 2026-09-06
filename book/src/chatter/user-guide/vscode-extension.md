@@ -11,9 +11,9 @@ A full-featured CHAT editor for VS Code built on the Rust-powered `chatter-lsp` 
 
 ## Installation
 
-The extension is located in [`apps/vscode-extension/`](https://github.com/TalkBank/talkbank-tools/tree/main/vscode). Two install paths, depending on what you want to do.
+The extension is located in [`apps/vscode-extension/`](https://github.com/TalkBank/batchalign/tree/main/vscode). Two install paths, depending on what you want to do.
 
-**End users — install a released VSIX.** Pre-built, platform-specific VSIX bundles (each ships with the matching `chatter-lsp` binary) are published on [GitHub Releases](https://github.com/TalkBank/talkbank-tools/releases). Download the `.vsix` for your platform, then in VS Code: Extensions sidebar → **"…"** menu → **Install from VSIX…** and pick the downloaded file.
+**End users — install a released VSIX.** Pre-built, platform-specific VSIX bundles (each ships with the matching `chatter-lsp` binary) are published on [GitHub Releases](https://github.com/TalkBank/batchalign/releases). Download the `.vsix` for your platform, then in VS Code: Extensions sidebar → **"…"** menu → **Install from VSIX…** and pick the downloaded file.
 
 **Developers — run from source.** Open the `apps/vscode-extension/` folder in VS Code, install dependencies, compile, and launch the Extension Development Host:
 

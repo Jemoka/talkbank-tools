@@ -501,7 +501,7 @@ issue.
 
 ## Filing bug reports
 
-Open an issue at <https://github.com/TalkBank/talkbank-tools/issues>.
+Open an issue at <https://github.com/TalkBank/batchalign/issues>.
 
 Attach:
 - `batchalign3 logs --export` output

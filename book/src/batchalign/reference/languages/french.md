@@ -37,7 +37,7 @@ both paths and satisfy the morphotag 1-to-1 invariant:
 | Multi-clitic | `d'l'attraper`, `qu'l'on` | Stanza emits correct Range expansion; DP realigner handles any residual splits |
 
 Probes in
-[`batchalign/tests/investigations/_cases/french.py`](https://github.com/TalkBank/talkbank-tools/blob/main/batchalign/tests/investigations/_cases/french.py)
+[`batchalign/tests/investigations/_cases/french.py`](https://github.com/TalkBank/batchalign/blob/main/batchalign/tests/investigations/_cases/french.py)
 (typed `ProbeCase` fixtures consumed by the matrix harness at
 `test_stanza_mwt_probe_matrix.py`).
 

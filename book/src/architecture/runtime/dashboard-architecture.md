@@ -89,4 +89,4 @@ construction.
 
 For the chatter desktop app (a separate Tauri product, not the
 batchalign dashboard), see
-[`apps/chatter/chatter-gui/`](https://github.com/TalkBank/talkbank-tools/tree/main/apps/chatter-gui).
+[`apps/chatter/chatter-gui/`](https://github.com/TalkBank/batchalign/tree/main/apps/chatter-gui).

@@ -1,7 +1,7 @@
 [book]
-title = "TalkBank Toolchain"
+title = "Batchalign"
 authors = ["TalkBank Contributors"]
-description = "Unified user, developer, and architecture documentation for the TalkBank toolchain: chatter, Batchalign3, the VS Code extension, and the CLAN command reimplementation."
+description = "User, developer, and architecture documentation for Batchalign."
 language = "en"
 src = "src"
 
@@ -18,5 +18,5 @@ traverse-parent-directories = false
 warning-policy = "error"
 
 [output.html]
-git-repository-url = "https://github.com/TalkBank/talkbank-tools"
-edit-url-template = "https://github.com/TalkBank/talkbank-tools/edit/main/book/{path}"
+git-repository-url = "https://github.com/TalkBank/batchalign"
+edit-url-template = "https://github.com/TalkBank/batchalign/edit/main/book/{path}"

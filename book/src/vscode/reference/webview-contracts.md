@@ -14,7 +14,7 @@ incoming payloads decode through a typed boundary (see
 or static images do not need a full message contract and are listed at
 the end.
 
-[effectBoundary]: https://github.com/TalkBank/talkbank-tools/blob/main/apps/vscode-extension/src/effectBoundary.ts
+[effectBoundary]: https://github.com/TalkBank/batchalign/blob/main/apps/vscode-extension/src/effectBoundary.ts
 
 ## Seven panels
 

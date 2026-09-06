@@ -48,5 +48,5 @@ The shared resolution logic lives in `talkbank_model::resolve_clan_location()`.
 Both the TUI and the desktop app call this function — it resolves line/column
 from byte offsets when needed and adjusts for hidden headers.
 
-See [`clan_location.rs`](https://github.com/TalkBank/talkbank-tools/blob/main/crates/core/talkbank-model/src/errors/clan_location.rs)
+See [`clan_location.rs`](https://github.com/TalkBank/batchalign/blob/main/crates/core/talkbank-model/src/errors/clan_location.rs)
 for the implementation and tests.
