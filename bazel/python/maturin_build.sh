@@ -12,9 +12,8 @@
 # Hermeticity:
 #   - The guard script asserts uv/maturin/python/rustc versions match
 #     the pins in pyproject.toml before any host-tool invocation.
-#   - Linux CC/CXX/AR/RANLIB point at toolchains_llvm-managed binaries.
-#     macOS uses Xcode's clang paired with its SDK, and Windows uses the
-#     Visual Studio toolchain because toolchains_llvm disables Windows.
+#   - Linux release wheels use the lock-pinned Zig manylinux sysroot. macOS
+#     uses Xcode's clang paired with its SDK, and Windows uses Visual Studio.
 #
 # Args (all passed by the sh_binary; users do not set env vars):
 #   $1 = uv binary                                    (@multitool//tools/uv)
@@ -48,9 +47,9 @@ hermeticity_guard "$UV"
 UV="$HERMETIC_UV"
 
 # C toolchain wiring -- see pyapp_build.sh header for the full rationale.
-# macOS uses Xcode's clang paired with its SDK. Linux uses hermetic LLVM.
-# toolchains_llvm intentionally provides no Windows repository, so the
-# native Windows wheel uses the Visual Studio toolchain on the hosted runner.
+# macOS uses Xcode's clang paired with its SDK. Linux resolves the Bazel LLVM
+# inputs supplied by the shared rule but gives compilation/linking ownership to
+# Zig's manylinux sysroot. Windows uses the Visual Studio host toolchain.
 # shellcheck source=runfiles_resolve.sh
 source "${BUILD_WORKSPACE_DIRECTORY}/bazel/python/runfiles_resolve.sh"
 case "$(uname -s)" in
@@ -70,6 +69,7 @@ case "$(uname -s)" in
             exit 2
         fi
         toolchain_source="Xcode"
+        use_zig=0
         platform_flags=()
         ;;
     MINGW*|MSYS*|CYGWIN*)
@@ -78,6 +78,7 @@ case "$(uname -s)" in
             exit 2
         fi
         toolchain_source="Visual Studio host"
+        use_zig=0
         platform_flags=()
         ;;
     *)
@@ -89,7 +90,8 @@ case "$(uname -s)" in
         CXX_ABS="$CC_ABS"
         AR_ABS="$(runfiles_resolve "$AR_RLOC")"
         RANLIB_ABS="$(runfiles_resolve "$RANLIB_RLOC")"
-        toolchain_source="toolchains_llvm (runfiles)"
+        toolchain_source="zig (manylinux_2_28 sysroot)"
+        use_zig=1
         # Hosted Ubuntu runners expose their host glibc to native C builds.
         # Zig supplies the requested older sysroot so the wheel cannot silently
         # regress to the runner's manylinux_2_38 compatibility floor.
@@ -101,7 +103,7 @@ esac
 # cannot fan out into one rustc per CPU and compete with the Bazel server for
 # memory. Release automation may opt into a larger, explicit budget.
 export CARGO_BUILD_JOBS="${BATCHALIGN_CARGO_JOBS:-${CARGO_BUILD_JOBS:-1}}"
-if [[ -n "${CC_ABS:-}" ]]; then
+if [[ -n "${CC_ABS:-}" && "$use_zig" != "1" ]]; then
     export CC="$CC_ABS"
     export CXX="$CXX_ABS"
     export AR="$AR_ABS"
@@ -178,6 +180,14 @@ echo "maturin_build.sh: wheel profile=release (configured by pyproject.toml)"
 target_flag=()
 if [[ -n "${MATURIN_TARGET:-}" ]]; then
     target_flag=(--target "$MATURIN_TARGET")
+elif [[ "$use_zig" == "1" ]]; then
+    host_triple="$(rustc -vV | sed -n 's/^host: //p')"
+    if [[ -z "$host_triple" ]]; then
+        echo "maturin_build.sh: rustc did not report a host target" >&2
+        exit 2
+    fi
+    # cargo-zigbuild needs an explicit target even when target == host.
+    target_flag=(--target "$host_triple")
 fi
 
 # `"${arr[@]+"${arr[@]}"}"` is the bash-set-u-safe way to splat a
